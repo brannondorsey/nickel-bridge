@@ -80,13 +80,12 @@ export function standings(tournamentId: number): Standing[] {
     complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
   }));
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
-  let rank = 0;
-  list.forEach((s, i) => {
+  for (const s of list) {
     if (s.complete) {
-      rank = i + 1;
-      s.rank = list.filter((o, j) => j < i && o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
+      // standard competition ranking among complete players (ties share a rank)
+      s.rank = list.filter((o) => o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
     }
-  });
+  }
   return list;
 }
 

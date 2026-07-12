@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerAuthRoutes, requireUser } from './auth.js';
 import { db } from './db.js';
-import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
+import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { closeExpired, getTournament, myTournaments, placeUser, standings } from './tournaments.js';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
@@ -135,4 +135,4 @@ app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: '0.0.0.0' });
-export { httpError };
+

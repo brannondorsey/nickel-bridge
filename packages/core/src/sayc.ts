@@ -321,10 +321,9 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
       );
     }
     if (ntLevel === 1 && call === makeBid(2, 3)) {
-      return meaning(
+      return generic(
         '2♠ over 1NT',
-        'A natural signoff-style bid in SAYC: a weak hand with a long spade suit is shown via 2♥ transfer instead — many pairs play 2♠ as a minor-suit signoff. Discuss with partner; treat as natural and weak by default.',
-        { exact: false } as Partial<BidMeaning> as never,
+        'Not part of core SAYC (spade hands go through the 2♥ transfer). Some pairs use it as a minor-suit signoff — agree with your partner; treat as natural and weak by default.',
       );
     }
     if (level === ntLevel + 1 && strain === 4) {
