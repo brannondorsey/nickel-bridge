@@ -1,0 +1,33 @@
+# Self-hosting on any VPS (or an Oracle Cloud Always-Free VM for $0):
+#
+#   1. cp .env.example .env   # fill in Google OAuth credentials + your domain
+#   2. docker compose up -d --build
+#
+# Caddy terminates HTTPS automatically (Let's Encrypt) for $DOMAIN.
+# Backups: copy ./data/bridge.db somewhere safe (it's just one file).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      BASE_URL: https://${DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      TOURNAMENT_WINDOW_DAYS: ${TOURNAMENT_WINDOW_DAYS:-7}
+    volumes:
+      - ./data:/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN}
+    command: caddy reverse-proxy --from ${DOMAIN} --to app:3000
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  caddy-data:

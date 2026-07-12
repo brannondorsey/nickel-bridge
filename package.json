@@ -15,6 +15,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
+    "playwright": "^1.61.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },

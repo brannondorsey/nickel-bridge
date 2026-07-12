@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Inference for the brl ActorCritic "DeepMind" policy network
@@ -13,6 +14,13 @@ interface TensorRef {
 
 interface Manifest {
   layers: { name: string; w: TensorRef; b: TensorRef }[];
+}
+
+/** Load one of the bundled models ("sl" — SAYC-faithful, default — or "rl-fsp"). */
+export function loadPolicyModel(name: 'sl' | 'rl-fsp' = 'sl'): PolicyModel {
+  const manifest = fileURLToPath(new URL(`../models/${name}.json`, import.meta.url));
+  const bin = fileURLToPath(new URL(`../models/${name}.bin`, import.meta.url));
+  return new PolicyModel(manifest, bin);
 }
 
 export class PolicyModel {

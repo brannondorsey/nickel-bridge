@@ -1,0 +1,31 @@
+# Fly.io deployment (~$2–3/month for a shared-cpu-1x + 1GB volume).
+#
+#   fly launch --copy-config --no-deploy   # creates the app, pick a name/region
+#   fly volumes create data --size 1
+#   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://<app>.fly.dev
+#   fly deploy
+#
+# SQLite lives on the volume; keep exactly one machine (no horizontal scaling).
+app = 'bridge-bot'
+primary_region = 'ewr'
+
+[build]
+
+[env]
+  PORT = '3000'
+  DB_PATH = '/data/bridge.db'
+
+[mounts]
+  source = 'data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
