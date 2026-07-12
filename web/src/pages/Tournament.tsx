@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { TournamentInfo, api } from '../api';
 import { useMe } from '../App';
-import { timeLeft } from './Lobby';
 
 export default function Tournament() {
   const { tid } = useParams();
@@ -27,12 +26,10 @@ export default function Tournament() {
     <div className="lobby">
       <div className="hero">
         <h1>{t.name}</h1>
-        <p>
-          {t.status === 'open' ? `Open · ${timeLeft(t.closesAt)} — standings are provisional until it closes.` : 'Final results'}
-        </p>
+        <p>Live standings — they keep evolving as more friends play these same four deals.</p>
       </div>
 
-      {t.status === 'open' && myDone < 4 ? (
+      {myDone < 4 ? (
         <Link to={`/t/${t.id}/b/${myDone + 1}`} className="btn btn-primary">
           {myDone === 0 ? 'Play board 1' : `Continue — board ${myDone + 1} of 4`}
         </Link>

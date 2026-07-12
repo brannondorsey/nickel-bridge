@@ -44,6 +44,7 @@ export default function Lobby() {
         ) : (
           tournaments.map((t) => {
             const meRow = t.standings.find((s) => s.userId === me?.user?.id);
+            const field = t.standings.filter((s) => s.complete).length;
             return (
               <Link key={t.id} to={`/t/${t.id}`} className="trow">
                 <div>
@@ -51,10 +52,10 @@ export default function Lobby() {
                   <div className="tmeta">
                     {t.myDone}/4 boards
                     {meRow?.totalPct != null ? ` · ${meRow.totalPct}%` : ''}
-                    {t.status === 'closed' && meRow?.rank ? ` · finished #${meRow.rank}` : ''}
+                    {meRow?.rank ? ` · #${meRow.rank} of ${field}` : ''}
                   </div>
                 </div>
-                <span className={`badge ${t.status}`}>{t.status === 'open' ? timeLeft(t.closesAt) : 'final'}</span>
+                <span className="badge open">{(t.myDone ?? 0) < 4 ? 'continue' : 'live'}</span>
               </Link>
             );
           })
@@ -68,12 +69,3 @@ export default function Lobby() {
   );
 }
 
-export function timeLeft(closesAt: number): string {
-  const s = closesAt - Date.now() / 1000;
-  if (s <= 0) return 'closing';
-  const days = Math.floor(s / 86400);
-  if (days >= 1) return `${days}d left`;
-  const hours = Math.floor(s / 3600);
-  if (hours >= 1) return `${hours}h left`;
-  return `${Math.max(1, Math.floor(s / 60))}m left`;
-}

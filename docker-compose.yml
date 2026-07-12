@@ -13,7 +13,6 @@ services:
       BASE_URL: https://${DOMAIN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      TOURNAMENT_WINDOW_DAYS: ${TOURNAMENT_WINDOW_DAYS:-7}
     volumes:
       - ./data:/data
 

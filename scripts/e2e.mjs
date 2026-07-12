@@ -38,13 +38,20 @@ function assert(cond, msg) {
   console.log(`ok: ${msg}`);
 }
 
-async function playBoard(client, tid, no) {
+async function playBoard(client, tid, no, bidOnce = false) {
   let board = await client.req(`/api/tournaments/${tid}/boards/${no}`);
   let safety = 200;
+  let didBid = false;
   while (board.state !== 'done' && safety-- > 0) {
     if (board.state === 'bidding' && board.myTurn) {
-      // bid what the AI would: cheapest strategy that exercises grading = pass
-      const res = await client.post(`/api/tournaments/${tid}/boards/${no}/call`, { call: 0 });
+      // default strategy: pass everything; optionally make one cheapest bid
+      // so this player's results differ from the field
+      let call = 0;
+      if (bidOnce && !didBid) {
+        call = board.legalCalls.find((a) => a >= 3) ?? 0;
+        didBid = true;
+      }
+      const res = await client.post(`/api/tournaments/${tid}/boards/${no}/call`, { call });
       board = res.board;
       if (res.evaluation) lastGrades.push(res.evaluation.grade);
     } else if (board.state === 'playing' && board.myTurn) {
@@ -102,8 +109,28 @@ const standings = await alice.req(`/api/tournaments/${a.tournamentId}`);
 assert(standings.standings.length === 2, 'standings list both players');
 assert(standings.standings.every((s) => s.complete), 'both players complete');
 
+// continuous Elo: the completed tournament is rated immediately, no expiry
+let lb = (await alice.req('/api/leaderboard')).leaderboard;
+assert(
+  lb.filter((r) => r.rated_tournaments === 1).length === 2,
+  'both players rated immediately after completion',
+);
+
+// a third player can still join the same tournament later (tournaments never close)
+const carol = new Client('carol');
+await carol.post('/auth/dev', { name: 'Carol E2E' });
+const c = await carol.post('/api/play');
+assert(c.tournamentId === a.tournamentId, 'Carol late-joins the same evergreen tournament');
+for (let no = 1; no <= 4; no++) {
+  // bid the cheapest bid once on board 1 so Carol's results differ from the others
+  await playBoard(carol, c.tournamentId, no, no === 1);
+}
+lb = (await carol.req('/api/leaderboard')).leaderboard;
+assert(lb.filter((r) => r.rated_tournaments === 1).length === 3, 'Elo re-ranked to include the late finisher');
+const b1c = await carol.req(`/api/tournaments/${c.tournamentId}/boards/1`);
+assert(b1c.result.field.length === 3, 'board 1 field now has three results');
+
 // grades came through
 assert(lastGrades.length > 0, `bid grading produced ${lastGrades.length} grades`);
 
 console.log('\nAll e2e checks passed.');
-console.log('note: to test Elo, expire the tournament (sqlite: UPDATE tournaments SET closes_at = 0) and GET /api/leaderboard.');

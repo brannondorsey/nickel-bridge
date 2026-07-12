@@ -6,11 +6,10 @@ import {
   BidMeaning,
   BoardView,
   SEAT_SHORT,
-  STRAIN_SYMBOLS,
   api,
   callDisplay,
   displaySort,
-  makeBid,
+  strainClass,
 } from '../api';
 import { HandFan, PlayingCard } from '../components/Cards';
 
@@ -115,12 +114,14 @@ export default function Board() {
         <Result board={board} onNext={() => (boardNo < board.totalBoards ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`) : navigate(`/t/${tournamentId}`))} />
       ) : (
         <>
-          <div className="table-area">
+          <div className={`table-area${board.flipped && board.state === 'playing' ? ' flipping' : ''}`}>
             <Auction board={board} onInspect={(e) => setInspect(e === inspect ? null : e)} />
-            {board.state === 'playing' ? <Table board={board} /> : null}
-            {board.watching ? (
-              <div className="watching-note">Your robot partner is declarer — the robots play this one out.</div>
+            {board.flipped && board.state === 'playing' ? (
+              <div className="flip-note">
+                Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
+              </div>
             ) : null}
+            {board.state === 'playing' ? <Table board={board} /> : null}
             {board.state === 'playing' ? (
               <>
                 <MyHand board={board} selected={selectedCard} onSelect={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))} />
@@ -204,9 +205,8 @@ function Auction({ board, onInspect }: { board: BoardView; onInspect: (e: Auctio
 
 function CallText({ call }: { call: number }) {
   const text = callDisplay(call);
-  const strain = (call - 3) % 5;
-  const red = call >= 3 && (strain === 1 || strain === 2); // ♦ ♥
-  return <span className={red ? 'red' : ''}>{text}</span>;
+  if (call < 3) return <span>{text}</span>;
+  return <span className={strainClass((call - 3) % 5)}>{text}</span>;
 }
 
 function MyHand({
@@ -218,45 +218,62 @@ function MyHand({
   selected?: number | null;
   onSelect?: (card: number) => void;
 }) {
-  const dummyIsNorth = board.dummy === 0;
-  const iControlDummy = board.state === 'playing' && dummyIsNorth && !board.watching;
+  // Bottom fan = the hand the human plays from (South, or North when the
+  // board is flipped). Top fan = dummy. Either can be the hand to play.
+  const playingSeat = board.playingSeat ?? 2;
+  const canPlayFrom = (seat: number | undefined) =>
+    board.state === 'playing' && board.myTurn && board.handToPlay === seat;
+
+  const dummyLabel =
+    board.dummy === 2
+      ? 'South — your hand as dummy'
+      : `${['North', 'East', 'South', 'West'][board.dummy ?? 0]} (dummy${board.dummy === 0 && board.declarer === 2 ? ' — yours' : ''})`;
+  const bottomLabel = playingSeat === 0 ? 'North (you, for partner)' : 'South (you)';
+
   return (
     <>
       {board.state === 'playing' && board.dummyHand ? (
         <>
           <div className="hand-label">
-            {board.dummy === 0 ? 'North (dummy' + (iControlDummy ? ' — yours' : '') + ')' : `${SEAT_SHORT[board.dummy!]} (dummy)`}
+            {dummyLabel}
             {typeof board.dummyHcp === 'number' ? <span className="hcp-badge">{board.dummyHcp} HCP</span> : null}
           </div>
           <HandFan
             cards={displaySort(board.dummyHand)}
-            dummy
-            legal={board.myTurn && board.handToPlay === board.dummy ? board.legalCards : []}
+            legal={canPlayFrom(board.dummy) ? board.legalCards : []}
             selected={selected}
-            onSelect={board.myTurn && board.handToPlay === board.dummy ? onSelect : undefined}
+            onSelect={canPlayFrom(board.dummy) ? onSelect : undefined}
           />
         </>
       ) : null}
       <HandFan
         cards={displaySort(board.hand)}
-        legal={board.state === 'playing' ? (board.myTurn && board.handToPlay === 2 ? board.legalCards : []) : undefined}
+        legal={board.state === 'playing' ? (canPlayFrom(playingSeat) ? board.legalCards : []) : undefined}
         selected={selected}
-        onSelect={board.state === 'playing' && board.myTurn && board.handToPlay === 2 ? onSelect : undefined}
+        onSelect={canPlayFrom(playingSeat) ? onSelect : undefined}
       />
       <div className="hand-label">
-        South (you) <span className="hcp-badge">{board.hcp} HCP</span>
+        {bottomLabel} <span className="hcp-badge">{board.hcp} HCP</span>
       </div>
     </>
   );
 }
 
 function Table({ board }: { board: BoardView }) {
-  const seats: { pos: string; seat: number }[] = [
-    { pos: 'n', seat: 0 },
-    { pos: 'e', seat: 1 },
-    { pos: 's', seat: 2 },
-    { pos: 'w', seat: 3 },
-  ];
+  // rotate the compass 180° when the board is flipped (human declaring from N)
+  const seats: { pos: string; seat: number }[] = board.flipped
+    ? [
+        { pos: 's', seat: 0 },
+        { pos: 'w', seat: 1 },
+        { pos: 'n', seat: 2 },
+        { pos: 'e', seat: 3 },
+      ]
+    : [
+        { pos: 'n', seat: 0 },
+        { pos: 'e', seat: 1 },
+        { pos: 's', seat: 2 },
+        { pos: 'w', seat: 3 },
+      ];
   const trick = board.currentTrick ?? [];
   const showTrick = trick.length ? trick : (board.lastTrick ?? []);
   return (
@@ -269,7 +286,7 @@ function Table({ board }: { board: BoardView }) {
               {SEAT_SHORT[seat]}
               {seat === board.declarer ? '·decl' : seat === board.dummy ? '·dummy' : ''}
             </span>
-            {played ? <PlayingCard card={played.card} small /> : <div style={{ height: 'calc(var(--card-w) * 0.72 * 1.45)' }} />}
+            {played ? <PlayingCard card={played.card} small /> : <div style={{ height: 'calc(var(--card-h) * 0.72)' }} />}
           </div>
         );
       })}

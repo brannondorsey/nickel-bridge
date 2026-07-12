@@ -13,7 +13,17 @@
   --accent: #b8862d;
   --red: #c0392b;
   --good: #2e7d32;
-  --card-w: clamp(42px, 11vw, 62px);
+  /* four-color deck (on white card faces / light backgrounds) */
+  --suit-s: #21272b;
+  --suit-h: #c0392b;
+  --suit-d: #cf8600;
+  --suit-c: #1e7d34;
+  /* brighter variants for text on the green felt */
+  --suit-s-felt: #f2f5f3;
+  --suit-h-felt: #ff9d94;
+  --suit-d-felt: #ffd34d;
+  --suit-c-felt: #8fe3a1;
+  --card-w: clamp(44px, 11.6vw, 62px);
   --card-h: calc(var(--card-w) * 1.45);
 }
 html,
@@ -266,9 +276,6 @@ a {
 .auction td button.hasMeaning {
   background: rgba(255, 255, 255, 0.14);
 }
-.auction .red {
-  color: #ff9d94;
-}
 .auction td .you {
   outline: 1.5px solid var(--accent);
   border-radius: 6px;
@@ -278,7 +285,7 @@ a {
 /* trick area */
 .trick {
   position: relative;
-  height: 190px;
+  height: calc(var(--card-h) * 1.44 + 62px);
   margin: 6px 0;
 }
 .trick .seatpos {
@@ -339,21 +346,33 @@ a {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 4px 0 0 6px;
-  font-weight: 700;
+  padding: 4px 0 0 5px;
+  font-weight: 800;
   position: relative;
   flex-shrink: 0;
 }
 .pcard .rank {
-  font-size: calc(var(--card-w) * 0.38);
+  font-size: calc(var(--card-w) * 0.36);
   line-height: 1;
 }
-.pcard .suit {
-  font-size: calc(var(--card-w) * 0.36);
-  line-height: 1.15;
+.pcard .rank.ten {
+  letter-spacing: -0.09em;
 }
-.pcard.red {
-  color: var(--red);
+.pcard .suit {
+  font-size: calc(var(--card-w) * 0.34);
+  line-height: 1.2;
+}
+.pcard.suit-s {
+  color: var(--suit-s);
+}
+.pcard.suit-h {
+  color: var(--suit-h);
+}
+.pcard.suit-d {
+  color: var(--suit-d);
+}
+.pcard.suit-c {
+  color: var(--suit-c);
 }
 .pcard.small {
   --cw: calc(var(--card-w) * 0.72);
@@ -368,6 +387,7 @@ a {
   font-size: calc(var(--cw) * 0.44);
 }
 
+/* fanned hands: every card keeps a legible top-left corner sliver */
 .handfan {
   display: flex;
   justify-content: center;
@@ -375,24 +395,72 @@ a {
   min-height: calc(var(--card-h) + 16px);
 }
 .handfan .cardbtn {
-  margin-left: calc(var(--card-w) * -0.52);
+  margin-left: calc(var(--card-w) * -0.55);
   transition: transform 0.12s ease;
   position: relative;
 }
 .handfan .cardbtn.selected {
   z-index: 2;
+  transform: translateY(-14px);
 }
 .handfan .cardbtn:first-child {
   margin-left: 0;
 }
-.handfan .cardbtn.selected {
-  transform: translateY(-14px);
+.handfan .cardbtn.suitgap {
+  margin-left: calc(var(--card-w) * -0.42);
 }
-.handfan .cardbtn:disabled .pcard {
+.handfan.interactive .cardbtn:disabled .pcard {
   filter: brightness(0.82);
+  opacity: 0.88;
 }
-.handfan.dummy .cardbtn.selected {
-  transform: translateY(14px);
+
+/* felt-side text colors for calls in the auction grid (cards keep their own) */
+.auction .suit-s {
+  color: var(--suit-s-felt);
+}
+.auction .suit-h {
+  color: var(--suit-h-felt);
+}
+.auction .suit-d {
+  color: var(--suit-d-felt);
+}
+.auction .suit-c {
+  color: var(--suit-c-felt);
+}
+/* light-background text colors for calls (bidding box, panels, recaps) */
+.suit-h {
+  color: var(--suit-h);
+}
+.suit-d {
+  color: var(--suit-d);
+}
+.suit-c {
+  color: var(--suit-c);
+}
+
+/* board flip (partner declared — human plays North) */
+@keyframes boardflip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(90deg) scale(0.92);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+.table-area.flipping {
+  animation: boardflip 0.9s ease;
+}
+.flip-note {
+  margin: 0 12px 6px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  text-align: center;
 }
 
 .hand-label {
@@ -627,15 +695,6 @@ a {
 }
 .bid-recap .r {
   color: var(--red);
-}
-
-.watching-note {
-  margin: 10px 12px;
-  background: rgba(255, 255, 255, 0.12);
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  text-align: center;
 }
 
 .notice {

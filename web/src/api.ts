@@ -74,7 +74,8 @@ export interface BoardView {
   contractLabel?: string;
   declarer?: number;
   dummy?: number;
-  watching?: boolean;
+  flipped?: boolean;
+  playingSeat?: number;
   currentTrick?: TrickCard[];
   completedTricks?: number;
   declarerTricks?: number;
@@ -101,8 +102,6 @@ export interface Standing {
 export interface TournamentInfo {
   id: number;
   name: string;
-  status: 'open' | 'closed';
-  closesAt: number;
   myDone?: number;
   standings: Standing[];
 }
@@ -152,7 +151,11 @@ export const SEAT_SHORT = ['N', 'E', 'S', 'W'];
 
 export const cardSuit = (c: number) => Math.floor(c / 13);
 export const cardRank = (c: number) => c % 13;
-export const isRed = (c: number) => cardSuit(c) === 1 || cardSuit(c) === 2;
+/** four-color deck: ♠ black, ♥ red, ♦ yellow, ♣ green */
+export const SUIT_CLASSES = ['suit-s', 'suit-h', 'suit-d', 'suit-c'];
+export const suitClass = (suit: number) => SUIT_CLASSES[suit];
+/** strain (♣♦♥♠NT bid order) → color class */
+export const strainClass = (strain: number) => (strain === 4 ? 'suit-nt' : SUIT_CLASSES[3 - strain]);
 export const callDisplay = (call: number): string => {
   if (call === 0) return 'Pass';
   if (call === 1) return 'X';
@@ -162,13 +165,10 @@ export const callDisplay = (call: number): string => {
 };
 export const makeBid = (level: number, strain: number) => 3 + (level - 1) * 5 + strain;
 
-/** sort for display: ♠ ♥ ♣ ♦ alternating colors, descending ranks */
+/** sort for display: ♠ ♥ ♦ ♣ (each suit has its own color), descending ranks */
 export function displaySort(hand: number[]): number[] {
-  const suitOrder = [0, 1, 3, 2]; // ♠ ♥ ♣ ♦
   return [...hand].sort((a, b) => {
-    const sa = suitOrder.indexOf(cardSuit(a));
-    const sb = suitOrder.indexOf(cardSuit(b));
-    if (sa !== sb) return sa - sb;
+    if (cardSuit(a) !== cardSuit(b)) return cardSuit(a) - cardSuit(b);
     return cardRank(b) - cardRank(a);
   });
 }

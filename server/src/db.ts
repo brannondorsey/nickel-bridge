@@ -31,9 +31,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   seed TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open',   -- open | closed
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  closes_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE TABLE IF NOT EXISTS boards (
@@ -76,14 +74,15 @@ export interface UserRow {
   created_at: number;
 }
 
+/** Tournaments never close: they stay joinable forever to maximize the field. */
 export interface TournamentRow {
   id: number;
   name: string;
   seed: string;
-  status: 'open' | 'closed';
   created_at: number;
-  closes_at: number;
 }
+
+export const BOARDS_PER_TOURNAMENT = 4;
 
 export interface BoardRow {
   id: number;

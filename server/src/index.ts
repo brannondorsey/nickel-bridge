@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { registerAuthRoutes, requireUser } from './auth.js';
 import { db } from './db.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
-import { closeExpired, getTournament, myTournaments, placeUser, standings } from './tournaments.js';
+import { getTournament, myTournaments, placeUser, standings } from './tournaments.js';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
@@ -27,12 +27,9 @@ app.post('/api/play', (req, reply) => {
 app.get('/api/tournaments', (req, reply) => {
   const user = requireUser(req, reply);
   if (!user) return;
-  closeExpired();
   const mine = myTournaments(user.id).map((t) => ({
     id: t.id,
     name: t.name,
-    status: t.status,
-    closesAt: t.closes_at,
     myDone: t.myDone,
     standings: standings(t.id),
   }));
@@ -42,14 +39,11 @@ app.get('/api/tournaments', (req, reply) => {
 app.get('/api/tournaments/:id', (req, reply) => {
   const user = requireUser(req, reply);
   if (!user) return;
-  closeExpired();
   const t = getTournament(Number((req.params as { id: string }).id));
   if (!t) return reply.code(404).send({ error: 'not found' });
   return reply.send({
     id: t.id,
     name: t.name,
-    status: t.status,
-    closesAt: t.closes_at,
     standings: standings(t.id),
   });
 });
@@ -57,14 +51,12 @@ app.get('/api/tournaments/:id', (req, reply) => {
 app.get('/api/tournaments/:id/boards/:no', async (req, reply) => {
   const user = requireUser(req, reply);
   if (!user) return;
-  closeExpired();
   const { id, no } = req.params as { id: string; no: string };
   const t = getTournament(Number(id));
   const boardNo = Number(no);
   if (!t || boardNo < 1 || boardNo > 4) return reply.code(404).send({ error: 'not found' });
-  const canStart = t.status === 'open' && t.closes_at > Date.now() / 1000;
-  const b = loadBoard(t, user.id, boardNo, canStart);
-  if (!b) return reply.code(409).send({ error: 'tournament is closed' });
+  const b = loadBoard(t, user.id, boardNo, true);
+  if (!b) return reply.code(404).send({ error: 'not found' });
   await ensureAdvanced(b);
   return reply.send(boardView(t, b, user.elo));
 });
@@ -76,7 +68,6 @@ app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {
   const { call } = (req.body ?? {}) as { call?: number };
   const t = getTournament(Number(id));
   if (!t) return reply.code(404).send({ error: 'not found' });
-  if (t.status !== 'open') return reply.code(409).send({ error: 'tournament is closed' });
   const b = loadBoard(t, user.id, Number(no), false);
   if (!b) return reply.code(404).send({ error: 'board not started' });
   if (typeof call !== 'number' || call < 0 || call > 37) return reply.code(400).send({ error: 'bad call' });
@@ -91,7 +82,6 @@ app.post('/api/tournaments/:id/boards/:no/play', async (req, reply) => {
   const { card } = (req.body ?? {}) as { card?: number };
   const t = getTournament(Number(id));
   if (!t) return reply.code(404).send({ error: 'not found' });
-  if (t.status !== 'open') return reply.code(409).send({ error: 'tournament is closed' });
   const b = loadBoard(t, user.id, Number(no), false);
   if (!b) return reply.code(404).send({ error: 'board not started' });
   if (typeof card !== 'number' || card < 0 || card > 51) return reply.code(400).send({ error: 'bad card' });
@@ -102,7 +92,6 @@ app.post('/api/tournaments/:id/boards/:no/play', async (req, reply) => {
 app.get('/api/leaderboard', (req, reply) => {
   const user = requireUser(req, reply);
   if (!user) return;
-  closeExpired();
   const rows = db
     .prepare(
       `SELECT u.id, u.name, u.picture, u.elo,

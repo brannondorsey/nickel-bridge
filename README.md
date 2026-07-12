@@ -22,13 +22,15 @@ judgment, not card luck.
 
 ## Competition
 
-- **Just-in-time tournaments** — hit *Play* and you're placed into the open tournament with
-  the most plays (so friends compare against each other), or a fresh one is created.
-  Tournaments close after 7 days (configurable); rankings are then final.
-- **Matchpoints & percentiles** per board and overall, provisional standings while a
-  tournament is open.
-- **Elo ratings** — closed tournaments feed pairwise Elo updates (start 1200, K=24);
-  the Rankings page is the long-term leaderboard.
+- **Just-in-time tournaments** — hit *Play* and you're placed into the tournament with the
+  most plays that you haven't played yet (so friends compare against each other), or a fresh
+  one is created. Tournaments **never close** — the goal is maximum participation, and
+  standings keep evolving as more friends play the same deals.
+- **Matchpoints & percentiles** per board and overall, live standings.
+- **Elo ratings, continuously re-ranked** — every completed tournament result triggers a
+  deterministic full replay of the pairwise Elo history (start 1200, K=24), so a late
+  finisher in an old tournament correctly re-ranks everyone. The Rankings page is the
+  long-term leaderboard.
 
 ## The AI
 
@@ -96,7 +98,6 @@ The whole app is one container: Node + SQLite + the AI. Backup = copy one file
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth |
 | `DB_PATH` | `./data/bridge.db` | SQLite location |
 | `PORT` | `3000` | listen port |
-| `TOURNAMENT_WINDOW_DAYS` | `7` | days until a tournament closes and Elo applies |
 | `AI_MODEL` | `sl` | `sl` or `rl-fsp` |
 | `DEV_AUTH` | off | `1` enables name-only dev login — never in production |
 

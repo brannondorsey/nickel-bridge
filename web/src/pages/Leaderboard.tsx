@@ -26,7 +26,9 @@ export default function Leaderboard() {
     <div className="leader">
       <div className="hero">
         <h1>Rankings</h1>
-        <p>Elo ratings from head-to-head tournament results. Everyone starts at 1200.</p>
+        <p>
+          Elo from head-to-head tournament results, re-ranked live as results come in. Everyone starts at 1200.
+        </p>
       </div>
       <div className="card-box">
         <ol>

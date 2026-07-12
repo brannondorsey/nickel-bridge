@@ -16,7 +16,7 @@ await shot('01-lobby');
 
 // play → board
 await page.click('button:has-text("Play")');
-await page.waitForSelector('.bidbox, .watching-note, .result', { timeout: 30000 });
+await page.waitForSelector('.bidbox, .result', { timeout: 30000 });
 await shot('02-bidding');
 
 // tap a legal bid to see its meaning before submitting

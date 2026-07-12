@@ -25,10 +25,11 @@ import {
   partnerOf,
   playState,
 } from '@bridge/core';
-import { BoardRow, TournamentRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
+import { recomputeElo } from './tournaments.js';
 
 export const HUMAN_SEAT: Seat = 2; // South
-export const BOARDS_PER_TOURNAMENT = 4;
+export { BOARDS_PER_TOURNAMENT };
 
 const bidder = new Bidder(loadPolicyModel((process.env.AI_MODEL as 'sl' | 'rl-fsp') ?? 'sl'));
 
@@ -82,9 +83,20 @@ function save(b: GameBoard): void {
   );
 }
 
-/** Which seat controls a hand during play (declarer plays dummy). */
-function controller(hand: Seat, contract: Contract): Seat {
-  return hand === partnerOf(contract.declarer) ? contract.declarer : hand;
+/** function boundary defeats TS narrowing: advanceRobots mutates row.state */
+function boardDone(row: BoardRow): boolean {
+  return row.state === 'done';
+}
+
+/**
+ * Does the human play this hand? The human plays their whole side: South
+ * always, and North whenever N-S is the declaring side (South declaring →
+ * South + dummy North; North declaring → the board flips and the human runs
+ * partner's hand). Defending, the human plays only South.
+ */
+function humanControls(hand: Seat, contract: Contract): boolean {
+  if (hand === HUMAN_SEAT) return true;
+  return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
 }
 
 function finishBoard(b: GameBoard): void {
@@ -126,7 +138,7 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
         finishBoard(b);
         return;
       }
-      if (controller(ps.handToPlay, b.contract!) === HUMAN_SEAT) return;
+      if (humanControls(ps.handToPlay, b.contract!)) return;
       b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
       continue;
     }
@@ -144,24 +156,29 @@ export async function submitCall(b: GameBoard, call: Call): Promise<BidEvaluatio
   b.bidEvals.push(evaluation);
   await advanceRobots(b);
   save(b);
+  if (boardDone(b.row)) recomputeElo();
   return evaluation;
 }
 
 export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
   if (b.row.state !== 'playing') throw httpError(409, 'not in play phase');
   const ps = playState(b.deal, b.contract!, b.plays);
-  if (ps.isOver || controller(ps.handToPlay, b.contract!) !== HUMAN_SEAT) throw httpError(409, 'not your turn');
+  if (ps.isOver || !humanControls(ps.handToPlay, b.contract!)) throw httpError(409, 'not your turn');
   if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
   b.plays.push(card);
   await advanceRobots(b);
   save(b);
+  if (boardDone(b.row)) recomputeElo();
 }
 
 /** Ensure a fresh board has robots advanced up to the human (dealer may be W/N/E). */
 export async function ensureAdvanced(b: GameBoard): Promise<void> {
   const before = JSON.stringify([b.calls, b.plays, b.row.state]);
   await advanceRobots(b);
-  if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) save(b);
+  if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
+    save(b);
+    if (boardDone(b.row)) recomputeElo();
+  }
 }
 
 function meaningFor(dealer: Seat, callsBefore: Call[], call: Call): BidMeaning | null {
@@ -219,21 +236,30 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
   if (b.row.state !== 'bidding' && b.contract) {
     const ps = playState(deal, b.contract, b.plays);
     const dummy = partnerOf(b.contract.declarer);
+    // When partner (North) declares, the human takes over the declarer hand
+    // and the board flips: North's cards at the bottom, South face up as dummy.
+    const flipped = b.contract.declarer === partnerOf(HUMAN_SEAT);
+    const playingSeat = flipped ? b.contract.declarer : HUMAN_SEAT;
     view.contract = b.contract;
     view.contractLabel = contractLabel(b.contract);
     view.declarer = b.contract.declarer;
     view.dummy = dummy;
-    view.watching = controller(HUMAN_SEAT, b.contract) !== HUMAN_SEAT; // South is dummy
+    view.flipped = flipped;
+    view.playingSeat = playingSeat;
+    view.hand = remaining(deal, b.plays, playingSeat);
+    view.hcp = hcp(deal.hands[playingSeat]);
     view.currentTrick = ps.currentTrick;
     view.completedTricks = ps.completedTricks.length;
     view.declarerTricks = ps.declarerTricks;
     view.defenderTricks = ps.defenderTricks;
     view.lastTrick = ps.completedTricks.length ? ps.completedTricks[ps.completedTricks.length - 1] : null;
-    if (ps.dummyVisible && b.row.state === 'playing') {
+    // The human always sees their own (South) cards; dummy is public after the
+    // opening lead. Both conditions hold for every hand we ever send here.
+    if (b.row.state === 'playing' && (ps.dummyVisible || dummy === HUMAN_SEAT)) {
       view.dummyHand = remaining(deal, b.plays, dummy);
       view.dummyHcp = hcp(deal.hands[dummy]);
     }
-    if (b.row.state === 'playing' && !ps.isOver && controller(ps.handToPlay, b.contract) === HUMAN_SEAT) {
+    if (b.row.state === 'playing' && !ps.isOver && humanControls(ps.handToPlay, b.contract)) {
       view.myTurn = true;
       view.handToPlay = ps.handToPlay;
       view.legalCards = legalCards(deal, ps);
