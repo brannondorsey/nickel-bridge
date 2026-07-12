@@ -1,0 +1,24 @@
+{
+  "name": "bridge-bot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @bridge/core -w @bridge/ai -w server -w web",
+    "dev": "npm run dev -w server",
+    "test": "npm run test -w @bridge/core -w @bridge/ai -w server --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

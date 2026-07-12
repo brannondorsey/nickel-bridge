@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+web/dist/
+test-results/
+playwright-report/

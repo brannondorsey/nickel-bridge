@@ -1,0 +1,115 @@
+{
+ "source": "model-sl.pkl",
+ "license": "Apache-2.0 (github.com/harukaki/brl)",
+ "dtype": "float32",
+ "layers": [
+  {
+   "name": "actor_critic/linear",
+   "w": {
+    "shape": [
+     480,
+     1024
+    ],
+    "offset": 0,
+    "size": 491520
+   },
+   "b": {
+    "shape": [
+     1024
+    ],
+    "offset": 491520,
+    "size": 1024
+   }
+  },
+  {
+   "name": "actor_critic/linear_1",
+   "w": {
+    "shape": [
+     1024,
+     1024
+    ],
+    "offset": 492544,
+    "size": 1048576
+   },
+   "b": {
+    "shape": [
+     1024
+    ],
+    "offset": 1541120,
+    "size": 1024
+   }
+  },
+  {
+   "name": "actor_critic/linear_2",
+   "w": {
+    "shape": [
+     1024,
+     1024
+    ],
+    "offset": 1542144,
+    "size": 1048576
+   },
+   "b": {
+    "shape": [
+     1024
+    ],
+    "offset": 2590720,
+    "size": 1024
+   }
+  },
+  {
+   "name": "actor_critic/linear_3",
+   "w": {
+    "shape": [
+     1024,
+     1024
+    ],
+    "offset": 2591744,
+    "size": 1048576
+   },
+   "b": {
+    "shape": [
+     1024
+    ],
+    "offset": 3640320,
+    "size": 1024
+   }
+  },
+  {
+   "name": "actor_critic/linear_4",
+   "w": {
+    "shape": [
+     1024,
+     38
+    ],
+    "offset": 3641344,
+    "size": 38912
+   },
+   "b": {
+    "shape": [
+     38
+    ],
+    "offset": 3680256,
+    "size": 38
+   }
+  },
+  {
+   "name": "actor_critic/linear_5",
+   "w": {
+    "shape": [
+     1024,
+     1
+    ],
+    "offset": 3680294,
+    "size": 1024
+   },
+   "b": {
+    "shape": [
+     1
+    ],
+    "offset": 3681318,
+    "size": 1
+   }
+  }
+ ]
+}
