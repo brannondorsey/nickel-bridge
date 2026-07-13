@@ -58,6 +58,9 @@ judgment, not card luck.
 
 ## Development
 
+New contributor (or AI agent)? Start with [CONTRIBUTING.md](CONTRIBUTING.md) — it maps the
+codebase, the dev workflow, and the invariants (robot determinism!) you must not break.
+
 ```bash
 npm install
 npm run build                                   # core, ai, server, web
@@ -84,6 +87,9 @@ Google credentials. Don't set it in production.
 - If you deliberately change robot behavior (model, encoding, card-play tie-breaks,
   dealing), regenerate the trace: `npm run build && node tools/gen_trace_fixture.mjs` —
   a surprising diff there means you were about to break comparability of live tournaments.
+- The AI golden fixtures (`packages/ai/test/fixtures.json`) only need regenerating if the
+  observation encoding or model weights change: `venv/bin/python tools/gen_fixtures.py …`
+  — needs a Python venv with pinned jax (see the docstring in `tools/gen_fixtures.py`).
 - CI (`.github/workflows/ci.yml`) runs build + typecheck + all suites + the smoke + a
   Docker image build on every push/PR.
 

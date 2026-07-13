@@ -5,7 +5,7 @@ import { useMe } from '../App';
 
 interface Row {
   id: number;
-  name: string;
+  handle: string;
   picture: string | null;
   elo: number;
   rated_tournaments: number;
@@ -34,14 +34,18 @@ export default function Leaderboard() {
         <ol>
           {rows.map((r, i) => (
             <li key={r.id}>
-              <span className="rankno">{i + 1}</span>
-              <span className="lname">
-                {r.id === me?.user?.id ? 'You' : r.name}
-                <div className="lmeta">
-                  {r.played_tournaments} tournament{r.played_tournaments === 1 ? '' : 's'} · {r.rated_tournaments} rated
-                </div>
-              </span>
-              <span className="lelo">{r.elo}</span>
+              <Link to={`/players/${r.id}`} className="lrow">
+                <span className="rankno">{i + 1}</span>
+                <span className="lname">
+                  {r.id === me?.user?.id ? 'You' : r.handle}
+                  <div className="lmeta">
+                    {r.played_tournaments} tournament{r.played_tournaments === 1 ? '' : 's'} · {r.rated_tournaments}{' '}
+                    rated
+                  </div>
+                </span>
+                <span className="lelo">{r.elo}</span>
+                <span className="chev">›</span>
+              </Link>
             </li>
           ))}
         </ol>

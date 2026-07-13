@@ -4,7 +4,7 @@ import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
 const stmtDoneBoards = db.prepare(
-  `SELECT b.*, u.name AS user_name FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.state = 'done'`,
 );
 const stmtMyUnfinished = db.prepare(
@@ -38,7 +38,7 @@ const stmtEloHistory = db.prepare(
 
 export interface Standing {
   userId: number;
-  name: string;
+  handle: string;
   boardsDone: number;
   totalPct: number | null;
   complete: boolean;
@@ -52,21 +52,21 @@ export interface Standing {
  * play the same deals.
  */
 export function standings(tournamentId: number): Standing[] {
-  const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_name: string })[];
-  const users = new Map<number, { name: string; pcts: number[] }>();
+  const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string })[];
+  const users = new Map<number, { handle: string; pcts: number[] }>();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
     if (!boardRows.length) continue;
     const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
     boardRows.forEach((r, i) => {
-      const u = users.get(r.user_id) ?? { name: r.user_name, pcts: [] };
+      const u = users.get(r.user_id) ?? { handle: r.user_handle, pcts: [] };
       u.pcts.push(mps[i].pct);
       users.set(r.user_id, u);
     });
   }
   const list: Standing[] = [...users.entries()].map(([userId, u]) => ({
     userId,
-    name: u.name,
+    handle: u.handle,
     boardsDone: u.pcts.length,
     totalPct: u.pcts.length ? Math.round((u.pcts.reduce((a, b) => a + b, 0) / u.pcts.length) * 10) / 10 : null,
     complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,

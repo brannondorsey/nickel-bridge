@@ -445,7 +445,7 @@ function Result({ board, onNext }: { board: BoardView; onNext: () => void }) {
           <tbody>
             {r.field.map((f) => (
               <tr key={f.userId} className={f.isMe ? 'me' : ''}>
-                <td>{f.isMe ? 'You' : f.name}</td>
+                <td>{f.isMe ? 'You' : f.handle}</td>
                 <td>{f.contract}</td>
                 <td className="num">{f.scoreNS}</td>
                 <td className="num">

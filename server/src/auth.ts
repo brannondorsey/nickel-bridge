@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { db, UserRow } from './db.js';
+import { validateHandle } from './handle.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -21,6 +22,8 @@ const stmtInsertUser = db.prepare(
   `INSERT INTO users (google_id, email, name, picture) VALUES (?, ?, ?, ?) RETURNING *`,
 );
 const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?`);
+const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
+const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 
 export function userFromRequest(req: FastifyRequest): UserRow | null {
   const sid = req.cookies[SESSION_COOKIE];
@@ -32,6 +35,21 @@ export function requireUser(req: FastifyRequest, reply: FastifyReply): UserRow |
   const user = userFromRequest(req);
   if (!user) {
     reply.code(401).send({ error: 'not signed in' });
+    return null;
+  }
+  return user;
+}
+
+/**
+ * Same as requireUser, but also enforces the first-login handle prompt: a
+ * user who hasn't chosen a display handle yet cannot use the game/tournament
+ * API, even if they bypass the frontend's onboarding gate.
+ */
+export function requireUserWithHandle(req: FastifyRequest, reply: FastifyReply): UserRow | null {
+  const user = requireUser(req, reply);
+  if (!user) return null;
+  if (!user.handle) {
+    reply.code(403).send({ error: 'handle required' });
     return null;
   }
   return user;
@@ -130,9 +148,21 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   app.get('/api/me', (req, reply) => {
     const user = userFromRequest(req);
     return reply.send({
-      user: user ? { id: user.id, name: user.name, picture: user.picture, elo: user.elo } : null,
+      user: user ? { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo } : null,
       devAuth: process.env.DEV_AUTH === '1',
       googleAuth: Boolean(clientId),
     });
+  });
+
+  // First-login (and handle-change) endpoint: claims a case-insensitively unique display handle.
+  app.post('/api/handle', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    const { handle } = (req.body ?? {}) as { handle?: string };
+    const result = validateHandle(handle ?? '');
+    if (!result.ok) return reply.code(400).send({ error: result.error });
+    if (stmtHandleTaken.get(result.key, user.id)) return reply.code(409).send({ error: 'handle already taken' });
+    stmtSetHandle.run(result.handle, result.key, user.id);
+    return reply.send({ user: { id: user.id, handle: result.handle, picture: user.picture, elo: user.elo } });
   });
 }

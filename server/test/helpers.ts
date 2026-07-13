@@ -34,6 +34,7 @@ export class TestClient {
 
   async login(): Promise<void> {
     await this.post('/auth/dev', { name: this.name });
+    await this.post('/api/handle', { handle: this.name });
   }
 
   async get(url: string, expectStatus = 200): Promise<any> {

@@ -73,10 +73,61 @@ describe('auth', () => {
     const eve = new TestClient(app, 'Eve');
     await eve.login();
     const me = await eve.get('/api/me');
-    expect(me.user.name).toBe('Eve');
+    expect(me.user.handle).toBe('Eve');
     await eve.post('/auth/logout');
     const after = await eve.get('/api/me');
     expect(after.user).toBeNull();
+  });
+});
+
+describe('handle (first-login username)', () => {
+  it('starts null and gates game routes until claimed', async () => {
+    const frank = new TestClient(app, 'Frank');
+    await frank.post('/auth/dev', { name: frank.name });
+    const me = await frank.get('/api/me');
+    expect(me.user.handle).toBeNull();
+
+    const blocked = await frank.raw('POST', '/api/play');
+    expect(blocked.statusCode).toBe(403);
+
+    await frank.post('/api/handle', { handle: 'Frank' });
+    const after = await frank.get('/api/me');
+    expect(after.user.handle).toBe('Frank');
+
+    const allowed = await frank.raw('POST', '/api/play');
+    expect(allowed.statusCode).toBe(200);
+  });
+
+  it('rejects invalid handles', async () => {
+    const grace = new TestClient(app, 'Grace');
+    await grace.post('/auth/dev', { name: grace.name });
+
+    const empty = await grace.raw('POST', '/api/handle', { handle: '   ' });
+    expect(empty.statusCode).toBe(400);
+
+    const withControlChar = await grace.raw('POST', '/api/handle', { handle: 'ab\u0000cd' });
+    expect(withControlChar.statusCode).toBe(400);
+
+    const tooLong = await grace.raw('POST', '/api/handle', { handle: 'x'.repeat(25) });
+    expect(tooLong.statusCode).toBe(400);
+
+    const unicode = await grace.raw('POST', '/api/handle', { handle: '\u96ea\u3060\u308b\u307e\u2603\ufe0f' });
+    expect(unicode.statusCode).toBe(200);
+    expect((await grace.get('/api/me')).user.handle).toBe('\u96ea\u3060\u308b\u307e\u2603\ufe0f');
+  });
+
+  it('enforces case-insensitive uniqueness', async () => {
+    const heidi = new TestClient(app, 'Heidi');
+    const ivan = new TestClient(app, 'Ivan');
+    await heidi.post('/auth/dev', { name: heidi.name });
+    await ivan.post('/auth/dev', { name: ivan.name });
+
+    await heidi.post('/api/handle', { handle: 'Skywalker' });
+    const conflict = await ivan.raw('POST', '/api/handle', { handle: 'SKYWALKER' });
+    expect(conflict.statusCode).toBe(409);
+
+    const ok = await ivan.raw('POST', '/api/handle', { handle: 'Skywalker2' });
+    expect(ok.statusCode).toBe(200);
   });
 });
 

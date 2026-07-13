@@ -26,7 +26,7 @@ export default function Lobby() {
   return (
     <div className="lobby">
       <div className="hero">
-        <h1>Hi, {me?.user?.name?.split(' ')[0]}</h1>
+        <h1>Hi, {me?.user?.handle}</h1>
         <p>
           Four deals, robot partner &amp; opponents. Same deals as your friends — best matchpoint percentage wins.
         </p>

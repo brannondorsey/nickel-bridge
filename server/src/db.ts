@@ -64,12 +64,24 @@ CREATE INDEX IF NOT EXISTS idx_boards_user ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 `);
 
+// Migration: `handle`/`handle_key` were added after the initial schema, so existing
+// databases need an explicit ALTER TABLE (CREATE TABLE IF NOT EXISTS above is a no-op
+// on them). `handle` is the user-chosen display name shown everywhere in the app;
+// `handle_key` is its lowercased form, used only to enforce case-insensitive uniqueness
+// via a partial index (NULL until a user completes the first-login handle prompt).
+const userColumns = new Set((db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name));
+if (!userColumns.has('handle')) db.exec(`ALTER TABLE users ADD COLUMN handle TEXT`);
+if (!userColumns.has('handle_key')) db.exec(`ALTER TABLE users ADD COLUMN handle_key TEXT`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
+
 export interface UserRow {
   id: number;
   google_id: string;
   email: string | null;
   name: string;
   picture: string | null;
+  handle: string | null;
+  handle_key: string | null;
   elo: number;
   created_at: number;
 }

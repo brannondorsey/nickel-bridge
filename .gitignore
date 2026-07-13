@@ -11,3 +11,4 @@ data/
 web/dist/
 test-results/
 playwright-report/
+.claude/settings.local.json

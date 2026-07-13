@@ -54,7 +54,9 @@ export default function Tournament() {
                 <tr key={s.userId} className={s.userId === me?.user?.id ? 'me' : ''}>
                   <td>{s.complete ? (s.rank ?? i + 1) : '–'}</td>
                   <td>
-                    {s.userId === me?.user?.id ? 'You' : s.name}
+                    <Link to={`/players/${s.userId}`} className="plink">
+                      {s.userId === me?.user?.id ? 'You' : s.handle}
+                    </Link>
                     {!s.complete ? <span className="tmeta"> (in progress)</span> : ''}
                   </td>
                   <td className="num">{s.boardsDone}/4</td>

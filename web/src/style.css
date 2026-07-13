@@ -754,6 +754,140 @@ a {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.leader .lrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+}
+.leader .chev {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+/* ---------- player stats ---------- */
+.player-hero .avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--line);
+  margin-bottom: 8px;
+}
+.player-hero .avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--felt);
+  color: var(--cream);
+  font-size: 24px;
+  font-weight: 800;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.stat .val {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.stat .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.stat .sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.delta.up {
+  color: var(--good);
+  font-weight: 700;
+}
+.delta.down {
+  color: var(--red);
+  font-weight: 700;
+}
+.chart-caption {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+.trend-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  box-shadow: 0 2px 8px rgb(33 39 43 / 0.08);
+}
+.trend-tip span {
+  color: var(--muted);
+}
+.grade-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.grade-row .pctbar {
+  flex: 1;
+  margin-top: 0;
+}
+.grade-label {
+  width: 72px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.grade-count {
+  min-width: 24px;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.grade-count.wide {
+  min-width: 0;
+  flex-basis: 46%;
+  text-align: left;
+}
+.record-line {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.empty-stats {
+  text-align: center;
+}
+.empty-stats .btn {
+  display: inline-block;
+  margin-top: 8px;
+}
+.fieldtable .plink {
+  text-decoration: none;
+  border-bottom: 1px dotted var(--muted);
+}
 
 @media (min-width: 700px) {
   :root {
