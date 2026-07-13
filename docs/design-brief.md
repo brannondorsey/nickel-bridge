@@ -1,6 +1,7 @@
-# Bridge Bot — visual redesign brief
+# Nickel Bridge — visual redesign brief
 
-This is the requirements document for a visual redesign of Bridge Bot. It documents **what**
+This is the requirements document for a visual redesign of the app currently called Bridge
+Bot, which is being **renamed Nickel Bridge** as part of this redesign (§2). It documents **what**
 needs to be designed — every screen, component, state, and constraint — and deliberately does
 not say how anything should look. Where the current UI does something a particular way, it's
 described as context, not as a mandate; sections marked **requirement** are fixed, everything
@@ -11,7 +12,8 @@ so claims here can be verified against the running product.
 
 ## 1. What the product is
 
-Bridge Bot is a free, self-hostable web app for **learning SAYC bridge bidding** and playing
+Nickel Bridge (today shipping as "Bridge Bot" — the rename lands with this redesign) is a
+free, self-hostable web app for **learning SAYC bridge bidding** and playing
 **four-deal duplicate tournaments with friends — from your phone** ([README](../README.md)).
 Each player plays the *same four deals* on their own schedule, seated South with a robot
 partner against two robot opponents. Results are matchpointed against friends' results on
@@ -46,11 +48,24 @@ afterwards, a review artifact players revisit ("My boards → review"). Learning
 
 **Fixed requirements:**
 
-- The name **"Bridge Bot"** stays.
+- The app is being **renamed "Nickel Bridge"** — this is decided, and the new brand identity
+  should be built around that name (see the naming story below). The running app, repo, and
+  README still say "Bridge Bot"; that legacy name gets replaced in the product when the
+  redesign is implemented, so treat any "Bridge Bot" the designer encounters as outgoing.
 - All current **flows and features stay as-is**: the screens in §5, the information each one
   presents, and the interactions each one supports are requirements. Presentation of that
   information is open; the information itself is not.
 - Platform posture (§3) and accessibility baseline (§8).
+
+**The name, and where it comes from — material for the identity.** The app is named after
+the [Boulevard Bridge](https://en.wikipedia.org/wiki/Boulevard_Bridge) in Richmond, Virginia,
+which everyone in Richmond calls the **Nickel Bridge**: a narrow 1925 toll bridge carrying
+Route 161 across the James River, nicknamed for its five-cent toll. (The full story is even
+better: the original toll was a dime; regulators cut it to a nickel in 1957 after ruling the
+bridge too profitable, and it costs 50¢ today — the name outlived the price.) Threads the
+designer might pull on, entirely optionally: the double meaning of "bridge" (the card game /
+the river crossing), the nickel coin, tolls and toll booths, 1925, the James River, Richmond.
+None of this is a visual mandate — it's the story behind the name, offered as raw material.
 
 **Out of scope:** new features, changes to game flow or rules, changes to server-driven
 content (bid explanations, grades, scores are computed by the backend and arrive as text/data).
@@ -84,16 +99,16 @@ content (bid explanations, grades, scores are computed by the backend and arrive
 
 ## 4. Brand assets — all net-new
 
-The app has **zero visual assets today**: no logo (the wordmark is styled text "Bridge**Bot**"),
-no favicon, no app icons, no social/OG image, no illustrations, no manifest. The login screen's
-only decoration is a row of Unicode suit glyphs ♠♥♣♦. Player avatars are Google profile photos
-with a colored-initial fallback.
+The app has **zero visual assets today**: no logo (the current wordmark is styled text
+"Bridge**Bot**" — the outgoing name), no favicon, no app icons, no social/OG image, no
+illustrations, no manifest. The login screen's only decoration is a row of Unicode suit
+glyphs ♠♥♣♦. Player avatars are Google profile photos with a colored-initial fallback.
 
 Assets the redesign should produce:
 
 | Asset | Notes |
 | --- | --- |
-| Logo / wordmark | "Bridge Bot"; used in the app header and login screen |
+| Logo / wordmark | "Nickel Bridge" (§2 naming story); used in the app header and login screen |
 | Favicon + app icons | Standard web set (favicon, apple-touch-icon, PWA-ready sizes) |
 | Social / OG image | For links shared in group chats — the app spreads friend-to-friend |
 | Empty-state / login art | Optional; anywhere the designer wants illustration |
@@ -379,4 +394,4 @@ Requested from the designer:
 **Open questions the designer is invited to answer** (proposals welcome, none required):
 dark mode; a real desktop layout; using avatars on the leaderboard/standings; custom card-face
 art vs styled text; a four-hand deal diagram in the board result (§5.8, data already
-available); replacing the text wordmark with a drawn logo.
+available).
