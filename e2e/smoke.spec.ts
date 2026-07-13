@@ -91,3 +91,27 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.fieldtable')).toBeVisible();
   await expect(page.locator('.result .btn-primary')).toContainText(/Next board|Tournament/);
 });
+
+/** Stats page wiring: nav link → own page, leaderboard row → other pages. */
+test('player stats page is reachable for self and others', async ({ page, context }) => {
+  const name = `Stats ${Date.now()}`;
+
+  await page.goto('/');
+  await page.fill('input[placeholder*="dev"]', name);
+  await page.click('text=Dev sign-in');
+  await expect(page.getByText(`Hi, ${name.split(' ')[0]}`)).toBeVisible();
+
+  // own stats via the nav link; fresh account → empty state
+  await page.click('nav >> text=My stats');
+  const { user } = await (await context.request.get('/api/me')).json();
+  await expect(page).toHaveURL(`/players/${user.id}`);
+  await expect(page.getByText('Your stats')).toBeVisible();
+  await expect(page.getByText('No completed boards yet.')).toBeVisible();
+
+  // any leaderboard row links to that player's stats page
+  await page.click('nav >> text=Rankings');
+  await expect(page.locator('.leader li').first()).toBeVisible();
+  await page.locator('.leader .lrow').first().click();
+  await expect(page).toHaveURL(/\/players\/\d+/);
+  await expect(page.locator('.player-hero')).toBeVisible();
+});

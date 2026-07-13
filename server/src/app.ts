@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { registerAuthRoutes, requireUser } from './auth.js';
 import { db } from './db.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
+import { playerStats } from './stats.js';
 import { getTournament, myTournaments, placeUser, standings } from './tournaments.js';
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
@@ -103,6 +104,15 @@ export async function buildApp(): Promise<FastifyInstance> {
       )
       .all();
     return reply.send({ leaderboard: rows });
+  });
+
+  app.get('/api/users/:id/stats', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    const id = Number((req.params as { id: string }).id);
+    const stats = Number.isInteger(id) ? playerStats(id) : null;
+    if (!stats) return reply.code(404).send({ error: 'not found' });
+    return reply.send(stats);
   });
 
   // ---- static SPA ----

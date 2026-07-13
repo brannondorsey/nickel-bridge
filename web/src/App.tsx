@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { Suspense, createContext, lazy, useContext, useEffect, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import { Me, api } from './api';
 import Board from './pages/Board';
@@ -6,6 +6,9 @@ import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
 import Tournament from './pages/Tournament';
+
+// stats pulls in the charting library — keep it out of the core game bundle
+const Player = lazy(() => import('./pages/Player'));
 
 const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
 export const useMe = () => useContext(MeContext);
@@ -34,6 +37,7 @@ export default function App() {
                 Bridge<span>Bot</span>
               </Link>
               <nav>
+                <Link to={`/players/${me.user.id}`}>My stats</Link>
                 <Link to="/leaderboard">Rankings</Link>
                 <button
                   onClick={async () => {
@@ -48,6 +52,14 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Lobby />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route
+                path="/players/:id"
+                element={
+                  <Suspense fallback={<div className="spin" />}>
+                    <Player />
+                  </Suspense>
+                }
+              />
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
             </Routes>

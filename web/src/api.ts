@@ -106,6 +106,40 @@ export interface TournamentInfo {
   standings: Standing[];
 }
 
+export interface StatPoint {
+  tournamentId: number;
+  tournamentName: string;
+  finishedAt: number | null;
+}
+
+export interface PlayerStats {
+  user: { id: number; name: string; picture: string | null; elo: number; createdAt: number };
+  totals: {
+    boardsCompleted: number;
+    tournamentsPlayed: number;
+    tournamentsCompleted: number;
+    ratedTournaments: number;
+    currentElo: number;
+    peakElo: number;
+    avgPct: number | null;
+    avgBidAccuracy: number | null;
+    gradeCounts: { excellent: number; good: number; fair: number; poor: number };
+    declarer: { boards: number; made: number };
+    defense: { boards: number; beat: number };
+    passedOut: number;
+  };
+  percentiles: {
+    elo: number | null;
+    avgPct: number | null;
+    bidAccuracy: number | null;
+    ratedPlayers: number;
+    activePlayers: number;
+  };
+  eloSeries: (StatPoint & { elo: number })[];
+  pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
+  accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -136,6 +170,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ card }),
     }),
+  playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   leaderboard: () =>
     request<{ leaderboard: { id: number; name: string; picture: string | null; elo: number; rated_tournaments: number; played_tournaments: number }[] }>(
       '/api/leaderboard',
