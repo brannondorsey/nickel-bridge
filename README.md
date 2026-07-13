@@ -58,6 +58,9 @@ judgment, not card luck.
 
 ## Development
 
+New contributor (or AI agent)? Start with [CONTRIBUTING.md](CONTRIBUTING.md) — it maps the
+codebase, the dev workflow, and the invariants (robot determinism!) you must not break.
+
 ```bash
 npm install
 npm run build                                   # core, ai, server, web
