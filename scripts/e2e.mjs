@@ -73,6 +73,9 @@ const bob = new Client('bob');
 
 await alice.post('/auth/dev', { name: 'Alice E2E' });
 await bob.post('/auth/dev', { name: 'Bob E2E' });
+// first-login handle claim gates the whole game API (re-claiming your own is a no-op)
+await alice.post('/api/handle', { handle: 'Alice E2E' });
+await bob.post('/api/handle', { handle: 'Bob E2E' });
 
 // Alice: JIT creates a tournament
 const a = await alice.post('/api/play');
@@ -119,6 +122,7 @@ assert(
 // a third player can still join the same tournament later (tournaments never close)
 const carol = new Client('carol');
 await carol.post('/auth/dev', { name: 'Carol E2E' });
+await carol.post('/api/handle', { handle: 'Carol E2E' });
 const c = await carol.post('/api/play');
 assert(c.tournamentId === a.tournamentId, 'Carol late-joins the same evergreen tournament');
 for (let no = 1; no <= 4; no++) {
