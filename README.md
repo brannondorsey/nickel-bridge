@@ -70,6 +70,23 @@ node scripts/e2e.mjs http://localhost:3000      # end-to-end: two users, full to
 `DEV_AUTH=1` enables `POST /auth/dev` name-only login so you can try everything without
 Google credentials. Don't set it in production.
 
+### Testing
+
+- `npm test` — the whole unit/integration tier (~7s): core rules + scoring table, the SAYC
+  explainer spec table (`packages/core/test/sayc.test.ts` — add a row when you add a
+  convention), AI golden fixtures (bit-for-bit vs pgx), and in-process server suites
+  (API behavior, hidden-hand redaction, JIT placement, Elo recompute, and the **robot
+  determinism trace** — the fairness invariant of duplicate scoring).
+- `npm run test:e2e` — one asserting Playwright smoke at phone viewport; boots the built
+  server itself. Locally: `CHROMIUM_PATH=/path/to/chromium npm run test:e2e` to reuse an
+  installed browser.
+- `node scripts/e2e.mjs <url>` — smoke-test a *deployed* instance (needs `DEV_AUTH=1`).
+- If you deliberately change robot behavior (model, encoding, card-play tie-breaks,
+  dealing), regenerate the trace: `npm run build && node tools/gen_trace_fixture.mjs` —
+  a surprising diff there means you were about to break comparability of live tournaments.
+- CI (`.github/workflows/ci.yml`) runs build + typecheck + all suites + the smoke + a
+  Docker image build on every push/PR.
+
 ## Google sign-in setup
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → create a project →

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   auctionState,
   applyCall,
+  applyPlay,
   boardConditions,
   boardScoreNS,
   contractScore,
@@ -20,6 +21,7 @@ import {
   PASS,
   pbnToDeal,
   playState,
+  remainingCards,
   REDOUBLE,
   trickWinner,
   Contract,
@@ -52,11 +54,17 @@ describe('deal', () => {
     expect(new Set(all).size).toBe(52);
   });
 
-  it('board conditions follow duplicate rotation', () => {
-    expect(boardConditions(1)).toEqual({ dealer: 0, vul: { ns: false, ew: false } });
-    expect(boardConditions(2)).toEqual({ dealer: 1, vul: { ns: true, ew: false } });
-    expect(boardConditions(3)).toEqual({ dealer: 2, vul: { ns: false, ew: true } });
-    expect(boardConditions(4)).toEqual({ dealer: 3, vul: { ns: true, ew: true } });
+  it('board conditions follow the full standard 16-board rotation', () => {
+    // dealer rotates N E S W; vulnerability follows the standard duplicate cycle
+    const expected: [number, boolean, boolean][] = [
+      [0, false, false], [1, true, false], [2, false, true], [3, true, true],
+      [0, true, false], [1, false, true], [2, true, true], [3, false, false],
+      [0, false, true], [1, true, true], [2, false, false], [3, true, false],
+      [0, true, true], [1, false, false], [2, true, false], [3, false, true],
+    ];
+    expected.forEach(([dealer, ns, ew], i) => {
+      expect(boardConditions(i + 1), `board ${i + 1}`).toEqual({ dealer, vul: { ns, ew } });
+    });
   });
 
   it('round-trips PBN', () => {
@@ -95,6 +103,33 @@ describe('auction', () => {
     // N opens 1♥ (strain 2), E pass, S raises 2♥, all pass → declarer N
     const calls = [makeBid(1, 2), PASS, makeBid(2, 2), PASS, PASS, PASS];
     expect(finalContract(0, calls)!.declarer).toBe(0);
+  });
+
+  it('declarer follows the strain even when the last bidder is partner', () => {
+    // N 1♣, E pass, S 1♥, W pass, N 2♥ (supports S's hearts), all pass → S declares
+    const calls = [makeBid(1, 0), PASS, makeBid(1, 2), PASS, makeBid(2, 2), PASS, PASS, PASS];
+    const c = finalContract(0, calls)!;
+    expect(c.declarer).toBe(2);
+    expect(c.strain).toBe(2);
+  });
+
+  it('a new bid clears an earlier double', () => {
+    // N 1♠, E X, S 2♠, all pass → contract undoubled
+    const calls = [makeBid(1, 3), DOUBLE, makeBid(2, 3), PASS, PASS, PASS];
+    const c = finalContract(0, calls)!;
+    expect(c.doubled).toBe(false);
+    expect(c.redoubled).toBe(false);
+  });
+
+  it('redouble sticks until the next bid, and nothing is doublable after it', () => {
+    const calls = [makeBid(1, 4), DOUBLE, REDOUBLE];
+    const s = auctionState(0, calls);
+    expect(s.redoubled).toBe(true);
+    const mask = legalCalls(s);
+    expect(mask[DOUBLE]).toBe(false);
+    expect(mask[REDOUBLE]).toBe(false);
+    const done = finalContract(0, [...calls, PASS, PASS, PASS])!;
+    expect(done.redoubled).toBe(true);
   });
 
   it('double/redouble legality', () => {
@@ -144,6 +179,58 @@ describe('play', () => {
     // NT: ♠A wins
     expect(trickWinner(trick, 4)).toBe(0);
   });
+
+  it('highest trump wins an all-trump trick; overruff beats ruff', () => {
+    const allTrump = [
+      { seat: 0 as Seat, card: makeCard(1, 3) }, // ♥5 led
+      { seat: 1 as Seat, card: makeCard(1, 12) }, // ♥A
+      { seat: 2 as Seat, card: makeCard(1, 7) },
+      { seat: 3 as Seat, card: makeCard(1, 0) },
+    ];
+    expect(trickWinner(allTrump, 2)).toBe(1);
+    const overruff = [
+      { seat: 0 as Seat, card: makeCard(0, 12) }, // ♠A led
+      { seat: 1 as Seat, card: makeCard(1, 0) }, // ♥2 ruff
+      { seat: 2 as Seat, card: makeCard(1, 5) }, // ♥7 overruff
+      { seat: 3 as Seat, card: makeCard(0, 2) },
+    ];
+    expect(trickWinner(overruff, 2)).toBe(2);
+    // off-suit discard never wins in NT: highest of the LED suit wins
+    const discard = [
+      { seat: 0 as Seat, card: makeCard(2, 3) }, // ♦5 led
+      { seat: 1 as Seat, card: makeCard(0, 12) }, // ♠A discard
+      { seat: 2 as Seat, card: makeCard(2, 6) }, // ♦8
+      { seat: 3 as Seat, card: makeCard(3, 12) }, // ♣A discard
+    ];
+    expect(trickWinner(discard, 4)).toBe(2);
+  });
+
+  it('enforces following suit when able', () => {
+    const deal = dealBoard('follow-suit', 1);
+    const c = contract(1, 4, 0); // 1NT by N, E leads
+    // pick a lead from E in a suit South also holds — must follow
+    const southSuits = new Set(deal.hands[2].map((card) => Math.floor(card / 13)));
+    const lead = deal.hands[1].find((card) => southSuits.has(Math.floor(card / 13)))!;
+    expect(lead).toBeDefined();
+    const state = playState(deal, c, [lead]);
+    expect(state.handToPlay).toBe(2);
+    const ledSuit = Math.floor(lead / 13);
+    const legal = legalCards(deal, state);
+    expect(legal.length).toBeGreaterThan(0);
+    expect(legal.every((card) => Math.floor(card / 13) === ledSuit)).toBe(true);
+    const offSuit = deal.hands[2].find((x) => Math.floor(x / 13) !== ledSuit)!;
+    expect(() => applyPlay(deal, state, offSuit)).toThrow();
+  });
+
+  it('remainingCards shrinks as cards are played', () => {
+    const deal = dealBoard('remaining', 1);
+    const c = contract(1, 4, 0);
+    const state = playState(deal, c, []);
+    const lead = legalCards(deal, state)[0];
+    const after = playState(deal, c, [lead]);
+    expect(remainingCards(deal, after.plays, 1).length).toBe(12);
+    expect(remainingCards(deal, after.plays, 2).length).toBe(13);
+  });
 });
 
 describe('scoring', () => {
@@ -170,6 +257,51 @@ describe('scoring', () => {
     expect(contractScore(contract(3, 4, 2, true), NONE, 5)).toBe(-800); // 3NTX-4 nv: 100+200+200+300
     expect(contractScore(contract(3, 4, 2, true), BOTH, 6)).toBe(-800); // X-3 vul: 200+300+300
     expect(contractScore(contract(2, 0, 2, false, true), NONE, 6)).toBe(-600); // XX-2 nv: 200+400
+  });
+
+  it('matches the official duplicate scoring table (doubled/redoubled rows)', () => {
+    // [level, strain, doubled, redoubled, vul, tricksTaken, official score]
+    const TABLE: [number, number, boolean, boolean, boolean, number, number][] = [
+      // doubled partscores/games made (insult bonus included)
+      [1, 4, true, false, false, 7, 180], // 1NTX= nv
+      [2, 0, true, false, true, 8, 180], // 2♣X= vul (80 + 50 + 50)
+      [3, 0, true, false, false, 9, 470], // 3♣X= nv → doubled into game
+      [2, 2, true, false, false, 8, 470], // 2♥X= nv
+      [4, 3, true, false, true, 11, 990], // 4♠X+1 vul
+      [6, 2, true, false, false, 12, 1210], // 6♥X= nv
+      // redoubled
+      [1, 4, false, true, true, 7, 760], // 1NTXX= vul → game
+      [2, 1, false, true, false, 10, 960], // 2♦XX+2 nv: 160+300+2×200+100
+      [7, 4, false, true, true, 13, 2980], // 7NTXX= vul (maximum score)
+      // doubled undertricks, not vulnerable: -100, -300, -500, -800, -1100
+      [3, 4, true, false, false, 8, -100],
+      [3, 4, true, false, false, 7, -300],
+      [3, 4, true, false, false, 6, -500],
+      [3, 4, true, false, false, 5, -800],
+      [3, 4, true, false, false, 4, -1100],
+      // doubled undertricks, vulnerable: -200, -500, -800, -1100
+      [3, 4, true, false, true, 8, -200],
+      [3, 4, true, false, true, 7, -500],
+      [3, 4, true, false, true, 6, -800],
+      [3, 4, true, false, true, 5, -1100],
+      // redoubled undertricks
+      [2, 3, false, true, false, 7, -200],
+      [2, 3, false, true, false, 6, -600],
+      [2, 3, false, true, false, 5, -1000],
+      [2, 3, false, true, false, 4, -1600],
+      [2, 3, false, true, true, 7, -400],
+      [2, 3, false, true, true, 6, -1000],
+      // undoubled sanity anchors
+      [1, 0, false, false, false, 6, -50],
+      [7, 4, false, false, true, 6, -700],
+    ];
+    for (const [level, strain, dbl, rdbl, vul, tricks, expected] of TABLE) {
+      const v = vul ? BOTH : NONE;
+      expect(
+        contractScore(contract(level, strain, 2, dbl, rdbl), v, tricks),
+        `${level}${'♣♦♥♠N'[strain]}${rdbl ? 'XX' : dbl ? 'X' : ''} ${vul ? 'vul' : 'nv'} taking ${tricks}`,
+      ).toBe(expected);
+    }
   });
 
   it('boardScoreNS flips for EW declarers', () => {

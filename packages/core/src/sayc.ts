@@ -294,10 +294,12 @@ function explainOpening(level: number, strain: Strain): BidMeaning | null {
 function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain): BidMeaning | null {
   const partnerBid = ctx.partnerLastBid;
 
-  // --- over partner's 1NT / 2NT ---
+  // --- over partner's 1NT / 2NT / 3NT OPENING (not a later NT bid like Blackwood) ---
   const overNT =
     ctx.partnerOpened &&
     partnerBid !== null &&
+    ctx.opening !== null &&
+    ctx.opening.call === partnerBid &&
     bidStrain(partnerBid) === 4 &&
     ctx.lastBid === partnerBid &&
     !ctx.interference;
