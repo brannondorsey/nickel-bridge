@@ -1,18 +1,25 @@
-import { expect, test } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
+
+/** Dev sign-in, then claim a handle at the first-login prompt — lands on the lobby. */
+async function signInAndOnboard(page: Page, name: string) {
+  await page.goto('/');
+  await page.fill('input[placeholder*="dev"]', name);
+  await page.click('text=Dev sign-in');
+  await page.fill('input[placeholder="Handle"]', name);
+  await page.click('button:has-text("Continue")');
+  await expect(page.getByText(`Hi, ${name.split(' ')[0]}`)).toBeVisible();
+}
 
 /**
  * One asserting end-to-end pass over the real stack at phone viewport:
- * login → JIT placement → bid-meaning preview → grade toast → card play →
- * board result. Guards the client↔server wiring that unit suites can't see.
+ * login → handle prompt → JIT placement → bid-meaning preview → grade toast →
+ * card play → board result. Guards the client↔server wiring that unit suites
+ * can't see.
  */
 test('learn-and-play loop works end to end on mobile', async ({ page, context }) => {
   const name = `Smoke ${Date.now()}`;
 
-  // login (dev auth) → lobby
-  await page.goto('/');
-  await page.fill('input[placeholder*="dev"]', name);
-  await page.click('text=Dev sign-in');
-  await expect(page.getByText(`Hi, ${name.split(' ')[0]}`)).toBeVisible();
+  await signInAndOnboard(page, name);
 
   // Play → placed into a tournament, bidding view with HCP badge
   await page.click('button:has-text("Play")');
@@ -96,10 +103,7 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
 test('player stats page is reachable for self and others', async ({ page, context }) => {
   const name = `Stats ${Date.now()}`;
 
-  await page.goto('/');
-  await page.fill('input[placeholder*="dev"]', name);
-  await page.click('text=Dev sign-in');
-  await expect(page.getByText(`Hi, ${name.split(' ')[0]}`)).toBeVisible();
+  await signInAndOnboard(page, name);
 
   // own stats via the nav link; fresh account → empty state
   await page.click('nav >> text=My stats');

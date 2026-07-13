@@ -130,7 +130,7 @@ The whole app is one container: Node + SQLite + the AI. Backup = copy one file
 packages/core   game rules: deals/PBN, auction, play, scoring, matchpoints, Elo, SAYC explainer
 packages/ai     bidding network (TS inference + converted brl weights) and DDS WASM card play
 server          Fastify API, SQLite, Google OAuth, tournament lifecycle
-web             React SPA (mobile-first)
+web             React SPA (mobile-first) — redesign brief in docs/design-brief.md
 tools           one-time weight conversion + golden-fixture generation (Python)
 scripts         e2e smoke test
 ```

@@ -41,6 +41,7 @@ tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
+docs            design-brief.md — requirements spec for the visual redesign
 ```
 
 ## Development workflow
