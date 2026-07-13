@@ -41,7 +41,7 @@ const stmtSaveBoard = db.prepare(
   `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch() WHERE id = ?`,
 );
 const stmtBoardResults = db.prepare(
-  `SELECT b.*, u.name AS user_name FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.board_no = ? AND b.state = 'done' ORDER BY b.updated_at`,
 );
 
@@ -281,12 +281,12 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
 
 /** Result + field comparison for a completed board. */
 export function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
-  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & { user_name: string })[];
+  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & { user_handle: string })[];
   const scores = rows.map((r) => r.score_ns ?? 0);
   const mps = matchpoints(scores);
   const field = rows.map((r, i) => ({
     userId: r.user_id,
-    name: r.user_name,
+    handle: r.user_handle,
     contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
     scoreNS: r.score_ns ?? 0,
     pct: Math.round(mps[i].pct * 10) / 10,

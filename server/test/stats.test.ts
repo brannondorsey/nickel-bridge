@@ -62,7 +62,7 @@ describe('player stats', () => {
     const aliceId = await userId(alice);
     const stats = await alice.get(`/api/users/${aliceId}/stats`);
 
-    expect(stats.user.name).toBe('StatsAlice');
+    expect(stats.user.handle).toBe('StatsAlice');
     expect(stats.totals.boardsCompleted).toBe(4);
     expect(stats.totals.tournamentsPlayed).toBe(1);
     expect(stats.totals.tournamentsCompleted).toBe(1);

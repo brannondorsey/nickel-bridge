@@ -1,7 +1,7 @@
 /** Thin typed client for the server API. */
 
 export interface Me {
-  user: { id: number; name: string; picture: string | null; elo: number } | null;
+  user: { id: number; handle: string | null; picture: string | null; elo: number } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
 }
@@ -39,7 +39,7 @@ export interface TrickCard {
 
 export interface FieldEntry {
   userId: number;
-  name: string;
+  handle: string;
   contract: string;
   scoreNS: number;
   pct: number;
@@ -92,7 +92,7 @@ export interface BoardView {
 
 export interface Standing {
   userId: number;
-  name: string;
+  handle: string;
   boardsDone: number;
   totalPct: number | null;
   complete: boolean;
@@ -113,7 +113,7 @@ export interface StatPoint {
 }
 
 export interface PlayerStats {
-  user: { id: number; name: string; picture: string | null; elo: number; createdAt: number };
+  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
   totals: {
     boardsCompleted: number;
     tournamentsPlayed: number;
@@ -155,6 +155,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   me: () => request<Me>('/api/me'),
   devLogin: (name: string) => request<{ ok: boolean }>('/auth/dev', { method: 'POST', body: JSON.stringify({ name }) }),
+  setHandle: (handle: string) =>
+    request<{ user: Me['user'] }>('/api/handle', { method: 'POST', body: JSON.stringify({ handle }) }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
@@ -172,7 +174,7 @@ export const api = {
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   leaderboard: () =>
-    request<{ leaderboard: { id: number; name: string; picture: string | null; elo: number; rated_tournaments: number; played_tournaments: number }[] }>(
+    request<{ leaderboard: { id: number; handle: string; picture: string | null; elo: number; rated_tournaments: number; played_tournaments: number }[] }>(
       '/api/leaderboard',
     ),
 };

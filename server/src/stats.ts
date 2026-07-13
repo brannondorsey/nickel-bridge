@@ -2,7 +2,7 @@ import { Contract, ELO_INITIAL } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
-const stmtUser = db.prepare(`SELECT id, name, picture, elo, created_at FROM users WHERE id = ?`);
+const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ?`);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
 // so created_at is meaningless there — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.
@@ -31,7 +31,7 @@ export interface StatPoint {
 }
 
 export interface PlayerStats {
-  user: { id: number; name: string; picture: string | null; elo: number; createdAt: number };
+  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
   totals: {
     boardsCompleted: number;
     tournamentsPlayed: number;
@@ -85,7 +85,7 @@ function betterThan(value: number, field: number[]): number | null {
 
 export function playerStats(userId: number): PlayerStats | null {
   const u = stmtUser.get(userId) as
-    | { id: number; name: string; picture: string | null; elo: number; created_at: number }
+    | { id: number; handle: string; picture: string | null; elo: number; created_at: number }
     | undefined;
   if (!u) return null;
 
@@ -167,7 +167,7 @@ export function playerStats(userId: number): PlayerStats | null {
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
   return {
-    user: { id: u.id, name: u.name, picture: u.picture, elo: u.elo, createdAt: u.created_at },
+    user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at },
     totals: {
       boardsCompleted: boards.length,
       tournamentsPlayed: byTournament.size,

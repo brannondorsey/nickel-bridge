@@ -5,7 +5,7 @@ import { useMe } from '../App';
 
 interface Row {
   id: number;
-  name: string;
+  handle: string;
   picture: string | null;
   elo: number;
   rated_tournaments: number;
@@ -37,7 +37,7 @@ export default function Leaderboard() {
               <Link to={`/players/${r.id}`} className="lrow">
                 <span className="rankno">{i + 1}</span>
                 <span className="lname">
-                  {r.id === me?.user?.id ? 'You' : r.name}
+                  {r.id === me?.user?.id ? 'You' : r.handle}
                   <div className="lmeta">
                     {r.played_tournaments} tournament{r.played_tournaments === 1 ? '' : 's'} · {r.rated_tournaments}{' '}
                     rated

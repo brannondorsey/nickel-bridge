@@ -55,7 +55,7 @@ export default function Tournament() {
                   <td>{s.complete ? (s.rank ?? i + 1) : '–'}</td>
                   <td>
                     <Link to={`/players/${s.userId}`} className="plink">
-                      {s.userId === me?.user?.id ? 'You' : s.name}
+                      {s.userId === me?.user?.id ? 'You' : s.handle}
                     </Link>
                     {!s.complete ? <span className="tmeta"> (in progress)</span> : ''}
                   </td>

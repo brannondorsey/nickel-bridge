@@ -65,9 +65,9 @@ export default function Player() {
         {stats.user.picture ? (
           <img className="avatar" src={stats.user.picture} alt="" referrerPolicy="no-referrer" />
         ) : (
-          <div className="avatar avatar-fallback">{stats.user.name.charAt(0).toUpperCase()}</div>
+          <div className="avatar avatar-fallback">{[...stats.user.handle][0]?.toUpperCase()}</div>
         )}
-        <h1>{isMe ? 'Your stats' : stats.user.name}</h1>
+        <h1>{isMe ? 'Your stats' : stats.user.handle}</h1>
         <p>Learning since {since}</p>
       </div>
 

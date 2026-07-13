@@ -2,6 +2,7 @@ import { Suspense, createContext, lazy, useContext, useEffect, useState } from '
 import { Link, Route, Routes } from 'react-router-dom';
 import { Me, api } from './api';
 import Board from './pages/Board';
+import CreateHandle from './pages/CreateHandle';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
@@ -30,7 +31,9 @@ export default function App() {
   return (
     <MeContext.Provider value={{ me, refresh }}>
       <div className="shell">
-        {me?.user ? (
+        {me?.user && !me.user.handle ? (
+          <CreateHandle />
+        ) : me?.user ? (
           <>
             <header className="topbar">
               <Link to="/" className="brand">

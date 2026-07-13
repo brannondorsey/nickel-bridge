@@ -4,7 +4,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registerAuthRoutes, requireUser } from './auth.js';
+import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { db } from './db.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { playerStats } from './stats.js';
@@ -21,14 +21,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ---- game & tournament API ----
 
   app.post('/api/play', (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { tournament, nextBoard } = placeUser(user.id);
     return reply.send({ tournamentId: tournament.id, boardNo: nextBoard });
   });
 
   app.get('/api/tournaments', (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const mine = myTournaments(user.id).map((t) => ({
       id: t.id,
@@ -40,7 +40,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.get('/api/tournaments/:id', (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const t = getTournament(Number((req.params as { id: string }).id));
     if (!t) return reply.code(404).send({ error: 'not found' });
@@ -52,7 +52,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.get('/api/tournaments/:id/boards/:no', async (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { id, no } = req.params as { id: string; no: string };
     const t = getTournament(Number(id));
@@ -65,7 +65,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { id, no } = req.params as { id: string; no: string };
     const { call } = (req.body ?? {}) as { call?: number };
@@ -79,7 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.post('/api/tournaments/:id/boards/:no/play', async (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { id, no } = req.params as { id: string; no: string };
     const { card } = (req.body ?? {}) as { card?: number };
@@ -93,21 +93,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.get('/api/leaderboard', (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const rows = db
       .prepare(
-        `SELECT u.id, u.name, u.picture, u.elo,
+        `SELECT u.id, u.handle, u.picture, u.elo,
                 (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
                 (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b WHERE b.user_id = u.id) AS played_tournaments
-         FROM users u ORDER BY u.elo DESC, u.name`,
+         FROM users u ORDER BY u.elo DESC, u.handle`,
       )
       .all();
     return reply.send({ leaderboard: rows });
   });
 
   app.get('/api/users/:id/stats', (req, reply) => {
-    const user = requireUser(req, reply);
+    const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const id = Number((req.params as { id: string }).id);
     const stats = Number.isInteger(id) ? playerStats(id) : null;
