@@ -69,6 +69,8 @@ export interface BoardView {
   auction: AuctionEntry[];
   bidEvals: BidEval[];
   legalCalls?: number[];
+  /** SAYC meaning per legal call (null = no convention entry), sent while bidding on my turn */
+  legalCallMeanings?: Record<number, BidMeaning | null>;
   myTurn?: boolean;
   contract?: unknown;
   contractLabel?: string;

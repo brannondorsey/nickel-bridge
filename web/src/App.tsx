@@ -11,7 +11,7 @@ import Tournament from './pages/Tournament';
 // stats pulls in the charting library — keep it out of the core game bundle
 const Player = lazy(() => import('./pages/Player'));
 
-const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
+export const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
 export const useMe = () => useContext(MeContext);
 
 export default function App() {
