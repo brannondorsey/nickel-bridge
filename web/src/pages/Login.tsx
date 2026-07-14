@@ -1,46 +1,57 @@
-import { useEffect, useState } from 'react';
-import { Me, api } from '../api';
+import { useState } from 'react';
 import { useMe } from '../App';
+import { api } from '../api';
+import { Splash } from '../components/Splash';
+import { Button } from '../components/ds/Button';
+import { Input } from '../components/ds/Input';
 
+/**
+ * Logged-out users land on the splash itself: "PLAY THE TOLL →" is the
+ * Google sign-in, with the dev name-only login below it when the server
+ * enables it. Either auth option can be independently absent. No timer —
+ * signing in is the only way across.
+ */
 export default function Login() {
-  const { refresh } = useMe();
-  const [info, setInfo] = useState<Me | null>(null);
+  const { me, refresh } = useMe();
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.me().then(setInfo);
-  }, []);
+  const devSignIn = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.devLogin(name.trim());
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'sign-in failed');
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="login">
-      <div className="suits">
-        ♠<span className="r">♥</span>♣<span className="r">♦</span>
-      </div>
-      <h1>Nickel Bridge</h1>
-      <p style={{ color: 'var(--muted)', margin: 0 }}>
-        Learn SAYC bidding and play four-deal duplicate tournaments with your friends — robot partner and opponents,
-        real rankings.
-      </p>
-      {info?.googleAuth !== false ? (
-        <a className="btn btn-primary" href="/auth/google">
-          Sign in with Google
-        </a>
-      ) : null}
-      {info?.devAuth ? (
+    <Splash
+      pitch="Learn SAYC bidding and play four-deal duplicate tournaments with your friends — robot partner and opponents, real rankings."
+      cta={
         <>
-          <input placeholder="Name (dev login)" value={name} onChange={(e) => setName(e.target.value)} />
-          <button
-            className="btn btn-secondary"
-            onClick={async () => {
-              if (!name.trim()) return;
-              await api.devLogin(name.trim());
-              refresh();
-            }}
-          >
-            Dev sign-in
-          </button>
+          {me?.googleAuth !== false ? <Button href="/auth/google">PLAY THE TOLL →</Button> : null}
+          {me?.devAuth ? (
+            <>
+              <Input
+                placeholder="Name (dev login)"
+                value={name}
+                onChange={setName}
+                onEnter={devSignIn}
+                error={error}
+              />
+              <Button variant="secondary" onClick={devSignIn} busy={busy} busyLabel="SIGNING IN…">
+                DEV SIGN-IN
+              </Button>
+            </>
+          ) : null}
         </>
-      ) : null}
-    </div>
+      }
+    />
   );
 }

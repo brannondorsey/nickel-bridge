@@ -249,6 +249,189 @@ input {
   padding: 20px 16px;
 }
 
+/* visually hidden but focusable/readable (skip-intro button) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- splash: the toll gate (keyframes verbatim from the prototype) ---- */
+
+/* login mode: the whole screen, in flow. */
+.splash {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--paper);
+  padding-bottom: 130px;
+}
+/* auto mode: overlay above the app; its exit fade reveals Home beneath. */
+.splash-auto {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  min-height: 0;
+  cursor: pointer;
+  animation: nbSplashFade 0.6s ease 2.5s forwards;
+}
+
+.splash-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  text-align: center;
+}
+.splash-auto .splash-stack {
+  animation: nbSplashOut 0.55s ease-in 2.1s forwards;
+}
+
+.splash-word {
+  font-family: var(--font-display);
+  font-size: 32px;
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  animation: nbWordIn 0.9s ease-out both;
+}
+.splash-sub {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.42em;
+  color: var(--ink);
+  animation: nbSubIn 0.6s ease-out 0.5s both;
+}
+.splash-cta {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: nbSubIn 0.6s ease-out 0.8s both;
+}
+.splash-pitch {
+  max-width: 300px;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  animation: nbSubIn 0.6s ease-out 1.1s both;
+}
+
+.splash-bridge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  animation: nbBridgeRise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.splash-auto .splash-bridge {
+  animation: nbBridgeRise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both, nbBridgeOut 0.6s ease-in 2.1s forwards;
+}
+.splash-bridge img {
+  display: block;
+  width: 100%;
+  height: 146px;
+  object-fit: cover;
+  object-position: bottom;
+}
+
+@keyframes nbWordIn {
+  from {
+    opacity: 0;
+    letter-spacing: 0.34em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.16em;
+  }
+}
+@keyframes nbSubIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes nbBridgeRise {
+  from {
+    transform: translateY(150px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes nbSplashOut {
+  to {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+@keyframes nbBridgeOut {
+  to {
+    transform: translateY(170px);
+  }
+}
+@keyframes nbSplashFade {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .splash * {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+  }
+}
+
+/* ---- auth interstitial (create handle) ---- */
+.auth-screen {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.auth-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  margin: 28px 0 0;
+}
+.auth-copy {
+  max-width: 320px;
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.auth-actions {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+  text-align: left;
+}
+
 /* ================= design-system components ================= */
 
 /* ---- Button ---- */
