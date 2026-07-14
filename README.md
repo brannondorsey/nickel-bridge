@@ -142,8 +142,11 @@ deploy).
 4. Provision the production app once:
    ```
    fly apps create nickel-bridge
-   fly volumes create data --app nickel-bridge --region ewr --size 1
+   fly volumes create data --app nickel-bridge --region ewr --size 5
    ```
+   `fly.toml` also configures auto-extend (`auto_extend_size_threshold`/`_increment`/`_limit`),
+   so the volume grows itself in 1GB steps once past 80% full, up to a 20GB cap — no manual
+   `fly volumes extend` needed unless you outgrow that.
 5. Mint an **org-scoped** token and add it as a GitHub Actions repository secret named
    `FLY_API_TOKEN` (Settings → Secrets and variables → Actions):
    ```
