@@ -20,3 +20,29 @@ export function timeGreeting(hour: number): 'morning' | 'afternoon' | 'evening' 
   if (hour >= 12 && hour < 18) return 'afternoon';
   return 'evening';
 }
+
+/** unix seconds → "JUL 13 2026" (postmark cancel line) */
+export function postmarkDate(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    .replace(',', '')
+    .toUpperCase();
+}
+
+/** "Tournament #12" → "12"; falls back to the id for unnumbered names. */
+export function tournamentNo(name: string, id: number): string {
+  return name.match(/#(\d+)/)?.[1] ?? String(id);
+}
+
+/** NS-perspective score with an explicit sign: 620 → "+620", -100 → "−100" */
+export function signedScore(n: number): string {
+  return n < 0 ? `−${-n}` : `+${n}`;
+}
+
+/** "NS vul" / "EW vul" / "Both vul" / "None vul" */
+export function vulLabel(vul: { ns: boolean; ew: boolean }): string {
+  if (vul.ns && vul.ew) return 'Both vul';
+  if (vul.ns) return 'NS vul';
+  if (vul.ew) return 'EW vul';
+  return 'None vul';
+}

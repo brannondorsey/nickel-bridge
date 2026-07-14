@@ -1,95 +1,194 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { TournamentInfo, api } from '../api';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMe } from '../App';
+import { SEAT_SHORT, TournamentInfo, api, boardConditions } from '../api';
+import { ScreenHeader } from '../components/ds/AppHeader';
+import { Button } from '../components/ds/Button';
+import { FlipDigits } from '../components/ds/FlipDigits';
+import { Loading } from '../components/ds/Loading';
+import { PctBar } from '../components/ds/PctBar';
+import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { Postmark } from '../components/ds/Postmark';
+import { BoardTicketRow } from '../components/game/BoardTicketRow';
+import { ordinal, postmarkDate, signedScore, tournamentNo, vulLabel } from '../format';
 
+const TOTAL_BOARDS = 4;
+
+/**
+ * One page, two faces. The scoresheet lists all four boards as tickets
+ * (scored / live / sealed — deals stay sealed until the previous board is
+ * scored) over the live field. Once my four boards are done it flips to the
+ * postmarked result; "Review the boards" toggles back without a new route.
+ */
 export default function Tournament() {
   const { tid } = useParams();
   const { me } = useMe();
+  const navigate = useNavigate();
   const [t, setT] = useState<TournamentInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
 
   useEffect(() => {
     api
       .tournament(Number(tid))
       .then(setT)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e instanceof Error ? e.message : 'failed to load tournament'));
   }, [tid]);
 
-  if (error) return <div className="notice">{error}</div>;
-  if (!t) return <div className="spin" />;
+  if (error) {
+    return (
+      <div className="tourney-page">
+        <ScreenHeader title="Tournament" onBack={() => navigate('/')} />
+        <div className="notice-error">{error}</div>
+      </div>
+    );
+  }
+  if (!t) {
+    return (
+      <div className="tourney-page">
+        <Loading />
+      </div>
+    );
+  }
 
+  const myDone = t.myDone ?? 0;
+  const pairs = t.standings.length;
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
-  const myDone = meRow?.boardsDone ?? 0;
+  const complete = myDone === TOTAL_BOARDS;
+
+  if (complete && !reviewing) {
+    const num = tournamentNo(t.name, t.id);
+    const when = t.myLastPlayedAt ?? t.createdAt;
+    const delta = t.myEloDelta ? t.myEloDelta.after - t.myEloDelta.before : null;
+    return (
+      <div className="tourney-page">
+        <ScreenHeader title={t.name} caption={`Complete · ${pairs} pairs`} onBack={() => navigate('/')} />
+        <div className="tourney-result-hero">
+          <Postmark size={118} arcBottom={`TOURNAMENT Nº${num}`} line1="TOLL PAID" line2={when ? postmarkDate(when) : ''} />
+          <div className="tourney-pct">
+            <FlipDigits value={meRow?.totalPct ?? '—'} suffix="%" size={54} />
+          </div>
+          <div className="label-caps tourney-rank num">
+            MATCHPOINTS · {meRow?.rank ? `${ordinal(meRow.rank)} OF ` : ''}
+            {pairs} PAIRS
+          </div>
+          {t.myEloDelta ? (
+            <div className="tourney-rating num">
+              <span className="label-caps">NICKEL RATING</span>
+              <b>{t.myEloDelta.after}</b>
+              {delta !== null && delta !== 0 ? (
+                <span className={`tourney-rating-delta ${delta > 0 ? 'positive' : 'negative'}`}>
+                  {delta > 0 ? '+' : '−'}
+                  {Math.abs(delta)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <PerforatedPanel heading="BOARD BY BOARD" className="tourney-boards num">
+          {(t.myBoards ?? []).map((b) => (
+            <div key={b.no} className="tourney-board-line">
+              <b className="tourney-board-no">{b.no}</b>
+              <span>{b.contractLabel ?? 'Passed out'}</span>
+              <span className="tourney-board-score">{b.scoreNS !== null ? signedScore(b.scoreNS) : '—'}</span>
+              <span className="tourney-board-pct">
+                {b.pct !== null ? (
+                  <>
+                    <PctBar pct={b.pct} /> <b>{b.pct}</b>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </span>
+            </div>
+          ))}
+        </PerforatedPanel>
+        <div className="tourney-actions">
+          <Button to="/">BACK TO THE BRIDGE →</Button>
+          <Button variant="secondary" onClick={() => setReviewing(true)}>
+            Review the boards
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const liveNo = myDone + 1;
+  const rows = Array.from({ length: TOTAL_BOARDS }, (_, i) => {
+    const no = i + 1;
+    const summary = t.myBoards?.find((b) => b.no === no);
+    if (summary?.state === 'done') {
+      return (
+        <BoardTicketRow
+          key={no}
+          no={no}
+          state="scored"
+          to={`/t/${t.id}/b/${no}`}
+          main={`${summary.contractLabel ?? 'Passed out'}${summary.scoreNS !== null ? ` · ${signedScore(summary.scoreNS)}` : ''}`}
+          sub={summary.pct !== null ? `${summary.pct}% matchpoints` : 'waiting on the field'}
+        />
+      );
+    }
+    if (no === liveNo || summary) {
+      const { dealer, vul } = boardConditions(no);
+      return (
+        <BoardTicketRow
+          key={no}
+          no={no}
+          state="live"
+          to={`/t/${t.id}/b/${no}`}
+          main={summary?.state === 'playing' ? 'Card play — your turn' : 'Bidding — your call'}
+          sub={`Dealer ${SEAT_SHORT[dealer]} · ${vulLabel(vul)}`}
+        />
+      );
+    }
+    return (
+      <BoardTicketRow
+        key={no}
+        no={no}
+        state="sealed"
+        main={no === liveNo + 1 ? `Sealed — deals when board ${liveNo} is scored` : 'Sealed'}
+      />
+    );
+  });
 
   return (
-    <div className="lobby">
-      <div className="hero">
-        <h1>{t.name}</h1>
-        <p>Live standings — they keep evolving as more friends play these same four deals.</p>
-      </div>
-
-      {myDone < 4 ? (
-        <Link to={`/t/${t.id}/b/${myDone + 1}`} className="btn btn-primary">
-          {myDone === 0 ? 'Play board 1' : `Continue — board ${myDone + 1} of 4`}
-        </Link>
-      ) : null}
-
-      <div className="card-box">
-        <h2>Standings</h2>
+    <div className="tourney-page">
+      <ScreenHeader title={t.name} caption={`${pairs} pairs · matchpoints`} onBack={() => navigate('/')} />
+      <div className="tourney-sheet">{rows}</div>
+      <PerforatedPanel
+        heading={myDone > 0 ? `THE FIELD — AFTER BOARD ${myDone}` : 'THE FIELD'}
+        className="tourney-field num"
+      >
         {t.standings.length === 0 ? (
-          <div className="tmeta">No completed boards yet.</div>
+          <div className="empty-note">No one has played a board yet.</div>
         ) : (
-          <table className="fieldtable">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Player</th>
-                <th className="num">Boards</th>
-                <th className="num">Total%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {t.standings.map((s, i) => (
-                <tr key={s.userId} className={s.userId === me?.user?.id ? 'me' : ''}>
-                  <td>{s.complete ? (s.rank ?? i + 1) : '–'}</td>
-                  <td>
-                    <Link to={`/players/${s.userId}`} className="plink">
-                      {s.userId === me?.user?.id ? 'You' : s.handle}
-                    </Link>
-                    {!s.complete ? <span className="tmeta"> (in progress)</span> : ''}
-                  </td>
-                  <td className="num">{s.boardsDone}/4</td>
-                  <td className="num">
-                    {s.totalPct ?? '–'}
-                    {s.totalPct != null ? (
-                      <div className="pctbar">
-                        <i style={{ width: `${s.totalPct}%` }} />
-                      </div>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          t.standings.map((s, i) => {
+            const you = s.userId === me?.user?.id;
+            return (
+              <div key={s.userId} className={`tourney-field-row ${you ? 'tourney-field-you' : ''}`}>
+                <b className="tourney-field-rank">{s.rank ?? i + 1}</b>
+                <span className="tourney-field-name">
+                  <Link to={`/players/${s.userId}`}>{you ? 'You' : s.handle}</Link>
+                  {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
+                </span>
+                <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>
+              </div>
+            );
+          })
+        )}
+      </PerforatedPanel>
+      <div className="tourney-actions">
+        {complete ? (
+          <Button variant="secondary" onClick={() => setReviewing(false)}>
+            Back to the summary
+          </Button>
+        ) : (
+          <Button to={`/t/${t.id}/b/${liveNo}`}>
+            {myDone === 0 ? 'PLAY BOARD 1 →' : `CONTINUE BOARD ${liveNo} →`}
+          </Button>
         )}
       </div>
-
-      {myDone > 0 ? (
-        <div className="card-box">
-          <h2>My boards</h2>
-          {Array.from({ length: myDone }, (_, i) => i + 1).map((no) => (
-            <Link key={no} to={`/t/${t.id}/b/${no}`} className="trow">
-              <span className="tname">Board {no}</span>
-              <span className="tmeta">review →</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-
-      <Link to="/" className="btn btn-secondary">
-        Lobby
-      </Link>
     </div>
   );
 }

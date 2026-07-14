@@ -8,10 +8,9 @@ import { Loading } from '../components/ds/Loading';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { TicketStub } from '../components/ds/TicketStub';
 import { BoardTicketRow } from '../components/game/BoardTicketRow';
-import { ordinal, shortDate, timeGreeting } from '../format';
+import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 
-/** "Tournament #12" → "12"; falls back to the id for unnumbered names. */
-const tourneyNo = (t: TournamentInfo) => t.name.match(/#(\d+)/)?.[1] ?? String(t.id);
+const tourneyNo = (t: TournamentInfo) => tournamentNo(t.name, t.id);
 
 /**
  * Home ("the bridge is open"): one live crossing at a time. The current

@@ -1703,3 +1703,112 @@ a.board-row:hover {
 .stats-footer {
   margin: 20px 16px 0;
 }
+
+/* ---- Tournament sheet + result ---- */
+.tourney-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding-bottom: 18px;
+}
+.tourney-sheet {
+  padding: 14px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tourney-page .tourney-field {
+  margin: 14px 16px 0;
+}
+.tourney-field-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 6px 12px;
+  font-size: 14px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+.tourney-field-rank {
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+.tourney-field-you {
+  background: var(--surface);
+  margin: 0 -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.tourney-field-you .tourney-field-name {
+  font-weight: 600;
+}
+.tourney-field-name a {
+  text-decoration: none;
+}
+.tourney-field-progress {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.tourney-actions {
+  padding: 14px 16px 0;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tourney-result-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 16px 0;
+}
+.tourney-pct {
+  margin-top: 16px;
+}
+.tourney-rank {
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.tourney-rating {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tourney-rating .label-caps {
+  letter-spacing: 0.18em;
+}
+.tourney-rating b {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 16px;
+}
+.tourney-rating-delta {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+}
+.tourney-page .tourney-boards {
+  margin: 16px 16px 0;
+}
+.tourney-board-line {
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto;
+  gap: 7px 12px;
+  font-size: 13.5px;
+  align-items: center;
+  padding: 2px 0;
+}
+.tourney-board-no {
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+.tourney-board-score {
+  color: var(--muted);
+}
+.tourney-board-pct {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
