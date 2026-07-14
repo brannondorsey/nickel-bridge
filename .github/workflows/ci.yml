@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t bridge-bot:ci .
+      - run: docker build -t nickel-bridge:ci .
 
   # Deploys a throwaway Fly.io app per open PR (nickel-bridge-pr-<number>) so a change can be
   # reviewed live at a URL instead of run locally. Uses DEV_AUTH (name-only login) instead of

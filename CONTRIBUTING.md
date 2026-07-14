@@ -1,4 +1,4 @@
-# Contributing to Bridge Bot
+# Contributing to Nickel Bridge
 
 This guide is the technical map of the codebase for contributors — human or AI. The
 [README](README.md) covers what the app is, its features, and how to deploy it; this file
