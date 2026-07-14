@@ -1,7 +1,6 @@
 # Nickel Bridge — visual redesign brief
 
-This is the requirements document for a visual redesign of the app currently called Bridge
-Bot, which is being **renamed Nickel Bridge** as part of this redesign (§2). It documents **what**
+This is the requirements document for a visual redesign of Nickel Bridge. It documents **what**
 needs to be designed — every screen, component, state, and constraint — and deliberately does
 not say how anything should look. Where the current UI does something a particular way, it's
 described as context, not as a mandate; sections marked **requirement** are fixed, everything
@@ -12,8 +11,7 @@ so claims here can be verified against the running product.
 
 ## 1. What the product is
 
-Nickel Bridge (today shipping as "Bridge Bot" — the rename lands with this redesign) is a
-free, self-hostable web app for **learning SAYC bridge bidding** and playing
+Nickel Bridge is a free, self-hostable web app for **learning SAYC bridge bidding** and playing
 **four-deal duplicate tournaments with friends — from your phone** ([README](../README.md)).
 Each player plays the *same four deals* on their own schedule, seated South with a robot
 partner against two robot opponents. Results are matchpointed against friends' results on
@@ -48,10 +46,8 @@ afterwards, a review artifact players revisit ("My boards → review"). Learning
 
 **Fixed requirements:**
 
-- The app is being **renamed "Nickel Bridge"** — this is decided, and the new brand identity
-  should be built around that name (see the naming story below). The running app, repo, and
-  README still say "Bridge Bot"; that legacy name gets replaced in the product when the
-  redesign is implemented, so treat any "Bridge Bot" the designer encounters as outgoing.
+- The app was recently renamed to **Nickel Bridge**, and the new brand identity should be
+  built around that name (see the naming story below).
 - All current **flows and features stay as-is**: the screens in §5, the information each one
   presents, and the interactions each one supports are requirements. Presentation of that
   information is open; the information itself is not.

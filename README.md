@@ -1,4 +1,4 @@
-# Bridge Bot
+# Nickel Bridge
 
 A free, self-hostable web app for **learning SAYC bidding** and playing **four-deal duplicate
 bridge tournaments** with friends — from your phone.
