@@ -125,7 +125,8 @@ export default function Lobby() {
                       <Link key={t.id} to={`/t/${t.id}`} className="tolls-row num">
                         <b className="tolls-no">{tourneyNo(t)}</b>
                         <span className="tolls-meta">
-                          {when ? shortDate(when) : '—'} · {t.standings.length} pairs
+                          {when ? shortDate(when) : '—'} · {t.standings.length}{' '}
+                          {t.standings.length === 1 ? 'pair' : 'pairs'}
                         </span>
                         <b className="tolls-pct">{mine?.totalPct != null ? `${mine.totalPct}%` : '—'}</b>
                         <span className={`tolls-rank ${mine?.rank === 1 ? 'positive' : 'quiet'}`}>

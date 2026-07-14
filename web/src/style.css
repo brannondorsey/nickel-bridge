@@ -194,22 +194,6 @@ input {
   }
 }
 
-/* legacy spinner alias until every screen is on .loading (removed with the old App shell) */
-.spin {
-  margin: 64px auto;
-  width: 26px;
-  height: 26px;
-  border: 3px solid var(--line);
-  border-top-color: var(--ink);
-  border-radius: 50%;
-  animation: nb-spin 0.9s linear infinite;
-}
-@keyframes nb-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* error: perforated ticket panel in the negative color */
 .notice-error {
   display: flex;
