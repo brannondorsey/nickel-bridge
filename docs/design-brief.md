@@ -96,7 +96,7 @@ content (bid explanations, grades, scores are computed by the backend and arrive
 ## 4. Brand assets — all net-new
 
 The app has **zero visual assets today**: no logo (the current wordmark is styled text
-"Bridge**Bot**" — the outgoing name), no favicon, no app icons, no social/OG image, no
+"Nickel**Bridge**"), no favicon, no app icons, no social/OG image, no
 illustrations, no manifest. The login screen's only decoration is a row of Unicode suit
 glyphs ♠♥♣♦. Player avatars are Google profile photos with a colored-initial fallback.
 

@@ -37,7 +37,7 @@ export default function App() {
           <>
             <header className="topbar">
               <Link to="/" className="brand">
-                Bridge<span>Bot</span>
+                Nickel<span>Bridge</span>
               </Link>
               <nav>
                 <Link to={`/players/${me.user.id}`}>My stats</Link>
