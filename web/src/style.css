@@ -1475,3 +1475,81 @@ a.board-row:hover {
   font-style: italic;
   text-align: center;
 }
+
+/* ---- Rankings ---- */
+.rankings {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding-bottom: 24px;
+}
+.rank-head {
+  padding: 18px 16px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rank-title {
+  font-weight: 600;
+  font-size: 19px;
+}
+.rankings .rank-panel {
+  margin: 12px 16px 0;
+  padding: 6px 14px 6px 20px;
+}
+.rank-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  gap: 0 12px;
+  align-items: center;
+  font-size: 14.5px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.rank-row > * {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-quiet);
+}
+.rank-row:last-child > * {
+  border-bottom: none;
+}
+.rank-row-you {
+  background: var(--surface);
+  margin: 0 -12px 0 -6px;
+  padding-left: 6px;
+  padding-right: 12px;
+}
+.rank-row-you .rank-name {
+  font-weight: 600;
+}
+.rank-no {
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+.rank-move {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  text-align: right;
+  min-width: 26px;
+}
+.rank-move.quiet {
+  color: var(--muted);
+}
+.rank-foot {
+  margin: 12px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rank-foot-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.rank-foot-quiet {
+  color: var(--muted);
+}
