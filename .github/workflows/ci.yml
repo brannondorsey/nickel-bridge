@@ -68,7 +68,8 @@ jobs:
       - name: Ensure preview app + volume exist
         run: |
           flyctl apps create "$APP" --org personal || true
-          count=$(flyctl volumes list --app "$APP" --json 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+          count=$(flyctl volumes list --app "$APP" --json 2>/dev/null | jq 'length' 2>/dev/null)
+          count=${count:-0}
           if [ "$count" -eq 0 ]; then
             flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
           fi
