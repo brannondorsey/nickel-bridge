@@ -1812,3 +1812,187 @@ a.board-row:hover {
   align-items: center;
   gap: 6px;
 }
+
+/* ---- Board (bidding / play / result) ---- */
+.board-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding-bottom: 16px;
+}
+.board-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.board-head .ticket-stub {
+  flex-shrink: 0;
+}
+.board-head-mid {
+  flex: 1;
+  min-width: 0;
+}
+.board-head-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  font-family: var(--font-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-head-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.board-head-sub b {
+  color: var(--ink);
+  font-family: var(--font-label);
+}
+.board-vul {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.board-fan {
+  padding: 10px 8px 0;
+}
+.seat-line {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.seat-line-active {
+  color: var(--ink);
+}
+.board-follow {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  font-family: var(--font-label);
+  padding: 6px 16px 0;
+}
+.board-hint {
+  text-align: center;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 8px 16px 4px;
+}
+.board-page .flip-note {
+  margin: 10px 16px 0;
+}
+.board-page .toast,
+.board-page .grade-toast {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+.board-page .meaning-panel {
+  margin: 10px 12px 0;
+}
+.board-page .auction {
+  margin: 12px 12px 0;
+}
+.board-page .trick {
+  margin: 8px 12px 0;
+}
+.board-actions {
+  padding: 14px 12px 4px;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* result */
+.result-hero {
+  text-align: center;
+  padding: 20px 16px 0;
+}
+.result-contract {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 23px;
+}
+.result-score {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.pct-big {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+.pct-big.low .flipdigit {
+  background: var(--negative);
+}
+.result-sub {
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.result .result-field {
+  margin: 14px 12px 0;
+}
+.fieldtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.fieldtable td {
+  padding: 3px 0;
+  vertical-align: baseline;
+}
+.fieldtable-name {
+  font-weight: 400;
+}
+.fieldtable tr.me .fieldtable-name {
+  font-weight: 800;
+}
+.fieldtable tr.me td {
+  background: var(--surface);
+}
+.fieldtable tr.me td:first-child {
+  padding-left: 6px;
+}
+.fieldtable-contract {
+  color: var(--muted);
+  padding-right: 14px;
+}
+.fieldtable-pct {
+  text-align: right;
+  white-space: nowrap;
+}
+.result-bidding {
+  margin: 12px 12px 0;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 14px;
+}
+.result-bidding-head {
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.result-bid-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  padding: 3.5px 0;
+}
+.result-bid-call {
+  min-width: 38px;
+  font-family: var(--font-label);
+}
