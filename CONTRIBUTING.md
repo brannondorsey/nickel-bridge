@@ -54,7 +54,10 @@ npm run dev -w web       # Vite dev server on :5173, proxies /api and /auth to :
 ```
 
 Checks — run all three before pushing; CI runs exactly these plus the Playwright smoke and a
-Docker build (`.github/workflows/ci.yml`, on pushes to `main` and all PRs):
+Docker build (`.github/workflows/ci.yml`, on pushes to `main` and all PRs). Once those pass,
+CI also deploys: every open PR gets its own Fly.io preview app (destroyed on close by
+`.github/workflows/pr-preview-teardown.yml`), and every push to `main` deploys to production —
+see README.md "Deployment" for the one-time Fly setup and how preview auth (`DEV_AUTH`) works:
 
 ```bash
 npm run build
@@ -100,7 +103,10 @@ Never return raw board state to the client.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
-**exactly one machine** — no horizontal scaling.
+**exactly one machine** — no horizontal scaling. On Fly.io this means every environment
+(production, and each per-PR preview) is its own separate app with its own volume — `fly.toml`
+is shared across all of them, with the app name always overridden per-environment via `--app`
+in CI (see `.github/workflows/ci.yml`'s `deploy-preview`/`deploy-production` jobs).
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament, else joins the one with the most completed plays that you haven't

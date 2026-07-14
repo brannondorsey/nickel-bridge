@@ -109,9 +109,58 @@ The whole app is one container: Node + SQLite + the AI. Backup = copy one file
 
 | Option | Cost | How |
 | --- | --- | --- |
-| **Fly.io** (hands-off) | ~$2–3/mo | see `fly.toml` header comments |
+| **Fly.io** (hands-off, CI-automated) | ~$2–3/mo | see below |
 | **Any VPS** (Hetzner/DO…) | ~$4–5/mo | `cp .env.example .env`, fill it in, `docker compose up -d --build` (Caddy handles HTTPS) |
 | **Oracle Cloud Always-Free VM** | $0 | same docker-compose on their free ARM VM |
+
+### Fly.io: automated preview + production deploys
+
+CI (`.github/workflows/ci.yml`) deploys automatically once CI passes:
+
+- **Every open PR** gets its own live preview app at `https://nickel-bridge-pr-<number>.fly.dev`,
+  deployed on every push to the PR and linked in a PR comment. Preview apps run with
+  `DEV_AUTH=1` (name-only login, no Google account needed) instead of real Google OAuth,
+  since OAuth needs a redirect URI registered in advance and preview URLs are per-PR.
+  `.github/workflows/pr-preview-teardown.yml` destroys the app (and its volume) when the PR
+  closes, so preview cost never outlives the PR.
+- **Every push to `main`** deploys straight to the production app (`nickel-bridge`), no manual
+  approval step.
+
+Both jobs share one `fly.toml` — the `app = 'nickel-bridge'` line in it is only a default for
+local/manual use; CI always passes `--app <name>` explicitly. Fly bills the always-on parts
+(machines) near-zero when idle (`auto_stop_machines`/`min_machines_running = 0` in `fly.toml`),
+so the main cost driver of adding previews is one small volume per currently-open PR — check
+Fly's own pricing page for current per-GB rates.
+
+**One-time setup** (only needs doing once, by whoever owns the Fly account — not repeated per
+deploy).
+
+1. Create a Fly.io account and install `flyctl` (`curl -L https://fly.io/install.sh | sh`).
+2. `fly auth login`.
+3. Confirm `nickel-bridge` is available as an app name (Fly app names are global) — pick
+   another name and update `fly.toml` + the two workflow files if not.
+4. Provision the production app once:
+   ```
+   fly apps create nickel-bridge
+   fly volumes create data --app nickel-bridge --region ewr --size 1
+   ```
+5. Mint an **org-scoped** token and add it as a GitHub Actions repository secret named
+   `FLY_API_TOKEN` (Settings → Secrets and variables → Actions):
+   ```
+   fly tokens create org
+   ```
+   Use an org token, not a single-app `fly tokens create deploy --app <name>` token — CI
+   creates a brand-new Fly app per open PR (`nickel-bridge-pr-<number>`), which an app-scoped
+   token isn't allowed to do (it can only manage the one app it was minted for).
+6. Register `https://nickel-bridge.fly.dev/auth/google/callback` as an authorized redirect URI
+   (see "Google sign-in setup" above), then set the production app's real secrets — **only**
+   on the production app, never on a preview app:
+   ```
+   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://nickel-bridge.fly.dev --app nickel-bridge
+   ```
+
+Once `FLY_API_TOKEN` is set, the very next PR and the next merge to `main` will deploy
+automatically — there's no separate manual first deploy to do.
 
 ### Environment variables
 

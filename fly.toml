@@ -1,12 +1,17 @@
-# Fly.io deployment (~$2–3/month for a shared-cpu-1x + 1GB volume).
+# Fly.io deployment (~$2–3/month for a shared-cpu-1x + 1GB volume, per app).
 #
-#   fly launch --copy-config --no-deploy   # creates the app, pick a name/region
-#   fly volumes create data --size 1
-#   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://<app>.fly.dev
-#   fly deploy
+# This one file is shared by every environment: production and every per-PR preview app
+# (see .github/workflows/ci.yml and pr-preview-teardown.yml). `app = 'nickel-bridge'` below is
+# only the default for local/manual `fly deploy` — CI always passes `--app <name>` explicitly
+# (`nickel-bridge` for production, `nickel-bridge-pr-<number>` for previews), which overrides it.
 #
-# SQLite lives on the volume; keep exactly one machine (no horizontal scaling).
-app = 'bridge-bot'
+# One-time production setup (see README.md "Deployment" for the full checklist):
+#   fly apps create nickel-bridge
+#   fly volumes create data --app nickel-bridge --region ewr --size 1
+#   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://nickel-bridge.fly.dev --app nickel-bridge
+#
+# SQLite lives on the volume; keep exactly one machine per app (no horizontal scaling).
+app = 'nickel-bridge'
 primary_region = 'ewr'
 
 [build]
@@ -25,6 +30,13 @@ primary_region = 'ewr'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '15s'
+    method = 'GET'
+    path = '/health'
+    timeout = '5s'
 
 [[vm]]
   size = 'shared-cpu-1x'

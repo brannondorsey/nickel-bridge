@@ -1,0 +1,17 @@
+name: PR preview teardown
+
+# Destroys the per-PR Fly.io preview app (and its attached volume) created by the
+# deploy-preview job in ci.yml, so preview cost never outlives the PR. Runs independently
+# of CI health — a closed PR should be torn down even if it never had a green CI run.
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl apps destroy "nickel-bridge-pr-${{ github.event.pull_request.number }}" --yes || true
