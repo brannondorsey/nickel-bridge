@@ -45,6 +45,8 @@ export interface PlayerStats {
     declarer: { boards: number; made: number };
     defense: { boards: number; beat: number };
     passedOut: number;
+    /** rating change since the start of the current UTC month; null when unrated */
+    monthlyEloDelta: number | null;
   };
   /** "better than N% of players" per metric; null when the player or field lacks data */
   percentiles: {
@@ -181,12 +183,31 @@ export function playerStats(userId: number): PlayerStats | null {
       declarer,
       defense,
       passedOut,
+      monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
     percentiles: fieldPercentiles(userId, u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
     eloSeries,
     pctSeries,
     accuracySeries,
   };
+}
+
+/**
+ * Rating change since the start of the current UTC month. The baseline is the
+ * rating after the player's last tournament finished before this month (1200
+ * when their whole rated history is inside the month); unrated players get
+ * null. Like everything Elo here, a full recompute can shift this
+ * retroactively — that's the evergreen model, not a bug.
+ */
+function monthlyEloDelta(currentElo: number, eloSeries: (StatPoint & { elo: number })[]): number | null {
+  if (!eloSeries.length) return null;
+  const now = new Date();
+  const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000;
+  let baseline = ELO_INITIAL;
+  for (const p of eloSeries) {
+    if (p.finishedAt !== null && p.finishedAt < monthStart) baseline = p.elo;
+  }
+  return currentElo - baseline;
 }
 
 /**

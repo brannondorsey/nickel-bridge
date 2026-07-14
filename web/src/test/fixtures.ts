@@ -241,6 +241,13 @@ export const tournamentInProgress: TournamentInfo = {
   id: 12,
   name: 'Tournament #12',
   myDone: 1,
+  createdAt: 1_781_000_000,
+  myLastPlayedAt: 1_781_050_000,
+  myEloDelta: null,
+  myBoards: [
+    { no: 1, state: 'done', contractLabel: '4♠ by S', scoreNS: 620, pct: 58 },
+    { no: 2, state: 'bidding', contractLabel: null, scoreNS: null, pct: null },
+  ],
   standings: [
     { userId: 7, handle: 'Alice', boardsDone: 4, totalPct: 83, complete: true, rank: 1 },
     { userId: 1, handle: 'Margaret', boardsDone: 1, totalPct: 58, complete: false },
@@ -252,6 +259,15 @@ export const tournamentComplete: TournamentInfo = {
   id: 11,
   name: 'Tournament #11',
   myDone: 4,
+  createdAt: 1_780_400_000,
+  myLastPlayedAt: 1_780_500_000,
+  myEloDelta: { before: 1475, after: 1487 },
+  myBoards: [
+    { no: 1, state: 'done', contractLabel: '4♠ by S', scoreNS: 620, pct: 58 },
+    { no: 2, state: 'done', contractLabel: '3NT+1 by N', scoreNS: 630, pct: 74 },
+    { no: 3, state: 'done', contractLabel: '2♥-1 by S', scoreNS: -100, pct: 41 },
+    { no: 4, state: 'done', contractLabel: '4♥ by W', scoreNS: -420, pct: 71 },
+  ],
   standings: [
     { userId: 7, handle: 'Alice', boardsDone: 4, totalPct: 71, complete: true, rank: 1 },
     { userId: 1, handle: 'Margaret', boardsDone: 4, totalPct: 61, complete: true, rank: 2 },
@@ -282,6 +298,7 @@ export const playerStatsFull: PlayerStats = {
     declarer: { boards: 88, made: 54 },
     defense: { boards: 126, beat: 66 },
     passedOut: 3,
+    monthlyEloDelta: 34,
   },
   percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, ratedPlayers: 54, activePlayers: 60 },
   eloSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), elo: 1380 + i * 11 })),
@@ -304,6 +321,7 @@ export const playerStatsEmpty: PlayerStats = {
     declarer: { boards: 0, made: 0 },
     defense: { boards: 0, beat: 0 },
     passedOut: 0,
+    monthlyEloDelta: null,
   },
   percentiles: { elo: null, avgPct: null, bidAccuracy: null, ratedPlayers: 0, activePlayers: 0 },
   eloSeries: [],
@@ -314,8 +332,8 @@ export const playerStatsEmpty: PlayerStats = {
 // ---- leaderboard ----
 
 export const leaderboardRows = [
-  { id: 7, handle: 'Alice', picture: null, elo: 1642, rated_tournaments: 9, played_tournaments: 11 },
-  { id: 10, handle: 'Henry', picture: null, elo: 1601, rated_tournaments: 8, played_tournaments: 9 },
-  { id: 1, handle: 'Margaret', picture: null, elo: 1487, rated_tournaments: 10, played_tournaments: 12 },
-  { id: 8, handle: 'Bob', picture: null, elo: 1466, rated_tournaments: 5, played_tournaments: 7 },
+  { id: 7, handle: 'Alice', picture: null, elo: 1642, rated_tournaments: 9, played_tournaments: 11, movement: 2 },
+  { id: 10, handle: 'Henry', picture: null, elo: 1601, rated_tournaments: 8, played_tournaments: 9, movement: -1 },
+  { id: 1, handle: 'Margaret', picture: null, elo: 1487, rated_tournaments: 10, played_tournaments: 12, movement: 3 },
+  { id: 8, handle: 'Bob', picture: null, elo: 1466, rated_tournaments: 5, played_tournaments: 7, movement: null },
 ];
