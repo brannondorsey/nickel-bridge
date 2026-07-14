@@ -18,6 +18,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
 
+  // Liveness check for Fly's http_service health checks — no auth, no DB touch.
+  app.get('/health', (req, reply) => reply.send({ ok: true }));
+
   // ---- game & tournament API ----
 
   app.post('/api/play', (req, reply) => {

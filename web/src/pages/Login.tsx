@@ -16,7 +16,7 @@ export default function Login() {
       <div className="suits">
         ♠<span className="r">♥</span>♣<span className="r">♦</span>
       </div>
-      <h1>Bridge Bot</h1>
+      <h1>Nickel Bridge</h1>
       <p style={{ color: 'var(--muted)', margin: 0 }}>
         Learn SAYC bidding and play four-deal duplicate tournaments with your friends — robot partner and opponents,
         real rankings.
