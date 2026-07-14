@@ -1385,3 +1385,93 @@ a.board-row:hover {
   font-style: italic;
   flex: 1;
 }
+
+/* ================= screens ================= */
+
+/* ---- Home ---- */
+.home {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.home-greeting {
+  padding: 20px 16px 0;
+}
+.home-hello {
+  font-weight: 600;
+  font-size: 21px;
+}
+.home-sub {
+  font-size: 14.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.home-current {
+  margin: 16px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.home-current-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.home-current-text {
+  flex: 1;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.home-current-sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+.home-gate {
+  padding: 14px 16px 0;
+}
+.home-tolls {
+  padding: 20px 16px 24px;
+}
+.home-tolls .tolls-panel {
+  margin-top: 10px;
+  padding: 2px 14px 2px 20px;
+}
+.tolls-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  gap: 0 12px;
+  align-items: center;
+  font-size: 14.5px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.tolls-row > * {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-quiet);
+}
+.tolls-row:last-child > * {
+  border-bottom: none;
+}
+.tolls-no {
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+.tolls-rank {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  text-align: right;
+}
+.tolls-rank.quiet {
+  color: var(--muted);
+}
+.home-tolls-note {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  font-style: italic;
+  text-align: center;
+}
