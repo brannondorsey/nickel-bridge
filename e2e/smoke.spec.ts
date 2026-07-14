@@ -1,32 +1,51 @@
 import { Page, expect, test } from '@playwright/test';
 
-/** Dev sign-in, then claim a handle at the first-login prompt — lands on the lobby. */
+/**
+ * Dev sign-in on the splash, claim a handle, tap through the first-visit
+ * splash intro — lands on Home ("Good …, {name}").
+ */
 async function signInAndOnboard(page: Page, name: string) {
   await page.goto('/');
   await page.fill('input[placeholder*="dev"]', name);
-  await page.click('text=Dev sign-in');
+  await page.getByRole('button', { name: /dev sign-in/i }).click();
   await page.fill('input[placeholder="Handle"]', name);
-  await page.click('button:has-text("Continue")');
-  await expect(page.getByText(`Hi, ${name.split(' ')[0]}`)).toBeVisible();
+  await page.getByRole('button', { name: /continue/i }).click();
+  // the first authenticated visit plays the splash intro — tap skips it
+  const splash = page.getByTestId('splash');
+  await splash.waitFor({ timeout: 10_000 }).catch(() => {});
+  if (await splash.isVisible().catch(() => false)) await splash.click();
+  await expect(page.getByText(new RegExp(`Good (morning|afternoon|evening), ${name.split(' ')[0]}`))).toBeVisible();
 }
 
 /**
  * One asserting end-to-end pass over the real stack at phone viewport:
  * login → handle prompt → JIT placement → bid-meaning preview → grade toast →
- * card play → board result. Guards the client↔server wiring that unit suites
- * can't see.
+ * call inspector → card play → board result. Guards the client↔server wiring
+ * that unit suites can't see.
  */
 test('learn-and-play loop works end to end on mobile', async ({ page, context }) => {
   const name = `Smoke ${Date.now()}`;
 
   await signInAndOnboard(page, name);
 
-  // Play → placed into a tournament, bidding view with HCP badge
-  await page.click('button:has-text("Play")');
+  // Play the toll → placed into a tournament, bidding view with HCP badge
+  await page.click('.home-cta');
   await expect(page.locator('.bidbox')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.hcp-badge')).toBeVisible();
+  await expect(page.locator('.hcp-badge').first()).toBeVisible();
   const boardUrl = new URL(page.url());
   const [, , tid, , no] = boardUrl.pathname.split('/'); // /t/:tid/b/:no
+
+  // levels 5–7 hide behind the fold until asked for
+  await expect(page.locator('.bidbox button.bid[aria-label="7NT"]')).toHaveCount(0);
+  await page.click('.bidbox-fold');
+  await expect(page.locator('.bidbox button.bid[aria-label="7NT"]')).toBeVisible();
+
+  // tapping a past call in the auction opens the inspector bottom sheet
+  // (board 1 deals from North, so robot calls precede ours)
+  await page.locator('.auction tbody button').first().click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: /close/i }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // the meaning panel appears BEFORE the bid is submitted
   await expect(page.locator('.grade-toast')).toHaveCount(0);
@@ -36,10 +55,10 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(meaning.locator('.mtitle')).not.toHaveText('');
   await expect(page.locator('.grade-toast')).toHaveCount(0);
 
-  // confirm → the bid is graded with stars
+  // confirm → the bid is graded with the star stamp
   await page.click('.confirm-row .btn-primary');
   await expect(page.locator('.grade-toast')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.grade-toast .stars')).toBeVisible();
+  await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
   // finish the auction by passing (robot annotations may appear in between)
   for (let i = 0; i < 12; i++) {
@@ -92,30 +111,32 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
     await page.reload();
   }
 
-  // board result: score hero, matchpoint %, field table
+  // board result: score hero, matchpoint %, field table, the revealed deal
   await expect(page.locator('.result')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.pct-big')).toContainText('%');
   await expect(page.locator('.fieldtable')).toBeVisible();
-  await expect(page.locator('.result .btn-primary')).toContainText(/Next board|Tournament/);
+  await expect(page.locator('.deal-diagram')).toBeVisible();
+  await expect(page.locator('.board-actions .ds-btn').first()).toContainText(/NEXT BOARD|TOURNAMENT/);
 });
 
-/** Stats page wiring: nav link → own page, leaderboard row → other pages. */
+/** Stats page wiring: bottom tab → own page, rankings row → other pages. */
 test('player stats page is reachable for self and others', async ({ page, context }) => {
   const name = `Stats ${Date.now()}`;
 
   await signInAndOnboard(page, name);
 
-  // own stats via the nav link; fresh account → empty state
-  await page.click('nav >> text=My stats');
+  // own stats via the bottom tab; fresh account → rating hero + empty state
+  await page.click('.tabbar >> text=STATS');
   const { user } = await (await context.request.get('/api/me')).json();
   await expect(page).toHaveURL(`/players/${user.id}`);
-  await expect(page.getByText('Your stats')).toBeVisible();
-  await expect(page.getByText('No completed boards yet.')).toBeVisible();
+  await expect(page.getByText('NICKEL RATING')).toBeVisible();
+  await expect(page.getByText(/No boards played yet/)).toBeVisible();
+  await expect(page.getByRole('link', { name: /play your first board/i })).toBeVisible();
 
-  // any leaderboard row links to that player's stats page
-  await page.click('nav >> text=Rankings');
-  await expect(page.locator('.leader li').first()).toBeVisible();
-  await page.locator('.leader .lrow').first().click();
+  // any rankings row links to that player's stats page
+  await page.click('.tabbar >> text=RANKINGS');
+  await expect(page.locator('.rank-row').first()).toBeVisible();
+  await page.locator('.rank-row').first().click();
   await expect(page).toHaveURL(/\/players\/\d+/);
   await expect(page.locator('.player-hero')).toBeVisible();
 });
