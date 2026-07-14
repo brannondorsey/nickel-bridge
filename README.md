@@ -113,6 +113,10 @@ The whole app is one container: Node + SQLite + the AI. Backup = copy one file
 | **Any VPS** (Hetzner/DO…) | ~$4–5/mo | `cp .env.example .env`, fill it in, `docker compose up -d --build` (Caddy handles HTTPS) |
 | **Oracle Cloud Always-Free VM** | $0 | same docker-compose on their free ARM VM |
 
+Local Docker Compose (no domain/OAuth needed): `cp .env.example .env`, uncomment `DEV_AUTH=1`
+in it, then `docker compose up --build app` — the app is reachable at `http://localhost:3000`
+without starting Caddy.
+
 ### Environment variables
 
 | Var | Default | Purpose |

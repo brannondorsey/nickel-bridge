@@ -5,14 +5,23 @@
 #
 # Caddy terminates HTTPS automatically (Let's Encrypt) for $DOMAIN.
 # Backups: copy ./data/bridge.db somewhere safe (it's just one file).
+#
+# Local dev (no domain/OAuth needed): set DEV_AUTH=1 in .env for name-only
+# login (never set this in a real deployment), then hit the app directly at
+# http://localhost:3000 — Caddy/HTTPS aren't required for local use. The app
+# port is bound to 127.0.0.1 only, so it stays off the public internet even
+# when this same compose file is used for a real VPS deployment.
 services:
   app:
     build: .
     restart: unless-stopped
+    ports:
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
     environment:
-      BASE_URL: https://${DOMAIN}
+      BASE_URL: ${BASE_URL:-https://${DOMAIN}}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      DEV_AUTH: ${DEV_AUTH:-}
     volumes:
       - ./data:/data
 
