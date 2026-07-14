@@ -133,8 +133,7 @@ so the main cost driver of adding previews is one small volume per currently-ope
 Fly's own pricing page for current per-GB rates.
 
 **One-time setup** (only needs doing once, by whoever owns the Fly account — not repeated per
-deploy). Order matters: `fly tokens create deploy --app <name>` needs the app to already exist,
-so create the app before minting the token.
+deploy).
 
 1. Create a Fly.io account and install `flyctl` (`curl -L https://fly.io/install.sh | sh`).
 2. `fly auth login`.
@@ -145,11 +144,14 @@ so create the app before minting the token.
    fly apps create nickel-bridge
    fly volumes create data --app nickel-bridge --region ewr --size 1
    ```
-5. Mint a CI token scoped to that app, and add it as a GitHub Actions repository secret named
+5. Mint an **org-scoped** token and add it as a GitHub Actions repository secret named
    `FLY_API_TOKEN` (Settings → Secrets and variables → Actions):
    ```
-   fly tokens create deploy --app nickel-bridge
+   fly tokens create org
    ```
+   Use an org token, not a single-app `fly tokens create deploy --app <name>` token — CI
+   creates a brand-new Fly app per open PR (`nickel-bridge-pr-<number>`), which an app-scoped
+   token isn't allowed to do (it can only manage the one app it was minted for).
 6. Register `https://nickel-bridge.fly.dev/auth/google/callback` as an authorized redirect URI
    (see "Google sign-in setup" above), then set the production app's real secrets — **only**
    on the production app, never on a preview app:
