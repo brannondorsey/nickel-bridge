@@ -54,6 +54,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     concurrency:
       group: preview-${{ github.event.pull_request.number }}
