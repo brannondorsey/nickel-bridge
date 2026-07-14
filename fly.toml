@@ -1,17 +1,17 @@
 # Fly.io deployment (~$2–3/month for a shared-cpu-1x + 1GB volume, per app).
 #
 # This one file is shared by every environment: production and every per-PR preview app
-# (see .github/workflows/ci.yml and pr-preview-teardown.yml). `app = 'bridge-bot'` below is
+# (see .github/workflows/ci.yml and pr-preview-teardown.yml). `app = 'nickel-bridge'` below is
 # only the default for local/manual `fly deploy` — CI always passes `--app <name>` explicitly
-# (`bridge-bot` for production, `bridge-bot-pr-<number>` for previews), which overrides it.
+# (`nickel-bridge` for production, `nickel-bridge-pr-<number>` for previews), which overrides it.
 #
 # One-time production setup (see README.md "Deployment" for the full checklist):
-#   fly apps create bridge-bot
-#   fly volumes create data --app bridge-bot --region ewr --size 1
-#   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://bridge-bot.fly.dev --app bridge-bot
+#   fly apps create nickel-bridge
+#   fly volumes create data --app nickel-bridge --region ewr --size 1
+#   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://nickel-bridge.fly.dev --app nickel-bridge
 #
 # SQLite lives on the volume; keep exactly one machine per app (no horizontal scaling).
-app = 'bridge-bot'
+app = 'nickel-bridge'
 primary_region = 'ewr'
 
 [build]

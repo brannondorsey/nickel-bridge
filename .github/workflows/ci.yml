@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t bridge-bot:ci .
 
-  # Deploys a throwaway Fly.io app per open PR (bridge-bot-pr-<number>) so a change can be
+  # Deploys a throwaway Fly.io app per open PR (nickel-bridge-pr-<number>) so a change can be
   # reviewed live at a URL instead of run locally. Uses DEV_AUTH (name-only login) instead of
   # Google OAuth, since OAuth needs a pre-registered redirect URI and preview URLs are per-PR.
   # Never enable DEV_AUTH on the production app (see .claude/CLAUDE.md invariant #5).
@@ -61,7 +61,7 @@ jobs:
       cancel-in-progress: true
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      APP: bridge-bot-pr-${{ github.event.pull_request.number }}
+      APP: nickel-bridge-pr-${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -96,4 +96,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --app bridge-bot --config fly.toml --remote-only --ha=false
+      - run: flyctl deploy --app nickel-bridge --config fly.toml --remote-only --ha=false

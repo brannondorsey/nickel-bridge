@@ -14,4 +14,4 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl apps destroy "bridge-bot-pr-${{ github.event.pull_request.number }}" --yes || true
+      - run: flyctl apps destroy "nickel-bridge-pr-${{ github.event.pull_request.number }}" --yes || true
