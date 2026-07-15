@@ -86,6 +86,21 @@ describe('Board — bidding', () => {
     expect(toast).not.toHaveTextContent(/%/);
   });
 
+  it('keeps the grade toast visible when the bid ends the auction', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardPlaying, // robots passed it out — straight to the play phase
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    await screen.findByText('Excellent');
+    expect(document.querySelector('.grade-toast')).toBeInTheDocument();
+    expect(document.querySelector('.trick')).toBeInTheDocument();
+  });
+
   it('opens the call inspector dialog from a past auction call', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();

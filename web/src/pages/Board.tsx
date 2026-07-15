@@ -130,6 +130,7 @@ export default function Board() {
       ) : board.state === 'playing' ? (
         <PlayPhase
           board={board}
+          lastEval={lastEval}
           selectedCard={selectedCard}
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
         />
@@ -240,10 +241,12 @@ function BiddingPhase({
 
 function PlayPhase({
   board,
+  lastEval,
   selectedCard,
   onSelectCard,
 }: {
   board: BoardView;
+  lastEval: BidEval | null;
   selectedCard: number | null;
   onSelectCard: (card: number) => void;
 }) {
@@ -278,6 +281,9 @@ function PlayPhase({
 
   return (
     <>
+      {/* keep the last bid's grade visible when the auction ends on the human's
+          own call — it clears as soon as they play a card */}
+      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
       {board.flipped ? (
         <Toast className="flip-note">
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
