@@ -35,6 +35,8 @@ export interface BidMeaning {
   shapePromise?: string;
   /** true when the call is a recognized artificial/conventional bid */
   artificial?: boolean;
+  /** partner may not pass: forcing for one round, or forcing to game */
+  forcing?: 'one-round' | 'game';
   /** false when we fell back to a generic explanation */
   exact: boolean;
   /**
@@ -178,7 +180,7 @@ function explainDouble(ctx: Ctx): BidMeaning {
     return meaning(
       'Negative double',
       'Takeout of the overcall: shows the unbid major(s) (typically exactly 4 cards) and enough points to compete — about 6+ at the one level, 8+ at the two level. Partner is asked to pick a suit.',
-      { points: '6+ pts', artificial: true },
+      { points: '6+ pts', artificial: true, forcing: 'one-round' },
     );
   }
 
@@ -194,7 +196,7 @@ function explainDouble(ctx: Ctx): BidMeaning {
     return meaning(
       'Takeout double',
       `Asks partner to bid their best unbid suit. Shows opening values (13+ points, or a bit less with perfect shape), shortness in ${S[strain]}, and support for the unbid suits.`,
-      { points: '13+ pts (or 11–12 with ideal shape)', artificial: true },
+      { points: '13+ pts (or 11–12 with ideal shape)', artificial: true, forcing: 'one-round' },
     );
   }
 
@@ -279,7 +281,7 @@ function explainOpening(level: number, strain: Strain): BidMeaning | null {
       return meaning(
         '2♣ opening',
         'Strong and artificial — says nothing about clubs. Almost game-forcing: 22+ HCP, or a hand within one trick of game. Partner must respond (2♦ is the usual "waiting" reply).',
-        { points: '22+ pts', artificial: true, req: { minHcp: 21 } },
+        { points: '22+ pts', artificial: true, forcing: 'one-round', req: { minHcp: 21 } },
       );
     if (strain === 4)
       return meaning('2NT opening', 'A balanced 20–21 HCP. Not forcing; partner may pass with a very weak hand.', {
@@ -496,6 +498,7 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning('2NT response', 'Balanced 13–15 points without a fit — forcing to game in SAYC.', {
         points: '13–15 HCP',
         shapePromise: 'balanced',
+        forcing: 'game',
         req: { minHcp: 13, maxHcp: 15, balanced: true },
       });
     if (call === makeBid(3, 4))
@@ -521,6 +524,7 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
             points: '10–13 pts',
             shapePromise: `4+ ${S[openStrain]}, singleton/void ${S[strain]}`,
             artificial: true,
+            forcing: 'game',
             req: { minHcp: 9, maxHcp: 14, suits: [{ strain: openStrain, min: 4 }, { strain, max: 1 }] },
           },
         );
@@ -528,13 +532,23 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
         return meaning(
           'Jump shift',
           `A strong jump in a new suit: 17+ points with a good 5+ card ${S[strain]} suit. Game forcing, suggests slam.`,
-          { points: '17+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 16, suits: [{ strain, min: 5 }] } },
+          {
+            points: '17+ pts',
+            shapePromise: `5+ ${S[strain]}`,
+            forcing: 'game',
+            req: { minHcp: 16, suits: [{ strain, min: 5 }] },
+          },
         );
       if (level === 1)
         return meaning(
           `New suit at the 1 level`,
           `Natural and forcing one round: 4+ ${S[strain]} and 6+ points. Opener must bid again.`,
-          { points: '6+ pts', shapePromise: `4+ ${S[strain]}`, req: { minHcp: 5, suits: [{ strain, min: 4 }] } },
+          {
+            points: '6+ pts',
+            shapePromise: `4+ ${S[strain]}`,
+            forcing: 'one-round',
+            req: { minHcp: 5, suits: [{ strain, min: 4 }] },
+          },
         );
       if (level === minLevel)
         return meaning(
@@ -543,6 +557,7 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
           {
             points: '10+ pts',
             shapePromise: `${strain === 2 && openStrain === 3 ? '5+' : '4+'} ${S[strain]}`,
+            forcing: 'one-round',
             req: { minHcp: 10, suits: [{ strain, min: strain === 2 && openStrain === 3 ? 5 : 4 }] },
           },
         );
@@ -555,11 +570,17 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning(
         `Positive response`,
         `Natural and positive opposite the strong 2♣: a good 5+ card ${S[strain]} suit and 8+ points. (With less, respond 2♦ waiting.)`,
-        { points: '8+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 7, suits: [{ strain, min: 5 }] } },
+        {
+          points: '8+ pts',
+          shapePromise: `5+ ${S[strain]}`,
+          forcing: 'game',
+          req: { minHcp: 7, suits: [{ strain, min: 5 }] },
+        },
       );
     return meaning('2NT positive', 'Balanced 8+ points opposite the strong 2♣ opening.', {
       points: '8+ HCP',
       shapePromise: 'balanced',
+      forcing: 'game',
       req: { minHcp: 8, balanced: true },
     });
   }
@@ -576,7 +597,12 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning(
         'New suit over the preempt',
         `Natural and forcing: a good 5+ card ${S[strain]} suit and interest in game.`,
-        { points: '15+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 14, suits: [{ strain, min: 5 }] } },
+        {
+          points: '15+ pts',
+          shapePromise: `5+ ${S[strain]}`,
+          forcing: 'one-round',
+          req: { minHcp: 14, suits: [{ strain, min: 5 }] },
+        },
       );
     if (strain === 4 && level === 3)
       return meaning('3NT over the preempt', 'To play: stoppers in the unbid suits and expectation of nine tricks (often with a fit or source of tricks).', {
@@ -651,6 +677,7 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
         return meaning('Jump shift by opener', 'A very strong two-suiter: about 19+ points. Game forcing.', {
           points: '19+ pts',
           shapePromise: `4+ ${S[strain]}`,
+          forcing: 'game',
           req: { minHcp: 18, suits: [{ strain, min: 4 }] },
         });
       if (isReverse)
@@ -660,6 +687,7 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
           {
             points: '17+ pts',
             shapePromise: `4+ ${S[strain]}, longer ${S[openStrain]}`,
+            forcing: 'one-round',
             req: { minHcp: 16, suits: [{ strain, min: 4 }] },
           },
         );
@@ -688,6 +716,7 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
       points: '8+ pts',
       shapePromise: shows,
       artificial: true,
+      forcing: 'one-round',
     });
   }
 

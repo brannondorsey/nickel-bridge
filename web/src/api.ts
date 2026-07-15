@@ -12,6 +12,8 @@ export interface BidMeaning {
   points?: string;
   shapePromise?: string;
   artificial?: boolean;
+  /** partner may not pass: forcing for one round, or forcing to game */
+  forcing?: 'one-round' | 'game';
   exact: boolean;
 }
 
