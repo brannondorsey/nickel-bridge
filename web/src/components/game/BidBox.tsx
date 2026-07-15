@@ -32,12 +32,15 @@ export function BidBox({
   const [expanded, setExpanded] = useState(false);
   const showHigh = expanded || mustExpand;
 
+  // While a call is in flight (busy) every button locks: a click landing on a
+  // stale still-enabled button could toggle the selection off mid-submit and
+  // leave the confirm CTA dead until the user reselects.
   const bidButton = (call: number) => (
     <button
       key={call}
       type="button"
       className={`bid${selected === call ? ' selected' : ''}`}
-      disabled={!legal.has(call)}
+      disabled={busy || !legal.has(call)}
       onClick={() => onSelect(call)}
       aria-label={callDisplay(call)}
     >
@@ -62,7 +65,7 @@ export function BidBox({
               key={call}
               type="button"
               className={`bid${selected === call ? ' selected' : ''}${call === 1 ? ' bid-x' : ''}`}
-              disabled={!legal.has(call)}
+              disabled={busy || !legal.has(call)}
               onClick={() => onSelect(call)}
             >
               {callDisplay(call)}

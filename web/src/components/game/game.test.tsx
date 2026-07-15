@@ -177,6 +177,14 @@ describe('BidBox', () => {
     await userEvent.click(screen.getByRole('button', { name: /bid 2♥/i }));
     expect(onConfirm).toHaveBeenCalledOnce();
   });
+
+  it('locks every button while a call is in flight', () => {
+    render(<BidBox legalCalls={legal} selected={bid2H} onSelect={() => {}} onConfirm={() => {}} busy />);
+    // a stray click mid-submit must not toggle the selection off
+    expect(screen.getByRole('button', { name: '2♥' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pass' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /bid 2♥/i })).toBeDisabled();
+  });
 });
 
 describe('GradeToast', () => {
