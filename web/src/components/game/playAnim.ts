@@ -130,6 +130,20 @@ const sameCards = (a: TrickCard[], b: TrickCard[]) =>
   a.length === b.length && a.every((t, i) => t.card === b[i].card && t.seat === b[i].seat);
 
 /**
+ * Every intermediate snapshot (ordinary play or a claim's fast-forward)
+ * renders as a locked play phase — shared by stagePlaySteps and
+ * stageClaimSteps so the "what does a mid-animation view look like" contract
+ * can't drift between the two.
+ */
+const lockedView = (next: BoardView, over: Partial<BoardView>): BoardView => ({
+  ...next,
+  state: 'playing',
+  myTurn: false,
+  legalCards: undefined,
+  ...over,
+});
+
+/**
  * Stage the transition prev → next as timed snapshots. Returns [] whenever
  * there is nothing to animate (not a play-phase transition, no new cards, or
  * data that doesn't line up) — the caller then applies `next` directly.
@@ -185,22 +199,13 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     return dummys.length ? [...next.dummyHand, ...dummys] : next.dummyHand;
   };
 
-  // every intermediate snapshot renders as a locked play phase
-  const mid = (over: Partial<BoardView>): BoardView => ({
-    ...next,
-    state: 'playing',
-    myTurn: false,
-    legalCards: undefined,
-    ...over,
-  });
-
   const steps: StagedStep[] = [];
 
   // entering play from the auction: settle the layout before the lead glides
   if (intoPlay) {
     steps.push({
       delayBefore: 0,
-      view: mid({
+      view: lockedView(next, {
         currentTrick: [],
         completedTricks: 0,
         declarerTricks: 0,
@@ -217,7 +222,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
   finishing.forEach((play, i) => {
     steps.push({
       delayBefore: i === 0 ? (intoPlay ? 350 : 0) : GLIDE_MS + ROBOT_GAP_MS,
-      view: mid({
+      view: lockedView(next, {
         currentTrick: [...prevTrick, ...finishing.slice(0, i + 1)],
         completedTricks: prevDone,
         declarerTricks: prev.declarerTricks ?? 0,
@@ -236,7 +241,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     // can animate collect and stamp as separate beats
     steps.push({
       delayBefore: GLIDE_MS + HOLD_MS,
-      view: mid({
+      view: lockedView(next, {
         currentTrick: [],
         completedTricks: nextDone,
         declarerTricks: prev.declarerTricks ?? 0,
@@ -248,7 +253,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     });
     steps.push({
       delayBefore: COLLECT_MS + 80,
-      view: mid({
+      view: lockedView(next, {
         currentTrick: [],
         completedTricks: nextDone,
         handToPlay: winner,
@@ -259,7 +264,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     after.forEach((play, i) => {
       steps.push({
         delayBefore: i === 0 ? STAMP_MS : GLIDE_MS + ROBOT_GAP_MS,
-        view: mid({
+        view: lockedView(next, {
           currentTrick: nextCur.slice(0, i + 1),
           completedTricks: nextDone,
           handToPlay: (play.seat + 1) % 4,
@@ -362,14 +367,6 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
     return dummys.length ? [...next.dummyHand, ...dummys] : next.dummyHand;
   };
 
-  const mid = (over: Partial<BoardView>): BoardView => ({
-    ...next,
-    state: 'playing',
-    myTurn: false,
-    legalCards: undefined,
-    ...over,
-  });
-
   const steps: StagedStep[] = [];
   let played = 0;
   let doneCount = prevDone;
@@ -383,7 +380,7 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
       const delayBefore = ti === 0 && i === 0 ? 0 : i === 0 ? CLAIM_TRICK_GAP_MS : CLAIM_GAP_MS;
       steps.push({
         delayBefore,
-        view: mid({
+        view: lockedView(next, {
           currentTrick: [...(ti === 0 ? prevTrick : []), ...toPlay.slice(0, i + 1)],
           completedTricks: doneCount,
           declarerTricks: declCount,
@@ -401,7 +398,7 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
     else defCount += 1;
     steps.push({
       delayBefore: CLAIM_GAP_MS,
-      view: mid({
+      view: lockedView(next, {
         currentTrick: [],
         completedTricks: doneCount,
         declarerTricks: declCount,

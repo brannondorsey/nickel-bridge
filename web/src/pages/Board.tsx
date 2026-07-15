@@ -39,7 +39,7 @@ import {
   AUTO_PLAY_DELAY_MS,
   CLAIM_MIN_DISPLAY_MS,
   ClaimAnnouncement,
-  capturePlayOrigin,
+  StagedStep,
   captureFanOriginIfVisible,
   claimAnnouncement,
   motionOK,
@@ -105,17 +105,18 @@ export default function Board() {
   }, []);
   useEffect(() => cancelStaging, [cancelStaging]);
 
-  const applyBoard = useCallback(
-    (prev: BoardView | null, next: BoardView) => {
+  // Schedules an already-computed steps array on timers. Split out of
+  // applyBoard so runClaim (below) can compute stageClaimSteps exactly once
+  // and reuse the same array both to schedule the animation and to sum its
+  // total duration — computing it twice risked the two copies disagreeing
+  // (e.g. after a future edit to one call site) about how long the
+  // fast-forward actually takes.
+  const scheduleSteps = useCallback(
+    (prev: BoardView, steps: StagedStep[]) => {
       cancelStaging();
-      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
-      if (!steps.length) {
-        setBoard(next);
-        return;
-      }
       const gen = stagingRef.current.gen;
       let at = 0;
-      let priorTrick = prev!.currentTrick ?? [];
+      let priorTrick = prev.currentTrick ?? [];
       for (const step of steps) {
         const curTrick = step.view.currentTrick ?? [];
         // the one new card this step adds to the trick in progress, if any
@@ -143,20 +144,38 @@ export default function Board() {
     [cancelStaging],
   );
 
-  // Bracket a claim's fast-forward (applyBoard, above) with the announcement
-  // banner: it pops up right as the fast-forward starts and stays in place
-  // — the only indication a claim happened — for the whole burst, then
-  // clears when the real (state: 'done') `next` view hands off to the
-  // normal completion view.
+  const applyBoard = useCallback(
+    (prev: BoardView | null, next: BoardView) => {
+      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+      if (!steps.length) {
+        cancelStaging();
+        setBoard(next);
+        return;
+      }
+      scheduleSteps(prev!, steps);
+    },
+    [cancelStaging, scheduleSteps],
+  );
+
+  // Bracket a claim's fast-forward with the announcement banner: it pops up
+  // right as the fast-forward starts and stays in place — the only
+  // indication a claim happened — for the whole burst, then clears when the
+  // real (state: 'done') `next` view hands off to the normal completion view.
   //
-  // With motion on, applyBoard's own staged steps keep `board.state:
-  // 'playing'` (so PlayPhase, and the banner inside it, keep rendering) for
-  // as long as the fast-forward takes. Without it — reduced motion, or no
-  // WAAPI — applyBoard has nothing to stage and would jump `board` straight
-  // to the real (done) `next` synchronously, unmounting PlayPhase before the
-  // banner is ever seen. So in that case we deliberately don't call
-  // applyBoard until after an explicit minimum hold, same "always applies
-  // regardless of motion" reasoning as AUTO_PLAY_DELAY_MS.
+  // claimAnnouncement and stageClaimSteps both validate the same prev/next
+  // transition but aren't the same function, so stageClaimSteps is computed
+  // once, up front, and its non-emptiness gates whether the banner shows at
+  // all — never announce a claim animation this transition's data can't
+  // actually support (falls back to a plain, unanimated jump instead, same
+  // defensive posture as every other staging bail-out in this codebase).
+  //
+  // With motion on, the staged steps keep `board.state: 'playing'` (so
+  // PlayPhase, and the banner inside it, keep rendering) for as long as the
+  // fast-forward takes. Without it — reduced motion, or no WAAPI — there's
+  // nothing to stage and jumping `board` straight to the real (done) `next`
+  // synchronously would unmount PlayPhase before the banner is ever seen. So
+  // in that case we deliberately hold before applying `next`, same "always
+  // applies regardless of motion" reasoning as AUTO_PLAY_DELAY_MS.
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
       const info = claimAnnouncement(prev, next);
@@ -165,12 +184,18 @@ export default function Board() {
         return;
       }
       const gen = ++claimGenRef.current;
-      setClaimInfo(info);
       if (motionOK()) {
-        applyBoard(prev, next);
-        const totalMs = stageClaimSteps(prev, next).reduce((sum, step) => sum + step.delayBefore, 0);
+        const steps = stageClaimSteps(prev, next);
+        if (!steps.length) {
+          applyBoard(prev, next); // claimAnnouncement approved it but staging couldn't — same fallback
+          return;
+        }
+        setClaimInfo(info);
+        scheduleSteps(prev, steps);
+        const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
         await sleep(totalMs);
       } else {
+        setClaimInfo(info);
         await sleep(CLAIM_MIN_DISPLAY_MS);
       }
       if (claimGenRef.current !== gen) return;
@@ -178,7 +203,7 @@ export default function Board() {
       setClaimInfo(null);
       setBoard(next);
     },
-    [applyBoard],
+    [applyBoard, scheduleSteps],
   );
 
   const load = useCallback(() => {
@@ -248,8 +273,7 @@ export default function Board() {
     if (!legal || legal.length !== 1 || selectedCard !== null) return;
     const card = legal[0];
     const id = window.setTimeout(() => {
-      const el = document.querySelector<HTMLElement>(`[data-card="${card}"]`);
-      if (el) capturePlayOrigin(card, el.getBoundingClientRect());
+      captureFanOriginIfVisible(board, { seat: board.handToPlay ?? board.playingSeat ?? 2, card });
       submitCard(card);
     }, AUTO_PLAY_DELAY_MS);
     return () => clearTimeout(id);

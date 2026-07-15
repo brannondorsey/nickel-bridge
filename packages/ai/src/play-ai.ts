@@ -106,7 +106,7 @@ export function pickFromSolve(legal: Card[], solve: DdSolve): Card {
     .sort((a, b) => cardRank(a) - cardRank(b) || cardSuit(a) - cardSuit(b));
   if (best.length === 0) {
     // defensive: DDS disagreed about legality — never happens, but never stall a game
-    return legal.sort((a, b) => cardRank(a) - cardRank(b))[0];
+    return legal.sort((a, b) => cardRank(a) - cardRank(b) || cardSuit(a) - cardSuit(b))[0];
   }
   return best[0];
 }

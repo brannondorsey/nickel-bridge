@@ -300,7 +300,12 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     view.lastTrick = ps.completedTricks.length ? ps.completedTricks[ps.completedTricks.length - 1] : null;
     // The human always sees their own (South) cards; dummy is public after the
     // opening lead. Both conditions hold for every hand we ever send here.
-    if (b.row.state === 'playing' && (ps.dummyVisible || dummy === HUMAN_SEAT)) {
+    // Sent for 'done' too (not just 'playing'): a laydown claim can resolve
+    // many tricks in one response, and the client's claim fast-forward
+    // (stageClaimSteps) reconstructs dummy's hand shrinking trick-by-trick
+    // from this same field — if it were omitted once the board flips to
+    // 'done', dummy's whole fan would vanish instantly instead of animating.
+    if ((b.row.state === 'playing' || b.row.state === 'done') && (ps.dummyVisible || dummy === HUMAN_SEAT)) {
       view.dummyHand = remaining(deal, b.plays, dummy);
       view.dummyHcp = hcp(deal.hands[dummy]);
     }

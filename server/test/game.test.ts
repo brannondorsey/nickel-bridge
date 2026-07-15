@@ -111,6 +111,14 @@ describe('automatic laydown claims', () => {
     expect(b.claimed).toBe(true);
     expect(views[views.length - 1].claimed).toBe(true);
 
+    // dummyHand must still be sent once the board is 'done', not just while
+    // 'playing' — the client's claim fast-forward animation reconstructs
+    // dummy's hand shrinking trick-by-trick from this field, and a claim can
+    // resolve many tricks (dummy still holding cards) in the same response
+    // that flips state to 'done'. An omitted field here (vs. an empty array)
+    // would make dummy's whole fan vanish instantly instead of animating.
+    expect(views[views.length - 1].dummyHand).toEqual([]);
+
     // ordinary play resolves at most one trick boundary per request — the
     // human plays at least one card every trick (see playAnim.ts's staging
     // docstring) — so a claim is the only way more than one trick's worth of
