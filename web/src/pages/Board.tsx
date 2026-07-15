@@ -289,7 +289,6 @@ function PlayPhase({
           <div className="board-fan">
             <HandFan
               cards={displaySort(board.dummyHand)}
-              small
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
               selected={selectedCard}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
