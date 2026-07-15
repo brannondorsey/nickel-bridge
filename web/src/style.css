@@ -2006,13 +2006,15 @@ a.board-row:hover {
   margin: 0;
 }
 
-/* ---- claim: announcement banner + terminal stamp ---- */
+/* ---- claim: announcement banner ---- */
 
 /* A declarative "wire," not a hint — Besley tracked caps like a button or
    label, not italic Crimson, because it states a fact that just became
    true rather than suggesting an action. Same toast shape (dashed
    perforation, ticket shadow) the app already uses to interrupt play with
-   news (flip-note, GradeToast). */
+   news (flip-note, GradeToast). Pops in right as the fast-forward starts and
+   stays put for the whole burst — the only indication a claim happened, no
+   separate terminal stamp. */
 .claim-banner {
   margin: 10px 16px 0;
   background: var(--panel);
@@ -2057,47 +2059,6 @@ a.board-row:hover {
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-/* Terminal stamp: same stamp-pop curve InkStamp already reserves, at hero
-   scale, centered over the trick area for the moment before the board hands
-   off to the toll receipt. */
-.claim-stamp-anchor {
-  position: relative;
-}
-.claim-stamp-wrap {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.claim-stamp {
-  font-size: 14px;
-  padding: 9px 18px;
-  border-width: 2.5px;
-  background: var(--paper);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .claim-stamp {
-    opacity: 0;
-    animation: claim-stamp-in 0.5s cubic-bezier(0.3, 1.6, 0.4, 1) forwards;
-  }
-}
-@keyframes claim-stamp-in {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--stamp-rotate)) scale(1.7);
-  }
-  60% {
-    opacity: 1;
-    transform: rotate(var(--stamp-rotate)) scale(0.94);
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(var(--stamp-rotate)) scale(1);
   }
 }
 .board-actions {

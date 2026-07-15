@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, TrickCard } from '../api';
-import { AUTO_PLAY_DELAY_MS } from '../components/game/playAnim';
+import { AUTO_PLAY_DELAY_MS, CLAIM_MIN_DISPLAY_MS } from '../components/game/playAnim';
 import {
   bid2H,
   boardBidding,
@@ -279,7 +279,7 @@ describe('Board — auto-play', () => {
 });
 
 describe('Board — claims', () => {
-  it('announces the claim, then resolves to the terminal stamp', async () => {
+  it('pops the announcement banner right as the fast-forward starts, keeps it in place, then hands off cleanly', async () => {
     const soleCard = boardPlaying.legalCards![1]; // Q♠ — completes the trick in progress
     const fullTrick: TrickCard[] = [...boardPlaying.currentTrick!, { seat: 2, card: soleCard }];
     const placeholderTrick: TrickCard[] = [
@@ -312,11 +312,13 @@ describe('Board — claims', () => {
     apiMock.board.mockResolvedValue(boardPlaying);
     apiMock.playCard.mockResolvedValue({ board: claimed });
 
-    // fake timers so the ~7s real-time sequence (announce, fast-forward
-    // through 9 tricks, stamp hold) advances deterministically instead of
-    // racing findByText's own real-time polling window. userEvent's own
-    // internal pointer-event machinery doesn't interleave with fake timers
-    // reliably, so the two taps use the lower-level fireEvent instead.
+    // jsdom has no WAAPI, so motionOK() is always false here — the same
+    // path a reduced-motion user hits — which is exactly the path that used
+    // to unmount the banner instantly (see CLAIM_MIN_DISPLAY_MS). Fake
+    // timers make that fixed, deterministic hold precisely steppable.
+    // userEvent's own internal pointer-event machinery doesn't interleave
+    // with fake timers reliably, so the two taps use the lower-level
+    // fireEvent instead.
     vi.useFakeTimers();
     try {
       renderBoard();
@@ -325,17 +327,23 @@ describe('Board — claims', () => {
       fireEvent.click(queen);
       fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
 
-      // announced clearly, before any card moves
-      await vi.waitFor(() => expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument());
+      // pops up right as the claim is detected — no artificial hold first
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument();
       expect(screen.getByText(/Laydown confirmed/)).toBeInTheDocument();
 
-      // run the announce hold, the whole fast-forward, and the stamp hold to
-      // completion — stageClaimSteps' exact per-beat timing (and that the
-      // terminal stamp renders "TOLLS CLAIMED") is covered by the pure unit
-      // tests in playAnim.test.ts; this integration test's job is confirming
-      // the wiring hands off cleanly to the normal completion view
-      await vi.runAllTimersAsync();
+      // ...and, unlike a one-shot toast, stays in place — still up, and the
+      // board hasn't jumped to the result yet, partway through the hold
+      await vi.advanceTimersByTimeAsync(CLAIM_MIN_DISPLAY_MS / 2);
+      expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument();
+      expect(screen.queryByText('SCORED')).not.toBeInTheDocument();
+
+      // ...then clears cleanly on hand-off to the normal completion view,
+      // with no separate terminal stamp
+      await vi.advanceTimersByTimeAsync(CLAIM_MIN_DISPLAY_MS);
       await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
+      expect(screen.queryByText('N/S CLAIM 9 REMAINING TRICKS')).not.toBeInTheDocument();
+      expect(screen.queryByText('TOLLS CLAIMED')).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

@@ -37,8 +37,7 @@ import { MeaningPanel } from '../components/game/MeaningPanel';
 import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
-  CLAIM_ANNOUNCE_MS,
-  CLAIM_STAMP_HOLD_MS,
+  CLAIM_MIN_DISPLAY_MS,
   ClaimAnnouncement,
   capturePlayOrigin,
   claimAnnouncement,
@@ -70,10 +69,10 @@ export default function Board() {
   const [inspect, setInspect] = useState<AuctionEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // A claim's announce → fast-forward → stamp sequence, driven by runClaim
-  // below. claimGenRef guards it the same way stagingRef guards applyBoard's
-  // per-card timers: bumping it invalidates any claim sequence in flight.
-  const [claimPhase, setClaimPhase] = useState<'announce' | 'playing' | 'stamp' | null>(null);
+  // A claim's fast-forward, driven by runClaim below. Non-null exactly while
+  // the announcement banner should be showing. claimGenRef guards it the
+  // same way stagingRef guards applyBoard's per-card timers: bumping it
+  // invalidates any claim sequence in flight.
   const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
   const claimGenRef = useRef(0);
 
@@ -131,9 +130,19 @@ export default function Board() {
   );
 
   // Bracket a claim's fast-forward (applyBoard, above) with the announcement
-  // banner and terminal stamp — see stageClaimSteps' docstring for why the
-  // hand-off to the real (state: 'done') `next` view happens here, after the
-  // stamp, rather than as the last staged step.
+  // banner: it pops up right as the fast-forward starts and stays in place
+  // — the only indication a claim happened — for the whole burst, then
+  // clears when the real (state: 'done') `next` view hands off to the
+  // normal completion view.
+  //
+  // With motion on, applyBoard's own staged steps keep `board.state:
+  // 'playing'` (so PlayPhase, and the banner inside it, keep rendering) for
+  // as long as the fast-forward takes. Without it — reduced motion, or no
+  // WAAPI — applyBoard has nothing to stage and would jump `board` straight
+  // to the real (done) `next` synchronously, unmounting PlayPhase before the
+  // banner is ever seen. So in that case we deliberately don't call
+  // applyBoard until after an explicit minimum hold, same "always applies
+  // regardless of motion" reasoning as AUTO_PLAY_DELAY_MS.
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
       const info = claimAnnouncement(prev, next);
@@ -143,21 +152,15 @@ export default function Board() {
       }
       const gen = ++claimGenRef.current;
       setClaimInfo(info);
-      setClaimPhase('announce');
-      await sleep(CLAIM_ANNOUNCE_MS);
+      if (motionOK()) {
+        applyBoard(prev, next);
+        const totalMs = stageClaimSteps(prev, next).reduce((sum, step) => sum + step.delayBefore, 0);
+        await sleep(totalMs);
+      } else {
+        await sleep(CLAIM_MIN_DISPLAY_MS);
+      }
       if (claimGenRef.current !== gen) return;
 
-      setClaimPhase('playing');
-      applyBoard(prev, next);
-      const totalMs = motionOK() ? stageClaimSteps(prev, next).reduce((sum, step) => sum + step.delayBefore, 0) : 0;
-      await sleep(totalMs);
-      if (claimGenRef.current !== gen) return;
-
-      setClaimPhase('stamp');
-      await sleep(CLAIM_STAMP_HOLD_MS);
-      if (claimGenRef.current !== gen) return;
-
-      setClaimPhase(null);
       setClaimInfo(null);
       setBoard(next);
     },
@@ -174,7 +177,6 @@ export default function Board() {
     setInspect(null);
     setError(null);
     setShowReceipt(false);
-    setClaimPhase(null);
     setClaimInfo(null);
     sawLiveRef.current = false;
     api
@@ -284,7 +286,6 @@ export default function Board() {
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
-          claimPhase={claimPhase}
           claimInfo={claimInfo}
         />
       ) : (
@@ -401,7 +402,6 @@ function PlayPhase({
   onSelectCard,
   inspect,
   onInspect,
-  claimPhase,
   claimInfo,
 }: {
   board: BoardView;
@@ -410,7 +410,6 @@ function PlayPhase({
   onSelectCard: (card: number) => void;
   inspect: AuctionEntry | null;
   onInspect: (entry: AuctionEntry) => void;
-  claimPhase: 'announce' | 'playing' | 'stamp' | null;
   claimInfo: ClaimAnnouncement | null;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
@@ -463,7 +462,7 @@ function PlayPhase({
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
         </Toast>
       ) : null}
-      {claimPhase === 'announce' && claimInfo ? (
+      {claimInfo ? (
         <div className="claim-banner">
           <div className="claim-banner-side">
             {claimInfo.side === 'NS' ? 'N/S' : 'E/W'} CLAIM {claimInfo.tricks} REMAINING{' '}
@@ -488,28 +487,19 @@ function PlayPhase({
       {mustFollow && led !== null ? (
         <div className="board-follow">{SUIT_PLURALS[led]} are live — you must follow suit</div>
       ) : null}
-      <div className="claim-stamp-anchor">
-        {board.dummyHand && dummyOnSide ? (
-          <div className="play-row">
-            {board.dummy === 3 ? (
-              <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
-            ) : null}
-            <TrickArea board={board} />
-            {board.dummy === 1 ? (
-              <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
-            ) : null}
-          </div>
-        ) : (
+      {board.dummyHand && dummyOnSide ? (
+        <div className="play-row">
+          {board.dummy === 3 ? (
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
+          ) : null}
           <TrickArea board={board} />
-        )}
-        {claimPhase === 'stamp' ? (
-          <div className="claim-stamp-wrap">
-            <InkStamp className="claim-stamp" rotate={-6}>
-              TOLLS CLAIMED
-            </InkStamp>
-          </div>
-        ) : null}
-      </div>
+          {board.dummy === 1 ? (
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
+          ) : null}
+        </div>
+      ) : (
+        <TrickArea board={board} />
+      )}
       <div className="board-fan">
         <HandFan
           cards={displaySort(board.hand)}
@@ -530,9 +520,7 @@ function PlayPhase({
           Only {RANK_CHARS[cardRank(soleLegal)]}
           {SUIT_SYMBOLS[cardSuit(soleLegal)]} to play — playing automatically…
         </div>
-      ) : claimPhase === 'playing' || claimPhase === 'stamp' ? (
-        <div className="board-hint">Laydown confirmed — the rest plays itself…</div>
-      ) : board.myTurn ? (
+      ) : claimInfo ? null : board.myTurn ? ( // the banner above already covers it while a claim is in progress
         <div className="board-hint">
           your turn{board.handToPlay === board.dummy ? ' — playing from dummy' : ''}
         </div>

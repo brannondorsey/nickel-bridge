@@ -130,10 +130,11 @@ either side is DD-confirmed to win 100% of the remaining tricks, it marks the bo
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
 untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
-needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`),
-shows an announcement banner, fast-forwards through a separate `stageClaimSteps` staging
-function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
-response — a claim can span many), then a terminal stamp before handing off to the normal
+needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); an
+announcement banner pops up right as the fast-forward starts and stays in place — the only
+indication a claim happened — while the remaining tricks play out through a separate
+`stageClaimSteps` staging function (kept apart from `stagePlaySteps`, which assumes at most one
+trick boundary per response — a claim can span many), before handing off to the normal
 completion view. See invariant 1 below — claims change what `advanceRobots` records for a
 human's untaken decisions, so they interact directly with the robot-trace fixture.
 

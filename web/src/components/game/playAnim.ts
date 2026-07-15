@@ -29,17 +29,20 @@ export const STAMP_MS = 420;
 // enough to read the hint before the card moves, short enough not to stall.
 export const AUTO_PLAY_DELAY_MS = 1000;
 
-// A claim's announcement banner holds this long before the fast-forward
-// starts, and the terminal stamp holds this long before the normal
-// completion hand-off — both roughly AUTO_PLAY_DELAY_MS's pacing, since
-// they're the same "let the human register what just happened" beat.
-export const CLAIM_ANNOUNCE_MS = 1000;
-export const CLAIM_STAMP_HOLD_MS = 900;
-// Fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+STAMP_MS since
-// a claim can span many tricks — the glide/collect beats themselves
-// (GLIDE_MS/COLLECT_MS) are untouched, only the gaps between them compress.
+// A claim's fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+
+// STAMP_MS since a claim can span many tricks — the glide/collect beats
+// themselves (GLIDE_MS/COLLECT_MS) are untouched, only the gaps between
+// them compress. The announcement banner (Board.tsx) pops up right as the
+// fast-forward starts and stays in place for the whole burst — no separate
+// hold beat or terminal stamp needed.
 export const CLAIM_GAP_MS = 130;
 export const CLAIM_TRICK_GAP_MS = 110;
+
+// Without motion (reduced-motion, or no WAAPI) there's no fast-forward to
+// hold the banner up for, so Board.tsx displays it for at least this long
+// before jumping straight to the result — same "always applies" reasoning
+// as AUTO_PLAY_DELAY_MS.
+export const CLAIM_MIN_DISPLAY_MS = 1200;
 
 export interface StagedStep {
   /** delay in ms after the previous step (0 = apply immediately) */
@@ -281,10 +284,10 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
  *
  * Unlike stagePlaySteps, this does NOT end with the real `next` view — every
  * step keeps `state: 'playing'` so the board only flips to 'done' (and the
- * receipt takes over) once the "TOLLS CLAIMED" stamp has had its moment.
- * Board.tsx owns that final hand-off, along with the announcement banner and
- * terminal stamp, since those are plain timed UI state, not board-view
- * snapshots.
+ * receipt takes over) once the whole fast-forward has played out. Board.tsx
+ * owns that final hand-off, along with the announcement banner it keeps
+ * visible for the duration, since those are plain timed UI state, not
+ * board-view snapshots.
  */
 export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] {
   if (prev.state !== 'playing' || next.state !== 'done' || !next.claimed || !next.playHistory) return [];
