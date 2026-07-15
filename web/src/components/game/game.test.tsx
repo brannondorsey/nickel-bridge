@@ -215,14 +215,14 @@ describe('GradeToast', () => {
 });
 
 describe('TrickArea', () => {
-  it('places played cards at compass seats with declarer/dummy tags and the trick counter', () => {
+  it('places played cards at compass seats with declarer/dummy tags and the trick meter', () => {
     const { container } = render(<TrickArea board={boardPlaying} />);
     expect(container.firstChild).toHaveClass('trick');
     // W led ♠3, N (dummy) played ♠4, E played ♠2; S (me, declarer) is the placeholder
     expect(container.querySelector('.seatpos.s .pcard-placeholder')).toBeInTheDocument();
     expect(within(container.querySelector('.seatpos.n')! as HTMLElement).getByText(/dummy/i)).toBeInTheDocument();
-    expect(screen.getByText(/trick 5 of 13/i)).toBeInTheDocument();
-    expect(screen.getByText(/DECL · DEF/i)).toBeInTheDocument();
+    // boardPlaying: declarerTricks 3, defenderTricks 1
+    expect(document.querySelector('.trick-meter-num')!.textContent).toBe('3–1');
   });
 
   it('rotates the compass when the board is flipped (human plays North at the bottom)', () => {

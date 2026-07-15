@@ -296,7 +296,7 @@ function BiddingPhase({
       <div className="board-fan">
         <HandFan cards={displaySort(board.hand)} />
       </div>
-      <SeatLine label="SOUTH — YOU" hcp={board.hcp} />
+      <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
       {board.myTurn ? (
         <BidBox
           legalCalls={board.legalCalls ?? []}
@@ -332,20 +332,8 @@ function PlayPhase({
   const playingSeat = board.playingSeat ?? 2;
   const canPlayFrom = (seat: number | undefined) => Boolean(board.myTurn) && board.handToPlay === seat;
 
-  const humanDeclares = board.declarer === playingSeat;
-  const dummyLabel = [
-    board.dummy !== undefined ? SEAT_NAMES[board.dummy] : '',
-    board.dummy === 2 ? 'YOUR HAND, DUMMY' : humanDeclares ? 'DUMMY · YOURS' : 'DUMMY',
-    canPlayFrom(board.dummy) ? 'YOUR TURN' : '',
-  ]
-    .filter(Boolean)
-    .join(' — ');
-  const bottomLabel = [
-    board.flipped ? `${SEAT_NAMES[0]} — YOU, FOR PARTNER` : `${SEAT_NAMES[2]} — YOU`,
-    canPlayFrom(playingSeat) ? 'YOUR TURN' : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const dummyLabel = board.dummy !== undefined ? `${SEAT_NAMES[board.dummy]} · DUMMY` : '';
+  const bottomLabel = `${SEAT_NAMES[playingSeat]} · YOU`;
 
   // follow-suit helper: the led suit constrains this turn's legal cards
   const led = board.currentTrick?.length ? cardSuit(board.currentTrick[0].card) : null;

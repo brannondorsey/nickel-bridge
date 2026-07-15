@@ -31,7 +31,6 @@ export function TrickArea({ board }: { board: BoardView }) {
         { pos: 'w', seat: 3 },
       ];
   const trick = board.currentTrick ?? [];
-  const trickNo = Math.min((board.completedTricks ?? 0) + 1, 13);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const slotEls = useRef(new Map<number, HTMLDivElement | null>());
@@ -88,6 +87,29 @@ export function TrickArea({ board }: { board: BoardView }) {
     return roles.join(' · ');
   };
 
+  // toll meter: declarer's tricks fill in from the left, defense's from the right,
+  // with a dashed marker at the contract's target trick count. Only the human's own
+  // side's fill/readout is judged — neutral ink while undecided, verdigris the instant
+  // their side's objective is mathematically locked in, accent red the instant it's
+  // mathematically lost. The human's partnership is always seats N/S (HUMAN_SEAT = 2
+  // in server/src/game.ts), so an even declarer seat means the human is declaring.
+  const declTricks = board.declarerTricks ?? 0;
+  const defTricks = board.defenderTricks ?? 0;
+  const remaining = 13 - (board.completedTricks ?? 0);
+  const needed = board.contract ? 6 + board.contract.level : undefined;
+  const humanDeclaring = (board.declarer ?? 2) % 2 === 0;
+  const yourTricks = humanDeclaring ? declTricks : defTricks;
+  const yourNeeded = needed !== undefined ? (humanDeclaring ? needed : 14 - needed) : undefined;
+  const meterState: 'neutral' | 'made' | 'failed' =
+    yourNeeded === undefined
+      ? 'neutral'
+      : yourTricks >= yourNeeded
+        ? 'made'
+        : yourTricks + remaining < yourNeeded
+          ? 'failed'
+          : 'neutral';
+  const mineState = meterState === 'neutral' ? '' : ` ${meterState}`;
+
   return (
     <div className="trick" ref={boxRef}>
       {seats.map(({ pos, seat }) => {
@@ -107,17 +129,32 @@ export function TrickArea({ board }: { board: BoardView }) {
           </div>
         );
       })}
-      <div className="tricks-count">
-        <div className="tricks-cells num">
-          <span className={`tricks-cell tricks-decl${stamp === 'decl' ? ' stamp' : ''}`}>
-            {board.declarerTricks ?? 0}
+      <div className="trick-meter">
+        <div className="trick-meter-num num">
+          <span
+            className={`trick-meter-side${humanDeclaring ? ` mine${mineState}` : ''}${stamp === 'decl' ? ' stamp' : ''}`}
+          >
+            {declTricks}
           </span>
-          <span className={`tricks-cell${stamp === 'def' ? ' stamp' : ''}`}>{board.defenderTricks ?? 0}</span>
+          <span className="trick-meter-dash">–</span>
+          <span
+            className={`trick-meter-side${!humanDeclaring ? ` mine${mineState}` : ''}${stamp === 'def' ? ' stamp' : ''}`}
+          >
+            {defTricks}
+          </span>
         </div>
-        <div className="tricks-caption">
-          DECL · DEF
-          <br />
-          TRICK {trickNo} OF 13
+        <div className="trick-meter-track">
+          <div
+            className={`trick-meter-fill left${humanDeclaring ? ` mine${mineState}` : ''}`}
+            style={{ width: `${(declTricks / 13) * 100}%` }}
+          />
+          <div
+            className={`trick-meter-fill right${!humanDeclaring ? ` mine${mineState}` : ''}`}
+            style={{ width: `${(defTricks / 13) * 100}%` }}
+          />
+          {needed !== undefined ? (
+            <div className={`trick-meter-post${mineState}`} style={{ left: `${(needed / 13) * 100}%` }} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -126,7 +163,7 @@ export function TrickArea({ board }: { board: BoardView }) {
 
 /** Which seat takes this completed trick (contract strain, else server hint). */
 function winnerOf(trick: { seat: number; card: number }[], board: BoardView): number {
-  const strain = (board.contract as { strain?: number } | undefined)?.strain;
+  const strain = board.contract?.strain;
   if (strain !== undefined) return trickWinner(trick, strain);
   return board.handToPlay ?? trick[0].seat;
 }

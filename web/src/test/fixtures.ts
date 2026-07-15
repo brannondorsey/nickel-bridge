@@ -150,6 +150,7 @@ export const boardPlaying: BoardView = {
   myTurn: true,
   hand: southRemaining,
   contractLabel: '4♠ by S',
+  contract: { level: 4, strain: 3, declarer: 2, doubled: false, redoubled: false },
   declarer: 2,
   dummy: 0,
   currentTrick: [
@@ -176,6 +177,7 @@ export const boardPlayingFlipped: BoardView = {
   playingSeat: 0,
   hand: northHand,
   contractLabel: '4♥ by N',
+  contract: { level: 4, strain: 2, declarer: 0, doubled: false, redoubled: false },
   declarer: 0,
   dummy: 2,
   currentTrick: [],
@@ -202,6 +204,7 @@ export const boardPlayingDummyTurn: BoardView = {
 export const boardPlayingEastDummy: BoardView = {
   ...boardPlaying,
   contractLabel: '3NT by W',
+  contract: { level: 3, strain: 4, declarer: 3, doubled: false, redoubled: false },
   declarer: 3,
   dummy: 1,
   dummyHand: eastHand,
@@ -212,6 +215,7 @@ export const boardPlayingEastDummy: BoardView = {
 export const boardPlayingWestDummy: BoardView = {
   ...boardPlaying,
   contractLabel: '3NT by E',
+  contract: { level: 3, strain: 4, declarer: 1, doubled: false, redoubled: false },
   declarer: 1,
   dummy: 3,
   dummyHand: westHand,

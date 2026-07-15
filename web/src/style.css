@@ -1243,39 +1243,46 @@ a.ds-btn-secondary:hover {
   will-change: transform;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
 }
-.tricks-count {
+/* ---- trick-meter: declarer tricks fill from the left, defense from the right,
+   with a dashed marker at the contract's target trick count. Only the human's own
+   side is judged for color — neutral ink until decided, verdigris once their
+   objective is locked in, accent red once it's mathematically lost. Same chart
+   convention as .pctbar (flat ink fill on a --chart-track background). ---- */
+.trick-meter {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  width: 118px;
   text-align: center;
 }
-.tricks-cells {
-  display: flex;
-  gap: 2px;
-  justify-content: center;
-}
-.tricks-cell {
-  width: 22px;
-  height: 32px;
-  background: var(--panel);
-  border: 1.5px solid var(--ink);
+.trick-meter-num {
   font-family: var(--font-label);
   font-weight: 800;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 2px;
-}
-.tricks-cell.tricks-decl {
-  background: var(--ink);
-  color: #fff;
-  border: none;
   font-size: 17px;
+  margin-bottom: 6px;
+}
+.trick-meter-side {
+  color: var(--muted);
+}
+.trick-meter-side.mine {
+  color: var(--ink);
+  transition: color 0.25s ease;
+}
+.trick-meter-side.mine.made {
+  color: var(--verdigris);
+}
+.trick-meter-side.mine.failed {
+  color: var(--accent);
+}
+.trick-meter-dash {
+  color: var(--line-dashed);
+  font-weight: 600;
+  margin: 0 3px;
 }
 /* the tally pops like an ink stamp when a collected trick lands on it */
-.tricks-cell.stamp {
+.trick-meter-side.stamp {
+  display: inline-block;
   animation: stamp-pop 0.42s cubic-bezier(0.3, 1.6, 0.4, 1);
 }
 @keyframes stamp-pop {
@@ -1289,13 +1296,47 @@ a.ds-btn-secondary:hover {
     transform: scale(1) rotate(0deg);
   }
 }
-.tricks-caption {
-  font-family: var(--font-label);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  margin-top: 4px;
+.trick-meter-track {
+  position: relative;
+  height: 9px;
+  background: var(--chart-track);
+}
+.trick-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--line-dashed);
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+.trick-meter-fill.left {
+  left: 0;
+}
+.trick-meter-fill.right {
+  right: 0;
+}
+.trick-meter-fill.mine {
+  background: var(--ink);
+}
+.trick-meter-fill.mine.made {
+  background: var(--verdigris);
+}
+.trick-meter-fill.mine.failed {
+  background: var(--accent);
+}
+/* dashed marker at the declarer's target trick count */
+.trick-meter-post {
+  position: absolute;
+  top: -4px;
+  bottom: -1px;
+  border-left: 1.5px dashed var(--ink);
+}
+.trick-meter-post.made {
+  border-left-color: var(--verdigris);
+}
+.trick-meter-post.failed {
+  border-left-color: var(--accent);
 }
 
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
