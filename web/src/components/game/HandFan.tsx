@@ -3,10 +3,11 @@ import { capturePlayOrigin } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
 /**
- * Overlapping card fan. Only an interactive fan (a card is being chosen from
- * it right now) dims its unplayable cards — an idle fan stays fully legible.
- * Class names .handfan/.interactive/.cardbtn/.selected/.suitgap are selected
- * on by the e2e smoke test.
+ * Overlapping card fan. Every card that can't be tapped right now — because
+ * it breaks follow-suit in the active fan, or because this fan isn't the one
+ * to play from at all — is dimmed, so only genuinely playable cards read as
+ * full color. Class names .handfan/.interactive/.cardbtn/.selected/.suitgap
+ * are selected on by the e2e smoke test.
  */
 export function HandFan({
   cards,
@@ -45,7 +46,7 @@ export function HandFan({
             }
             aria-label={`${RANK_CHARS[cardRank(c)]} of ${SUIT_SYMBOLS[cardSuit(c)]}`}
           >
-            <PlayingCard card={c} small={small} dimmed={interactive && !playable} selected={selected === c} />
+            <PlayingCard card={c} small={small} dimmed={!playable} selected={selected === c} />
           </button>
         );
       })}
