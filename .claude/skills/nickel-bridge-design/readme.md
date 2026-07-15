@@ -42,7 +42,41 @@ Usage: glyph for chrome; scene/footer for brand moments (splash, intro, empty st
 - `components/navigation/` — AppHeader, TabBar
 - `components/game/` — PlayingCard, StarGrade
 - `ui_kits/app/` — Splash/intro, Home, Tourneys, Tournament sheet, Call inspector, Tournament result, Stats, Rankings, Board (bidding / card play / board result)
-- `uploads/` — original bridge reference photographs from the brand explorations. **Inspiration only**: mood, era, linework, and palette reference for designers. The "no photography" rule under Imagery stands — these never appear in the product or in mocks.
+- `uploads/` — bridge reference photographs from the brand explorations (downsized to 800px). **Inspiration only**: mood, era, linework, and palette reference for designers. The "no photography" rule under Imagery stands — these never appear in the product or in mocks.
+
+## PRODUCTION MAPPING
+This skill's JSX is for prototyping only — **never copy skill components into `web/`**; their props differ from production (skill components take `style`/`padding`; production ones don't) and copying forks the design system. For production work the source of truth is `web/src/components/ds/` (plus `web/src/components/game/` for gameplay pieces), styled entirely from `web/src/style.css` — extend those, and port any *new* styles into `style.css`.
+
+| Skill component | Production component | Root CSS class |
+| --- | --- | --- |
+| `brand/TicketStub` | `ds/TicketStub.tsx` | `.ticket-stub` |
+| `brand/FlipDigits` | `ds/FlipDigits.tsx` | `.flipdigits` / `.flipdigit` |
+| `brand/Postmark` | `ds/Postmark.tsx` | `.postmark` |
+| `brand/InkStamp` | `ds/InkStamp.tsx` | `.ink-stamp` |
+| `brand/PerforatedPanel` | `ds/PerforatedPanel.tsx` | `.perf-panel` |
+| `brand/BridgeMark` | `ds/BridgeMark.tsx` | inline SVG (wordmark text: `.wordmark`) |
+| `core/Button` | `ds/Button.tsx` | `.ds-btn` (`.ds-btn-secondary`) |
+| `core/Chip` | `ds/Chip.tsx` | `.chip` (`.chip-quiet`, `.chip-colored`) |
+| `core/Input` | `ds/Input.tsx` | `.ds-input` (label: `.label-caps`) |
+| `core/Dialog` | `ds/Dialog.tsx` | `.sheet` (bottom sheet: `.sheet-layer`, `.sheet-scrim`) |
+| `core/Toast` | `ds/Toast.tsx` | `.toast` |
+| `core/Select` / `Checkbox` / `Radio` / `Switch` | none yet — port styles into `style.css` when first needed | — |
+| `navigation/AppHeader` | `ds/AppHeader.tsx` | `.appheader` |
+| `navigation/TabBar` | `ds/TabBar.tsx` | `.tabbar` |
+| `game/PlayingCard` | `game/PlayingCard.tsx` | `.pcard` |
+| `game/StarGrade` | `ds/StarGrade.tsx` | `.stargrade` |
+
+Production also has pieces with no skill counterpart (`HcpBadge`, `PctBar`, `Sparkline`, `Loading`) — they follow the same rules; check `ds/` before assuming something doesn't exist.
+
+## EXTENDING THE SYSTEM
+For a screen with precedent, copy the closest `ui_kits/app/` screen and modify — don't invent new layouts. For content with no precedent, pick the motif by content type, then compose from existing pieces:
+- **Hero number** (the one number the screen is about: MP%, rating) → FlipDigits, Besley 800 tabular. At most one per screen.
+- **Ledger / itemized rows** (standings, money, score breakdowns) → PerforatedPanel; `.label-caps` Besley column heads, tabular numerals right-aligned; a total row separates with a 1px structural ink rule and weight 800. No dot leaders — whitespace and alignment do the work.
+- **Status** (live, scored) → InkStamp: LIVE red, SCORED ink. Sealed/unavailable is *not* a stamp — it's the dashed `#B9B4A9` border treatment.
+- **Result / completion moment** → Postmark + wave cancel, result screens only.
+- **Counter / admission token** (board number, entry) → TicketStub.
+- **Aside, hint, or explanation** → italic Crimson Pro in muted `#6E6A62`.
+New vocabulary must stay inside the toll metaphor (receipts, ledgers, gates, crossings) and be plausible for a 1926 toll office; introduce new terms sparingly and reuse them consistently once coined.
 
 ## Intentional additions
 - `core/` fill-ins (Input, Select, Checkbox, Radio, Switch, Dialog, Toast) were not in the explorations; styled to match (square, ink borders, Besley labels) per user request.
