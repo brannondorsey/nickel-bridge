@@ -202,7 +202,20 @@ export const boardPlayingDummyTurn: BoardView = {
 
 export const bidEvalsFixture: BidEval[] = [
   { call: bid1H, bestCall: bid1H, userProb: 0.81, bestProb: 0.81, grade: 'excellent', score: 1 },
-  { call: bid2H, bestCall: makeBid(3, 2), userProb: 0.3, bestProb: 0.55, grade: 'good', score: 0.7 },
+  {
+    call: bid2H,
+    bestCall: makeBid(3, 2),
+    userProb: 0.3,
+    bestProb: 0.55,
+    grade: 'good',
+    score: 0.7,
+    saycConsistent: true,
+    bestMeaning: {
+      title: 'Limit raise',
+      description: 'Invitational jump raise: 3+ card support and 10–12 points.',
+      exact: true,
+    },
+  },
   { call: makeBid(4, 3), bestCall: makeBid(4, 3), userProb: 0.72, bestProb: 0.72, grade: 'fair', score: 0.4 },
   { call: 0, bestCall: makeBid(4, 4), userProb: 0.05, bestProb: 0.6, grade: 'poor', score: 0.05 },
 ];

@@ -5,3 +5,4 @@ export * from './play.js';
 export * from './score.js';
 export * from './elo.js';
 export * from './sayc.js';
+export * from './advisor.js';

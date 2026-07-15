@@ -1,6 +1,7 @@
 import { SEAT_SHORT, type AuctionEntry, callDisplay } from '../../api';
 import { Chip } from '../ds/Chip';
 import { Dialog } from '../ds/Dialog';
+import { ForcingChip } from './MeaningPanel';
 
 /** Bottom-sheet inspector for a past auction call. */
 export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose: () => void }) {
@@ -10,10 +11,11 @@ export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose
     <Dialog title={title} onClose={onClose}>
       {m ? (
         <>
-          {m.points || m.shapePromise ? (
+          {m.points || m.shapePromise || m.forcing ? (
             <div className="meaning-chips">
               {m.points ? <Chip>{m.points}</Chip> : null}
               {m.shapePromise ? <Chip quiet>{m.shapePromise}</Chip> : null}
+              <ForcingChip forcing={m.forcing} />
             </div>
           ) : null}
           <div className="meaning-body">{m.description}</div>

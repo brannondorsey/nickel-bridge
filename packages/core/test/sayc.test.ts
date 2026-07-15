@@ -19,6 +19,7 @@ interface Row {
   title?: string; // substring match
   points?: string; // exact `points` field
   artificial?: boolean;
+  forcing?: 'one-round' | 'game' | null; // null asserts NOT forcing
   exact?: boolean; // explanation is pamphlet-exact (default true)
 }
 
@@ -28,7 +29,7 @@ const SPEC: Row[] = [
   { name: '1♦ opening', calls: [], candidate: b(1, 1), title: '1♦ opening', points: '13–21 pts' },
   { name: '1♥ opening promises 5', calls: [], candidate: b(1, 2), title: '1♥ opening', points: '13–21 pts' },
   { name: '1NT opening', calls: [], candidate: b(1, 4), title: '1NT opening', points: '15–17 HCP' },
-  { name: '2♣ strong artificial', calls: [], candidate: b(2, 0), title: '2♣ opening', artificial: true },
+  { name: '2♣ strong artificial', calls: [], candidate: b(2, 0), title: '2♣ opening', artificial: true, forcing: 'one-round' },
   { name: 'weak two', calls: [], candidate: b(2, 3), title: 'Weak two', points: '5–11 HCP' },
   { name: '2NT opening', calls: [], candidate: b(2, 4), title: '2NT opening', points: '20–21 HCP' },
   { name: '3-level preempt', calls: [], candidate: b(3, 2), title: 'Preempt', points: '5–10 HCP' },
@@ -36,11 +37,16 @@ const SPEC: Row[] = [
 
   // ---- responses to suit openings ----
   { name: 'single raise', calls: [b(1, 3), PASS], candidate: b(2, 3), title: 'Single raise', points: '6–10 pts' },
-  { name: 'limit raise', calls: [b(1, 3), PASS], candidate: b(3, 3), title: 'Limit raise', points: '10–12 pts' },
+  { name: 'limit raise', calls: [b(1, 3), PASS], candidate: b(3, 3), title: 'Limit raise', points: '10–12 pts', forcing: null },
   { name: '1NT response', calls: [b(1, 2), PASS], candidate: b(1, 4), title: '1NT response', points: '6–10 pts' },
-  { name: 'new suit 1-level forcing', calls: [b(1, 0), PASS], candidate: b(1, 3), title: 'New suit at the 1 level', points: '6+ pts' },
+  { name: 'new suit 1-level forcing', calls: [b(1, 0), PASS], candidate: b(1, 3), title: 'New suit at the 1 level', points: '6+ pts', forcing: 'one-round' },
   { name: 'two-over-one', calls: [b(1, 3), PASS], candidate: b(2, 1), title: 'New suit at the 2 level', points: '10+ pts' },
-  { name: 'jump shift response', calls: [b(1, 0), PASS], candidate: b(2, 3), title: 'Jump shift', points: '17+ pts' },
+  { name: 'jump shift response', calls: [b(1, 0), PASS], candidate: b(2, 3), title: 'Jump shift', points: '17+ pts', forcing: 'game' },
+  { name: 'jump shift is a single jump only', calls: [b(1, 2), PASS], candidate: b(2, 3), title: 'Jump shift', points: '17+ pts' },
+  { name: 'splinter 4♣ over 1♥', calls: [b(1, 2), PASS], candidate: b(4, 0), title: 'Splinter', points: '10–13 pts', artificial: true, forcing: 'game' },
+  { name: 'splinter 3♠ over 1♥', calls: [b(1, 2), PASS], candidate: b(3, 3), title: 'Splinter', points: '10–13 pts', artificial: true },
+  { name: 'splinter 4♥ over 1♠', calls: [b(1, 3), PASS], candidate: b(4, 2), title: 'Splinter', points: '10–13 pts', artificial: true },
+  { name: 'no splinter over a minor — honest fallback', calls: [b(1, 0), PASS], candidate: b(3, 3), exact: false },
   { name: 'weak response pass', calls: [b(1, 3), PASS], candidate: PASS, points: '0–5 pts' },
 
   // ---- notrump machinery ----
@@ -65,7 +71,7 @@ const SPEC: Row[] = [
   { name: 'Blackwood 5♦ = 1 ace', dealer: 2, calls: [b(1, 3), PASS, b(3, 3), PASS, b(4, 4), PASS], candidate: b(5, 1), title: 'Blackwood response', artificial: true },
 
   // ---- competitive ----
-  { name: 'takeout double', calls: [b(1, 2)], candidate: DOUBLE, title: 'Takeout double', artificial: true },
+  { name: 'takeout double', calls: [b(1, 2)], candidate: DOUBLE, title: 'Takeout double', artificial: true, forcing: 'one-round' },
   { name: 'negative double', calls: [b(1, 1), b(1, 3)], candidate: DOUBLE, title: 'Negative double', artificial: true },
   { name: 'penalty double high level', calls: [b(4, 3)], candidate: DOUBLE, title: 'Penalty double' },
   { name: 'one-level overcall', calls: [b(1, 0)], candidate: b(1, 3), title: 'One-level overcall', points: '8–16 pts' },
@@ -95,6 +101,7 @@ describe('SAYC explainer spec table', () => {
       if (row.title) expect(meaning!.title).toContain(row.title);
       if (row.points) expect(meaning!.points).toBe(row.points);
       if (row.artificial !== undefined) expect(Boolean(meaning!.artificial)).toBe(row.artificial);
+      if (row.forcing !== undefined) expect(meaning!.forcing ?? null).toBe(row.forcing);
       expect(meaning!.exact).toBe(row.exact ?? true);
       expect(meaning!.description.length).toBeGreaterThan(20);
     });
