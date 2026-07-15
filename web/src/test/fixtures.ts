@@ -198,6 +198,26 @@ export const boardPlayingDummyTurn: BoardView = {
   legalCards: boardPlaying.dummyHand!,
 };
 
+/** West declares 3NT, East is dummy — an opponent's hand, shown as a rail */
+export const boardPlayingEastDummy: BoardView = {
+  ...boardPlaying,
+  contractLabel: '3NT by W',
+  declarer: 3,
+  dummy: 1,
+  dummyHand: eastHand,
+  dummyHcp: 10,
+};
+
+/** East declares 3NT, West is dummy — same rail, mirrored to the left */
+export const boardPlayingWestDummy: BoardView = {
+  ...boardPlaying,
+  contractLabel: '3NT by E',
+  declarer: 1,
+  dummy: 3,
+  dummyHand: westHand,
+  dummyHcp: 8,
+};
+
 // ---- done ----
 
 export const bidEvalsFixture: BidEval[] = [

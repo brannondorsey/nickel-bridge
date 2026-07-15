@@ -1291,6 +1291,71 @@ a.ds-btn-secondary:hover {
   margin-top: 4px;
 }
 
+/* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
+.play-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.play-row .trick {
+  flex: 1;
+  min-width: 0;
+  /* stretches to match the rail's content height instead of the fixed
+     230px .trick normally uses, so a long suit never gets clipped and a
+     short one never leaves the box looking squashed */
+  height: auto;
+  min-height: 230px;
+}
+.dummy-rail {
+  width: 96px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0 10px 10px;
+  border-left: 1px solid var(--line);
+}
+.dummy-rail-left {
+  padding: 10px 10px 10px 0;
+  border-left: none;
+  border-right: 1px solid var(--line);
+  order: -1;
+}
+.dummy-rail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--line-quiet);
+}
+.dummy-rail-seat {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.dummy-rail-role {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.dummy-rail-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+}
+.dummy-rail-ranks {
+  letter-spacing: 0.03em;
+}
+
 /* ---- DealDiagram ---- */
 .deal-diagram {
   margin: 12px 12px 0;
@@ -1928,6 +1993,12 @@ a.board-row:hover {
 }
 .board-page .trick {
   margin: 8px 12px 0;
+}
+.board-page .play-row {
+  margin: 8px 12px 0;
+}
+.board-page .play-row .trick {
+  margin: 0;
 }
 .board-actions {
   padding: 14px 12px 4px;

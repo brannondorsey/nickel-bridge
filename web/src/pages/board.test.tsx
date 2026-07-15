@@ -10,7 +10,9 @@ import {
   boardDoneLow,
   boardPlaying,
   boardPlayingDummyTurn,
+  boardPlayingEastDummy,
   boardPlayingFlipped,
+  boardPlayingWestDummy,
   meFixture,
 } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
@@ -172,6 +174,42 @@ describe('Board — play', () => {
     expect(bottom.textContent).toContain('S · DECL · YOU');
     const top = document.querySelector('.trick .seatpos.n')!;
     expect(top.textContent).toContain('N · DUMMY');
+    // North/South dummy keeps the full-width top fan, not the rail
+    expect(document.querySelector('.play-row')).not.toBeInTheDocument();
+    expect(document.querySelector('.dummy-rail')).not.toBeInTheDocument();
+  });
+
+  it('shows an East dummy as a rail on the right, not the top fan', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingEastDummy);
+    renderBoard();
+    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    // no top-fan seat line for dummy — East never plays into the human's hands
+    expect(screen.queryByText(/EAST — DUMMY/)).not.toBeInTheDocument();
+    const rail = document.querySelector('.dummy-rail-right')!;
+    expect(rail).toBeInTheDocument();
+    expect(rail.textContent).toContain('EAST');
+    expect(rail.textContent).toContain('10 HCP');
+    // trick box still gets the correct compass tags either side of the rail
+    const east = document.querySelector('.trick .seatpos.e')!;
+    expect(east.textContent).toContain('E · DUMMY');
+    const west = document.querySelector('.trick .seatpos.w')!;
+    expect(west.textContent).toContain('W · DECL');
+    // only one hand fan on screen — the human's own, at the bottom
+    expect(document.querySelectorAll('.handfan')).toHaveLength(1);
+  });
+
+  it('shows a West dummy as a rail on the left', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingWestDummy);
+    renderBoard();
+    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    const rail = document.querySelector('.dummy-rail-left')!;
+    expect(rail).toBeInTheDocument();
+    expect(rail.textContent).toContain('WEST');
+    expect(rail.textContent).toContain('8 HCP');
+    const west = document.querySelector('.trick .seatpos.w')!;
+    expect(west.textContent).toContain('W · DUMMY');
+    const east = document.querySelector('.trick .seatpos.e')!;
+    expect(east.textContent).toContain('E · DECL');
   });
 });
 
