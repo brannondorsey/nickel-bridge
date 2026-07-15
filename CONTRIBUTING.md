@@ -120,6 +120,23 @@ stages the transition into timed snapshots (card-by-card glides, trick collect, 
 that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
 so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
 
+**Auto-play and claims:** two QoL layers sit on top of the flow above, both client-driven so
+the server stays a plain request/response API. When `boardView.legalCards` has exactly one
+card, `Board.tsx` plays it automatically after a short delay (`AUTO_PLAY_DELAY_MS`) instead of
+requiring a tap — it just simulates the second tap of the normal select-then-confirm flow.
+Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
+(`solveFutureTricks` in `packages/ai/src/play-ai.ts`) at every real decision point; the instant
+either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
+and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
+a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
+untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
+needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`),
+shows an announcement banner, fast-forwards through a separate `stageClaimSteps` staging
+function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
+response — a claim can span many), then a terminal stamp before handing off to the normal
+completion view. See invariant 1 below — claims change what `advanceRobots` records for a
+human's untaken decisions, so they interact directly with the robot-trace fixture.
+
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
 **exactly one machine** — no horizontal scaling. On Fly.io this means every environment
@@ -159,7 +176,11 @@ module-level constants next to the functions that use them. Match that style.
    this. If you *deliberately* change robot behavior (model, encoding, tie-breaks, dealing),
    regenerate it: `npm run build && node tools/gen_trace_fixture.mjs`. If that diff surprises
    you, you were about to silently break comparability of live tournaments — stop and figure
-   out why.
+   out why. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   touching robot behavior: once a board becomes DD-determined, its tail switches from the
+   fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
+   reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that
+   reordering and the score is unchanged — before accepting a new fixture.
 2. **`packages/ai/src/encode.ts` is a bit-for-bit port** of the pgx `bridge_bidding`
    observation encoding, verified by golden tests against the original JAX output. Do not
    refactor it for style. Regenerating `packages/ai/test/fixtures.json` is only needed if the

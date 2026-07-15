@@ -35,6 +35,7 @@ export function HandFan({
           <button
             key={c}
             type="button"
+            data-card={c}
             className={`cardbtn${selected === c ? ' selected' : ''}${newSuit ? ' suitgap' : ''}`}
             disabled={!playable}
             onClick={

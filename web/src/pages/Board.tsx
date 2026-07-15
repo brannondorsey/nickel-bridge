@@ -35,13 +35,25 @@ import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToa
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
 import { SuitText } from '../components/game/SuitText';
-import { motionOK, stagePlaySteps } from '../components/game/playAnim';
+import {
+  AUTO_PLAY_DELAY_MS,
+  CLAIM_ANNOUNCE_MS,
+  CLAIM_STAMP_HOLD_MS,
+  ClaimAnnouncement,
+  capturePlayOrigin,
+  claimAnnouncement,
+  motionOK,
+  stageClaimSteps,
+  stagePlaySteps,
+} from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 const SUIT_PLURALS = ['spades', 'hearts', 'diamonds', 'clubs'];
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** The board screen — bidding, card play, and the scored result, one route. */
 export default function Board() {
@@ -57,6 +69,13 @@ export default function Board() {
   const [lastEval, setLastEval] = useState<BidEval | null>(null);
   const [inspect, setInspect] = useState<AuctionEntry | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // A claim's announce → fast-forward → stamp sequence, driven by runClaim
+  // below. claimGenRef guards it the same way stagingRef guards applyBoard's
+  // per-card timers: bumping it invalidates any claim sequence in flight.
+  const [claimPhase, setClaimPhase] = useState<'announce' | 'playing' | 'stamp' | null>(null);
+  const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
+  const claimGenRef = useRef(0);
 
   // The toll receipt auto-shows only when the board completes live in this
   // visit (sawLive flips as soon as we render a bidding/playing state);
@@ -89,7 +108,7 @@ export default function Board() {
   const applyBoard = useCallback(
     (prev: BoardView | null, next: BoardView) => {
       cancelStaging();
-      const steps = prev && motionOK() ? stagePlaySteps(prev, next) : [];
+      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
       if (!steps.length) {
         setBoard(next);
         return;
@@ -111,8 +130,43 @@ export default function Board() {
     [cancelStaging],
   );
 
+  // Bracket a claim's fast-forward (applyBoard, above) with the announcement
+  // banner and terminal stamp — see stageClaimSteps' docstring for why the
+  // hand-off to the real (state: 'done') `next` view happens here, after the
+  // stamp, rather than as the last staged step.
+  const runClaim = useCallback(
+    async (prev: BoardView, next: BoardView) => {
+      const info = claimAnnouncement(prev, next);
+      if (!info) {
+        applyBoard(prev, next); // data didn't line up — fall back to a plain (unanimated) jump
+        return;
+      }
+      const gen = ++claimGenRef.current;
+      setClaimInfo(info);
+      setClaimPhase('announce');
+      await sleep(CLAIM_ANNOUNCE_MS);
+      if (claimGenRef.current !== gen) return;
+
+      setClaimPhase('playing');
+      applyBoard(prev, next);
+      const totalMs = motionOK() ? stageClaimSteps(prev, next).reduce((sum, step) => sum + step.delayBefore, 0) : 0;
+      await sleep(totalMs);
+      if (claimGenRef.current !== gen) return;
+
+      setClaimPhase('stamp');
+      await sleep(CLAIM_STAMP_HOLD_MS);
+      if (claimGenRef.current !== gen) return;
+
+      setClaimPhase(null);
+      setClaimInfo(null);
+      setBoard(next);
+    },
+    [applyBoard],
+  );
+
   const load = useCallback(() => {
     cancelStaging();
+    claimGenRef.current++;
     setBoard(null);
     setSelectedCall(null);
     setSelectedCard(null);
@@ -120,6 +174,8 @@ export default function Board() {
     setInspect(null);
     setError(null);
     setShowReceipt(false);
+    setClaimPhase(null);
+    setClaimInfo(null);
     sawLiveRef.current = false;
     api
       .board(tournamentId, boardNo)
@@ -150,14 +206,38 @@ export default function Board() {
     try {
       const { board: next } = await api.playCard(tournamentId, boardNo, card);
       setSelectedCard(null);
-      applyBoard(board, next); // plays out card-by-card, then unlocks input
       setLastEval(null);
+      if (next.claimed && board) {
+        await runClaim(board, next);
+      } else {
+        applyBoard(board, next); // plays out card-by-card, then unlocks input
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
+  // A forced move (exactly one legal card) plays itself after a short delay,
+  // so the human can see it happen without needing to tap it — this simulates
+  // the same "second tap" a manual play would trigger, so it reuses the whole
+  // submitCard/applyBoard pipeline unchanged. Cancelled by the effect cleanup
+  // whenever board/selectedCard/busy change — a manual tap, a fresher server
+  // response (including intermediate staged snapshots, which always set
+  // legalCards: undefined), or unmount all naturally invalidate the timer.
+  useEffect(() => {
+    if (!board || board.state !== 'playing' || !board.myTurn || busy) return;
+    const legal = board.legalCards;
+    if (!legal || legal.length !== 1 || selectedCard !== null) return;
+    const card = legal[0];
+    const id = window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-card="${card}"]`);
+      if (el) capturePlayOrigin(card, el.getBoundingClientRect());
+      submitCard(card);
+    }, AUTO_PLAY_DELAY_MS);
+    return () => clearTimeout(id);
+  }, [board, selectedCard, busy]);
 
   if (error) {
     return (
@@ -204,6 +284,8 @@ export default function Board() {
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
+          claimPhase={claimPhase}
+          claimInfo={claimInfo}
         />
       ) : (
         <BiddingPhase
@@ -319,6 +401,8 @@ function PlayPhase({
   onSelectCard,
   inspect,
   onInspect,
+  claimPhase,
+  claimInfo,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -326,6 +410,8 @@ function PlayPhase({
   onSelectCard: (card: number) => void;
   inspect: AuctionEntry | null;
   onInspect: (entry: AuctionEntry) => void;
+  claimPhase: 'announce' | 'playing' | 'stamp' | null;
+  claimInfo: ClaimAnnouncement | null;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -362,6 +448,10 @@ function PlayPhase({
   // instead of the full-width fan a partner's dummy gets at the top.
   const dummyOnSide = board.dummy === 1 || board.dummy === 3;
 
+  // A forced move highlights like a manual selection, for the whole delay
+  // Board.tsx's auto-play timer waits out before playing it.
+  const soleLegal = board.myTurn && board.legalCards?.length === 1 ? board.legalCards[0] : null;
+
   return (
     <>
       <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
@@ -373,6 +463,15 @@ function PlayPhase({
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
         </Toast>
       ) : null}
+      {claimPhase === 'announce' && claimInfo ? (
+        <div className="claim-banner">
+          <div className="claim-banner-side">
+            {claimInfo.side === 'NS' ? 'N/S' : 'E/W'} CLAIM {claimInfo.tricks} REMAINING{' '}
+            {claimInfo.tricks === 1 ? 'TRICK' : 'TRICKS'}
+          </div>
+          <div className="claim-banner-sub">Laydown confirmed — the rest plays itself…</div>
+        </div>
+      ) : null}
       {board.dummyHand && !dummyOnSide ? (
         <>
           <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
@@ -380,7 +479,7 @@ function PlayPhase({
             <HandFan
               cards={displaySort(board.dummyHand)}
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
-              selected={selectedCard}
+              selected={selectedCard ?? soleLegal}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
             />
           </div>
@@ -389,24 +488,33 @@ function PlayPhase({
       {mustFollow && led !== null ? (
         <div className="board-follow">{SUIT_PLURALS[led]} are live — you must follow suit</div>
       ) : null}
-      {board.dummyHand && dummyOnSide ? (
-        <div className="play-row">
-          {board.dummy === 3 ? (
-            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
-          ) : null}
+      <div className="claim-stamp-anchor">
+        {board.dummyHand && dummyOnSide ? (
+          <div className="play-row">
+            {board.dummy === 3 ? (
+              <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
+            ) : null}
+            <TrickArea board={board} />
+            {board.dummy === 1 ? (
+              <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
+            ) : null}
+          </div>
+        ) : (
           <TrickArea board={board} />
-          {board.dummy === 1 ? (
-            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
-          ) : null}
-        </div>
-      ) : (
-        <TrickArea board={board} />
-      )}
+        )}
+        {claimPhase === 'stamp' ? (
+          <div className="claim-stamp-wrap">
+            <InkStamp className="claim-stamp" rotate={-6}>
+              TOLLS CLAIMED
+            </InkStamp>
+          </div>
+        ) : null}
+      </div>
       <div className="board-fan">
         <HandFan
           cards={displaySort(board.hand)}
           legal={canPlayFrom(playingSeat) ? board.legalCards : []}
-          selected={selectedCard}
+          selected={selectedCard ?? soleLegal}
           onSelect={canPlayFrom(playingSeat) ? onSelectCard : undefined}
         />
       </div>
@@ -417,6 +525,13 @@ function PlayPhase({
           <span className={suitClass(cardSuit(selectedCard))}>{SUIT_SYMBOLS[cardSuit(selectedCard)]}</span> selected — tap again to
           play
         </div>
+      ) : soleLegal !== null ? (
+        <div className="board-hint num">
+          Only {RANK_CHARS[cardRank(soleLegal)]}
+          {SUIT_SYMBOLS[cardSuit(soleLegal)]} to play — playing automatically…
+        </div>
+      ) : claimPhase === 'playing' || claimPhase === 'stamp' ? (
+        <div className="board-hint">Laydown confirmed — the rest plays itself…</div>
       ) : board.myTurn ? (
         <div className="board-hint">
           your turn{board.handToPlay === board.dummy ? ' — playing from dummy' : ''}

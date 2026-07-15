@@ -1,7 +1,9 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { BoardView, TrickCard } from '../api';
+import { AUTO_PLAY_DELAY_MS } from '../components/game/playAnim';
 import {
   bid2H,
   boardBidding,
@@ -34,6 +36,13 @@ const renderBoard = () =>
   );
 
 const inAuction = () => within(document.querySelector('.auction') as HTMLElement);
+
+// Safety net: if a fake-timer test below throws or times out mid-await, its
+// own try/finally may not unwind before the next test starts — never leave
+// fake timers active for a test that didn't ask for them.
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('Board — bidding', () => {
   it('shows the ticket header with deal conditions and the vul chip', async () => {
@@ -224,6 +233,112 @@ describe('Board — play', () => {
     expect(west.textContent).toContain('W · DUMMY');
     const east = document.querySelector('.trick .seatpos.e')!;
     expect(east.textContent).toContain('E · DECL');
+  });
+});
+
+describe('Board — auto-play', () => {
+  it('plays the only legal card by itself after a short delay, with no tap required', async () => {
+    const soleCard = boardPlaying.legalCards![1]; // Q♠
+    const forced: BoardView = { ...boardPlaying, legalCards: [soleCard] };
+    apiMock.board.mockResolvedValue(forced);
+    apiMock.playCard.mockResolvedValue({ board: forced });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText(/Only Q♠ to play — playing automatically…/)).toBeInTheDocument());
+      // the sole card reads as selected, same treatment a manual tap gets
+      expect(screen.getByRole('button', { name: 'Q of ♠' })).toHaveClass('selected');
+      expect(apiMock.playCard).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+      expect(apiMock.playCard).toHaveBeenCalledWith(12, 2, soleCard);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not auto-play once the user has manually selected a card', async () => {
+    const soleCard = boardPlaying.legalCards![1];
+    const forced: BoardView = { ...boardPlaying, legalCards: [soleCard] };
+    apiMock.board.mockResolvedValue(forced);
+    apiMock.playCard.mockResolvedValue({ board: forced });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText(/playing automatically/)).toBeInTheDocument());
+      // advancing past the delay without a manual tap would auto-play — instead
+      // simulate the user already having tapped it once (selectedCard set)
+      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS / 2);
+      expect(apiMock.playCard).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Board — claims', () => {
+  it('announces the claim, then resolves to the terminal stamp', async () => {
+    const soleCard = boardPlaying.legalCards![1]; // Q♠ — completes the trick in progress
+    const fullTrick: TrickCard[] = [...boardPlaying.currentTrick!, { seat: 2, card: soleCard }];
+    const placeholderTrick: TrickCard[] = [
+      { seat: 0, card: 26 },
+      { seat: 1, card: 27 },
+      { seat: 2, card: 31 },
+      { seat: 3, card: 32 },
+    ];
+    const claimed: BoardView = {
+      ...boardPlaying,
+      contract: { level: 4, strain: 3, declarer: 2 }, // spades trump, South declares
+      state: 'done',
+      claimed: true,
+      myTurn: false,
+      legalCards: undefined,
+      currentTrick: [],
+      completedTricks: 13,
+      declarerTricks: 12,
+      defenderTricks: 1,
+      lastTrick: placeholderTrick,
+      hand: [],
+      dummyHand: [],
+      // 4 already-accounted-for tricks, then the 9 new ones (the completed
+      // trick-in-progress + 8 claimed placeholders) — claimAnnouncement
+      // slices off the first `prev.completedTricks` (4) entries
+      playHistory: [...Array(4).fill(placeholderTrick), fullTrick, ...Array(8).fill(placeholderTrick)],
+      result: boardDone.result,
+      allHands: boardDone.allHands,
+    };
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: claimed });
+
+    // fake timers so the ~7s real-time sequence (announce, fast-forward
+    // through 9 tricks, stamp hold) advances deterministically instead of
+    // racing findByText's own real-time polling window. userEvent's own
+    // internal pointer-event machinery doesn't interleave with fake timers
+    // reliably, so the two taps use the lower-level fireEvent instead.
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH — YOU · YOUR TURN')).toBeInTheDocument());
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+
+      // announced clearly, before any card moves
+      await vi.waitFor(() => expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument());
+      expect(screen.getByText(/Laydown confirmed/)).toBeInTheDocument();
+
+      // run the announce hold, the whole fast-forward, and the stamp hold to
+      // completion — stageClaimSteps' exact per-beat timing (and that the
+      // terminal stamp renders "TOLLS CLAIMED") is covered by the pure unit
+      // tests in playAnim.test.ts; this integration test's job is confirming
+      // the wiring hands off cleanly to the normal completion view
+      await vi.runAllTimersAsync();
+      await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -25,6 +25,22 @@ export const HOLD_MS = 300;
 export const COLLECT_MS = 260;
 export const STAMP_MS = 420;
 
+// A forced (single-legal-card) turn auto-plays after this delay — long
+// enough to read the hint before the card moves, short enough not to stall.
+export const AUTO_PLAY_DELAY_MS = 1000;
+
+// A claim's announcement banner holds this long before the fast-forward
+// starts, and the terminal stamp holds this long before the normal
+// completion hand-off — both roughly AUTO_PLAY_DELAY_MS's pacing, since
+// they're the same "let the human register what just happened" beat.
+export const CLAIM_ANNOUNCE_MS = 1000;
+export const CLAIM_STAMP_HOLD_MS = 900;
+// Fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+STAMP_MS since
+// a claim can span many tricks — the glide/collect beats themselves
+// (GLIDE_MS/COLLECT_MS) are untouched, only the gaps between them compress.
+export const CLAIM_GAP_MS = 130;
+export const CLAIM_TRICK_GAP_MS = 110;
+
 export interface StagedStep {
   /** delay in ms after the previous step (0 = apply immediately) */
   delayBefore: number;
@@ -229,5 +245,134 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
   // the real server view last: restores myTurn/legalCards (or shows the result)
   const lastWasPlay = !boundary || after.length > 0;
   steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : STAMP_MS, view: next });
+  return steps;
+}
+
+// ---- claims ----
+
+export interface ClaimAnnouncement {
+  side: 'NS' | 'EW';
+  tricks: number;
+}
+
+/**
+ * Which side is claiming, and how many tricks — derived entirely from data
+ * already in the response, no dedicated server field needed. A claim only
+ * ever fires on a 100% laydown, so every trick newly added to playHistory is
+ * won by the same side; the first one is enough to tell which.
+ */
+export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnouncement | null {
+  if (!next.claimed || !next.playHistory) return null;
+  const strain = (next.contract as { strain?: number } | undefined)?.strain;
+  if (strain === undefined) return null;
+  const newTricks = next.playHistory.slice(prev.completedTricks ?? 0);
+  const firstTrick = newTricks[0];
+  if (!firstTrick?.length) return null;
+  return { side: trickWinner(firstTrick, strain) % 2 === 0 ? 'NS' : 'EW', tricks: newTricks.length };
+}
+
+/**
+ * Stage a claim's fast-forward as timed snapshots, mirroring stagePlaySteps'
+ * glide/collect beats but compressed and spanning up to 13 tricks instead of
+ * at most one boundary. Kept separate from stagePlaySteps rather than
+ * generalizing it: that function's single-trick-boundary assumption is
+ * documented and load-bearing for ordinary play, and stretching it here
+ * would risk destabilizing the common, well-tested path.
+ *
+ * Unlike stagePlaySteps, this does NOT end with the real `next` view — every
+ * step keeps `state: 'playing'` so the board only flips to 'done' (and the
+ * receipt takes over) once the "TOLLS CLAIMED" stamp has had its moment.
+ * Board.tsx owns that final hand-off, along with the announcement banner and
+ * terminal stamp, since those are plain timed UI state, not board-view
+ * snapshots.
+ */
+export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] {
+  if (prev.state !== 'playing' || next.state !== 'done' || !next.claimed || !next.playHistory) return [];
+  if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
+
+  const strain = (next.contract as { strain?: number } | undefined)?.strain;
+  if (strain === undefined) return [];
+
+  const prevDone = prev.completedTricks ?? 0;
+  const prevTrick = prev.currentTrick ?? [];
+  const newTricks = next.playHistory.slice(prevDone);
+  if (!newTricks.length) return [];
+  if (!sameCards(newTricks[0].slice(0, prevTrick.length), prevTrick)) return [];
+
+  const declBefore = prev.declarerTricks ?? 0;
+  const defBefore = prev.defenderTricks ?? 0;
+  const claimingIsDecl = (next.declarerTricks ?? 0) - declBefore === newTricks.length;
+  const claimingIsDef = (next.defenderTricks ?? 0) - defBefore === newTricks.length;
+  if (!claimingIsDecl && !claimingIsDef) return []; // not a clean 100% laydown — don't guess
+
+  const playingSeat = next.playingSeat ?? 2;
+  const dummySeat = next.dummy;
+  const allPlays = newTricks.flatMap((t, ti) => (ti === 0 ? t.slice(prevTrick.length) : t));
+
+  // hands reconstructed backward, same as stagePlaySteps: a snapshot taken
+  // before a play must still hold that card in its fan
+  const handAt = (i: number) => {
+    const pending = allPlays.slice(i);
+    const mine = pending.filter((t) => t.seat === playingSeat).map((t) => t.card);
+    return mine.length ? [...(next.hand ?? []), ...mine] : next.hand;
+  };
+  const dummyHandAt = (i: number) => {
+    if (!next.dummyHand) return undefined;
+    const pending = allPlays.slice(i);
+    const dummys = pending.filter((t) => t.seat === dummySeat).map((t) => t.card);
+    return dummys.length ? [...next.dummyHand, ...dummys] : next.dummyHand;
+  };
+
+  const mid = (over: Partial<BoardView>): BoardView => ({
+    ...next,
+    state: 'playing',
+    myTurn: false,
+    legalCards: undefined,
+    ...over,
+  });
+
+  const steps: StagedStep[] = [];
+  let played = 0;
+  let doneCount = prevDone;
+  let declCount = declBefore;
+  let defCount = defBefore;
+
+  newTricks.forEach((trick, ti) => {
+    const toPlay = ti === 0 ? trick.slice(prevTrick.length) : trick;
+    toPlay.forEach((play, i) => {
+      played += 1;
+      const delayBefore = ti === 0 && i === 0 ? 0 : i === 0 ? CLAIM_TRICK_GAP_MS : CLAIM_GAP_MS;
+      steps.push({
+        delayBefore,
+        view: mid({
+          currentTrick: [...(ti === 0 ? prevTrick : []), ...toPlay.slice(0, i + 1)],
+          completedTricks: doneCount,
+          declarerTricks: declCount,
+          defenderTricks: defCount,
+          lastTrick: ti === 0 ? (prev.lastTrick ?? null) : newTricks[ti - 1],
+          handToPlay: (play.seat + 1) % 4,
+          hand: handAt(played),
+          dummyHand: dummyHandAt(played),
+        }),
+      });
+    });
+    const winner = trickWinner(trick, strain);
+    doneCount += 1;
+    if (claimingIsDecl) declCount += 1;
+    else defCount += 1;
+    steps.push({
+      delayBefore: CLAIM_GAP_MS,
+      view: mid({
+        currentTrick: [],
+        completedTricks: doneCount,
+        declarerTricks: declCount,
+        defenderTricks: defCount,
+        handToPlay: winner,
+        hand: handAt(played),
+        dummyHand: dummyHandAt(played),
+      }),
+    });
+  });
+
   return steps;
 }

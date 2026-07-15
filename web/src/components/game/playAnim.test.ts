@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardView } from '../../api';
+import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
+  CLAIM_TRICK_GAP_MS,
   GLIDE_MS,
   HOLD_MS,
   ROBOT_GAP_MS,
   capturePlayOrigin,
+  claimAnnouncement,
+  stageClaimSteps,
   stagePlaySteps,
   takePlayOrigin,
   trickWinner,
@@ -231,5 +234,125 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, next)).toEqual([]);
     // two boundaries at once (stale tab): never animate a guess
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
+  });
+});
+
+// ---- claims ----
+// A near-the-end position: 11 tricks already complete (8-3 for declarer),
+// 2 spades left in each of South's and dummy's hands. N-S (South declares)
+// claims both remaining tricks.
+const claimContract = { level: 4, strain: 3, declarer: 2 }; // spades trump
+const placeholderTrick: TrickCard[] = [
+  { seat: 0, card: D(0) },
+  { seat: 1, card: D(1) },
+  { seat: 2, card: D(5) },
+  { seat: 3, card: D(6) },
+];
+const claimPrev: BoardView = {
+  ...boardPlaying,
+  contract: claimContract,
+  completedTricks: 11,
+  currentTrick: [],
+  declarerTricks: 8,
+  defenderTricks: 3,
+  hand: [S(9), S(10)],
+  dummyHand: [S(7), S(8)],
+};
+const trick12: TrickCard[] = [
+  { seat: 2, card: S(9) },
+  { seat: 3, card: S(0) },
+  { seat: 0, card: S(1) },
+  { seat: 1, card: S(2) },
+];
+const trick13: TrickCard[] = [
+  { seat: 2, card: S(10) },
+  { seat: 3, card: S(3) },
+  { seat: 0, card: S(4) },
+  { seat: 1, card: S(6) },
+];
+const claimNext: BoardView = {
+  ...claimPrev,
+  state: 'done',
+  claimed: true,
+  myTurn: false,
+  legalCards: undefined,
+  hand: [],
+  dummyHand: [],
+  completedTricks: 13,
+  declarerTricks: 10,
+  defenderTricks: 3,
+  currentTrick: [],
+  playHistory: [...Array(11).fill(placeholderTrick), trick12, trick13],
+};
+
+describe('claimAnnouncement', () => {
+  it('derives the claiming side and trick count from playHistory alone', () => {
+    // South (seat 2, the N-S side) wins both new tricks
+    expect(claimAnnouncement(claimPrev, claimNext)).toEqual({ side: 'NS', tricks: 2 });
+  });
+
+  it('returns null without the claimed flag, playHistory, or a resolvable strain', () => {
+    const withHistory = { ...claimPrev, state: 'done' as const, playHistory: claimNext.playHistory };
+    expect(claimAnnouncement(claimPrev, withHistory)).toBeNull(); // no claimed flag
+    expect(claimAnnouncement(claimPrev, { ...claimNext, playHistory: undefined })).toBeNull();
+    expect(claimAnnouncement(claimPrev, { ...claimNext, contract: undefined })).toBeNull();
+  });
+});
+
+describe('stageClaimSteps', () => {
+  it('returns [] when the transition is not a claim', () => {
+    expect(stageClaimSteps(claimPrev, { ...claimNext, claimed: false })).toEqual([]);
+    expect(stageClaimSteps({ ...claimPrev, state: 'bidding' }, claimNext)).toEqual([]);
+    expect(stageClaimSteps(claimPrev, { ...claimNext, playHistory: undefined })).toEqual([]);
+  });
+
+  it('stages every new trick card-by-card, ending fully tallied but NOT at the real done view', () => {
+    const steps = stageClaimSteps(claimPrev, claimNext);
+    // 4 cards + collect for trick 12, 4 cards + collect for trick 13
+    expect(steps).toHaveLength(10);
+
+    // every intermediate view stays locked in "playing" — Board.tsx owns the
+    // hand-off to 'done' after the terminal stamp, not this function
+    for (const step of steps) {
+      expect(step.view.state).toBe('playing');
+      expect(step.view.myTurn).toBe(false);
+      expect(step.view.legalCards).toBeUndefined();
+    }
+    expect(steps.some((s) => s.view.state === 'done')).toBe(false);
+
+    // first card lands immediately (the caller already held for the announce beat)
+    expect(steps[0].delayBefore).toBe(0);
+    expect(steps[0].view.currentTrick).toEqual([trick12[0]]);
+    expect(steps[0].view.hand).not.toContain(S(9));
+
+    // trick 12 collects: the claiming side's tally (declarer here) bumps
+    expect(steps[4].view.currentTrick).toEqual([]);
+    expect(steps[4].view.completedTricks).toBe(12);
+    expect(steps[4].view.declarerTricks).toBe(9);
+    expect(steps[4].view.defenderTricks).toBe(3);
+
+    // the second trick's opening card uses the (longer) inter-trick gap
+    expect(steps[5].delayBefore).toBe(CLAIM_TRICK_GAP_MS);
+    expect(steps[5].view.currentTrick).toEqual([trick13[0]]);
+
+    // final staged step: fully tallied, hands empty
+    const last = steps[9];
+    expect(last.view.completedTricks).toBe(13);
+    expect(last.view.declarerTricks).toBe(10);
+    expect(last.view.hand).toEqual([]);
+    expect(last.view.dummyHand).toEqual([]);
+  });
+
+  it('reconciles a trick already in progress before staging the rest', () => {
+    const midTrickPrev: BoardView = { ...claimPrev, currentTrick: [trick12[0], trick12[1]] };
+    const steps = stageClaimSteps(midTrickPrev, claimNext);
+    // 2 remaining cards of trick 12 + collect, then all of trick 13 + collect
+    expect(steps).toHaveLength(8);
+    expect(steps[0].view.currentTrick).toEqual([trick12[0], trick12[1], trick12[2]]);
+  });
+
+  it('bails to [] when the in-progress trick does not match playHistory', () => {
+    const mismatched: BoardView = { ...claimPrev, currentTrick: [{ seat: 2, card: H(0) }] };
+    expect(stageClaimSteps(mismatched, claimNext)).toEqual([]);
   });
 });

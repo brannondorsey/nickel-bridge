@@ -3,6 +3,8 @@ import {
   Bidder,
   chooseCard,
   loadPolicyModel,
+  pickFromSolve,
+  solveFutureTricks,
 } from '@bridge/ai';
 import {
   BidMeaning,
@@ -53,6 +55,12 @@ export interface GameBoard {
   plays: Card[];
   bidEvals: (BidEvaluation & { call: Call; bestMeaning?: BidMeaning | null })[];
   contract: Contract | null;
+  /**
+   * Set by advanceRobots when this request resolved a laydown claim.
+   * Transient — never persisted (loadBoard builds a fresh GameBoard per
+   * request, so it always starts unset) and never added to the boards table.
+   */
+  claimed?: boolean;
 }
 
 export function loadBoard(t: TournamentRow, userId: number, boardNo: number, createIfMissing: boolean): GameBoard | null {
@@ -139,11 +147,42 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
         finishBoard(b);
         return;
       }
+      const legal = legalCards(b.deal, ps);
+      if (legal.length > 1) {
+        // A forced (single-legal-card) node carries no new branching
+        // information for a claim, so we skip the solve there — the next
+        // real decision point is checked the following iteration regardless.
+        const solve = await solveFutureTricks(b.deal, b.contract!, b.plays);
+        const remainingTricks = 13 - ps.completedTricks.length;
+        if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
+          // Either the side to move (bestScore === remaining) or the
+          // defense (bestScore === 0) is a 100% laydown from here. Play out
+          // the whole rest of the hand DD-optimally for both sides — this is
+          // the only way the claim's outcome is guaranteed identical to what
+          // continued play would have produced.
+          b.claimed = true;
+          b.plays.push(pickFromSolve(legal, solve));
+          await resolveClaim(b);
+          continue;
+        }
+        if (!humanControls(ps.handToPlay, b.contract!)) {
+          b.plays.push(pickFromSolve(legal, solve));
+          continue;
+        }
+        return;
+      }
       if (humanControls(ps.handToPlay, b.contract!)) return;
       b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
       continue;
     }
     return; // done
+  }
+}
+
+/** Play out every remaining card DD-optimally for both sides once a claim fires. */
+async function resolveClaim(b: GameBoard): Promise<void> {
+  while (!playState(b.deal, b.contract!, b.plays).isOver) {
+    b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
   }
 }
 
@@ -276,6 +315,7 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     view.result = boardResult(t, b, viewerElo);
     view.allHands = deal.hands;
     view.playHistory = b.contract ? playState(deal, b.contract, b.plays).completedTricks : [];
+    if (b.claimed) view.claimed = true;
   }
   return view;
 }
