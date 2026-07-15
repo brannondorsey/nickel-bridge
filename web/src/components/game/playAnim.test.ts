@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
@@ -6,6 +6,7 @@ import {
   GLIDE_MS,
   HOLD_MS,
   ROBOT_GAP_MS,
+  captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
   stageClaimSteps,
@@ -59,6 +60,61 @@ describe('play-origin capture', () => {
     capturePlayOrigin(12, rect);
     expect(takePlayOrigin(12)).toBe(rect);
     expect(takePlayOrigin(12)).toBeNull();
+  });
+});
+
+describe('captureFanOriginIfVisible', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  // jsdom's own getBoundingClientRect always returns all-zeros, so cards
+  // added to the DOM here get a stubbed rect — same technique the app's own
+  // flight code already relies on being non-zero to do anything.
+  function addFanCard(card: number, width = 46): HTMLElement {
+    const el = document.createElement('button');
+    el.setAttribute('data-card', String(card));
+    el.getBoundingClientRect = () =>
+      ({ left: 10, top: 20, width, height: 66, right: 10 + width, bottom: 86, x: 10, y: 20, toJSON() {} }) as DOMRect;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  it('captures a still-visible bottom-fan (playingSeat) card', () => {
+    addFanCard(5);
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 0 } as BoardView, { seat: 2, card: 5 });
+    expect(takePlayOrigin(5)).not.toBeNull();
+  });
+
+  it('captures a still-visible top-fan dummy card, but not a side-rail (E/W) dummy card', () => {
+    addFanCard(6);
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 0 } as BoardView, { seat: 0, card: 6 });
+    expect(takePlayOrigin(6)).not.toBeNull();
+
+    addFanCard(7);
+    // East dummy renders as a DummyRail, not a HandFan — no fan to glide from
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 1 } as BoardView, { seat: 1, card: 7 });
+    expect(takePlayOrigin(7)).toBeNull();
+  });
+
+  it('does not capture a robot seat with no fan on screen', () => {
+    addFanCard(8);
+    // seat 3 (West) is neither playingSeat nor dummy here
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 0 } as BoardView, { seat: 3, card: 8 });
+    expect(takePlayOrigin(8)).toBeNull();
+  });
+
+  it('is a no-op once an origin is already captured — never overrides a real tap', () => {
+    const tapped = { left: 1, top: 2, width: 3, height: 4 } as DOMRect;
+    capturePlayOrigin(9, tapped);
+    addFanCard(9, 999); // a very different rect, to prove it's not the one used
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 0 } as BoardView, { seat: 2, card: 9 });
+    expect(takePlayOrigin(9)).toBe(tapped);
+  });
+
+  it('does nothing when the card has no element on screen at all', () => {
+    captureFanOriginIfVisible({ playingSeat: 2, dummy: 0 } as BoardView, { seat: 2, card: 10 });
+    expect(takePlayOrigin(10)).toBeNull();
   });
 });
 
@@ -354,5 +410,86 @@ describe('stageClaimSteps', () => {
   it('bails to [] when the in-progress trick does not match playHistory', () => {
     const mismatched: BoardView = { ...claimPrev, currentTrick: [{ seat: 2, card: H(0) }] };
     expect(stageClaimSteps(mismatched, claimNext)).toEqual([]);
+  });
+});
+
+// ---- mixed leading trick ----
+// The claim is only detected server-side at a decision point with more than
+// one legal card (a forced single-legal-card node skips the DD solve — see
+// game.ts), so the trick already in progress when the client's last request
+// went out can finish for either side before the guaranteed claim run
+// begins. Here West (defense) already holds the ace of trumps in the
+// in-progress trick — defense wins it regardless of the claim — and only
+// the two tricks after that are the true (declarer) laydown.
+const C = (r: number) => 3 * 13 + r;
+const mixedContract = { level: 4, strain: 3, declarer: 2 }; // spades trump, South declares
+const mixedPrev: BoardView = {
+  ...boardPlaying,
+  contract: mixedContract,
+  completedTricks: 9,
+  currentTrick: [
+    { seat: 3, card: S(12) }, // West leads the ace of spades
+    { seat: 0, card: S(1) },
+  ],
+  declarerTricks: 6,
+  defenderTricks: 3,
+};
+const mixedTrick: TrickCard[] = [
+  ...mixedPrev.currentTrick!,
+  { seat: 2, card: S(2) }, // South (declarer) forced to follow low
+  { seat: 1, card: S(3) },
+]; // West's ace wins — defense takes this trick despite the coming claim
+const declTrick1: TrickCard[] = [
+  { seat: 0, card: C(12) }, // North (N-S) wins on the ace of clubs
+  { seat: 1, card: C(1) },
+  { seat: 2, card: C(2) },
+  { seat: 3, card: C(3) },
+];
+const declTrick2: TrickCard[] = [
+  { seat: 0, card: C(11) },
+  { seat: 1, card: C(4) },
+  { seat: 2, card: C(5) },
+  { seat: 3, card: C(6) },
+];
+const mixedNext: BoardView = {
+  ...mixedPrev,
+  state: 'done',
+  claimed: true,
+  myTurn: false,
+  legalCards: undefined,
+  hand: [],
+  dummyHand: [],
+  completedTricks: 12,
+  declarerTricks: 8,
+  defenderTricks: 4,
+  currentTrick: [],
+  playHistory: [...Array(9).fill(placeholderTrick), mixedTrick, declTrick1, declTrick2],
+};
+
+describe('claimAnnouncement — mixed leading trick', () => {
+  it('does not count the in-progress trick toward the claim when it goes to the other side', () => {
+    // if it blindly trusted the first new trick, this would wrongly report
+    // {side: 'EW', tricks: 3} — West's ace, not the actual N-S laydown
+    expect(claimAnnouncement(mixedPrev, mixedNext)).toEqual({ side: 'NS', tricks: 2 });
+  });
+});
+
+describe('stageClaimSteps — mixed leading trick', () => {
+  it('tallies the in-progress trick to whichever side actually won it, not the claiming side', () => {
+    const steps = stageClaimSteps(mixedPrev, mixedNext);
+    // 2 cards to finish trick 9 + collect, then 4+collect and 4+collect for the two clean tricks
+    expect(steps).toHaveLength(2 + 1 + 5 + 5);
+
+    // the mixed trick's collect bumps the DEFENSE tally, not declarer
+    const mixedCollect = steps[2];
+    expect(mixedCollect.view.completedTricks).toBe(10);
+    expect(mixedCollect.view.declarerTricks).toBe(6);
+    expect(mixedCollect.view.defenderTricks).toBe(4);
+
+    // the two clean claim tricks after it bump declarer's tally only
+    const last = steps[steps.length - 1];
+    expect(last.view.completedTricks).toBe(12);
+    expect(last.view.declarerTricks).toBe(8);
+    expect(last.view.defenderTricks).toBe(4);
   });
 });

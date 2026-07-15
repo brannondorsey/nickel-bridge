@@ -79,6 +79,31 @@ export function takePlayOrigin(card: number): DOMRect | null {
   return hit.rect;
 }
 
+/**
+ * Cards played without ever being tapped — the auto-play timer's forced
+ * card, and every card in a claim's fast-forward — never go through
+ * HandFan's onClick, so capturePlayOrigin is never called for them and
+ * TrickArea's glideIn falls back to an off-table origin. That's correct for
+ * an opponent's card (it was never visible to begin with), but wrong for
+ * the human's OWN hand or a top-fan dummy: those cards sit in a visible
+ * fan the whole time (handAt/dummyHandAt keep them there until their staged
+ * step), so they should glide from wherever they currently are, exactly
+ * like a real tap. Board.tsx calls this just before applying each staged
+ * step, for whichever card is newly appearing in that step — a no-op if an
+ * origin was already captured some other way (a real tap, or the auto-play
+ * timer), since it only fills in a gap, never overrides one.
+ */
+export function captureFanOriginIfVisible(view: BoardView, play: TrickCard): void {
+  if (playOrigins.has(play.card) || typeof document === 'undefined') return;
+  const isBottomFan = play.seat === (view.playingSeat ?? 2);
+  const isTopFan = play.seat === view.dummy && view.dummy !== 1 && view.dummy !== 3; // not the E/W dummy rail
+  if (!isBottomFan && !isTopFan) return;
+  const el = document.querySelector<HTMLElement>(`[data-card="${play.card}"]`);
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0) capturePlayOrigin(play.card, rect);
+}
+
 // ---- trick winner (mirrors @bridge/core play.ts trickWinner) ----
 
 /** strain 0=♣ 1=♦ 2=♥ 3=♠ 4=NT; suits 0=♠ 1=♥ 2=♦ 3=♣ */
@@ -260,18 +285,26 @@ export interface ClaimAnnouncement {
 
 /**
  * Which side is claiming, and how many tricks — derived entirely from data
- * already in the response, no dedicated server field needed. A claim only
- * ever fires on a 100% laydown, so every trick newly added to playHistory is
- * won by the same side; the first one is enough to tell which.
+ * already in the response, no dedicated server field needed. The claim is
+ * only detected server-side at a decision point with more than one legal
+ * card (forced single-card nodes skip the solve — see game.ts), so the
+ * trick that was already in progress when the human's last request went out
+ * can still be won by either side; only the tricks from the claim's true
+ * detection point onward are guaranteed to the claiming side. That's always
+ * a suffix of the newly-completed tricks (the burst runs to the end of the
+ * board once claimed), so walk backward from the last trick — which is
+ * always part of the true claim — to find where the pure run starts.
  */
 export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnouncement | null {
   if (!next.claimed || !next.playHistory) return null;
   const strain = (next.contract as { strain?: number } | undefined)?.strain;
   if (strain === undefined) return null;
   const newTricks = next.playHistory.slice(prev.completedTricks ?? 0);
-  const firstTrick = newTricks[0];
-  if (!firstTrick?.length) return null;
-  return { side: trickWinner(firstTrick, strain) % 2 === 0 ? 'NS' : 'EW', tricks: newTricks.length };
+  if (!newTricks.length) return null;
+  const lastParity = trickWinner(newTricks[newTricks.length - 1], strain) % 2;
+  let tailStart = newTricks.length;
+  while (tailStart > 0 && trickWinner(newTricks[tailStart - 1], strain) % 2 === lastParity) tailStart--;
+  return { side: lastParity === 0 ? 'NS' : 'EW', tricks: newTricks.length - tailStart };
 }
 
 /**
@@ -294,7 +327,8 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
   if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
 
   const strain = (next.contract as { strain?: number } | undefined)?.strain;
-  if (strain === undefined) return [];
+  const declarer = next.declarer;
+  if (strain === undefined || declarer === undefined) return [];
 
   const prevDone = prev.completedTricks ?? 0;
   const prevTrick = prev.currentTrick ?? [];
@@ -302,11 +336,13 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
   if (!newTricks.length) return [];
   if (!sameCards(newTricks[0].slice(0, prevTrick.length), prevTrick)) return [];
 
-  const declBefore = prev.declarerTricks ?? 0;
-  const defBefore = prev.defenderTricks ?? 0;
-  const claimingIsDecl = (next.declarerTricks ?? 0) - declBefore === newTricks.length;
-  const claimingIsDef = (next.defenderTricks ?? 0) - defBefore === newTricks.length;
-  if (!claimingIsDecl && !claimingIsDef) return []; // not a clean 100% laydown — don't guess
+  // The tally can't be assumed to belong wholly to one side: the claim is
+  // only detected at a decision point with more than one legal card, so a
+  // trick already in progress when this burst started may finish for
+  // whichever side actually holds the winning card, before the guaranteed
+  // run of claim tricks begins. Each trick's winner is tallied individually
+  // (same rule as packages/core/src/play.ts) rather than assumed.
+  const declParity = declarer % 2;
 
   const playingSeat = next.playingSeat ?? 2;
   const dummySeat = next.dummy;
@@ -337,8 +373,8 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
   const steps: StagedStep[] = [];
   let played = 0;
   let doneCount = prevDone;
-  let declCount = declBefore;
-  let defCount = defBefore;
+  let declCount = prev.declarerTricks ?? 0;
+  let defCount = prev.defenderTricks ?? 0;
 
   newTricks.forEach((trick, ti) => {
     const toPlay = ti === 0 ? trick.slice(prevTrick.length) : trick;
@@ -361,7 +397,7 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
     });
     const winner = trickWinner(trick, strain);
     doneCount += 1;
-    if (claimingIsDecl) declCount += 1;
+    if (winner % 2 === declParity) declCount += 1;
     else defCount += 1;
     steps.push({
       delayBefore: CLAIM_GAP_MS,

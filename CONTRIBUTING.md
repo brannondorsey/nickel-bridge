@@ -134,8 +134,13 @@ needed to know which side or how many tricks — see `claimAnnouncement` in `pla
 announcement banner pops up right as the fast-forward starts and stays in place — the only
 indication a claim happened — while the remaining tricks play out through a separate
 `stageClaimSteps` staging function (kept apart from `stagePlaySteps`, which assumes at most one
-trick boundary per response — a claim can span many), before handing off to the normal
-completion view. See invariant 1 below — claims change what `advanceRobots` records for a
+trick boundary per response — a claim can span many), reusing the same glide-in/collect
+machinery `stagePlaySteps` uses for ordinary play, before handing off to the normal completion
+view. Because the solve only runs at a decision point with more than one legal card, the trick
+already in progress when the client's last request went out can still finish for either side
+before the guaranteed run of claim tricks begins — `claimAnnouncement`/`stageClaimSteps` tally
+each newly-completed trick by its actual winner rather than assuming the whole batch belongs to
+the claiming side. See invariant 1 below — claims change what `advanceRobots` records for a
 human's untaken decisions, so they interact directly with the robot-trace fixture.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and

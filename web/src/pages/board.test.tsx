@@ -288,6 +288,16 @@ describe('Board — claims', () => {
       { seat: 2, card: 31 },
       { seat: 3, card: 32 },
     ];
+    // North (NS) wins every one of these on the ace of clubs — unlike
+    // placeholderTrick (used only for the already-accounted-for history
+    // entries this test slices off), these ones' winners actually back the
+    // declarerTricks/defenderTricks tallies below.
+    const claimTrick: TrickCard[] = [
+      { seat: 0, card: 39 + 12 }, // North: A♣
+      { seat: 1, card: 39 + 1 },
+      { seat: 2, card: 39 + 2 },
+      { seat: 3, card: 39 + 3 },
+    ];
     const claimed: BoardView = {
       ...boardPlaying,
       contract: { level: 4, strain: 3, declarer: 2 }, // spades trump, South declares
@@ -299,13 +309,13 @@ describe('Board — claims', () => {
       completedTricks: 13,
       declarerTricks: 12,
       defenderTricks: 1,
-      lastTrick: placeholderTrick,
+      lastTrick: claimTrick,
       hand: [],
       dummyHand: [],
       // 4 already-accounted-for tricks, then the 9 new ones (the completed
-      // trick-in-progress + 8 claimed placeholders) — claimAnnouncement
-      // slices off the first `prev.completedTricks` (4) entries
-      playHistory: [...Array(4).fill(placeholderTrick), fullTrick, ...Array(8).fill(placeholderTrick)],
+      // trick-in-progress + 8 claimed tricks) — claimAnnouncement slices off
+      // the first `prev.completedTricks` (4) entries
+      playHistory: [...Array(4).fill(placeholderTrick), fullTrick, ...Array(8).fill(claimTrick)],
       result: boardDone.result,
       allHands: boardDone.allHands,
     };

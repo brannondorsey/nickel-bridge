@@ -40,6 +40,7 @@ import {
   CLAIM_MIN_DISPLAY_MS,
   ClaimAnnouncement,
   capturePlayOrigin,
+  captureFanOriginIfVisible,
   claimAnnouncement,
   motionOK,
   stageClaimSteps,
@@ -114,14 +115,27 @@ export default function Board() {
       }
       const gen = stagingRef.current.gen;
       let at = 0;
+      let priorTrick = prev!.currentTrick ?? [];
       for (const step of steps) {
+        const curTrick = step.view.currentTrick ?? [];
+        // the one new card this step adds to the trick in progress, if any
+        // (a trick boundary resets currentTrick to [], not a new play)
+        const newPlay = curTrick.length > priorTrick.length ? curTrick[curTrick.length - 1] : null;
+        priorTrick = curTrick;
+        const apply = () => {
+          // fills in the flight origin for a card that was never tapped
+          // (auto-play, or any card in a claim) but is still sitting in a
+          // visible fan — see captureFanOriginIfVisible's docstring
+          if (newPlay) captureFanOriginIfVisible(step.view, newPlay);
+          setBoard(step.view);
+        };
         at += step.delayBefore;
         if (at === 0) {
-          setBoard(step.view);
+          apply();
           continue;
         }
         const id = window.setTimeout(() => {
-          if (stagingRef.current.gen === gen) setBoard(step.view);
+          if (stagingRef.current.gen === gen) apply();
         }, at);
         stagingRef.current.timers.push(id);
       }
