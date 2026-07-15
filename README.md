@@ -22,10 +22,12 @@ judgment, not card luck.
 
 ## Competition
 
-- **Just-in-time tournaments** — hit *Play* and you're placed into the tournament with the
-  most plays that you haven't played yet (so friends compare against each other), or a fresh
-  one is created. Tournaments **never close** — the goal is maximum participation, and
-  standings keep evolving as more friends play the same deals.
+- **Just-in-time tournaments** — hit *Play* and you're placed into the most comparison-rich
+  recent tournament you haven't played yet (popularity × recency scoring, with a grace
+  window that funnels the first few players onto freshly created deals), or a fresh one is
+  created — see [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md) for the full design.
+  Tournaments **never close** — the goal is maximum participation, and standings keep
+  evolving as more friends play the same deals.
 - **Matchpoints & percentiles** per board and overall, live standings.
 - **Elo ratings, continuously re-ranked** — every completed tournament result triggers a
   deterministic full replay of the pairwise Elo history (start 1200, K=24), so a late

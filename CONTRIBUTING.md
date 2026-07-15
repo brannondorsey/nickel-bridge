@@ -125,8 +125,15 @@ is shared across all of them, with the app name always overridden per-environmen
 in CI (see `.github/workflows/ci.yml`'s `deploy-preview`/`deploy-production` jobs).
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
-unfinished tournament, else joins the one with the most completed plays that you haven't
-played, else creates a new one.
+unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
+haven't played, in two tiers: a **grace window** force-joins young (< 48h), under-filled
+(< 4 starters) tournaments so fresh ones collect a field instead of orphaning; then
+candidates are scored `log(1 + distinct finishers) · e^(−age/τ)` and one is weighted-random
+sampled from those near the top score. If nothing beats what a brand-new tournament would
+score (`ln 2`), a new one is created — which the grace window then fills. All knobs live in
+the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are archived
+from placement but stay resumable and completable via direct URL (boards deal lazily), and
+still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id

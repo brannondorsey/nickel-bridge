@@ -51,9 +51,9 @@ describe('leaderboard movement', () => {
   });
 
   it('gives a late joiner of an old tournament numeric movement (retroactive re-rank)', async () => {
-    // JIT placement sends Carol to the fullest existing tournament, which is
-    // older than the latest rated one — the recompute inserts her into history
-    // retroactively, so she exists in both snapshots.
+    // JIT placement grace-serves Carol the oldest young under-filled
+    // tournament, which is older than the latest rated one — the recompute
+    // inserts her into history retroactively, so she exists in both snapshots.
     const carol = new TestClient(app, 'Carol');
     await carol.login();
     const { tournamentId } = await carol.post('/api/play');
