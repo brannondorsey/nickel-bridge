@@ -889,15 +889,8 @@ a.ds-btn-secondary:hover {
 .pcard.suit-c {
   color: var(--suit-c);
 }
-/* dimmed cards keep their suit hue at low strength (spades stay ink) */
-.pcard.dimmed.suit-h {
-  color: #dca9a2;
-}
-.pcard.dimmed.suit-d {
-  color: #cfbc93;
-}
-.pcard.dimmed.suit-c {
-  color: #9cc2b6;
+.pcard.dimmed {
+  opacity: 0.4;
 }
 .pcard-placeholder {
   width: var(--card-w);
@@ -939,6 +932,12 @@ a.ds-btn-secondary:hover {
   padding: 0;
   margin-left: calc(var(--card-w) * -0.56);
   transition: transform 0.12s ease;
+  /* Without this, a dimmed card's opacity gives it its own stacking context,
+     which paints it above later (non-dimmed) siblings regardless of DOM
+     order — a disabled card would then intercept clicks meant for the
+     enabled card overlapping it. Isolating every card keeps fan stacking in
+     document order no matter which cards are dimmed. */
+  isolation: isolate;
 }
 .handfan .cardbtn:first-child {
   margin-left: 0;
