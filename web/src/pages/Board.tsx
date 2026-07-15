@@ -172,6 +172,8 @@ export default function Board() {
           lastEval={lastEval}
           selectedCard={selectedCard}
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
+          inspect={inspect}
+          onInspect={(e) => setInspect(e === inspect ? null : e)}
         />
       ) : (
         <BiddingPhase
@@ -283,11 +285,15 @@ function PlayPhase({
   lastEval,
   selectedCard,
   onSelectCard,
+  inspect,
+  onInspect,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
   selectedCard: number | null;
   onSelectCard: (card: number) => void;
+  inspect: AuctionEntry | null;
+  onInspect: (entry: AuctionEntry) => void;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -326,6 +332,7 @@ function PlayPhase({
 
   return (
     <>
+      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
       {/* keep the last bid's grade visible when the auction ends on the human's
           own call — it clears as soon as they play a card */}
       {lastEval ? <GradeToast evaluation={lastEval} /> : null}

@@ -140,6 +140,18 @@ describe('Board — play', () => {
     expect(apiMock.playCard).toHaveBeenCalledWith(12, 2, boardPlaying.legalCards![1]);
   });
 
+  it('keeps the auction visible and inspectable during play', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    renderBoard();
+    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    expect(document.querySelector('.auction')).toBeInTheDocument();
+    // the completed auction, no pending "?" for a phase that's already over
+    expect(screen.queryByText('?')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '1♥' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Opening, one of a major/)).toBeInTheDocument();
+  });
+
   it('switches the interactive fan to dummy on dummy’s turn', async () => {
     apiMock.board.mockResolvedValue(boardPlayingDummyTurn);
     renderBoard();
@@ -196,6 +208,8 @@ describe('Board — play', () => {
     expect(west.textContent).toContain('W · DECL');
     // only one hand fan on screen — the human's own, at the bottom
     expect(document.querySelectorAll('.handfan')).toHaveLength(1);
+    // the auction stays visible above the rail layout too
+    expect(document.querySelector('.auction')).toBeInTheDocument();
   });
 
   it('shows a West dummy as a rail on the left', async () => {
