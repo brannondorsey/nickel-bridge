@@ -135,7 +135,8 @@ describe('CallInspector', () => {
   it('opens a dialog for a past call and closes', async () => {
     const onClose = vi.fn();
     render(<CallInspector entry={biddingAuction[2]} onClose={onClose} />);
-    expect(screen.getByRole('dialog', { name: /S bid 1♥/ })).toBeInTheDocument();
+    // the accessible-name algorithm inserts a space between the level and the colored strain glyph
+    expect(screen.getByRole('dialog', { name: /S bid 1\s*♥/ })).toBeInTheDocument();
     expect(screen.getByText(/13–21 HCP/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();

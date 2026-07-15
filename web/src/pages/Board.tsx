@@ -33,6 +33,7 @@ import { DummyRail } from '../components/game/DummyRail';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
+import { SuitText } from '../components/game/SuitText';
 import { motionOK, stagePlaySteps } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
@@ -493,7 +494,12 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
                   <>
                     {' '}
                     — robot bid <CallText call={e.bestCall} />
-                    {e.bestMeaning?.exact ? <> ({e.bestMeaning.title})</> : null}
+                    {e.bestMeaning?.exact ? (
+                      <>
+                        {' ('}
+                        <SuitText text={e.bestMeaning.title} />)
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <> — the robot's choice too</>
