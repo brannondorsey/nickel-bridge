@@ -127,7 +127,7 @@ sampled from those near the top score. If nothing beats what a brand-new tournam
 score (`ln 2`), a new one is created — which the grace window then fills. All knobs live in
 the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are archived
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
-still count in the Elo replay.
+still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
