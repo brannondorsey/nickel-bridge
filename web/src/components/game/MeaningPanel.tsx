@@ -2,14 +2,10 @@ import type { BidMeaning } from '../../api';
 import { Chip } from '../ds/Chip';
 import { CallText } from './CallText';
 
-/** Forcing qualifier chip: red for game-forcing, ink for forcing one round. */
+/** Forcing qualifier chip: same typography as the other chips, red for game-forcing. */
 export function ForcingChip({ forcing }: { forcing?: BidMeaning['forcing'] }) {
   if (!forcing) return null;
-  return forcing === 'game' ? (
-    <Chip color="var(--accent)">GAME FORCING</Chip>
-  ) : (
-    <Chip color="var(--ink)">FORCING</Chip>
-  );
+  return forcing === 'game' ? <Chip className="chip-gf">Game forcing</Chip> : <Chip>Forcing</Chip>;
 }
 
 /**

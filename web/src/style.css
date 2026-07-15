@@ -476,6 +476,11 @@ a.ds-btn-secondary:hover {
   letter-spacing: 0.1em;
   font-size: 10.5px;
 }
+/* game-forcing qualifier: accent color, but same typography as the other chips */
+.chip.chip-gf {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ---- Input ---- */
 .ds-input {
