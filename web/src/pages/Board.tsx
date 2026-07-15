@@ -1,26 +1,43 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   AuctionEntry,
   BidEval,
-  BidMeaning,
   BoardView,
+  RANK_CHARS,
   SEAT_SHORT,
+  SUIT_SYMBOLS,
   api,
-  callDisplay,
+  cardRank,
+  cardSuit,
   displaySort,
-  strainClass,
 } from '../api';
-import { HandFan, PlayingCard } from '../components/Cards';
+import { Button } from '../components/ds/Button';
+import { Chip } from '../components/ds/Chip';
+import { FlipDigits } from '../components/ds/FlipDigits';
+import { HcpBadge } from '../components/ds/HcpBadge';
+import { InkStamp } from '../components/ds/InkStamp';
+import { Loading } from '../components/ds/Loading';
+import { PctBar } from '../components/ds/PctBar';
+import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { StarGrade } from '../components/ds/StarGrade';
+import { TicketStub } from '../components/ds/TicketStub';
+import { Toast } from '../components/ds/Toast';
+import { AuctionGrid } from '../components/game/AuctionGrid';
+import { BidBox } from '../components/game/BidBox';
+import { CallInspector } from '../components/game/CallInspector';
+import { CallText } from '../components/game/CallText';
+import { DealDiagram } from '../components/game/DealDiagram';
+import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
+import { HandFan } from '../components/game/HandFan';
+import { MeaningPanel } from '../components/game/MeaningPanel';
+import { TrickArea } from '../components/game/TrickArea';
+import { signedScore, vulLabel } from '../format';
 
-const GRADE_TEXT: Record<string, string> = {
-  excellent: 'Excellent',
-  good: 'Good',
-  fair: 'Questionable',
-  poor: 'Poor',
-};
-const GRADE_STARS: Record<string, number> = { excellent: 3, good: 2, fair: 1, poor: 0 };
+const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
+const SUIT_PLURALS = ['spades', 'hearts', 'diamonds', 'clubs'];
 
+/** The board screen — bidding, card play, and the scored result, one route. */
 export default function Board() {
   const { tid, no } = useParams();
   const navigate = useNavigate();
@@ -82,414 +99,316 @@ export default function Board() {
 
   if (error) {
     return (
-      <div className="notice">
-        {error}
-        <p>
-          <Link to="/">Back to lobby</Link>
-        </p>
+      <div className="board-page">
+        <div className="notice-error">{error}</div>
+        <div className="board-actions">
+          <Button variant="secondary" to="/">
+            Back to lobby
+          </Button>
+        </div>
       </div>
     );
   }
-  if (!board) return <div className="spin" />;
-
-  const vulText = board.vul.ns && board.vul.ew ? 'All vul' : board.vul.ns ? 'NS vul' : board.vul.ew ? 'EW vul' : 'None vul';
+  if (!board) {
+    return (
+      <div className="board-page">
+        <Loading />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="board-head">
-        <span>
-          <b>{board.tournamentName}</b> · Board {board.boardNo}/{board.totalBoards}
-        </span>
-        <span>
-          Dealer {SEAT_SHORT[board.dealer]} · <span className={`vulchip${board.vul.ns ? ' vul' : ''}`}>{vulText}</span>
-        </span>
-        {board.contractLabel && board.state !== 'done' ? (
-          <span>
-            <b>{board.contractLabel}</b> · {board.declarerTricks ?? 0} tricks
-          </span>
-        ) : null}
-      </div>
-
+    <div className="board-page">
+      <BoardHead board={board} />
       {board.state === 'done' ? (
-        <Result board={board} onNext={() => (boardNo < board.totalBoards ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`) : navigate(`/t/${tournamentId}`))} />
+        <Result
+          board={board}
+          onNext={() =>
+            boardNo < board.totalBoards ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`) : navigate(`/t/${tournamentId}`)
+          }
+        />
+      ) : board.state === 'playing' ? (
+        <PlayPhase
+          board={board}
+          selectedCard={selectedCard}
+          onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
+        />
       ) : (
-        <>
-          <div className={`table-area${board.flipped && board.state === 'playing' ? ' flipping' : ''}`}>
-            <Auction board={board} onInspect={(e) => setInspect(e === inspect ? null : e)} />
-            {board.flipped && board.state === 'playing' ? (
-              <div className="flip-note">
-                Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
-              </div>
-            ) : null}
-            {board.state === 'playing' ? <Table board={board} /> : null}
-            {board.state === 'playing' ? (
-              <>
-                <MyHand board={board} selected={selectedCard} onSelect={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))} />
-                {selectedCard !== null ? (
-                  <div className="hand-label">tap again to play</div>
-                ) : board.myTurn ? (
-                  <div className="hand-label">
-                    your turn{board.handToPlay === board.dummy ? ' — playing from dummy' : ''}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            {board.state === 'bidding' ? <MyHand board={board} /> : null}
-          </div>
+        <BiddingPhase
+          board={board}
+          lastEval={lastEval}
+          selectedCall={selectedCall}
+          onSelectCall={(c) => setSelectedCall(selectedCall === c ? null : c)}
+          onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
+          busy={busy}
+          inspect={inspect}
+          onInspect={(e) => setInspect(e === inspect ? null : e)}
+        />
+      )}
+      {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
+    </div>
+  );
+}
 
-          {lastEval ? <GradeToast evaluation={lastEval} board={board} /> : null}
-          {inspect?.meaning ? <MeaningPanel meaning={inspect.meaning} call={inspect.call} prefix={`${SEAT_SHORT[inspect.seat]} bid`} /> : null}
-
-          {board.state === 'bidding' && board.myTurn ? (
-            <BidBox
-              board={board}
-              selected={selectedCall}
-              onSelect={(c) => setSelectedCall(selectedCall === c ? null : c)}
-              onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
-              busy={busy}
-            />
+/** Compact ticket header: mini stub, tournament context, vul chip (or SCORED stamp). */
+function BoardHead({ board }: { board: BoardView }) {
+  const vul = vulLabel(board.vul).toUpperCase();
+  return (
+    <div className="board-head">
+      <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
+      <div className="board-head-mid">
+        <div className="board-head-name">{board.tournamentName}</div>
+        <div className="board-head-sub num">
+          Dealer {SEAT_SHORT[board.dealer]}
+          {board.state === 'playing' && board.contractLabel ? (
+            <>
+              {' · '}
+              <b>{board.contractLabel}</b>
+            </>
           ) : null}
-          {board.state === 'bidding' && !board.myTurn ? <div className="notice">Robots are thinking…</div> : null}
-        </>
+        </div>
+      </div>
+      {board.state === 'done' ? (
+        <InkStamp rotate={-4}>SCORED</InkStamp>
+      ) : (
+        <Chip color={board.vul.ns ? 'var(--suit-h)' : undefined} quiet={!board.vul.ns && !board.vul.ew} className="board-vul">
+          {vul}
+        </Chip>
       )}
     </div>
   );
 }
 
-function Auction({ board, onInspect }: { board: BoardView; onInspect: (e: AuctionEntry) => void }) {
-  const rows: (AuctionEntry | null)[][] = [];
-  let row: (AuctionEntry | null)[] = new Array(board.dealer).fill(null);
-  for (const entry of board.auction) {
-    row.push(entry);
-    if (row.length === 4) {
-      rows.push(row);
-      row = [];
-    }
-  }
-  if (row.length) rows.push([...row, ...new Array(4 - row.length).fill(null)]);
-  if (!rows.length) rows.push([null, null, null, null]);
-
+function SeatLine({ label, hcp, active = false }: { label: string; hcp?: number; active?: boolean }) {
   return (
-    <div className="auction">
-      <table>
-        <thead>
-          <tr>
-            {['N', 'E', 'S ★', 'W'].map((s) => (
-              <th key={s}>{s}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {r.map((entry, j) => (
-                <td key={j}>
-                  {entry ? (
-                    <button
-                      className={`${entry.meaning ? 'hasMeaning' : ''}`}
-                      onClick={() => onInspect(entry)}
-                      title="what does this bid mean?"
-                    >
-                      <CallText call={entry.call} />
-                    </button>
-                  ) : null}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className={`seat-line${active ? ' seat-line-active' : ''}`}>
+      <span className="seat-line-label">{label}</span>
+      {typeof hcp === 'number' ? <HcpBadge hcp={hcp} /> : null}
     </div>
   );
 }
 
-function CallText({ call }: { call: number }) {
-  const text = callDisplay(call);
-  if (call < 3) return <span>{text}</span>;
-  return <span className={strainClass((call - 3) % 5)}>{text}</span>;
-}
-
-function MyHand({
+function BiddingPhase({
   board,
-  selected,
-  onSelect,
+  lastEval,
+  selectedCall,
+  onSelectCall,
+  onConfirm,
+  busy,
+  inspect,
+  onInspect,
 }: {
   board: BoardView;
-  selected?: number | null;
-  onSelect?: (card: number) => void;
+  lastEval: BidEval | null;
+  selectedCall: number | null;
+  onSelectCall: (call: number) => void;
+  onConfirm: () => void;
+  busy: boolean;
+  inspect: AuctionEntry | null;
+  onInspect: (entry: AuctionEntry) => void;
+}) {
+  const meanings = board.legalCallMeanings ?? {};
+  return (
+    <>
+      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
+      {board.myTurn ? (
+        selectedCall !== null ? (
+          <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
+        ) : (
+          <MeaningPanel placeholder />
+        )
+      ) : null}
+      <div className="board-fan">
+        <HandFan cards={displaySort(board.hand)} />
+      </div>
+      <SeatLine label="SOUTH — YOU" hcp={board.hcp} />
+      {board.myTurn ? (
+        <BidBox
+          legalCalls={board.legalCalls ?? []}
+          selected={selectedCall}
+          onSelect={onSelectCall}
+          onConfirm={onConfirm}
+          busy={busy}
+        />
+      ) : (
+        <div className="notice">Robots are thinking…</div>
+      )}
+    </>
+  );
+}
+
+function PlayPhase({
+  board,
+  selectedCard,
+  onSelectCard,
+}: {
+  board: BoardView;
+  selectedCard: number | null;
+  onSelectCard: (card: number) => void;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
   const playingSeat = board.playingSeat ?? 2;
-  const canPlayFrom = (seat: number | undefined) =>
-    board.state === 'playing' && board.myTurn && board.handToPlay === seat;
+  const canPlayFrom = (seat: number | undefined) => Boolean(board.myTurn) && board.handToPlay === seat;
 
-  const dummyLabel =
-    board.dummy === 2
-      ? 'South — your hand as dummy'
-      : `${['North', 'East', 'South', 'West'][board.dummy ?? 0]} (dummy${board.dummy === 0 && board.declarer === 2 ? ' — yours' : ''})`;
-  const bottomLabel = playingSeat === 0 ? 'North (you, for partner)' : 'South (you)';
+  const humanDeclares = board.declarer === playingSeat;
+  const dummyLabel = [
+    board.dummy !== undefined ? SEAT_NAMES[board.dummy] : '',
+    board.dummy === 2 ? 'YOUR HAND, DUMMY' : humanDeclares ? 'DUMMY · YOURS' : 'DUMMY',
+    canPlayFrom(board.dummy) ? 'YOUR TURN' : '',
+  ]
+    .filter(Boolean)
+    .join(' — ');
+  const bottomLabel = [
+    board.flipped ? `${SEAT_NAMES[0]} — YOU, FOR PARTNER` : `${SEAT_NAMES[2]} — YOU`,
+    canPlayFrom(playingSeat) ? 'YOUR TURN' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // follow-suit helper: the led suit constrains this turn's legal cards
+  const led = board.currentTrick?.length ? cardSuit(board.currentTrick[0].card) : null;
+  const activeHand = board.handToPlay === board.dummy ? board.dummyHand : board.hand;
+  const mustFollow =
+    Boolean(board.myTurn) &&
+    led !== null &&
+    activeHand !== undefined &&
+    (board.legalCards?.length ?? 0) < activeHand.length;
 
   return (
     <>
-      {board.state === 'playing' && board.dummyHand ? (
+      {board.flipped ? (
+        <Toast className="flip-note">
+          Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
+        </Toast>
+      ) : null}
+      {board.dummyHand ? (
         <>
-          <div className="hand-label">
-            {dummyLabel}
-            {typeof board.dummyHcp === 'number' ? <span className="hcp-badge">{board.dummyHcp} HCP</span> : null}
+          <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
+          <div className="board-fan">
+            <HandFan
+              cards={displaySort(board.dummyHand)}
+              small
+              legal={canPlayFrom(board.dummy) ? board.legalCards : []}
+              selected={selectedCard}
+              onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
+            />
           </div>
-          <HandFan
-            cards={displaySort(board.dummyHand)}
-            legal={canPlayFrom(board.dummy) ? board.legalCards : []}
-            selected={selected}
-            onSelect={canPlayFrom(board.dummy) ? onSelect : undefined}
-          />
         </>
       ) : null}
-      <HandFan
-        cards={displaySort(board.hand)}
-        legal={board.state === 'playing' ? (canPlayFrom(playingSeat) ? board.legalCards : []) : undefined}
-        selected={selected}
-        onSelect={canPlayFrom(playingSeat) ? onSelect : undefined}
-      />
-      <div className="hand-label">
-        {bottomLabel} <span className="hcp-badge">{board.hcp} HCP</span>
+      {mustFollow && led !== null ? (
+        <div className="board-follow">{SUIT_PLURALS[led]} are live — you must follow suit</div>
+      ) : null}
+      <TrickArea board={board} />
+      <div className="board-fan">
+        <HandFan
+          cards={displaySort(board.hand)}
+          legal={canPlayFrom(playingSeat) ? board.legalCards : []}
+          selected={selectedCard}
+          onSelect={canPlayFrom(playingSeat) ? onSelectCard : undefined}
+        />
       </div>
-    </>
-  );
-}
-
-function Table({ board }: { board: BoardView }) {
-  // rotate the compass 180° when the board is flipped (human declaring from N)
-  const seats: { pos: string; seat: number }[] = board.flipped
-    ? [
-        { pos: 's', seat: 0 },
-        { pos: 'w', seat: 1 },
-        { pos: 'n', seat: 2 },
-        { pos: 'e', seat: 3 },
-      ]
-    : [
-        { pos: 'n', seat: 0 },
-        { pos: 'e', seat: 1 },
-        { pos: 's', seat: 2 },
-        { pos: 'w', seat: 3 },
-      ];
-  const trick = board.currentTrick ?? [];
-  const showTrick = trick.length ? trick : (board.lastTrick ?? []);
-  return (
-    <div className="trick">
-      {seats.map(({ pos, seat }) => {
-        const played = showTrick.find((t) => t.seat === seat);
-        return (
-          <div key={pos} className={`seatpos ${pos}`}>
-            <span className="label">
-              {SEAT_SHORT[seat]}
-              {seat === board.declarer ? '·decl' : seat === board.dummy ? '·dummy' : ''}
-            </span>
-            {played ? <PlayingCard card={played.card} small /> : <div style={{ height: 'calc(var(--card-h) * 0.72)' }} />}
-          </div>
-        );
-      })}
-      <div className="tricks-count">
-        <div>
-          Declarer {board.declarerTricks ?? 0} · Defense {board.defenderTricks ?? 0}
+      <SeatLine label={bottomLabel} hcp={board.hcp} active={canPlayFrom(playingSeat)} />
+      {selectedCard !== null ? (
+        <div className="board-hint num">
+          {RANK_CHARS[cardRank(selectedCard)]}
+          {SUIT_SYMBOLS[cardSuit(selectedCard)]} selected — tap again to play
         </div>
-        <div style={{ opacity: 0.7 }}>{trick.length === 0 && (board.lastTrick?.length ?? 0) > 0 ? 'last trick' : `trick ${(board.completedTricks ?? 0) + 1}`}</div>
-      </div>
-    </div>
-  );
-}
-
-function BidBox({
-  board,
-  selected,
-  onSelect,
-  onConfirm,
-  busy,
-}: {
-  board: BoardView;
-  selected: number | null;
-  onSelect: (call: number) => void;
-  onConfirm: () => void;
-  busy: boolean;
-}) {
-  const legal = useMemo(() => new Set(board.legalCalls ?? []), [board.legalCalls]);
-  const meanings = (board as unknown as { legalCallMeanings?: Record<number, BidMeaning | null> }).legalCallMeanings ?? {};
-  const meaning = selected !== null ? meanings[selected] : null;
-
-  return (
-    <>
-      {selected !== null ? (
-        meaning ? (
-          <MeaningPanel meaning={meaning} call={selected} prefix="Your" />
-        ) : (
-          <div className="meaning-panel">
-            <div className="mtitle">
-              <CallText call={selected} />
-            </div>
-            No standard SAYC meaning in this sequence — use your judgment.
-          </div>
-        )
+      ) : board.myTurn ? (
+        <div className="board-hint">
+          your turn{board.handToPlay === board.dummy ? ' — playing from dummy' : ''}
+        </div>
       ) : (
-        <div className="meaning-panel" style={{ borderLeftColor: 'var(--line)' }}>
-          Tap a bid to see what it means <em>before</em> you make it.
-        </div>
+        <div className="board-hint">Robots are thinking…</div>
       )}
-      <div className="bidbox">
-        <div className="grid">
-          {Array.from({ length: 35 }, (_, i) => i + 3).map((call) => (
-            <button
-              key={call}
-              className={`bid${selected === call ? ' selected' : ''}`}
-              disabled={!legal.has(call)}
-              onClick={() => onSelect(call)}
-            >
-              <CallText call={call} />
-            </button>
-          ))}
-        </div>
-        <div className="callrow">
-          {[0, 1, 2].map((call) => (
-            <button
-              key={call}
-              className={`bid${selected === call ? ' selected' : ''}`}
-              disabled={!legal.has(call)}
-              onClick={() => onSelect(call)}
-            >
-              {callDisplay(call)}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="confirm-row">
-        <button className="btn btn-primary" disabled={selected === null || busy} onClick={onConfirm}>
-          {busy ? '…' : selected !== null ? `Bid ${callDisplay(selected)}` : 'Select a bid'}
-        </button>
-      </div>
     </>
-  );
-}
-
-function MeaningPanel({ meaning, call, prefix }: { meaning: BidMeaning; call: number; prefix: string }) {
-  return (
-    <div className="meaning-panel">
-      <div className="mtitle">
-        {prefix} <CallText call={call} /> — {meaning.title}
-        {meaning.points ? <span className="mpts">{meaning.points}</span> : null}
-        {meaning.shapePromise ? <span className="mshape">{meaning.shapePromise}</span> : null}
-      </div>
-      {meaning.description}
-      {!meaning.exact ? <div className="approx">Beyond the SAYC pamphlet — general guidance only.</div> : null}
-    </div>
-  );
-}
-
-function GradeToast({ evaluation, board }: { evaluation: BidEval; board: BoardView }) {
-  const stars = GRADE_STARS[evaluation.grade];
-  const differs = evaluation.bestCall !== evaluation.call;
-  return (
-    <div className={`grade-toast ${evaluation.grade}`}>
-      <b>
-        {GRADE_TEXT[evaluation.grade]}{' '}
-        <span className="stars">
-          {[0, 1, 2].map((i) => (
-            <span key={i} className={i < stars ? 'on' : 'off'}>
-              ★
-            </span>
-          ))}
-        </span>
-      </b>{' '}
-      — you bid <b>{callDisplay(evaluation.call)}</b>
-      {differs ? (
-        <>
-          ; the AI prefers <b>{callDisplay(evaluation.bestCall)}</b> ({Math.round(evaluation.bestProb * 100)}% vs{' '}
-          {Math.round(evaluation.userProb * 100)}%)
-        </>
-      ) : (
-        <> — the AI’s choice too</>
-      )}
-      .
-    </div>
   );
 }
 
 function Result({ board, onNext }: { board: BoardView; onNext: () => void }) {
   const r = board.result!;
   const low = r.pct < 40;
+  const others = Math.max(0, r.field.length - 1);
   return (
     <div className="result">
-      <div className="score-hero">
-        <div className="contract">{r.contractLabel}</div>
-        <div className="points">
-          {r.scoreNS > 0 ? '+' : ''}
-          {r.scoreNS} for N-S
+      <div className="result-hero">
+        <div className="result-contract">{r.contractLabel}</div>
+        <div className="result-score num">
+          {signedScore(r.scoreNS)} for N–S · {vulLabel(board.vul)}
         </div>
-        <div className={`pct-big${low ? ' low' : ''}`}>{r.pct}%</div>
-        <div className="pct-sub">
-          matchpoints vs {Math.max(0, r.field.length - 1)} other {r.field.length === 2 ? 'player' : 'players'} so far
-          {r.bidAccuracy != null ? ` · bidding accuracy ${r.bidAccuracy}%` : ''}
+        <div className={`pct-big${low ? ' low' : ''}`}>
+          <FlipDigits value={r.pct} suffix="%" size={54} />
+        </div>
+        <div className="label-caps result-sub num">
+          MATCHPOINTS · VS {others} OTHER {others === 1 ? 'PLAYER' : 'PLAYERS'}
+          {r.bidAccuracy != null ? ` · BIDDING ${r.bidAccuracy}%` : ''}
         </div>
       </div>
 
-      <div className="card-box">
-        <h2>The field — board {board.boardNo}</h2>
-        <table className="fieldtable">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Contract</th>
-              <th className="num">Score</th>
-              <th className="num">MP%</th>
-            </tr>
-          </thead>
+      <PerforatedPanel heading={`THE FIELD — BOARD ${board.boardNo}`} className="result-field">
+        <table className="fieldtable num">
           <tbody>
             {r.field.map((f) => (
               <tr key={f.userId} className={f.isMe ? 'me' : ''}>
-                <td>{f.isMe ? 'You' : f.handle}</td>
-                <td>{f.contract}</td>
-                <td className="num">{f.scoreNS}</td>
-                <td className="num">
-                  {f.pct}
-                  <div className="pctbar">
-                    <i style={{ width: `${f.pct}%` }} />
-                  </div>
+                <td className="fieldtable-name">{f.isMe ? 'You' : f.handle}</td>
+                <td className="fieldtable-contract">
+                  {f.contract} · {signedScore(f.scoreNS)}
+                </td>
+                <td className="fieldtable-pct">
+                  <PctBar pct={f.pct} width={56} /> <b>{f.pct}</b>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </PerforatedPanel>
+
+      {board.allHands ? (
+        <DealDiagram
+          hands={board.allHands}
+          dealer={board.dealer}
+          vul={board.vul}
+          playedSeat={board.flipped ? 0 : 2}
+          dummy={board.dummy}
+        />
+      ) : null}
 
       {board.bidEvals.length ? (
-        <div className="card-box">
-          <h2>Your bidding</h2>
-          <div className="bid-recap">
-            {board.bidEvals.map((e, i) => (
-              <div className="item" key={i}>
-                <span className="callname">
-                  <CallText call={e.call} />
-                </span>
-                <span>
-                  {GRADE_TEXT[e.grade]}
-                  {e.bestCall !== e.call ? (
-                    <>
-                      {' '}
-                      — AI preferred <CallText call={e.bestCall} />
-                    </>
-                  ) : null}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="result-bidding">
+          <div className="label-caps result-bidding-head">YOUR BIDDING</div>
+          {board.bidEvals.map((e, i) => (
+            <div className="result-bid-row" key={i}>
+              <b className="result-bid-call">
+                <CallText call={e.call} />
+              </b>
+              <StarGrade stars={GRADE_STARS[e.grade]} />
+              <span>
+                {GRADE_TEXT[e.grade]}
+                {e.bestCall !== e.call ? (
+                  <>
+                    {' '}
+                    — AI preferred <CallText call={e.bestCall} />
+                  </>
+                ) : (
+                  <> — the AI's choice too</>
+                )}
+              </span>
+            </div>
+          ))}
         </div>
       ) : null}
 
-      <button className="btn btn-primary" onClick={onNext}>
-        {board.boardNo < board.totalBoards ? `Next board (${board.boardNo + 1}/${board.totalBoards})` : 'Tournament summary'}
-      </button>
-      <Link to="/" className="btn btn-secondary">
-        Lobby
-      </Link>
+      <div className="board-actions">
+        <Button onClick={onNext}>
+          {board.boardNo < board.totalBoards
+            ? `NEXT BOARD — ${board.boardNo + 1} OF ${board.totalBoards} →`
+            : 'TOURNAMENT SUMMARY →'}
+        </Button>
+        <Button variant="secondary" to="/">
+          Back to lobby
+        </Button>
+      </div>
     </div>
   );
 }

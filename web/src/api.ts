@@ -69,6 +69,8 @@ export interface BoardView {
   auction: AuctionEntry[];
   bidEvals: BidEval[];
   legalCalls?: number[];
+  /** SAYC meaning per legal call (null = no convention entry), sent while bidding on my turn */
+  legalCallMeanings?: Record<number, BidMeaning | null>;
   myTurn?: boolean;
   contract?: unknown;
   contractLabel?: string;
@@ -99,10 +101,25 @@ export interface Standing {
   rank?: number;
 }
 
+export interface MyBoardSummary {
+  no: number;
+  state: 'bidding' | 'playing' | 'done';
+  contractLabel: string | null;
+  scoreNS: number | null;
+  pct: number | null;
+}
+
 export interface TournamentInfo {
   id: number;
   name: string;
   myDone?: number;
+  createdAt?: number;
+  /** unix seconds of my last completed board, null if I've finished none */
+  myLastPlayedAt?: number | null;
+  /** my rating change from this tournament, null while it hasn't rated */
+  myEloDelta?: { before: number; after: number } | null;
+  /** my started boards (detail endpoint only); unstarted boards are absent */
+  myBoards?: MyBoardSummary[];
   standings: Standing[];
 }
 
@@ -127,6 +144,8 @@ export interface PlayerStats {
     declarer: { boards: number; made: number };
     defense: { boards: number; beat: number };
     passedOut: number;
+    /** rating change since the start of the current UTC month; null when unrated */
+    monthlyEloDelta: number | null;
   };
   percentiles: {
     elo: number | null;
@@ -174,9 +193,18 @@ export const api = {
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   leaderboard: () =>
-    request<{ leaderboard: { id: number; handle: string; picture: string | null; elo: number; rated_tournaments: number; played_tournaments: number }[] }>(
-      '/api/leaderboard',
-    ),
+    request<{
+      leaderboard: {
+        id: number;
+        handle: string;
+        picture: string | null;
+        elo: number;
+        rated_tournaments: number;
+        played_tournaments: number;
+        /** rank movement since the previous rated tournament; null without a prior snapshot */
+        movement: number | null;
+      }[];
+    }>('/api/leaderboard'),
 };
 
 // ---- shared card/call helpers (mirror @bridge/core conventions) ----
@@ -201,6 +229,23 @@ export const callDisplay = (call: number): string => {
   return `${level}${STRAIN_SYMBOLS[(call - 3) % 5]}`;
 };
 export const makeBid = (level: number, strain: number) => 3 + (level - 1) * 5 + strain;
+
+/**
+ * Standard duplicate dealer/vulnerability cycle — a pure function of board
+ * number, mirrored from @bridge/core boardConditions so tournament screens can
+ * label boards without fetching each one.
+ */
+export function boardConditions(boardNo: number): { dealer: number; vul: { ns: boolean; ew: boolean } } {
+  const dealer = (boardNo - 1) % 4;
+  const VULS = [
+    { ns: false, ew: false },
+    { ns: true, ew: false },
+    { ns: false, ew: true },
+    { ns: true, ew: true },
+  ];
+  const idx = (boardNo - 1 + Math.floor((boardNo - 1) / 4)) % 4;
+  return { dealer, vul: VULS[idx] };
+}
 
 /** sort for display: ♠ ♥ ♦ ♣ (each suit has its own color), descending ranks */
 export function displaySort(hand: number[]): number[] {

@@ -14,10 +14,12 @@ covers how the code is organized, how to work on it, and which invariants you mu
   see `tsconfig.base.json`). **Node >= 22** required.
 - **npm workspaces** monorepo: `packages/*`, `server`, `web`.
 - **Server:** Fastify 5, `better-sqlite3` (synchronous SQLite), cookie sessions, Google OAuth.
-- **Web:** React 18 + `react-router-dom` 6 + `recharts`, built with Vite 5.
+- **Web:** React 18 + `react-router-dom` 6, built with Vite 5. No chart library — sparklines
+  are hand-rolled SVG. Fonts self-hosted via `@fontsource` (imported in `web/src/main.tsx`).
 - **AI:** pure-TypeScript MLP inference (no GPU/native ML deps) + vendored DDS WebAssembly
   double-dummy solver.
-- **Tests:** Vitest (unit/integration), Playwright (browser smoke).
+- **Tests:** Vitest (unit/integration, including a jsdom + Testing Library suite in `web`),
+  Playwright (browser smoke).
 - **Python** appears only in `tools/` for offline, one-time fixture/weight generation.
 
 ## Repo map
@@ -35,8 +37,12 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts
-web             main.tsx → App.tsx (router + MeContext auth), api.ts (typed API client),
-                pages/ (Board.tsx is the gameplay UI), components/, style.css
+web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
+                api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
+                pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page),
+                components/ds/ (design-system pieces) + components/game/ (auction, bid box,
+                fans, trick area, deal diagram), src/test/ (fixtures + apiMock pattern),
+                style.css (all styling — token blocks ported from the design prototype)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
@@ -62,7 +68,7 @@ see README.md "Deployment" for the one-time Fly setup and how preview auth (`DEV
 ```bash
 npm run build
 npm run typecheck
-npm test                 # core + ai + server Vitest suites, ~7s
+npm test                 # core + ai + server + web Vitest suites, ~10s
 ```
 
 E2E:

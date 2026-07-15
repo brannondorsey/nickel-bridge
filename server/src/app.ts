@@ -8,7 +8,15 @@ import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { db } from './db.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { playerStats } from './stats.js';
-import { getTournament, myTournaments, placeUser, standings } from './tournaments.js';
+import {
+  getTournament,
+  leaderboardMovement,
+  myBoardSummaries,
+  myEloDelta,
+  myTournaments,
+  placeUser,
+  standings,
+} from './tournaments.js';
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -37,6 +45,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       id: t.id,
       name: t.name,
       myDone: t.myDone,
+      createdAt: t.created_at,
+      myLastPlayedAt: t.myLastPlayedAt,
       standings: standings(t.id),
     }));
     return reply.send({ tournaments: mine });
@@ -47,9 +57,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!user) return;
     const t = getTournament(Number((req.params as { id: string }).id));
     if (!t) return reply.code(404).send({ error: 'not found' });
+    const myBoards = myBoardSummaries(t.id, user.id);
     return reply.send({
       id: t.id,
       name: t.name,
+      createdAt: t.created_at,
+      myDone: myBoards.filter((b) => b.state === 'done').length,
+      myEloDelta: myEloDelta(t.id, user.id),
+      myBoards,
       standings: standings(t.id),
     });
   });
@@ -105,8 +120,9 @@ export async function buildApp(): Promise<FastifyInstance> {
                 (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b WHERE b.user_id = u.id) AS played_tournaments
          FROM users u ORDER BY u.elo DESC, u.handle`,
       )
-      .all();
-    return reply.send({ leaderboard: rows });
+      .all() as { id: number }[];
+    const movement = leaderboardMovement();
+    return reply.send({ leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })) });
   });
 
   app.get('/api/users/:id/stats', (req, reply) => {

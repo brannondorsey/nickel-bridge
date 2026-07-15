@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { ELO_INITIAL, eloUpdates, matchpoints } from '@bridge/core';
+import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
@@ -34,6 +34,18 @@ const stmtResetElo = db.prepare(`UPDATE users SET elo = ?`);
 const stmtSetElo = db.prepare(`UPDATE users SET elo = ? WHERE id = ?`);
 const stmtEloHistory = db.prepare(
   `INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`,
+);
+const stmtAllEloHistory = db.prepare(
+  `SELECT user_id, tournament_id, after FROM elo_history ORDER BY tournament_id`,
+);
+const stmtMyEloDelta = db.prepare(
+  `SELECT before, after FROM elo_history WHERE user_id = ? AND tournament_id = ?`,
+);
+const stmtMyLastPlayed = db.prepare(
+  `SELECT MAX(updated_at) AS at FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
+);
+const stmtMyBoards = db.prepare(
+  `SELECT * FROM boards WHERE tournament_id = ? AND user_id = ? ORDER BY board_no`,
 );
 
 export interface Standing {
@@ -135,10 +147,83 @@ export function getTournament(id: number): TournamentRow | null {
   return (stmtTournament.get(id) as TournamentRow | undefined) ?? null;
 }
 
-export function myTournaments(userId: number): (TournamentRow & { myDone: number })[] {
+export function myTournaments(
+  userId: number,
+): (TournamentRow & { myDone: number; myLastPlayedAt: number | null })[] {
   const list = stmtMyTournaments.all(userId) as TournamentRow[];
   return list.map((t) => ({
     ...t,
     myDone: (stmtMyBoardCount.get(t.id, userId) as { n: number }).n,
+    myLastPlayedAt: (stmtMyLastPlayed.get(t.id, userId) as { at: number | null }).at,
   }));
+}
+
+/**
+ * Rank movement per rated user: previous rank − current rank, where "previous"
+ * is the rating snapshot before the newest rated tournament in elo_history.
+ * Null for users first rated at that tournament (no previous snapshot) and for
+ * everyone when fewer than two rated tournaments exist. Because elo_history is
+ * wiped and replayed on every board completion, movement can shift
+ * retroactively when a late finisher re-ranks an old tournament — that is the
+ * evergreen-Elo model working as intended.
+ */
+export function leaderboardMovement(): Map<number, number> {
+  const rows = stmtAllEloHistory.all() as { user_id: number; tournament_id: number; after: number }[];
+  const movement = new Map<number, number>();
+  if (!rows.length) return movement;
+  const latestTid = rows[rows.length - 1].tournament_id;
+  const prev = new Map<number, number>();
+  const current = new Map<number, number>();
+  for (const r of rows) {
+    if (r.tournament_id < latestTid) prev.set(r.user_id, r.after);
+    current.set(r.user_id, r.after);
+  }
+  // standard competition ranking (ties share a rank), within each snapshot's population
+  const rank = (ratings: Map<number, number>, userId: number) =>
+    [...ratings.values()].filter((v) => v > ratings.get(userId)!).length + 1;
+  for (const userId of current.keys()) {
+    if (!prev.has(userId)) continue;
+    movement.set(userId, rank(prev, userId) - rank(current, userId));
+  }
+  return movement;
+}
+
+/** The viewer's rating change from one tournament, or null if it never rated. */
+export function myEloDelta(tournamentId: number, userId: number): { before: number; after: number } | null {
+  const row = stmtMyEloDelta.get(userId, tournamentId) as { before: number; after: number } | undefined;
+  return row ?? null;
+}
+
+export interface MyBoardSummary {
+  no: number;
+  state: BoardRow['state'];
+  contractLabel: string | null;
+  scoreNS: number | null;
+  pct: number | null;
+}
+
+/**
+ * The viewer's started boards with their field matchpoint pct, matching the
+ * numbers boardResult() reports on the board's own result view (same rounding,
+ * same matchpoints() field).
+ */
+export function myBoardSummaries(tournamentId: number, userId: number): MyBoardSummary[] {
+  const mine = stmtMyBoards.all(tournamentId, userId) as BoardRow[];
+  if (!mine.length) return [];
+  const done = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string })[];
+  return mine.map((b) => {
+    if (b.state !== 'done') return { no: b.board_no, state: b.state, contractLabel: null, scoreNS: null, pct: null };
+    const field = done.filter((r) => r.board_no === b.board_no);
+    const mps = matchpoints(field.map((r) => r.score_ns ?? 0));
+    const i = field.findIndex((r) => r.user_id === userId);
+    return {
+      no: b.board_no,
+      state: b.state,
+      contractLabel: b.contract
+        ? contractLabel(JSON.parse(b.contract) as Contract, b.tricks_declarer ?? undefined)
+        : 'Passed out',
+      scoreNS: b.score_ns,
+      pct: i >= 0 ? Math.round(mps[i].pct * 10) / 10 : null,
+    };
+  });
 }

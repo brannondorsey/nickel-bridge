@@ -75,11 +75,13 @@ Google credentials. Don't set it in production.
 
 ### Testing
 
-- `npm test` — the whole unit/integration tier (~7s): core rules + scoring table, the SAYC
+- `npm test` — the whole unit/integration tier (~10s): core rules + scoring table, the SAYC
   explainer spec table (`packages/core/test/sayc.test.ts` — add a row when you add a
-  convention), AI golden fixtures (bit-for-bit vs pgx), and in-process server suites
+  convention), AI golden fixtures (bit-for-bit vs pgx), in-process server suites
   (API behavior, hidden-hand redaction, JIT placement, Elo recompute, and the **robot
-  determinism trace** — the fairness invariant of duplicate scoring).
+  determinism trace** — the fairness invariant of duplicate scoring), and the web suite
+  (jsdom + Testing Library: design-system components, every screen, both hand-flip
+  orientations).
 - `npm run test:e2e` — one asserting Playwright smoke at phone viewport; boots the built
   server itself. Locally: `CHROMIUM_PATH=/path/to/chromium npm run test:e2e` to reuse an
   installed browser.

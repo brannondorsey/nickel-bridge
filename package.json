@@ -11,7 +11,7 @@
   "scripts": {
     "build": "npm run build -w @bridge/core -w @bridge/ai -w server -w web",
     "dev": "npm run dev -w server",
-    "test": "npm run test -w @bridge/core -w @bridge/ai -w server --if-present",
+    "test": "npm run test -w @bridge/core -w @bridge/ai -w server -w web --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:e2e": "playwright test"
   },
