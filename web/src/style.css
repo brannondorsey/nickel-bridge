@@ -889,7 +889,11 @@ a.ds-btn-secondary:hover {
 .pcard.suit-c {
   color: var(--suit-c);
 }
-.pcard.dimmed {
+/* dim only the glyphs, not the card face — opacity on .pcard itself would
+   make the (opaque, #fff) card background translucent too, letting
+   overlapping neighbors show through */
+.pcard.dimmed .rank,
+.pcard.dimmed .suit {
   opacity: 0.4;
 }
 .pcard-placeholder {
@@ -932,6 +936,7 @@ a.ds-btn-secondary:hover {
   padding: 0;
   margin-left: calc(var(--card-w) * -0.56);
   transition: transform 0.12s ease;
+  position: relative;
   /* Without this, a dimmed card's opacity gives it its own stacking context,
      which paints it above later (non-dimmed) siblings regardless of DOM
      order — a disabled card would then intercept clicks meant for the
@@ -1208,8 +1213,23 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
   white-space: nowrap;
 }
-.trick-empty {
+/* fixed-size slot so glide/collect targets have a stable rect even when empty */
+.trick-slot {
+  width: calc(var(--card-w) * 0.8);
   height: calc(var(--card-h) * 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* animation clones: fly over everything, never intercept taps */
+.pcard-flight {
+  position: fixed;
+  margin: 0;
+  z-index: 90;
+  pointer-events: none;
+  transform-origin: top left;
+  will-change: transform;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
 }
 .tricks-count {
   position: absolute;
@@ -1241,6 +1261,21 @@ a.ds-btn-secondary:hover {
   color: #fff;
   border: none;
   font-size: 17px;
+}
+/* the tally pops like an ink stamp when a collected trick lands on it */
+.tricks-cell.stamp {
+  animation: stamp-pop 0.42s cubic-bezier(0.3, 1.6, 0.4, 1);
+}
+@keyframes stamp-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(1.45) rotate(-9deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
 }
 .tricks-caption {
   font-family: var(--font-label);

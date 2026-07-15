@@ -74,6 +74,14 @@ describe('HandFan', () => {
     expect(container.querySelector('.cardbtn.selected')).toBeInTheDocument();
     expect(container.querySelectorAll('.cardbtn.suitgap').length).toBe(3); // ♠→♥, ♥→♦, ♦→♣
   });
+
+  it('dims illegal cards in an active fan, but dims nothing when legal is omitted (bidding\'s read-only display)', () => {
+    const { container: active } = render(<HandFan cards={southHand} legal={[12]} onSelect={() => {}} />);
+    expect(active.querySelectorAll('.pcard.dimmed').length).toBe(12);
+
+    const { container: readOnly } = render(<HandFan cards={southHand} />);
+    expect(readOnly.querySelectorAll('.pcard.dimmed').length).toBe(0);
+  });
 });
 
 describe('AuctionGrid', () => {

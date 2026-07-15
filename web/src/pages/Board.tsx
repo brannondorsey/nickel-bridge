@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AuctionEntry,
@@ -31,6 +31,7 @@ import { DealDiagram } from '../components/game/DealDiagram';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
+import { motionOK, stagePlaySteps } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
 
@@ -52,7 +53,44 @@ export default function Board() {
   const [inspect, setInspect] = useState<AuctionEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Staged application of server responses: one card at a time on timers so
+  // TrickArea can animate each play (see playAnim.ts). Bumping `gen`
+  // invalidates any staging still in flight.
+  const stagingRef = useRef({ gen: 0, timers: [] as number[] });
+  const cancelStaging = useCallback(() => {
+    stagingRef.current.gen++;
+    stagingRef.current.timers.forEach(clearTimeout);
+    stagingRef.current.timers = [];
+  }, []);
+  useEffect(() => cancelStaging, [cancelStaging]);
+
+  const applyBoard = useCallback(
+    (prev: BoardView | null, next: BoardView) => {
+      cancelStaging();
+      const steps = prev && motionOK() ? stagePlaySteps(prev, next) : [];
+      if (!steps.length) {
+        setBoard(next);
+        return;
+      }
+      const gen = stagingRef.current.gen;
+      let at = 0;
+      for (const step of steps) {
+        at += step.delayBefore;
+        if (at === 0) {
+          setBoard(step.view);
+          continue;
+        }
+        const id = window.setTimeout(() => {
+          if (stagingRef.current.gen === gen) setBoard(step.view);
+        }, at);
+        stagingRef.current.timers.push(id);
+      }
+    },
+    [cancelStaging],
+  );
+
   const load = useCallback(() => {
+    cancelStaging();
     setBoard(null);
     setSelectedCall(null);
     setSelectedCard(null);
@@ -63,7 +101,7 @@ export default function Board() {
       .board(tournamentId, boardNo)
       .then(setBoard)
       .catch((e) => setError(e.message));
-  }, [tournamentId, boardNo]);
+  }, [tournamentId, boardNo, cancelStaging]);
   useEffect(load, [load]);
 
   const submitCall = async (call: number) => {
@@ -74,7 +112,7 @@ export default function Board() {
       setLastEval(evaluation);
       setSelectedCall(null);
       setInspect(null);
-      setBoard(next);
+      applyBoard(board, next); // stages the opening lead if the auction just ended
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -88,7 +126,7 @@ export default function Board() {
     try {
       const { board: next } = await api.playCard(tournamentId, boardNo, card);
       setSelectedCard(null);
-      setBoard(next);
+      applyBoard(board, next); // plays out card-by-card, then unlocks input
       setLastEval(null);
     } catch (e) {
       setError((e as Error).message);
