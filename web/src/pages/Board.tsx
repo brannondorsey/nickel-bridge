@@ -11,6 +11,7 @@ import {
   cardRank,
   cardSuit,
   displaySort,
+  suitClass,
 } from '../api';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
@@ -27,11 +28,13 @@ import { AuctionGrid } from '../components/game/AuctionGrid';
 import { BidBox } from '../components/game/BidBox';
 import { CallInspector } from '../components/game/CallInspector';
 import { CallText } from '../components/game/CallText';
+import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
 import { DummyRail } from '../components/game/DummyRail';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
+import { SuitText } from '../components/game/SuitText';
 import { motionOK, stagePlaySteps } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
@@ -232,7 +235,9 @@ function BoardHead({ board }: { board: BoardView }) {
           {board.state === 'playing' && board.contractLabel ? (
             <>
               {' · '}
-              <b>{board.contractLabel}</b>
+              <b>
+                <ContractLabel label={board.contractLabel} />
+              </b>
             </>
           ) : null}
         </div>
@@ -409,7 +414,8 @@ function PlayPhase({
       {selectedCard !== null ? (
         <div className="board-hint num">
           {RANK_CHARS[cardRank(selectedCard)]}
-          {SUIT_SYMBOLS[cardSuit(selectedCard)]} selected — tap again to play
+          <span className={suitClass(cardSuit(selectedCard))}>{SUIT_SYMBOLS[cardSuit(selectedCard)]}</span> selected — tap again to
+          play
         </div>
       ) : board.myTurn ? (
         <div className="board-hint">
@@ -429,7 +435,9 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
   return (
     <div className="result">
       <div className="result-hero">
-        <div className="result-contract">{r.contractLabel}</div>
+        <div className="result-contract">
+          <ContractLabel label={r.contractLabel} />
+        </div>
         <div className="result-score num">
           {signedScore(r.scoreNS)} for N–S · {vulLabel(board.vul)}
         </div>
@@ -452,7 +460,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
               <tr key={f.userId} className={f.isMe ? 'me' : ''}>
                 <td className="fieldtable-name">{f.isMe ? 'You' : f.handle}</td>
                 <td className="fieldtable-contract">
-                  {f.contract} · {signedScore(f.scoreNS)}
+                  <ContractLabel label={f.contract} /> · {signedScore(f.scoreNS)}
                 </td>
                 <td className="fieldtable-pct">
                   <PctBar pct={f.pct} width={56} /> <b>{f.pct}</b>
@@ -488,7 +496,12 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
                   <>
                     {' '}
                     — robot bid <CallText call={e.bestCall} />
-                    {e.bestMeaning?.exact ? <> ({e.bestMeaning.title})</> : null}
+                    {e.bestMeaning?.exact ? (
+                      <>
+                        {' ('}
+                        <SuitText text={e.bestMeaning.title} />)
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <> — the robot's choice too</>

@@ -2,6 +2,7 @@ import type { BidEval } from '../../api';
 import { StarGrade } from '../ds/StarGrade';
 import { Toast } from '../ds/Toast';
 import { CallText } from './CallText';
+import { SuitText } from './SuitText';
 
 export const GRADE_TEXT: Record<BidEval['grade'], string> = {
   excellent: 'Excellent',
@@ -33,7 +34,12 @@ export function GradeToast({ evaluation }: { evaluation: BidEval }) {
           <b>
             <CallText call={evaluation.bestCall} />
           </b>
-          {bestTitle ? <> ({bestTitle})</> : null}
+          {bestTitle ? (
+            <>
+              {' ('}
+              <SuitText text={bestTitle} />)
+            </>
+          ) : null}
         </>
       ) : (
         <> — the robot’s choice too</>

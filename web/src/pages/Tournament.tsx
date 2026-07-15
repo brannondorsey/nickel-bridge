@@ -10,6 +10,7 @@ import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Postmark } from '../components/ds/Postmark';
 import { BoardTicketRow } from '../components/game/BoardTicketRow';
+import { ContractLabel } from '../components/game/ContractLabel';
 import { ordinal, postmarkDate, signedScore, tournamentNo, vulLabel } from '../format';
 
 const TOTAL_BOARDS = 4;
@@ -90,7 +91,7 @@ export default function Tournament() {
           {(t.myBoards ?? []).map((b) => (
             <div key={b.no} className="tourney-board-line">
               <b className="tourney-board-no">{b.no}</b>
-              <span>{b.contractLabel ?? 'Passed out'}</span>
+              <ContractLabel label={b.contractLabel ?? 'Passed out'} />
               <span className="tourney-board-score">{b.scoreNS !== null ? signedScore(b.scoreNS) : '—'}</span>
               <span className="tourney-board-pct">
                 {b.pct !== null ? (
@@ -125,7 +126,12 @@ export default function Tournament() {
           no={no}
           state="scored"
           to={`/t/${t.id}/b/${no}`}
-          main={`${summary.contractLabel ?? 'Passed out'}${summary.scoreNS !== null ? ` · ${signedScore(summary.scoreNS)}` : ''}`}
+          main={
+            <>
+              <ContractLabel label={summary.contractLabel ?? 'Passed out'} />
+              {summary.scoreNS !== null ? ` · ${signedScore(summary.scoreNS)}` : ''}
+            </>
+          }
           sub={summary.pct !== null ? `${summary.pct}% matchpoints` : 'waiting on the field'}
         />
       );

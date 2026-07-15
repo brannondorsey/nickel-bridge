@@ -23,8 +23,8 @@ describe('Tournament sheet', () => {
     apiMock.tournament.mockResolvedValue(tournamentInProgress);
     renderWithMe(<Tournament />, { me: meFixture });
 
-    // board 1 — scored, links to review
-    const scored = (await screen.findByText('4♠ by S · +620')).closest('a')!;
+    // board 1 — scored, links to review (contract label splits the strain glyph into its own colored span)
+    const scored = (await screen.findByText((_, el) => el?.textContent === '4♠ by S · +620')).closest('a')!;
     expect(scored).toHaveAttribute('href', '/t/12/b/1');
     expect(within(scored).getByText('58% matchpoints')).toBeInTheDocument();
     expect(within(scored).getByText('SCORED')).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('Tournament result', () => {
 
     // board-by-board recap
     expect(screen.getByText('BOARD BY BOARD')).toBeInTheDocument();
-    expect(screen.getByText('3NT+1 by N')).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.textContent === '3NT+1 by N')).toBeInTheDocument();
     expect(screen.getByText('−100')).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: /back to the bridge/i })).toHaveAttribute('href', '/');
@@ -99,7 +99,10 @@ describe('Tournament result', () => {
     renderWithMe(<Tournament />, { me: meFixture });
     await userEvent.click(await screen.findByRole('button', { name: /review the boards/i }));
     // now the sheet: all four boards scored and linked
-    expect(screen.getByText('4♠ by S · +620').closest('a')).toHaveAttribute('href', '/t/11/b/1');
+    expect(screen.getByText((_, el) => el?.textContent === '4♠ by S · +620').closest('a')).toHaveAttribute(
+      'href',
+      '/t/11/b/1',
+    );
     expect(screen.getAllByText('SCORED')).toHaveLength(4);
     // and back
     await userEvent.click(screen.getByRole('button', { name: /back to the summary/i }));

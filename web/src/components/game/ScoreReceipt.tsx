@@ -4,6 +4,7 @@ import { Button } from '../ds/Button';
 import { PerforatedPanel } from '../ds/PerforatedPanel';
 import { Postmark } from '../ds/Postmark';
 import { postmarkDate, signedScore, tournamentNo, vulLabel } from '../../format';
+import { ContractLabel } from './ContractLabel';
 
 /**
  * The toll receipt — an interstitial shown when a board is scored, before the
@@ -26,7 +27,9 @@ export function ScoreReceipt({ board, onContinue }: { board: BoardView; onContin
   return (
     <div className="receipt">
       <div className="result-hero">
-        <div className="result-contract">{r.contractLabel}</div>
+        <div className="result-contract">
+          <ContractLabel label={r.contractLabel} />
+        </div>
         <div className="result-score num">
           {bd
             ? `${r.tricksDeclarer} of 13 tricks to declarer · ${vulLabel(board.vul)}`
