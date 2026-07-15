@@ -55,6 +55,8 @@ tools           offline Python weight conversion + golden-fixture generation;
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign
+.claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
+                design-system skill — see "Design system" below
 ```
 
 ## Development workflow
@@ -168,6 +170,22 @@ module-level constants next to the functions that use them. Match that style.
    it; the web bundle deliberately does not (it mirrors the few helpers it needs in
    `web/src/api.ts` and receives anything score-shaped pre-computed from the server).
 5. **`DEV_AUTH=1` must never be set in production** — it's unauthenticated login.
+
+## Design system
+
+The visual identity — 1920s toll bridge: ink-on-paper palette, Poiret One/Crimson
+Pro/Besley type, toll vocabulary ("PLAY THE TOLL", "PREVIOUS CROSSINGS"), ticket/stamp/
+postmark motifs — lives as a Claude Code skill in `.claude/skills/nickel-bridge-design/`
+(exported from Claude Design): brand rules in its `readme.md`, CSS tokens, guideline
+specimens, SVG marks, and reference JSX components.
+
+**Use the `nickel-bridge-design` skill for any UI work** — new screens or components,
+changes to `web/src/style.css`, user-facing copy, mocks and prototypes. Its `readme.md` is
+the source of truth for visual and voice decisions (`docs/design-brief.md` is the
+requirements spec it grew from). The skill's JSX components are prototyping references, not
+imports: production equivalents live in `web/src/components/ds/`, and styles get ported into
+`web/src/style.css`. Note the skill's demo HTML uses Google-hosted fonts via `@import`;
+production self-hosts the same faces via `@fontsource`.
 
 ## Code style
 

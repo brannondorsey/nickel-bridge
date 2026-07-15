@@ -1,0 +1,6 @@
+:root{
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
+  /* Deco stays square */
+  --radius-panel:0; --radius-btn:2px; --radius-chip:3px; --radius-card:4px;
+  --screen-w:390px;
+}

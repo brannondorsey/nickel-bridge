@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Limelight&family=Poiret+One&family=Josefin+Sans:wght@400;600&family=Besley:ital,wght@0,400;0,600;0,800;1,400&family=Crimson+Pro:wght@400;600&family=Old+Standard+TT:wght@400;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}a{color:#141414}a:hover{color:#C22F21}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}.dv-group{display:block;width:100%;font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);padding:26px 0 12px}@keyframes gatearm{0%,15%{transform:rotate(0deg)}45%,70%{transform:rotate(-58deg)}100%{transform:rotate(0deg)}}</style>
+</helmet>
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">The remaining screens — Home, Tournament sheet, call inspector, tournament result, Stats, Rankings, Tourneys · locked system (1e type + 1h surface + 1k/1m/1n vocab + 3b postmark)</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a"><div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Home — the toll plaza (evolved from the Brand file's intro end-state)</div>
+<div class="dv-card" data-screen-label="Home" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #141414">
+<div style="display:flex;align-items:center;gap:9px">
+<svg width="26" height="20" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"></line><path d="M8 112 Q80 38 152 112" stroke-width="10"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"></line></g></svg>
+<span style="font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em">NICKEL BRIDGE</span>
+</div>
+<span style="font-family:Besley,serif;font-size:8.5px;letter-spacing:.3em;color:#6E6A62">DUPLICATE · SAYC</span>
+</div>
+<div style="padding:20px 16px 0">
+<div style="font-weight:600;font-size:21px">Good evening, Margaret</div>
+<div style="font-size:14.5px;color:#6E6A62;margin-top:2px">The bridge is open.</div>
+</div>
+<div style="margin:16px 16px 0;background:#F1EFE9;border:1px solid #D8D5CE;padding:16px 14px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:12px">
+<svg width="132" height="47" viewBox="0 0 184 66"><rect x="2" y="2" width="180" height="62" fill="#fff" stroke="#141414" stroke-width="3"></rect><line x1="126" y1="2" x2="126" y2="64" stroke="#141414" stroke-width="2" stroke-dasharray="3 5"></line><text x="16" y="26" font-family="Besley,serif" font-weight="700" font-size="11" letter-spacing="3" fill="#141414">OPEN NOW</text><text x="16" y="52" font-family="Besley,serif" font-weight="800" font-size="22" fill="#141414">4 boards</text><text x="146" y="14" font-family="Besley,serif" font-weight="700" font-size="10" letter-spacing="2" fill="#141414" transform="rotate(90 146 14)">ADMIT ONE</text></svg>
+<div style="flex:1;font-size:14.5px;line-height:1.45">Tournament #12<br><span style="color:#6E6A62;font-size:13px">Board 2 of 4 in progress — your call</span></div>
+</div>
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:14.5px;letter-spacing:.06em;padding:12px;border-radius:2px">CONTINUE THE CROSSING →</div>
+</div>
+<div style="margin:12px 16px 0;border:1px dashed #B9B4A9;color:#6E6A62;padding:11px 14px;display:flex;align-items:center;gap:12px">
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:15px">Tournament #13</div><div style="font-size:12.5px">Sealed — opens when you finish #12</div></div>
+</div>
+<div style="padding:20px 16px 4px">
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;color:#6E6A62">PREVIOUS CROSSINGS</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #E4E1D8"><span style="font-size:15px">Board 4 — 3NT+1 by S</span><span style="font-weight:600;font-size:15px;font-variant-numeric:tabular-nums">62% · +630</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0"><span style="font-size:15px">Board 3 — 4♠−1 by E</span><span style="font-weight:600;font-size:15px;font-variant-numeric:tabular-nums">48% · +100</span></div>
+</div>
+<div style="display:flex;border-top:1px solid #141414;margin-top:14px;font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;text-align:center">
+<div style="flex:1;padding:13px 0;box-shadow:inset 0 3px 0 #141414">HOME</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">TOURNEYS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">STATS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">RANKINGS</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="4b"><div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>Tournament sheet — boards as ticket stubs, field so far</div>
+<div class="dv-card" data-screen-label="Tournament sheet" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #141414">
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font-family:Besley,serif;font-weight:700;font-size:14px">‹</span><span style="font-family:Besley,serif;font-weight:700;font-size:13.5px">Tournament #12</span></div>
+<span style="font-size:12.5px;color:#6E6A62">12 pairs · matchpoints</span>
+</div>
+<div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:10px">
+<div style="border:1px solid #141414;background:#fff;display:flex;align-items:stretch">
+<div style="width:74px;border-right:2px dashed #141414;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em;color:#6E6A62">BOARD</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">1</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center;gap:10px">
+<div style="flex:1"><div style="font-weight:600;font-size:15px">4♠= by S · +620</div><div style="font-size:12.5px;color:#6E6A62;font-variant-numeric:tabular-nums">58% matchpoints</div></div>
+<div style="border:2px solid #141414;border-radius:50%;padding:4px 10px;transform:rotate(-5deg);-webkit-mask-image:linear-gradient(105deg,#000 50%,rgba(0,0,0,.45) 100%);mask-image:linear-gradient(105deg,#000 50%,rgba(0,0,0,.45) 100%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:10px;letter-spacing:.2em">SCORED</span></div>
+</div>
+</div>
+<div style="border:1.5px solid #141414;background:#fff;display:flex;align-items:stretch;box-shadow:3px 3px 0 rgba(20,20,20,.12)">
+<div style="width:74px;border-right:2px dashed #141414;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em;color:#6E6A62">BOARD</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">2</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center;gap:10px">
+<div style="flex:1"><div style="font-weight:600;font-size:15px">Bidding — your call</div><div style="font-size:12.5px;color:#6E6A62">Dealer N · NS vul</div></div>
+<div style="border:2px solid #C22F21;border-radius:50%;padding:4px 12px;transform:rotate(3deg);-webkit-mask-image:linear-gradient(75deg,rgba(0,0,0,.55) 0%,#000 45%);mask-image:linear-gradient(75deg,rgba(0,0,0,.55) 0%,#000 45%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:10px;letter-spacing:.24em;color:#C22F21">LIVE</span></div>
+</div>
+</div>
+<div style="border:1px dashed #B9B4A9;display:flex;align-items:stretch;color:#6E6A62">
+<div style="width:74px;border-right:2px dashed #B9B4A9;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em">BOARD</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">3</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center"><div style="font-size:14px;font-style:italic">Sealed — deals when board 2 is scored</div></div>
+</div>
+<div style="border:1px dashed #B9B4A9;display:flex;align-items:stretch;color:#6E6A62">
+<div style="width:74px;border-right:2px dashed #B9B4A9;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em">BOARD</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">4</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center"><div style="font-size:14px;font-style:italic">Sealed</div></div>
+</div>
+</div>
+<div style="margin:14px 16px 0;border:1px solid #141414;background:#fff;position:relative;padding:12px 14px 12px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62;margin-bottom:8px">THE FIELD — AFTER BOARD 1</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;font-size:14px;font-variant-numeric:tabular-nums;align-items:baseline">
+<b style="font-family:Besley,serif;font-size:12px">1</b><div>Alice</div><b>83%</b>
+<b style="font-family:Besley,serif;font-size:12px;background:#F1EFE9;margin:0 -4px;padding:0 4px">2</b><div style="font-weight:600;background:#F1EFE9;margin:0 -12px;padding:0 12px">You</div><b style="background:#F1EFE9;margin:0 -4px;padding:0 4px">58%</b>
+<b style="font-family:Besley,serif;font-size:12px">3</b><div>Bob</div><b>33%</b>
+</div>
+</div>
+<div style="padding:14px 16px 18px"><div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">CONTINUE BOARD 2 →</div></div>
+</div></div>
+
+<div class="dv-opt" id="4c"><div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>Call inspector — the "tap any call" sheet over the auction</div>
+<div class="dv-card" data-screen-label="Call inspector" style="width:390px;height:620px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414;position:relative;overflow:hidden">
+<div style="padding:12px;filter:grayscale(.2)">
+<div style="border:1px solid #141414;padding:2px"><div style="border:1px solid #141414;padding:10px 12px 12px;font-family:Besley,serif">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#6E6A62;padding-bottom:6px;border-bottom:1px solid #D8D5CE"><div>N</div><div>E</div><div style="color:#141414">S ★</div><div>W</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;font-size:15px;font-weight:600;row-gap:7px;padding-top:8px;font-variant-numeric:tabular-nums">
+<div style="color:#6E6A62">—</div><div style="color:#6E6A62">—</div><div style="border-bottom:2px dotted #141414;justify-self:center;padding:0 5px">1<span style="color:#C22F21">♥</span></div><div>Pass</div>
+<div style="outline:2px solid #141414;outline-offset:3px;justify-self:center;padding:0 5px;font-weight:800">1NT</div><div>Pass</div><div style="color:#6E6A62">?</div><div></div>
+</div>
+</div></div>
+</div>
+<div style="position:absolute;inset:0;background:rgba(20,20,20,.34)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:2px solid #141414;padding:10px 16px 18px">
+<div style="width:40px;height:4px;background:#D8D5CE;border-radius:2px;margin:0 auto 12px"></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="font-family:Besley,serif;font-weight:800;font-size:19px">1NT — partner's response</div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:16px;color:#6E6A62">✕</div>
+</div>
+<div style="display:flex;gap:6px;margin:10px 0 12px;flex-wrap:wrap">
+<span style="border:1px solid #141414;font-family:Besley,serif;font-weight:700;font-size:11px;padding:3px 8px;border-radius:3px">6–9 HCP</span>
+<span style="border:1px solid #141414;font-family:Besley,serif;font-weight:700;font-size:11px;padding:3px 8px;border-radius:3px">NO 4-CARD MAJOR TO BID</span>
+<span style="border:1px solid #D8D5CE;color:#6E6A62;font-family:Besley,serif;font-weight:600;font-size:11px;padding:3px 8px;border-radius:3px">DENIES 3 HEARTS</span>
+</div>
+<div style="font-size:15px;line-height:1.5">A catch-all response: partner has enough to keep the auction open but cannot raise hearts or bid a suit at the one level. Not a balanced-hand promise — this is SAYC's "I have something, but nothing to say."</div>
+<div style="margin-top:14px;border:1px solid #141414;position:relative;padding:10px 12px 10px 18px;background:#FCFBF8">
+<div style="position:absolute;left:6px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62;margin-bottom:6px">WHAT YOU KNOW ABOUT PARTNER</div>
+<div style="font-size:13.5px;line-height:1.7">6–9 points, fewer than three hearts<br>No four spades — would have bid 1♠<br>Minors still unknown</div>
+</div>
+<div style="font-size:12.5px;color:#6E6A62;margin-top:12px;font-style:italic">With 3+ hearts and 6–9, partner raises to 2<span style="color:#C22F21">♥</span> instead.</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="4d"><div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a>Tournament result — the postmark cancels the whole crossing (<a class="dv-oid" href="#3b">3b</a>)</div>
+<div class="dv-card" data-screen-label="Tournament result" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #141414">
+<span style="font-family:Besley,serif;font-weight:700;font-size:13.5px">Tournament #12</span>
+<span style="font-size:12.5px;color:#6E6A62">Complete · 12 pairs</span>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;padding:22px 16px 0">
+<div style="display:flex;align-items:center;transform:rotate(-4deg);-webkit-mask-image:linear-gradient(100deg,#000 50%,rgba(0,0,0,.4) 100%);mask-image:linear-gradient(100deg,#000 50%,rgba(0,0,0,.4) 100%)">
+<svg width="118" height="118" viewBox="0 0 104 104"><circle cx="52" cy="52" r="49" fill="none" stroke="#141414" stroke-width="3"></circle><circle cx="52" cy="52" r="36" fill="none" stroke="#141414" stroke-width="1.5"></circle><defs><path id="pmT4d" d="M 14 52 A 38 38 0 0 1 90 52"></path><path id="pmB4d" d="M 12 52 A 40 40 0 0 0 92 52"></path></defs><text font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="10.5" letter-spacing="2.5" fill="#141414"><textPath href="#pmT4d" startOffset="50%" text-anchor="middle">NICKEL BRIDGE</textPath></text><text font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="8.5" letter-spacing="2" fill="#141414"><textPath href="#pmB4d" startOffset="50%" text-anchor="middle">TOURNAMENT Nº12</textPath></text><text x="52" y="49" text-anchor="middle" font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="12" letter-spacing="1" fill="#141414">TOLL PAID</text><text x="52" y="63" text-anchor="middle" font-family="'Crimson Pro',serif" font-size="10" fill="#141414">JUL 13 1926</text></svg>
+<svg width="70" height="66" viewBox="0 0 64 60" style="margin-left:-8px"><g stroke="#141414" stroke-width="2.5" fill="none"><path d="M0 8 Q16 2 32 8 T64 8"></path><path d="M0 22 Q16 16 32 22 T64 22"></path><path d="M0 36 Q16 30 32 36 T64 36"></path><path d="M0 50 Q16 44 32 50 T64 50"></path></g></svg>
+</div>
+<div style="display:flex;gap:4px;justify-content:center;margin-top:16px;font-family:Besley,serif">
+<div style="width:38px;height:54px;background:#141414;color:#fff;font-weight:800;font-size:32px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">6<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:38px;height:54px;background:#141414;color:#fff;font-weight:800;font-size:32px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">1<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:38px;height:54px;background:#fff;border:2px solid #141414;font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;border-radius:3px;box-sizing:border-box">%</div>
+</div>
+<div style="font-family:Besley,serif;font-size:11px;font-weight:700;letter-spacing:.16em;color:#6E6A62;margin-top:8px">MATCHPOINTS · 2ND OF 12 PAIRS</div>
+<div style="display:flex;align-items:baseline;gap:8px;margin-top:10px"><span style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.18em;color:#6E6A62">NICKEL RATING</span><span style="font-family:Besley,serif;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums">1487</span><span style="font-family:Besley,serif;font-weight:700;font-size:13px;color:#00775A">+12</span></div>
+</div>
+<div style="margin:16px 16px 0;border:1px solid #141414;background:#fff;position:relative;padding:12px 14px 12px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62;margin-bottom:8px">BOARD BY BOARD</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:7px 12px;font-size:13.5px;font-variant-numeric:tabular-nums;align-items:center">
+<b style="font-family:Besley,serif;font-size:12px">1</b><div>4♠= by S</div><div style="color:#6E6A62">+620</div><div style="display:flex;align-items:center;gap:6px"><div style="width:52px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:42%;background:#141414"></div></div><b>58</b></div>
+<b style="font-family:Besley,serif;font-size:12px">2</b><div>3NT+1 by N</div><div style="color:#6E6A62">+630</div><div style="display:flex;align-items:center;gap:6px"><div style="width:52px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:26%;background:#141414"></div></div><b>74</b></div>
+<b style="font-family:Besley,serif;font-size:12px">3</b><div>2♥−1 by S</div><div style="color:#6E6A62">−100</div><div style="display:flex;align-items:center;gap:6px"><div style="width:52px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:59%;background:#141414"></div></div><b>41</b></div>
+<b style="font-family:Besley,serif;font-size:12px">4</b><div>4♥= by W</div><div style="color:#6E6A62">−420</div><div style="display:flex;align-items:center;gap:6px"><div style="width:52px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:29%;background:#141414"></div></div><b>71</b></div>
+</div>
+</div>
+<div style="padding:16px 16px 18px;display:flex;flex-direction:column;gap:8px">
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">BACK TO THE BRIDGE →</div>
+<div style="border:1px solid #141414;text-align:center;font-family:Besley,serif;font-weight:700;font-size:13px;padding:11px;border-radius:2px">Review the boards</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="4e"><div class="dv-olabel"><a class="dv-oid" href="#4e">4e</a>Stats — your crossings, chart per <a class="dv-oid" href="#1o">1o</a> (grayscale + one accent)</div>
+<div class="dv-card" data-screen-label="Stats" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #141414">
+<span style="font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em">NICKEL BRIDGE</span>
+<span style="font-family:Besley,serif;font-size:8.5px;letter-spacing:.3em;color:#6E6A62">STATS</span>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;padding:20px 16px 0">
+<div style="display:flex;gap:3px;font-family:Besley,serif">
+<div style="width:32px;height:46px;background:#141414;color:#fff;font-weight:800;font-size:27px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">1<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:32px;height:46px;background:#141414;color:#fff;font-weight:800;font-size:27px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">4<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:32px;height:46px;background:#141414;color:#fff;font-weight:800;font-size:27px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">8<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:32px;height:46px;background:#141414;color:#fff;font-weight:800;font-size:27px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">7<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+</div>
+<div style="display:flex;align-items:baseline;gap:8px;margin-top:8px"><span style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.18em;color:#6E6A62">NICKEL RATING</span><span style="font-family:Besley,serif;font-weight:700;font-size:12px;color:#00775A">+34 THIS MONTH</span></div>
+</div>
+<div style="margin:16px 16px 0;border:1px solid #141414;background:#fff;padding:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><span style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62">MATCHPOINTS — LAST 10 TOURNAMENTS</span><span style="font-family:Besley,serif;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums">Ø 57%</span></div>
+<svg width="100%" height="86" viewBox="0 0 326 86" preserveAspectRatio="none"><line x1="0" y1="14" x2="326" y2="14" stroke="#D8D5CE" stroke-width="1" stroke-dasharray="3 4"></line><line x1="0" y1="44" x2="326" y2="44" stroke="#C22F21" stroke-width="1.5" stroke-dasharray="5 4"></line><line x1="0" y1="76" x2="326" y2="76" stroke="#D8D5CE" stroke-width="1"></line><polyline points="6,66 41,54 76,60 111,38 146,46 181,30 216,42 251,24 286,34 320,22" fill="none" stroke="#141414" stroke-width="2.5"></polyline><circle cx="320" cy="22" r="3.5" fill="#141414"></circle></svg>
+<div style="display:flex;justify-content:space-between;font-family:Besley,serif;font-size:9.5px;color:#6E6A62;margin-top:4px"><span>10 tournaments ago</span><span style="color:#C22F21">- - field average 50%</span><span>latest</span></div>
+</div>
+<div style="margin:12px 16px 0;border:1px solid #141414;background:#fff;position:relative;padding:12px 14px 12px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62;margin-bottom:8px">BIDDING — 214 CALLS GRADED</div>
+<div style="display:grid;grid-template-columns:auto 1fr auto;gap:7px 12px;font-size:13.5px;align-items:center;font-variant-numeric:tabular-nums">
+<span style="letter-spacing:2px;font-size:12px">★★★</span><div style="height:8px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:36%;background:#141414"></div></div><b>64%</b>
+<span style="letter-spacing:2px;font-size:12px">★★<span style="color:#D8D5CE">★</span></span><div style="height:8px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:73%;background:#141414"></div></div><b>27%</b>
+<span style="letter-spacing:2px;font-size:12px">★<span style="color:#D8D5CE">★★</span></span><div style="height:8px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:91%;background:#141414"></div></div><b>9%</b>
+</div>
+<div style="font-size:12.5px;color:#6E6A62;margin-top:10px;font-style:italic">Most-missed call: invitational raises after 1NT rebids.</div>
+</div>
+<div style="margin:12px 16px 0;display:flex;gap:10px">
+<div style="flex:1;border:1px solid #141414;background:#fff;padding:12px 14px"><div style="font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;color:#6E6A62">DECLARING</div><div style="font-family:Besley,serif;font-weight:800;font-size:21px;font-variant-numeric:tabular-nums;margin-top:4px">61%</div><div style="font-size:12px;color:#6E6A62">88 boards</div></div>
+<div style="flex:1;border:1px solid #141414;background:#fff;padding:12px 14px"><div style="font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;color:#6E6A62">DEFENDING</div><div style="font-family:Besley,serif;font-weight:800;font-size:21px;font-variant-numeric:tabular-nums;margin-top:4px">52%</div><div style="font-size:12px;color:#6E6A62">126 boards</div></div>
+</div>
+<div style="display:flex;border-top:1px solid #141414;margin-top:16px;font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;text-align:center">
+<div style="flex:1;padding:13px 0;color:#6E6A62">HOME</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">TOURNEYS</div>
+<div style="flex:1;padding:13px 0;box-shadow:inset 0 3px 0 #141414">STATS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">RANKINGS</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="4f"><div class="dv-olabel"><a class="dv-oid" href="#4f">4f</a>Rankings — the weekly field, perforated ledger</div>
+<div class="dv-card" data-screen-label="Rankings" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #141414">
+<span style="font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em">NICKEL BRIDGE</span>
+<span style="font-family:Besley,serif;font-size:8.5px;letter-spacing:.3em;color:#6E6A62">RANKINGS</span>
+</div>
+<div style="padding:18px 16px 0;display:flex;align-items:baseline;justify-content:space-between">
+<div style="font-weight:600;font-size:19px">The field</div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:#6E6A62">ALL-TIME · 54 PLAYERS</div>
+</div>
+<div style="margin:12px 16px 0;border:1px solid #141414;background:#fff;position:relative;padding:6px 14px 6px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:0 12px;font-size:14.5px;font-variant-numeric:tabular-nums;align-items:center">
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">1</b><div style="padding:9px 0;border-bottom:1px solid #E4E1D8">Alice Whitmore</div><b style="padding:9px 0;border-bottom:1px solid #E4E1D8">1642</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#00775A;padding:9px 0;border-bottom:1px solid #E4E1D8">▲2</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">2</b><div style="padding:9px 0;border-bottom:1px solid #E4E1D8">Henry Chu</div><b style="padding:9px 0;border-bottom:1px solid #E4E1D8">1601</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#C22F21;padding:9px 0;border-bottom:1px solid #E4E1D8">▼1</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">3</b><div style="padding:9px 0;border-bottom:1px solid #E4E1D8">Dot Pemberton</div><b style="padding:9px 0;border-bottom:1px solid #E4E1D8">1583</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#C22F21;padding:9px 0;border-bottom:1px solid #E4E1D8">▼1</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">4</b><div style="padding:9px 0;border-bottom:1px solid #E4E1D8">Sam Okafor</div><b style="padding:9px 0;border-bottom:1px solid #E4E1D8">1540</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#6E6A62;padding:9px 0;border-bottom:1px solid #E4E1D8">—</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0;background:#F1EFE9;margin-left:-6px;padding-left:6px">5</b><div style="padding:9px 0;font-weight:600;background:#F1EFE9;margin:0 -12px;padding-left:12px;padding-right:12px">Margaret — you</div><b style="padding:9px 0;background:#F1EFE9;margin:0 -4px;padding-left:4px;padding-right:4px">1487</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#00775A;padding:9px 0;background:#F1EFE9;margin-right:-6px;padding-right:6px">▲3</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">6</b><div style="padding:9px 0;border-bottom:1px solid #E4E1D8;border-top:1px solid #E4E1D8">Ruth Adler</div><b style="padding:9px 0;border-bottom:1px solid #E4E1D8;border-top:1px solid #E4E1D8">1466</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#C22F21;padding:9px 0;border-bottom:1px solid #E4E1D8;border-top:1px solid #E4E1D8">▼2</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:9px 0">7</b><div style="padding:9px 0">Leo Marsh</div><b style="padding:9px 0">1421</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#6E6A62;padding:9px 0">—</span>
+</div>
+</div>
+<div style="margin:12px 16px 0;background:#F1EFE9;border:1px solid #D8D5CE;padding:12px 14px;display:flex;align-items:center;gap:12px">
+<svg width="34" height="26" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"></line><path d="M8 112 Q80 38 152 112" stroke-width="10"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"></line></g></svg>
+<div style="font-size:13.5px;line-height:1.45">Rankings update after every game played on the site. <span style="color:#6E6A62">54 players crossed this week.</span></div>
+</div>
+<div style="display:flex;border-top:1px solid #141414;margin-top:16px;font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;text-align:center">
+<div style="flex:1;padding:13px 0;color:#6E6A62">HOME</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">TOURNEYS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">STATS</div>
+<div style="flex:1;padding:13px 0;box-shadow:inset 0 3px 0 #141414">RANKINGS</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="4g"><div class="dv-olabel"><a class="dv-oid" href="#4g">4g</a>Tourneys — the ledger of crossings (open, live, and cancelled)</div>
+<div class="dv-card" data-screen-label="Tourneys" style="width:390px;background:#FCFBF8;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #141414">
+<span style="font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em">NICKEL BRIDGE</span>
+<span style="font-family:Besley,serif;font-size:8.5px;letter-spacing:.3em;color:#6E6A62">TOURNEYS</span>
+</div>
+<div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:10px">
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;color:#6E6A62">AT THE GATE</div>
+<div style="border:1.5px solid #141414;background:#fff;display:flex;align-items:stretch;box-shadow:3px 3px 0 rgba(20,20,20,.12)">
+<div style="width:74px;border-right:2px dashed #141414;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em;color:#6E6A62">TOURNEY</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">12</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center;gap:10px">
+<div style="flex:1"><div style="font-weight:600;font-size:15px">Board 2 of 4 — your call</div><div style="font-size:12.5px;color:#6E6A62">2nd of 12 pairs after board 1</div></div>
+<div style="border:2px solid #C22F21;border-radius:50%;padding:4px 12px;transform:rotate(3deg);-webkit-mask-image:linear-gradient(75deg,rgba(0,0,0,.55) 0%,#000 45%);mask-image:linear-gradient(75deg,rgba(0,0,0,.55) 0%,#000 45%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:10px;letter-spacing:.24em;color:#C22F21">LIVE</span></div>
+</div>
+</div>
+<div style="border:1px dashed #B9B4A9;display:flex;align-items:stretch;color:#6E6A62">
+<div style="width:74px;border-right:2px dashed #B9B4A9;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0"><span style="font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em">TOURNEY</span><span style="font-family:Besley,serif;font-weight:800;font-size:22px">13</span></div>
+<div style="flex:1;padding:10px 12px;display:flex;align-items:center"><div style="font-size:14px;font-style:italic">Opens when you finish #12 — one crossing at a time</div></div>
+</div>
+</div>
+<div style="padding:20px 16px 0">
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;color:#6E6A62">TOLLS PAID</div>
+<div style="margin-top:10px;border:1px solid #141414;background:#fff;position:relative;padding:2px 14px 2px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:0 12px;font-size:14.5px;font-variant-numeric:tabular-nums;align-items:center">
+<b style="font-family:Besley,serif;font-size:12px;padding:10px 0">11</b><div style="padding:10px 0;border-bottom:1px solid #E4E1D8">Jul 9 · 14 pairs</div><b style="padding:10px 0;border-bottom:1px solid #E4E1D8">54%</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#6E6A62;padding:10px 0;border-bottom:1px solid #E4E1D8">6TH</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:10px 0">10</b><div style="padding:10px 0;border-bottom:1px solid #E4E1D8">Jul 6 · 11 pairs</div><b style="padding:10px 0;border-bottom:1px solid #E4E1D8">63%</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#00775A;padding:10px 0;border-bottom:1px solid #E4E1D8">1ST</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:10px 0">9</b><div style="padding:10px 0;border-bottom:1px solid #E4E1D8">Jul 2 · 16 pairs</div><b style="padding:10px 0;border-bottom:1px solid #E4E1D8">47%</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#6E6A62;padding:10px 0;border-bottom:1px solid #E4E1D8">9TH</span>
+<b style="font-family:Besley,serif;font-size:12px;padding:10px 0">8</b><div style="padding:10px 0">Jun 28 · 12 pairs</div><b style="padding:10px 0">59%</b><span style="font-family:Besley,serif;font-weight:700;font-size:11px;color:#00775A;padding:10px 0">3RD</span>
+</div>
+</div>
+<div style="font-size:12.5px;color:#6E6A62;margin-top:10px;font-style:italic;text-align:center">Every crossing since June — tap a row for its postmark.</div>
+</div>
+<div style="display:flex;border-top:1px solid #141414;margin-top:16px;font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.16em;text-align:center">
+<div style="flex:1;padding:13px 0;color:#6E6A62">HOME</div>
+<div style="flex:1;padding:13px 0;box-shadow:inset 0 3px 0 #141414">TOURNEYS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">STATS</div>
+<div style="flex:1;padding:13px 0;color:#6E6A62">RANKINGS</div>
+</div>
+</div></div>
+</div>
+<p class="dv-next">All six use the locked kit — say "swap 4b's stamps for 3c", "give 4e a per-suit row", or "wire these into one clickable flow".</p>
+</section>
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Ink stamps, round 2 — making them read as stamps (rotation + ink fade + stamp-native shapes)</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Oval office stamp — the "PAID" archetype</div>
+<div class="dv-card" style="width:250px;padding:26px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:16px">
+<div style="border:3px solid #141414;border-radius:50%;padding:10px 26px;transform:rotate(-6deg);-webkit-mask-image:linear-gradient(105deg,#000 55%,rgba(0,0,0,.45) 100%);mask-image:linear-gradient(105deg,#000 55%,rgba(0,0,0,.45) 100%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:17px;letter-spacing:.3em;color:#141414">LIVE</span></div>
+<div style="border:3px solid #00775A;border-radius:50%;padding:10px 20px;transform:rotate(4deg);-webkit-mask-image:linear-gradient(75deg,rgba(0,0,0,.5) 0%,#000 40%);mask-image:linear-gradient(75deg,rgba(0,0,0,.5) 0%,#000 40%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:15px;letter-spacing:.24em;color:#00775A">CONTINUE</span></div>
+<div style="border:3px solid #141414;border-radius:50%;padding:10px 22px;transform:rotate(-3deg);-webkit-mask-image:linear-gradient(115deg,#000 45%,rgba(0,0,0,.5) 90%);mask-image:linear-gradient(115deg,#000 45%,rgba(0,0,0,.5) 90%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:15px;letter-spacing:.26em;color:#141414">SCORED</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">oval + uneven ink pressure = instant rubber-stamp read</div>
+</div></div>
+
+<div class="dv-opt" id="3b"><div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Postmark — <span style="color:#00775A">✓ WINNER — locked stamp treatment</span></div>
+<div class="dv-card" style="width:250px;padding:26px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="display:flex;align-items:center;transform:rotate(-4deg);-webkit-mask-image:linear-gradient(100deg,#000 50%,rgba(0,0,0,.4) 100%);mask-image:linear-gradient(100deg,#000 50%,rgba(0,0,0,.4) 100%)">
+<svg width="104" height="104" viewBox="0 0 104 104"><circle cx="52" cy="52" r="49" fill="none" stroke="#141414" stroke-width="3"></circle><circle cx="52" cy="52" r="36" fill="none" stroke="#141414" stroke-width="1.5"></circle><defs><path id="pmT3b" d="M 14 52 A 38 38 0 0 1 90 52"></path><path id="pmB3b" d="M 12 52 A 40 40 0 0 0 92 52"></path></defs><text font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="10.5" letter-spacing="2.5" fill="#141414"><textPath href="#pmT3b" startOffset="50%" text-anchor="middle">NICKEL BRIDGE</textPath></text><text font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="8.5" letter-spacing="2" fill="#141414"><textPath href="#pmB3b" startOffset="50%" text-anchor="middle">BOARD 2 · TOLL PAID</textPath></text><text x="52" y="49" text-anchor="middle" font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="13" letter-spacing="1" fill="#141414">SCORED</text><text x="52" y="63" text-anchor="middle" font-family="'Crimson Pro',serif" font-size="10" fill="#141414">JUL 13 1926</text></svg>
+<svg width="64" height="60" viewBox="0 0 64 60" style="margin-left:-8px"><g stroke="#141414" stroke-width="2.5" fill="none"><path d="M0 8 Q16 2 32 8 T64 8"></path><path d="M0 22 Q16 16 32 22 T64 22"></path><path d="M0 36 Q16 30 32 36 T64 36"></path><path d="M0 50 Q16 44 32 50 T64 50"></path></g></svg>
+</div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">for the result screen only — cancels the board like a mailed ticket</div>
+</div></div>
+
+<div class="dv-opt" id="3c"><div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Notched box — inspection-stamp corners</div>
+<div class="dv-card" style="width:250px;padding:26px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:16px">
+<div style="transform:rotate(-5deg);-webkit-mask-image:linear-gradient(110deg,#000 50%,rgba(0,0,0,.45) 100%);mask-image:linear-gradient(110deg,#000 50%,rgba(0,0,0,.45) 100%)"><svg width="128" height="46" viewBox="0 0 128 46"><path d="M10 3 L118 3 M125 10 L125 36 M118 43 L10 43 M3 36 L3 10" stroke="#141414" stroke-width="4" fill="none"></path><text x="64" y="30" text-anchor="middle" font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="17" letter-spacing="5" fill="#141414">LIVE</text></svg></div>
+<div style="transform:rotate(3deg);-webkit-mask-image:linear-gradient(70deg,rgba(0,0,0,.5) 0%,#000 45%);mask-image:linear-gradient(70deg,rgba(0,0,0,.5) 0%,#000 45%)"><svg width="150" height="46" viewBox="0 0 150 46"><path d="M10 3 L140 3 M147 10 L147 36 M140 43 L10 43 M3 36 L3 10" stroke="#00775A" stroke-width="4" fill="none"></path><text x="75" y="29" text-anchor="middle" font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="15" letter-spacing="4" fill="#00775A">CONTINUE</text></svg></div>
+<div style="transform:rotate(-2deg);-webkit-mask-image:linear-gradient(115deg,#000 40%,rgba(0,0,0,.5) 95%);mask-image:linear-gradient(115deg,#000 40%,rgba(0,0,0,.5) 95%)"><svg width="140" height="46" viewBox="0 0 140 46"><path d="M10 3 L130 3 M137 10 L137 36 M130 43 L10 43 M3 36 L3 10" stroke="#141414" stroke-width="4" fill="none"></path><text x="70" y="29" text-anchor="middle" font-family="'Josefin Sans',sans-serif" font-weight="600" font-size="15" letter-spacing="4" fill="#141414">SCORED</text></svg></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">open corners = rubber die that didn't print evenly; still crisp vector</div>
+</div></div>
+
+<div class="dv-opt" id="3d"><div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Bare overprint — no border, just heavy ink</div>
+<div class="dv-card" style="width:250px;padding:26px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="transform:rotate(-7deg);-webkit-mask-image:linear-gradient(105deg,#000 45%,rgba(0,0,0,.35) 100%);mask-image:linear-gradient(105deg,#000 45%,rgba(0,0,0,.35) 100%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:30px;letter-spacing:.32em;color:#141414;border-top:3px solid #141414;border-bottom:3px solid #141414;padding:2px 0 0">LIVE</span></div>
+<div style="transform:rotate(4deg);-webkit-mask-image:linear-gradient(80deg,rgba(0,0,0,.4) 0%,#000 50%);mask-image:linear-gradient(80deg,rgba(0,0,0,.4) 0%,#000 50%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:22px;letter-spacing:.28em;color:#00775A;border-top:3px solid #00775A;border-bottom:3px solid #00775A;padding:2px 0 0">CONTINUE</span></div>
+<div style="transform:rotate(-3deg);-webkit-mask-image:linear-gradient(115deg,#000 40%,rgba(0,0,0,.4) 90%);mask-image:linear-gradient(115deg,#000 40%,rgba(0,0,0,.4) 90%)"><span style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:22px;letter-spacing:.28em;color:#141414;border-top:3px solid #141414;border-bottom:3px solid #141414;padding:2px 0 0">SCORED</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">loudest; works stamped diagonally across a result card</div>
+</div></div>
+</div>
+<p class="dv-next">Pick one: "<a class="dv-oid" href="#3a">3a</a> for statuses, <a class="dv-oid" href="#3b">3b</a> for results" is a natural split · or "tone the fade down on __".</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Nickel Bridge — foundations &amp; the Board screen (marks live in Nickel Bridge Brand)</span></div>
+
+<div class="dv-card" style="width:640px;padding:20px 24px;font:13px/1.6 system-ui,sans-serif;color:#333;margin-bottom:26px">
+<div style="font-weight:700;margin-bottom:6px;color:#141414">Assumptions &amp; reasoning</div>
+Working strictly from the brief + moodboard: black etching-weight linework on flat white, <b>no texture</b>, suit colors as the only color in the app. Illustration leans iconic-and-bold (per your note) — a Hell-Gate-class steel arch, drawn as heavy geometric black shapes, not fine crosshatch and not suit-pip puns. The four-color deck is kept, retuned for AA contrast on white (♦ darkened to ochre, ♣ deepened). Board screens (<a class="dv-oid" href="#1p">1p</a>–<a class="dv-oid" href="#1r">1r</a>) use pairing <a class="dv-oid" href="#1d">1d</a> and table surface <a class="dv-oid" href="#1g">1g</a> as the working combo — both swappable. Fine detail stays on brand surfaces; the bid box and auction stay bold and plain (two-tier density rule).
+</div>
+
+<div class="dv-group">TYPE PAIRINGS</div>
+<div class="dv-opts">
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Limelight + Besley — marquee Deco &amp; Clarendon</div>
+<div class="dv-card" style="width:320px;padding:22px 24px;background:#fff">
+<div style="font-family:Limelight,serif;font-size:26px;letter-spacing:.08em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-weight:800;font-size:19px;color:#141414;margin-top:14px">Board 2 of 4 — your call</div>
+<div style="font-family:Besley,serif;font-size:14px;line-height:1.55;color:#141414;margin-top:8px">Opening 1♠ promises five spades and 13–21 points. Partner will respond with their longest suit.</div>
+<div style="font-family:Besley,serif;font-weight:800;font-size:22px;font-variant-numeric:tabular-nums;color:#141414;margin-top:10px">1200 · 58% · +620</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:12px">display sparingly (wordmark, phase titles) · Besley = 1845 Clarendon lineage, real tabular figures</div>
+</div></div>
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Poiret One + Crimson Pro — <span style="color:#00775A">✓ WINNER — locked type pairing</span></div>
+<div class="dv-card" style="width:320px;padding:22px 24px;background:#fff">
+<div style="font-family:'Poiret One',serif;font-size:28px;letter-spacing:.14em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:20px;color:#141414;margin-top:14px">Board 2 of 4 — your call</div>
+<div style="font-family:'Crimson Pro',serif;font-size:15px;line-height:1.5;color:#141414;margin-top:8px">Opening 1♠ promises five spades and 13–21 points. Partner will respond with their longest suit.</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:22px;font-variant-numeric:tabular-nums;color:#141414;margin-top:10px">1200 · 58% · +620</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:12px">elegant but hairline-thin at 16px — weakest for dense game UI</div>
+</div></div>
+<div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Josefin Sans + Old Standard — 1920s geometric &amp; scholarly</div>
+<div class="dv-card" style="width:320px;padding:22px 24px;background:#fff">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:25px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:'Old Standard TT',serif;font-weight:700;font-size:19px;color:#141414;margin-top:14px">Board 2 of 4 — your call</div>
+<div style="font-family:'Old Standard TT',serif;font-size:14.5px;line-height:1.5;color:#141414;margin-top:8px">Opening 1♠ promises five spades and 13–21 points. Partner will respond with their longest suit.</div>
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:21px;font-variant-numeric:tabular-nums;color:#141414;margin-top:10px">1200 · 58% · +620</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:12px">Josefin is period-authentic (1920s geometry); Old Standard reads bookish</div>
+</div></div>
+</div>
+
+<div class="dv-group">TABLE SURFACE — what replaces the green felt</div>
+<div class="dv-opts">
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>White + double hairline frame — <span style="color:#6E6A62">runner-up to 1h</span></div>
+<div class="dv-card" style="width:280px;padding:16px;background:#fff">
+<div style="border:1px solid #141414;padding:3px"><div style="border:1px solid #141414;padding:18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px">
+<div style="width:34px;height:48px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800;font-family:Besley,serif"><div style="font-size:13px;line-height:1">5</div><div style="font-size:12px;color:#C22F21">♥</div></div>
+<div style="font-family:Besley,serif;font-size:11px;letter-spacing:.12em;color:#141414">DECLARER 3 · DEFENSE 1</div>
+</div></div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:10px">quietest; frame = "the table"; max contrast for cards</div>
+</div></div>
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Warm paper-gray panel — <span style="color:#00775A">✓ chosen surface</span></div>
+<div class="dv-card" style="width:280px;padding:16px;background:#fff">
+<div style="background:#F1EFE9;border:1px solid #D8D5CE;padding:20px 12px;display:flex;flex-direction:column;align-items:center;gap:8px">
+<div style="width:34px;height:48px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800;font-family:Besley,serif;box-shadow:0 1px 2px rgba(0,0,0,.12)"><div style="font-size:13px;line-height:1">5</div><div style="font-size:12px;color:#C22F21">♥</div></div>
+<div style="font-family:Besley,serif;font-size:11px;letter-spacing:.12em;color:#141414">DECLARER 3 · DEFENSE 1</div>
+</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:10px">cards pop on tone; softest hierarchy; risks "beige app"</div>
+</div></div>
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Truss-rail frame — <span style="color:#C22F21">rejected: too busy</span></div>
+<div class="dv-card" style="width:280px;padding:16px;background:#fff">
+<div style="border:1px solid #141414">
+<svg width="100%" height="16" viewBox="0 0 280 20" preserveAspectRatio="none" style="display:block"><g stroke="#141414" stroke-width="2" fill="none"><line x1="0" y1="2" x2="280" y2="2"></line><line x1="0" y1="18" x2="280" y2="18"></line><path d="M0 18 L14 2 L28 18 L42 2 L56 18 L70 2 L84 18 L98 2 L112 18 L126 2 L140 18 L154 2 L168 18 L182 2 L196 18 L210 2 L224 18 L238 2 L252 18 L266 2 L280 18"></path></g></svg>
+<div style="padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:8px">
+<div style="width:34px;height:48px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800;font-family:Besley,serif"><div style="font-size:13px;line-height:1">5</div><div style="font-size:12px;color:#C22F21">♥</div></div>
+<div style="font-family:Besley,serif;font-size:11px;letter-spacing:.12em;color:#141414">DECLARER 3 · DEFENSE 1</div>
+</div>
+<svg width="100%" height="16" viewBox="0 0 280 20" preserveAspectRatio="none" style="display:block"><g stroke="#141414" stroke-width="2" fill="none"><line x1="0" y1="2" x2="280" y2="2"></line><line x1="0" y1="18" x2="280" y2="18"></line><path d="M0 2 L14 18 L28 2 L42 18 L56 2 L70 18 L84 2 L98 18 L112 2 L126 18 L140 2 L154 18 L168 2 L182 18 L196 2 L210 18 L224 2 L238 18 L252 2 L266 18 L280 2"></path></g></svg>
+</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:10px">"you're on the bridge deck" — strongest thematic read</div>
+</div></div>
+</div>
+
+<div class="dv-group">TOLL VOCABULARY — visual treatments (pick 1–2 to ship)</div>
+<div class="dv-opts">
+<div class="dv-opt" id="1j"><div class="dv-olabel"><a class="dv-oid" href="#1j">1j</a>Gate-arm loader — <span style="color:#C22F21">rejected: too cheesy</span></div>
+<div class="dv-card" style="width:230px;padding:24px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="width:150px;height:84px;position:relative">
+<div style="position:absolute;left:8px;bottom:0;width:14px;height:40px;background:#141414"></div>
+<div style="position:absolute;left:12px;bottom:32px;width:132px;height:12px;transform-origin:6px 6px;animation:gatearm 2.6s ease-in-out infinite;background:repeating-linear-gradient(115deg,#141414 0 14px,#fff 14px 28px);border:2px solid #141414;box-sizing:border-box"></div>
+<div style="position:absolute;left:0;bottom:-2px;width:150px;height:2px;background:#141414"></div>
+</div>
+<div style="font-family:Besley,serif;font-style:italic;font-size:13px;color:#141414">Robots are thinking…</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">replaces every spinner; arm lifts on resolve</div>
+</div></div>
+
+<div class="dv-opt" id="1k"><div class="dv-olabel"><a class="dv-oid" href="#1k">1k</a>Ticket-stub board counter — <span style="color:#00775A">✓ accepted</span></div>
+<div class="dv-card" style="width:230px;padding:24px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<svg width="184" height="66" viewBox="0 0 184 66">
+<rect x="2" y="2" width="180" height="62" fill="#fff" stroke="#141414" stroke-width="3"></rect>
+<line x1="126" y1="2" x2="126" y2="64" stroke="#141414" stroke-width="2" stroke-dasharray="3 5"></line>
+<text x="16" y="26" font-family="Besley,serif" font-weight="700" font-size="11" letter-spacing="3" fill="#141414">BOARD</text>
+<text x="16" y="52" font-family="Besley,serif" font-weight="800" font-size="24" fill="#141414">No. 2 of 4</text>
+<text x="146" y="14" font-family="Besley,serif" font-weight="700" font-size="10" letter-spacing="2" fill="#141414" transform="rotate(90 146 14)">ADMIT ONE</text>
+</svg>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">board header, lobby progress, tournament rows</div>
+</div></div>
+
+<div class="dv-opt" id="1l"><div class="dv-olabel"><a class="dv-oid" href="#1l">1l</a>Ink-stamp status</div>
+<div class="dv-card" style="width:230px;padding:24px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:12px">
+<div style="border:2.5px solid #141414;border-radius:6px;padding:5px 14px;transform:rotate(-5deg);box-shadow:inset 0 0 0 1.5px #fff, inset 0 0 0 3px #141414"><span style="font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.22em;color:#141414">LIVE</span></div>
+<div style="border:2.5px solid #00775A;border-radius:6px;padding:5px 14px;transform:rotate(3deg);box-shadow:inset 0 0 0 1.5px #fff, inset 0 0 0 3px #00775A"><span style="font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.22em;color:#00775A">CONTINUE</span></div>
+<div style="border:2.5px solid #141414;border-radius:6px;padding:5px 14px;transform:rotate(-3deg)"><span style="font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.22em;color:#141414">SCORED</span></div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">status badges + result-screen seal; crisp vector, never grunge</div>
+</div></div>
+
+<div class="dv-opt" id="1m"><div class="dv-olabel"><a class="dv-oid" href="#1m">1m</a>Flip-digit numerals — <span style="color:#00775A">✓ accepted</span></div>
+<div class="dv-card" style="width:230px;padding:24px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="display:flex;gap:3px">
+<div style="width:30px;height:44px;background:#141414;color:#fff;font-family:Besley,serif;font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">5<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:30px;height:44px;background:#141414;color:#fff;font-family:Besley,serif;font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">8<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:30px;height:44px;background:#fff;color:#141414;border:2px solid #141414;font-family:Besley,serif;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;border-radius:3px;box-sizing:border-box">%</div>
+</div>
+<div style="font-family:Besley,serif;font-size:11px;letter-spacing:.14em;color:#141414">MATCHPOINTS</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">turnstile counter for the hero numbers only (MP%, Elo)</div>
+</div></div>
+
+<div class="dv-opt" id="1n"><div class="dv-olabel"><a class="dv-oid" href="#1n">1n</a>Perforated panel edge — <span style="color:#00775A">✓ accepted</span></div>
+<div class="dv-card" style="width:230px;padding:24px 20px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="width:180px;border:1.5px solid #141414;background:#fff;position:relative;padding:14px 14px 14px 20px">
+<div style="position:absolute;left:6px;top:0;bottom:0;width:0;border-left:1.5px dashed #141414"></div>
+<div style="font-family:Besley,serif;font-weight:700;font-size:12px;letter-spacing:.1em;color:#141414">THE FIELD</div>
+<div style="font-family:Besley,serif;font-size:12.5px;color:#141414;margin-top:6px;line-height:1.6">Alice — 83%<br>You — 58%<br>Bob — 33%</div>
+</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">base container variant; sidesteps the "card" name collision</div>
+</div></div>
+</div>
+
+<div class="dv-group">FOUNDATIONS</div>
+<div class="dv-opts">
+<div class="dv-opt" id="1o"><div class="dv-olabel"><a class="dv-oid" href="#1o">1o</a>Color, type scale, spacing — as CSS custom properties</div>
+<div class="dv-card" style="width:664px;padding:24px 28px;background:#fff;font-family:'Crimson Pro',serif;color:#141414">
+<div style="display:flex;gap:28px;flex-wrap:wrap">
+<div style="flex:1;min-width:280px">
+<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);margin-bottom:10px">PALETTE — black + white + suits only</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#141414"></div><b>--ink</b> #141414 · text, linework</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#FCFBF8;border:1px solid #D8D5CE"></div><b>--paper</b> #FCFBF8 · page ground</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#fff;border:1px solid #D8D5CE"></div><b>--panel</b> #FFFFFF · panels, card faces</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#D8D5CE"></div><b>--line</b> #D8D5CE · hairlines</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#6E6A62"></div><b>--muted</b> #6E6A62 · captions (4.9:1)</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div style="width:40px;height:26px;background:#141414"></div><b>--suit-s</b> #141414 ♠ (15.9:1)</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#C22F21"></div><b>--suit-h</b> #C22F21 ♥ signal red (5.6:1)</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#9E6A00"></div><b>--suit-d</b> #9E6A00 ♦ signal amber (4.7:1)</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:40px;height:26px;background:#00775A"></div><b>--suit-c</b> #00775A ♣ signal green (5.6:1)</div>
+</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:10px">a traffic-signal triad — matched lightness &amp; chroma in oklch (30° / 78° / 165°), so red = stop, amber = caution, green = go reads as one system; all AA vs white, glyph shape still carries meaning. Fits the toll-road story: signals on the bridge deck</div>
+</div>
+<div style="flex:1;min-width:280px">
+<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);margin-bottom:10px">TYPE SCALE (pairing 1e — locked)</div>
+<div style="font-family:'Poiret One',serif;font-size:24px;letter-spacing:.14em">DISPLAY 24 — wordmark</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:21px;margin-top:6px">Title 21/600</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:17px;margin-top:4px">Heading 17/600</div>
+<div style="font-family:'Crimson Pro',serif;font-size:16px;margin-top:4px;line-height:1.5">Body 16/400 — meanings, recaps, 1.5 line height</div>
+<div style="font-family:'Crimson Pro',serif;font-size:13.5px;color:#6E6A62;margin-top:4px">Caption 13.5 muted</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:12px;letter-spacing:.14em;margin-top:6px">LABEL 12 · TRACKED CAPS</div>
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:16px;font-variant-numeric:tabular-nums;margin-top:6px">0123456789 — tabular-nums everywhere</div>
+<div style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);margin-top:6px">Crimson runs small — sizes bumped +1, weight 600 for UI text</div>
+<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);margin:16px 0 8px">SPACE · RADII · RULES</div>
+<div style="font-size:12.5px;line-height:1.7">space: 4 / 8 / 12 / 16 / 24 / 32<br>radii: 0 (panels) · 3px (chips) · 4px (cards) — Deco stays square<br>rules: 1px #D8D5CE quiet · 1px #141414 structural · 3px double = table frame</div>
+<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);margin:16px 0 8px">CHARTS — grayscale + one accent</div>
+<svg width="250" height="74" viewBox="0 0 250 74"><line x1="0" y1="18" x2="250" y2="18" stroke="#D8D5CE" stroke-width="1" stroke-dasharray="3 4"></line><line x1="0" y1="40" x2="250" y2="40" stroke="#C22F21" stroke-width="1.5" stroke-dasharray="5 4"></line><line x1="0" y1="62" x2="250" y2="62" stroke="#D8D5CE" stroke-width="1"></line><polyline points="0,58 40,48 80,52 120,34 160,38 200,22 250,26" fill="none" stroke="#141414" stroke-width="2.5"></polyline><circle cx="200" cy="22" r="3.5" fill="#141414"></circle><text x="4" y="36" font-family="Besley,serif" font-size="9.5" fill="#C22F21">field avg / reference — accent #C22F21</text></svg>
+</div>
+</div>
+</div></div>
+</div>
+
+<div class="dv-group">BOARD SCREEN — 390w, pairing <a class="dv-oid" href="#1d" style="font:inherit">1d</a> + surface <a class="dv-oid" href="#1g" style="font:inherit">1g</a></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1p"><div class="dv-olabel"><a class="dv-oid" href="#1p">1p</a>Phase A — bidding (your turn, 2♥ selected)</div>
+<div class="dv-card" style="width:390px;background:#FCFBF8;font-family:Besley,serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid #141414">
+<div style="font-family:Limelight,serif;font-size:15px;letter-spacing:.1em">NICKEL BRIDGE</div>
+<div style="display:flex;gap:14px;font-size:12px;font-weight:600"><span>Stats</span><span>Rankings</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #D8D5CE">
+<svg width="92" height="34" viewBox="0 0 92 34"><rect x="1.5" y="1.5" width="89" height="31" fill="#fff" stroke="#141414" stroke-width="2.5"></rect><line x1="64" y1="1" x2="64" y2="33" stroke="#141414" stroke-width="1.5" stroke-dasharray="2.5 4"></line><text x="8" y="13" font-family="Besley,serif" font-weight="700" font-size="7.5" letter-spacing="1.5" fill="#141414">BOARD</text><text x="8" y="27" font-family="Besley,serif" font-weight="800" font-size="13" fill="#141414">2 of 4</text><text x="82" y="8" font-family="Besley,serif" font-weight="700" font-size="6" letter-spacing="1" fill="#141414" transform="rotate(90 82 8)">ADMIT</text></svg>
+<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Tournament #12</div><div style="font-size:12px;color:#6E6A62">Dealer N</div></div>
+<div style="border:1.5px solid #C22F21;color:#C22F21;font-weight:800;font-size:10.5px;letter-spacing:.12em;padding:3px 8px;border-radius:3px">NS VUL</div>
+</div>
+<div style="margin:12px 12px 0;border:1px solid #141414;padding:2px"><div style="border:1px solid #141414;padding:10px 12px 12px">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#6E6A62;padding-bottom:6px;border-bottom:1px solid #D8D5CE">
+<div>N</div><div>E</div><div style="color:#141414">S ★</div><div>W</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;font-size:15px;font-weight:600;row-gap:7px;padding-top:8px;font-variant-numeric:tabular-nums">
+<div style="color:#6E6A62">—</div><div style="color:#6E6A62">—</div><div style="border-bottom:2px dotted #141414;justify-self:center;padding:0 5px">1<span style="color:#C22F21">♥</span></div><div>Pass</div>
+<div style="border-bottom:2px dotted #141414;justify-self:center;padding:0 5px">1NT</div><div>Pass</div><div style="outline:1.5px solid #141414;outline-offset:2px;justify-self:center;padding:0 5px;font-weight:800">?</div><div></div>
+</div>
+<div style="font-size:10.5px;color:#6E6A62;text-align:center;margin-top:9px;letter-spacing:.06em">dotted = has a SAYC meaning · tap any call to inspect</div>
+</div></div>
+<div style="margin:10px 12px 0;border:1px solid #141414;background:#fff;position:relative;padding:11px 14px 12px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-weight:800;font-size:14.5px">Your 2<span style="color:#C22F21">♥</span> — Rebid, invitational</div>
+<div style="display:flex;gap:6px;margin:6px 0 7px"><span style="border:1px solid #141414;font-weight:700;font-size:11px;padding:2px 7px;border-radius:3px">10–12 HCP</span><span style="border:1px solid #D8D5CE;color:#6E6A62;font-weight:600;font-size:11px;padding:2px 7px;border-radius:3px">6+ hearts</span></div>
+<div style="font-size:13.5px;line-height:1.5">Shows a long heart suit worth rebidding and invitational values opposite partner's 1NT. Partner passes with a minimum.</div>
+</div>
+<div style="display:flex;justify-content:center;align-items:flex-end;padding:14px 8px 2px">
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none"><div style="font-size:15px;line-height:1">A</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px"><div style="font-size:15px;line-height:1">Q</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px"><div style="font-size:14px;line-height:1;letter-spacing:-.09em">10</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#C22F21"><div style="font-size:15px;line-height:1">K</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#C22F21"><div style="font-size:15px;line-height:1">J</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#C22F21"><div style="font-size:15px;line-height:1">9</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#C22F21"><div style="font-size:15px;line-height:1">6</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#C22F21"><div style="font-size:15px;line-height:1">3</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#9E6A00"><div style="font-size:15px;line-height:1">8</div><div style="font-size:14px">♦</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#9E6A00"><div style="font-size:15px;line-height:1">2</div><div style="font-size:14px">♦</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#00775A"><div style="font-size:15px;line-height:1">Q</div><div style="font-size:14px">♣</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#00775A"><div style="font-size:15px;line-height:1">9</div><div style="font-size:14px">♣</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#00775A"><div style="font-size:15px;line-height:1">5</div><div style="font-size:14px">♣</div></div>
+</div>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#6E6A62">SOUTH — YOU</span><span style="background:#141414;color:#fff;font-weight:800;font-size:12px;padding:2px 9px;border-radius:3px;font-variant-numeric:tabular-nums">12 HCP</span></div>
+<div style="padding:12px 12px 0">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;font-variant-numeric:tabular-nums">
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">1<span style="color:#00775A">♣</span></div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">1<span style="color:#9E6A00">♦</span></div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">1<span style="color:#C22F21">♥</span></div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">1♠</div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">1NT</div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">2<span style="color:#00775A">♣</span></div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;opacity:.25;border-radius:2px">2<span style="color:#9E6A00">♦</span></div>
+<div style="background:#141414;color:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border-radius:2px">2<span style="color:#FF9D94;margin-left:1px">♥</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">2♠</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">2NT</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">3<span style="color:#00775A">♣</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">3<span style="color:#9E6A00">♦</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">3<span style="color:#C22F21">♥</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">3♠</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">3NT</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">4<span style="color:#00775A">♣</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">4<span style="color:#9E6A00">♦</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">4<span style="color:#C22F21">♥</span></div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">4♠</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-radius:2px">4NT</div>
+</div>
+<div style="text-align:center;font-size:11px;color:#6E6A62;padding:6px 0 2px;letter-spacing:.08em">▾ levels 5–7 below the fold ▾</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:5px;margin-top:2px">
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;border-radius:2px">Pass</div>
+<div style="border:1px solid #141414;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;border-radius:2px;color:#C22F21">X</div>
+<div style="border:1px solid #D8D5CE;background:#fff;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;opacity:.25;border-radius:2px">XX</div>
+</div>
+</div>
+<div style="padding:12px 12px 16px"><div style="background:#141414;color:#fff;text-align:center;font-weight:800;font-size:17px;letter-spacing:.06em;padding:14px;border-radius:2px">BID 2♥ →</div></div>
+</div></div>
+
+<div class="dv-opt" id="1q"><div class="dv-olabel"><a class="dv-oid" href="#1q">1q</a>Phase B — card play (declaring 4♠, dummy North)</div>
+<div class="dv-card" style="width:390px;background:#FCFBF8;font-family:Besley,serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #141414">
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font-weight:700;font-size:13.5px">Tournament #12</span><span style="font-size:12px;color:#6E6A62">Board 2/4</span></div>
+<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;font-size:14px">4♠ by S</span><span style="border:1.5px solid #C22F21;color:#C22F21;font-weight:800;font-size:10px;letter-spacing:.1em;padding:2px 6px;border-radius:3px">NS VUL</span></div>
+</div>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;padding:12px 0 2px"><span style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#6E6A62">NORTH — DUMMY</span><span style="background:#141414;color:#fff;font-weight:800;font-size:12px;padding:2px 9px;border-radius:3px">10 HCP</span></div>
+<div style="display:flex;justify-content:center;align-items:flex-end;padding:6px 8px 2px">
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none"><div style="font-size:13px;line-height:1">K</div><div style="font-size:12px">♠</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px"><div style="font-size:13px;line-height:1">J</div><div style="font-size:12px">♠</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px"><div style="font-size:13px;line-height:1">4</div><div style="font-size:12px">♠</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-16px;color:#DCA9A2"><div style="font-size:13px;line-height:1">8</div><div style="font-size:12px">♥</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px;color:#DCA9A2"><div style="font-size:13px;line-height:1">2</div><div style="font-size:12px">♥</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-16px;color:#CFBC93"><div style="font-size:13px;line-height:1">A</div><div style="font-size:12px">♦</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px;color:#CFBC93"><div style="font-size:13px;line-height:1">Q</div><div style="font-size:12px">♦</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px;color:#CFBC93"><div style="font-size:13px;line-height:1">7</div><div style="font-size:12px">♦</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-16px;color:#9CC2B6"><div style="font-size:13px;line-height:1">K</div><div style="font-size:12px">♣</div></div>
+<div style="width:40px;height:58px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-22px;color:#9CC2B6"><div style="font-size:13px;line-height:1">8</div><div style="font-size:12px">♣</div></div>
+</div>
+<div style="text-align:center;font-size:10.5px;color:#6E6A62;padding:2px 0 6px;letter-spacing:.06em">spades are live — you must follow suit</div>
+<div style="margin:4px 12px 0;border:1px solid #141414;padding:2px"><div style="border:1px solid #141414;position:relative;height:230px">
+<div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px"><span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#6E6A62">N · DUMMY</span><div style="width:36px;height:52px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800"><div style="font-size:12px;line-height:1">4</div><div style="font-size:11px">♠</div></div></div>
+<div style="position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:3px"><span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#6E6A62">E</span><div style="width:36px;height:52px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800;color:#C22F21"><div style="font-size:12px;line-height:1">9</div><div style="font-size:11px">♥</div></div></div>
+<div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px"><div style="width:36px;height:52px;border:1.5px dashed #B9B4A9;border-radius:3px"></div><span style="font-size:10px;font-weight:800;letter-spacing:.12em">S · DECL — YOU</span></div>
+<div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:3px"><span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#6E6A62">W</span><div style="width:36px;height:52px;background:#fff;border:1px solid #B9B4A9;border-radius:3px;padding:2px 0 0 4px;font-weight:800;color:#C22F21"><div style="font-size:12px;line-height:1">Q</div><div style="font-size:11px">♥</div></div></div>
+<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+<div style="display:flex;gap:2px;justify-content:center"><div style="width:22px;height:32px;background:#141414;color:#fff;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;border-radius:2px">3</div><div style="width:22px;height:32px;background:#fff;border:1.5px solid #141414;color:#141414;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;border-radius:2px;box-sizing:border-box">1</div></div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#6E6A62;margin-top:4px">DECL · DEF<br>TRICK 5 OF 13</div>
+</div>
+</div></div>
+<div style="display:flex;justify-content:center;align-items:flex-end;padding:12px 8px 2px">
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none"><div style="font-size:15px;line-height:1">A</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:2px solid #141414;border-radius:4px;box-shadow:0 3px 6px rgba(0,0,0,.2);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;transform:translateY(-12px);box-sizing:border-box"><div style="font-size:15px;line-height:1">Q</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px"><div style="font-size:14px;line-height:1;letter-spacing:-.09em">10</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px"><div style="font-size:15px;line-height:1">6</div><div style="font-size:14px">♠</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#DCA9A2"><div style="font-size:15px;line-height:1">K</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#DCA9A2"><div style="font-size:15px;line-height:1">J</div><div style="font-size:14px">♥</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#CFBC93"><div style="font-size:15px;line-height:1">8</div><div style="font-size:14px">♦</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-20px;color:#9CC2B6"><div style="font-size:15px;line-height:1">Q</div><div style="font-size:14px">♣</div></div>
+<div style="width:46px;height:66px;background:#fff;border:1px solid #B9B4A9;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);padding:3px 0 0 5px;font-weight:800;flex:none;margin-left:-26px;color:#9CC2B6"><div style="font-size:15px;line-height:1">5</div><div style="font-size:14px">♣</div></div>
+</div>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;padding:8px 0 6px"><span style="font-size:11px;font-weight:700;letter-spacing:.14em">SOUTH — YOU · YOUR TURN</span><span style="background:#141414;color:#fff;font-weight:800;font-size:12px;padding:2px 9px;border-radius:3px">12 HCP</span></div>
+<div style="text-align:center;font-family:Besley,serif;font-style:italic;font-size:13px;color:#6E6A62;padding:0 0 16px">Q♠ selected — tap again to play</div>
+</div></div>
+
+<div class="dv-opt" id="1r"><div class="dv-olabel"><a class="dv-oid" href="#1r">1r</a>Phase C — result, with the four-hand deal diagram</div>
+<div class="dv-card" style="width:390px;background:#FCFBF8;font-family:Besley,serif;color:#141414">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #141414">
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font-weight:700;font-size:13.5px">Tournament #12</span><span style="font-size:12px;color:#6E6A62">Board 2/4</span></div>
+<div style="border:2px solid #141414;border-radius:5px;padding:2px 9px;transform:rotate(-4deg)"><span style="font-weight:800;font-size:11px;letter-spacing:.18em">SCORED</span></div>
+</div>
+<div style="text-align:center;padding:20px 16px 6px">
+<div style="font-weight:800;font-size:23px">4♠= by S</div>
+<div style="font-size:13.5px;color:#6E6A62;margin-top:2px">+620 for N–S · NS vul</div>
+<div style="display:flex;gap:4px;justify-content:center;margin-top:14px">
+<div style="width:38px;height:54px;background:#141414;color:#fff;font-weight:800;font-size:32px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">5<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:38px;height:54px;background:#141414;color:#fff;font-weight:800;font-size:32px;display:flex;align-items:center;justify-content:center;border-radius:3px;position:relative;overflow:hidden">8<div style="position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,255,255,.35)"></div></div>
+<div style="width:38px;height:54px;background:#fff;border:2px solid #141414;font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;border-radius:3px;box-sizing:border-box">%</div>
+</div>
+<div style="font-size:11px;font-weight:700;letter-spacing:.16em;color:#6E6A62;margin-top:8px">MATCHPOINTS · VS 3 OTHER PLAYERS · BIDDING 89%</div>
+</div>
+<div style="margin:14px 12px 0;border:1px solid #141414;background:#fff;position:relative;padding:12px 14px 12px 20px">
+<div style="position:absolute;left:7px;top:0;bottom:0;border-left:1.5px dashed #141414"></div>
+<div style="font-weight:700;font-size:11px;letter-spacing:.16em;color:#6E6A62;margin-bottom:8px">THE FIELD — BOARD 2</div>
+<div style="display:grid;grid-template-columns:1fr auto auto;gap:6px 14px;font-size:13px;font-variant-numeric:tabular-nums;align-items:center">
+<div>Alice</div><div style="color:#6E6A62">4♠+1 · +650</div><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:56px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:17%;background:#141414"></div></div><b>83</b></div>
+<div style="font-weight:800;background:#F1EFE9;margin:0 -6px;padding:2px 6px">You</div><div style="color:#6E6A62;background:#F1EFE9;margin:0 -14px;padding:2px 14px">4♠= · +620</div><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;background:#F1EFE9;margin:0 -6px;padding:2px 6px"><div style="width:56px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:42%;background:#141414"></div></div><b>58</b></div>
+<div>Bob</div><div style="color:#6E6A62">3♠+1 · +170</div><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:56px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:67%;background:#141414"></div></div><b>33</b></div>
+<div>Cara</div><div style="color:#6E6A62">4♠−1 · −100</div><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:56px;height:6px;background:#EDEBE4;position:relative"><div style="position:absolute;inset:0;right:92%;background:#141414"></div></div><b>8</b></div>
+</div>
+</div>
+<div style="margin:12px 12px 0;border:1px solid #141414;background:#fff;padding:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><span style="font-weight:700;font-size:11px;letter-spacing:.16em;color:#6E6A62">THE DEAL</span><span style="font-size:11px;color:#6E6A62">Dealer N · NS vul</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto;gap:4px;font-size:11.5px;line-height:1.55;font-variant-numeric:tabular-nums">
+<div></div>
+<div style="border:1px solid #D8D5CE;padding:6px 8px"><b style="font-size:10px;letter-spacing:.1em;color:#6E6A62">NORTH · DUMMY</b><br><span>♠ K J 4</span><br><span style="color:#C22F21">♥ 8 2</span><br><span style="color:#9E6A00">♦ A Q 7 4</span><br><span style="color:#00775A">♣ K 8 6 3</span></div>
+<div></div>
+<div style="border:1px solid #D8D5CE;padding:6px 8px"><b style="font-size:10px;letter-spacing:.1em;color:#6E6A62">WEST</b><br><span>♠ 8 3</span><br><span style="color:#C22F21">♥ Q 10 7 5</span><br><span style="color:#9E6A00">♦ K J 9</span><br><span style="color:#00775A">♣ J 10 7 2</span></div>
+<div style="display:flex;align-items:center;justify-content:center"><svg width="48" height="48" viewBox="0 0 48 48"><line x1="24" y1="14" x2="24" y2="34" stroke="#D8D5CE" stroke-width="1.5"></line><line x1="14" y1="24" x2="34" y2="24" stroke="#D8D5CE" stroke-width="1.5"></line><text x="24" y="10" text-anchor="middle" font-family="Besley,serif" font-weight="700" font-size="10" fill="#141414">N</text><text x="24" y="45" text-anchor="middle" font-family="Besley,serif" font-size="10" fill="#6E6A62">S</text><text x="7" y="27.5" text-anchor="middle" font-family="Besley,serif" font-size="10" fill="#6E6A62">W</text><text x="41" y="27.5" text-anchor="middle" font-family="Besley,serif" font-size="10" fill="#6E6A62">E</text></svg></div>
+<div style="border:1px solid #D8D5CE;padding:6px 8px"><b style="font-size:10px;letter-spacing:.1em;color:#6E6A62">EAST</b><br><span>♠ 9 7 5 2</span><br><span style="color:#C22F21">♥ A 9 4</span><br><span style="color:#9E6A00">♦ 10 6 5 3</span><br><span style="color:#00775A">♣ A 4</span></div>
+<div></div>
+<div style="border:1.5px solid #141414;padding:6px 8px"><b style="font-size:10px;letter-spacing:.1em">SOUTH · YOU</b><br><span>♠ A Q 10 6</span><br><span style="color:#C22F21">♥ K J 6 3</span><br><span style="color:#9E6A00">♦ 8 2</span><br><span style="color:#00775A">♣ Q 9 5</span></div>
+<div></div>
+</div>
+</div>
+<div style="margin:12px 12px 0;border:1px solid #141414;background:#fff;padding:14px">
+<div style="font-weight:700;font-size:11px;letter-spacing:.16em;color:#6E6A62;margin-bottom:8px">YOUR BIDDING</div>
+<div style="display:flex;flex-direction:column;gap:7px;font-size:13px">
+<div style="display:flex;align-items:baseline;gap:10px"><b style="min-width:38px">1<span style="color:#C22F21">♥</span></b><span style="letter-spacing:2px">★★★</span><span>Excellent</span></div>
+<div style="display:flex;align-items:baseline;gap:10px"><b style="min-width:38px">2<span style="color:#C22F21">♥</span></b><span style="letter-spacing:2px">★★<span style="color:#D8D5CE">★</span></span><span>Good — AI preferred 3<span style="color:#C22F21">♥</span></span></div>
+<div style="display:flex;align-items:baseline;gap:10px"><b style="min-width:38px">4♠</b><span style="letter-spacing:2px">★★★</span><span>Excellent — the AI's choice too</span></div>
+</div>
+</div>
+<div style="padding:14px 12px 18px;display:flex;flex-direction:column;gap:8px">
+<div style="background:#141414;color:#fff;text-align:center;font-weight:800;font-size:16px;letter-spacing:.06em;padding:14px;border-radius:2px">NEXT BOARD — 3 OF 4 →</div>
+<div style="border:1px solid #141414;text-align:center;font-weight:700;font-size:13px;padding:11px;border-radius:2px">Back to lobby</div>
+</div>
+</div></div>
+</div>
+
+<p class="dv-next">Try next: "redo the Board with <a class="dv-oid" href="#1i">1i</a>" · "show the flip case and grade toast for <a class="dv-oid" href="#1q">1q</a>" · "build the remaining six screens with <a class="dv-oid" href="#1d">1d</a>" · "iterate marks in Nickel Bridge Brand"</p>
+</section>
+</x-dc>
+</body>
+</html>

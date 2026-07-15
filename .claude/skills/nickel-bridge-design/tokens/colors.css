@@ -1,0 +1,22 @@
+:root{
+  /* base */
+  --ink:#141414; --paper:#FCFBF8; --panel:#FFFFFF;
+  --surface:#F1EFE9; --surface-line:#D8D5CE;
+  --line:#D8D5CE; --line-quiet:#E4E1D8; --line-dashed:#B9B4A9;
+  --muted:#6E6A62;
+  --verdigris:#6F8F68;
+  --chart-track:#EDEBE4;
+  /* suit signal triad — matched lightness/chroma in oklch */
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  /* semantic */
+  --text-body:var(--ink); --text-muted:var(--muted);
+  --surface-page:var(--paper); --surface-card:var(--panel); --surface-inset:var(--surface);
+  --accent:#C22F21; --positive:#00775A; --negative:#C22F21;
+  --border-structural:1px solid var(--ink);
+  --border-quiet:1px solid var(--line);
+  --border-hairline:1px solid var(--line-quiet);
+  --border-sealed:1px dashed var(--line-dashed);
+  --btn-primary-bg:var(--ink); --btn-primary-fg:#FFFFFF;
+  --card-shadow:0 1px 2px rgba(0,0,0,.14);
+  --ticket-shadow:3px 3px 0 rgba(20,20,20,.12);
+}

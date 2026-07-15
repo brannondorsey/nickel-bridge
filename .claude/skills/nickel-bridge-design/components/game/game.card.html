@@ -1,0 +1,27 @@
+<!-- @dsCard group="Components" viewport="700x220" subtitle="Playing cards, fans, and call grades" name="Game pieces" -->
+<link rel="stylesheet" href="../../styles.css">
+<script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;background:#fff;padding:18px 22px}</style>
+<div id="root"></div>
+<script type="text/babel">
+const NS = window.NickelBridge || window.DS || {};
+const { PlayingCard, StarGrade } = NS;
+const fan = [['A','S'],['Q','S',true],['10','S'],['K','H'],['J','H'],['8','D'],['Q','C']];
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <div style={{display:'flex',flexDirection:'column',gap:16}}>
+    <div style={{display:'flex',alignItems:'flex-end',paddingTop:14}}>
+      {fan.map(([r,s,sel],i)=><PlayingCard key={i} rank={r} suit={s} selected={!!sel} style={{marginLeft:i===0?0:(['K','8','Q'].includes(r)&&!sel?-20:-26)}}/>)}
+      <PlayingCard placeholder style={{marginLeft:18}}/>
+      <PlayingCard rank="9" suit="H" dimmed style={{marginLeft:12}}/>
+    </div>
+    <div style={{display:'flex',gap:20,alignItems:'baseline',fontFamily:'var(--font-body)',fontSize:14}}>
+      <span><StarGrade stars={3}/> Excellent</span>
+      <span><StarGrade stars={2}/> Good</span>
+      <span><StarGrade stars={1}/> Poor</span>
+    </div>
+  </div>
+);
+</script>
