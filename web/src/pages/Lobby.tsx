@@ -102,8 +102,9 @@ export default function Lobby() {
 
           {current ? (
             <div className="home-gate">
+              {/* placement is scored, not sequential — the next tourney's number is unknowable */}
               <BoardTicketRow
-                no={Number(tourneyNo(current)) + 1 || '?'}
+                no="?"
                 state="sealed"
                 counterLabel="TOURNEY"
                 main={`Opens when you finish #${tourneyNo(current)} — one crossing at a time`}

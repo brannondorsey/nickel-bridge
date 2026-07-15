@@ -156,7 +156,7 @@ describe('tournament lifecycle over the API', () => {
 
   it('resumes an unfinished tournament before joining/creating others', async () => {
     const b = await bob.post('/api/play');
-    expect(b.tournamentId).toBe(tid); // joins the fullest tournament
+    expect(b.tournamentId).toBe(tid); // grace window: young + under-filled → force-joined
     await playBoard(bob, tid, 1);
     const again = await bob.post('/api/play');
     expect(again).toEqual({ tournamentId: tid, boardNo: 2 }); // resumes, not a new one

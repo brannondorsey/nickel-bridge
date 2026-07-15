@@ -84,7 +84,8 @@ assert(a.tournamentId > 0 && a.boardNo === 1, `Alice placed in tournament ${a.to
 const aliceBoards = [];
 for (let no = 1; no <= 4; no++) aliceBoards.push(await playBoard(alice, a.tournamentId, no));
 
-// Bob: JIT must place him in Alice's tournament (most plays), not a new one
+// Bob: the grace window must funnel him into Alice's young, under-filled
+// tournament, not a new one
 const b = await bob.post('/api/play');
 assert(b.tournamentId === a.tournamentId, `Bob JIT-placed into Alice's tournament (${b.tournamentId})`);
 
@@ -119,7 +120,8 @@ assert(
   'both players rated immediately after completion',
 );
 
-// a third player can still join the same tournament later (tournaments never close)
+// a third player still lands in the same tournament (grace window, then
+// popularity × recency scoring — tournaments never close)
 const carol = new Client('carol');
 await carol.post('/auth/dev', { name: 'Carol E2E' });
 await carol.post('/api/handle', { handle: 'Carol E2E' });

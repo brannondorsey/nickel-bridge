@@ -13,11 +13,23 @@ const stmtMyUnfinished = db.prepare(
      AND (SELECT COUNT(*) FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ? AND b.state = 'done') < ?
    ORDER BY t.created_at LIMIT 1`,
 );
-const stmtJoinable = db.prepare(
-  `SELECT t.*, (SELECT COUNT(*) FROM boards b WHERE b.tournament_id = t.id AND b.state = 'done') AS plays
+// Every tournament the user has never touched, created within the backlog
+// window, with distinct-finisher and distinct-starter counts. One query feeds
+// both the grace tier and the scoring tier of chooseTournament(). The LEFT
+// JOIN keeps zero-board tournaments (they are grace targets with starters = 0);
+// COUNT(DISTINCT CASE ...) yields 0, not NULL, when nobody has finished.
+// Tournaments older than the window are "archived": never candidates, but the
+// resume tier below is window-free and boards create lazily on GET, so they
+// stay resumable and completable via direct URL.
+const stmtCandidates = db.prepare(
+  `SELECT t.*,
+          COUNT(DISTINCT CASE WHEN b.state = 'done' THEN b.user_id END) AS done_players,
+          COUNT(DISTINCT b.user_id) AS starters
    FROM tournaments t
-   WHERE NOT EXISTS (SELECT 1 FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ?)
-   ORDER BY plays DESC, t.created_at ASC LIMIT 1`,
+   LEFT JOIN boards b ON b.tournament_id = t.id
+   WHERE t.created_at > ?
+     AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
+   GROUP BY t.id`,
 );
 const stmtCreateTournament = db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, ?) RETURNING *`);
 const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
@@ -125,15 +137,111 @@ export const recomputeElo = db.transaction(() => {
 });
 
 /**
- * Just-in-time placement:
- *  1. resume a tournament the user has started but not finished,
- *  2. else join the tournament with the most completed plays (maximizing the
- *     comparison field),
- *  3. else create a fresh one.
+ * Placement tuning. Ages and windows are in seconds (created_at is unixepoch
+ * seconds). These are playtest knobs, deliberately kept in one place: TAU_S
+ * is the knob to shrink once the group grows beyond a handful of daily
+ * players; the threshold is derived from the scoring function itself rather
+ * than being a separate constant.
  */
-export function placeUser(userId: number): { tournament: TournamentRow; nextBoard: number } {
+export const PLACEMENT = {
+  /** Decay time constant: how fast a tournament's appeal fades with age. */
+  TAU_S: 30 * 86400,
+  /** Newly created tournaments are force-served for up to this long... */
+  GRACE_TTL_S: 48 * 3600,
+  /** ...until they have this many distinct starters (creator + 3 friends). */
+  GRACE_CAP: 4,
+  /** Only tournaments created within this window are placement candidates. */
+  BACKLOG_WINDOW_S: 30 * 86400,
+  /** Weighted-sample among candidates within this fraction of the top score. */
+  SAMPLE_RATIO: 0.8,
+  /** Threshold: what a brand-new tournament would score (1 finisher, age 0). */
+  NEW_TOURNAMENT_SCORE: Math.LN2,
+};
+
+export interface PlacementCandidate extends TournamentRow {
+  /** Distinct users with >= 1 done board — the comparison-field proxy. */
+  done_players: number;
+  /** Distinct users with any board row — grace-window occupancy. */
+  starters: number;
+}
+
+/** Popularity × recency: log(1 + distinct finishers) · e^(−age/τ). */
+export function tournamentScore(donePlayers: number, ageSec: number): number {
+  return Math.log(1 + donePlayers) * Math.exp(-Math.max(0, ageSec) / PLACEMENT.TAU_S);
+}
+
+/**
+ * Pick the tournament to serve, or null to create a new one.
+ *
+ * Grace tier: force-join the oldest young (< GRACE_TTL_S), under-filled
+ * (< GRACE_CAP starters) tournament. Fresh tournaments collect their first few
+ * players before entering normal scoring instead of dying as 1-player
+ * orphans, and two friends who both return after a long absence land on the
+ * same deals (first returner creates, second is grace-served into it). Grace
+ * slots are occupied by board rows, not placements — boards deal lazily on
+ * GET, so several players placed before any of them opens a board can all be
+ * graced into the same tournament. Harmless at friends scale.
+ *
+ * Scoring tier: if the best candidate beats what a brand-new tournament would
+ * score (ln 2 — one finisher at age 0), weighted-sample among the candidates
+ * within SAMPLE_RATIO of the top (floored at ln 2) so simultaneous arrivals
+ * spread across near-equivalent boards instead of piling onto one. Otherwise
+ * create. Corollary: outside grace, a candidate needs ≥ 2 distinct finishers
+ * to be joined — a lone finisher's score ln 2 · e^(−age/τ) sits below the
+ * threshold at any age > 0, deliberately: past its grace window, a 1-player
+ * tournament is not worth joining over a fresh board.
+ */
+export function chooseTournament(
+  candidates: PlacementCandidate[],
+  nowSec: number,
+  rng: () => number,
+): PlacementCandidate | null {
+  const grace = candidates
+    .filter((c) => nowSec - c.created_at < PLACEMENT.GRACE_TTL_S && c.starters < PLACEMENT.GRACE_CAP)
+    .sort((a, b) => a.created_at - b.created_at || a.id - b.id);
+  if (grace.length) return grace[0];
+
+  const scored = candidates.map((c) => ({ c, score: tournamentScore(c.done_players, nowSec - c.created_at) }));
+  const top = scored.reduce((m, x) => Math.max(m, x.score), 0);
+  if (top < PLACEMENT.NEW_TOURNAMENT_SCORE) return null;
+
+  const floor = Math.max(PLACEMENT.SAMPLE_RATIO * top, PLACEMENT.NEW_TOURNAMENT_SCORE);
+  const pool = scored
+    .filter((x) => x.score >= floor)
+    .sort((a, b) => b.score - a.score || a.c.created_at - b.c.created_at || a.c.id - b.c.id);
+  let r = rng() * pool.reduce((s, x) => s + x.score, 0);
+  for (const x of pool) {
+    r -= x.score;
+    if (r < 0) return x.c;
+  }
+  return pool[pool.length - 1].c; // float-drift safety
+}
+
+/**
+ * Just-in-time placement:
+ *  1. resume a tournament the user has started but not finished (window-free:
+ *     your own unfinished tournaments never expire on you),
+ *  2. else serve a candidate from the backlog window via chooseTournament()
+ *     (grace force-join, then popularity × recency scoring with weighted
+ *     sampling near the top),
+ *  3. else create a fresh one — which the grace tier then fills with the next
+ *     few requesters.
+ *
+ * `nowSec`/`rng` are injectable for tests; production uses the real clock and
+ * Math.random. Selection randomness does not touch the robot-determinism
+ * invariant (deals derive from the tournament seed, not from placement).
+ */
+export function placeUser(
+  userId: number,
+  opts: { nowSec?: number; rng?: () => number } = {},
+): { tournament: TournamentRow; nextBoard: number } {
+  const nowSec = opts.nowSec ?? Math.floor(Date.now() / 1000);
+  const rng = opts.rng ?? Math.random;
   let t = stmtMyUnfinished.get(userId, userId, BOARDS_PER_TOURNAMENT) as TournamentRow | undefined;
-  if (!t) t = stmtJoinable.get(userId) as TournamentRow | undefined;
+  if (!t) {
+    const candidates = stmtCandidates.all(nowSec - PLACEMENT.BACKLOG_WINDOW_S, userId) as PlacementCandidate[];
+    t = chooseTournament(candidates, nowSec, rng) ?? undefined;
+  }
   if (!t) {
     t = stmtCreateTournament.get('Tournament', randomBytes(16).toString('hex')) as TournamentRow;
     stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
