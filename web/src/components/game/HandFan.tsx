@@ -1,4 +1,5 @@
 import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit } from '../../api';
+import { capturePlayOrigin } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
 /**
@@ -32,7 +33,16 @@ export function HandFan({
             type="button"
             className={`cardbtn${selected === c ? ' selected' : ''}${newSuit ? ' suitgap' : ''}`}
             disabled={!playable}
-            onClick={playable ? () => onSelect!(c) : undefined}
+            onClick={
+              playable
+                ? (e) => {
+                    // second tap plays: remember where the card left the fan
+                    // so TrickArea can glide it into the trick slot from here
+                    if (selected === c) capturePlayOrigin(c, e.currentTarget.getBoundingClientRect());
+                    onSelect!(c);
+                  }
+                : undefined
+            }
             aria-label={`${RANK_CHARS[cardRank(c)]} of ${SUIT_SYMBOLS[cardSuit(c)]}`}
           >
             <PlayingCard card={c} small={small} dimmed={interactive && !playable} selected={selected === c} />

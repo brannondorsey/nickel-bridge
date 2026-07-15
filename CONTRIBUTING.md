@@ -105,7 +105,11 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 `advanceRobots` loops, applying deterministic robot bids/plays until it's the human's turn or
 the board ends → state saved to SQLite → if the board completed, `recomputeElo()` →
 response is `boardView`, which **redacts hidden hands** (dummy only after the opening lead).
-Never return raw board state to the client.
+Never return raw board state to the client. Because one response can carry a whole burst of
+robot plays, the client doesn't apply it in one jump: `web/src/components/game/playAnim.ts`
+stages the transition into timed snapshots (card-by-card glides, trick collect, tally stamp)
+that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
+so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
