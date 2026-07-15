@@ -23,6 +23,7 @@ import {
   playState,
   remainingCards,
   REDOUBLE,
+  scoreBreakdown,
   trickWinner,
   Contract,
   Seat,
@@ -302,6 +303,63 @@ describe('scoring', () => {
         `${level}${'♣♦♥♠N'[strain]}${rdbl ? 'XX' : dbl ? 'X' : ''} ${vul ? 'vul' : 'nv'} taking ${tricks}`,
       ).toBe(expected);
     }
+  });
+
+  it('scoreBreakdown lines sum to contractScore for every contract', () => {
+    // Exhaustive: every level/strain/doubling/vulnerability/trick count.
+    for (let level = 1; level <= 7; level++) {
+      for (let strain = 0; strain <= 4; strain++) {
+        for (const [dbl, rdbl] of [[false, false], [true, false], [false, true]] as const) {
+          for (const vul of [NONE, BOTH]) {
+            for (let tricks = 0; tricks <= 13; tricks++) {
+              const c = contract(level, strain, 2, dbl, rdbl);
+              const b = scoreBreakdown(c, vul, tricks);
+              const label = `${level}${'♣♦♥♠N'[strain]}${rdbl ? 'XX' : dbl ? 'X' : ''} taking ${tricks}`;
+              expect(b.total, label).toBe(contractScore(c, vul, tricks));
+              expect(b.lines.reduce((s, l) => s + l.amount, 0), label).toBe(b.total);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('scoreBreakdown itemizes the components', () => {
+    // 4♠= vul: odd tricks 120 + game bonus 500
+    const made = scoreBreakdown(contract(4, 3, 2), BOTH, 10);
+    expect(made.lines.map((l) => [l.kind, l.amount])).toEqual([
+      ['odd-tricks', 120],
+      ['game-bonus', 500],
+    ]);
+    expect(made.lines[0].detail).toBe('4 × 30');
+    expect(made.vulnerable).toBe(true);
+
+    // 3NTX+1 vul: (3×30+10)×2 = 200, game 500, insult 50, overtrick 200
+    const dbl = scoreBreakdown(contract(3, 4, 2, true), BOTH, 10);
+    expect(dbl.lines.map((l) => [l.kind, l.amount])).toEqual([
+      ['odd-tricks', 200],
+      ['game-bonus', 500],
+      ['insult-bonus', 50],
+      ['overtricks', 200],
+    ]);
+    expect(dbl.lines[0].detail).toBe('(3 × 30 + 10) × 2');
+
+    // 6NT= vul: slam bonus present, partscore absent
+    const slam = scoreBreakdown(contract(6, 4, 2), BOTH, 12);
+    expect(slam.lines.map((l) => l.kind)).toEqual(['odd-tricks', 'game-bonus', 'slam-bonus']);
+
+    // 2♥= nv partscore
+    const part = scoreBreakdown(contract(2, 2, 2), NONE, 8);
+    expect(part.lines.map((l) => [l.kind, l.amount])).toEqual([
+      ['odd-tricks', 60],
+      ['partscore-bonus', 50],
+    ]);
+
+    // 3NTX−4 nv: single penalty line with the compressed progression
+    const down = scoreBreakdown(contract(3, 4, 2, true), NONE, 5);
+    expect(down.lines).toEqual([
+      { kind: 'undertricks', label: 'Down 4', detail: '100 + 2 × 200 + 300, doubled not vulnerable', amount: -800 },
+    ]);
   });
 
   it('boardScoreNS flips for EW declarers', () => {

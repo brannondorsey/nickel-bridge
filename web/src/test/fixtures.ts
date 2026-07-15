@@ -254,6 +254,14 @@ export const boardDone: BoardView = {
     scoreNS: 620,
     pct: 58,
     bidAccuracy: 89,
+    breakdown: {
+      lines: [
+        { kind: 'odd-tricks', label: 'Odd tricks', detail: '4 × 30', amount: 120 },
+        { kind: 'game-bonus', label: 'Game bonus', detail: 'vulnerable', amount: 500 },
+      ],
+      vulnerable: true,
+      total: 620,
+    },
     field: [
       { userId: 7, handle: 'Alice', contract: '4♠+1 by S', scoreNS: 650, pct: 83, isMe: false },
       { userId: 1, handle: 'Margaret', contract: '4♠ by S', scoreNS: 620, pct: 58, isMe: true },
@@ -265,7 +273,18 @@ export const boardDone: BoardView = {
 
 export const boardDoneLow: BoardView = {
   ...boardDone,
-  result: { ...boardDone.result!, pct: 33, scoreNS: -100, contractLabel: '4♠-1 by S', tricksDeclarer: 9 },
+  result: {
+    ...boardDone.result!,
+    pct: 33,
+    scoreNS: -100,
+    contractLabel: '4♠-1 by S',
+    tricksDeclarer: 9,
+    breakdown: {
+      lines: [{ kind: 'undertricks', label: 'Down one', detail: '100, vulnerable', amount: -100 }],
+      vulnerable: true,
+      total: -100,
+    },
+  },
 };
 
 // ---- tournaments ----

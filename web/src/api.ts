@@ -52,6 +52,21 @@ export interface FieldEntry {
   isMe: boolean;
 }
 
+/** One line of the duplicate-scoring receipt (mirror of @bridge/core ScoreLine). */
+export interface ScoreLine {
+  kind: 'odd-tricks' | 'overtricks' | 'undertricks' | 'game-bonus' | 'partscore-bonus' | 'slam-bonus' | 'insult-bonus';
+  label: string;
+  detail: string;
+  /** Signed, from the DECLARING side's perspective. */
+  amount: number;
+}
+
+export interface ScoreBreakdown {
+  lines: ScoreLine[];
+  vulnerable: boolean;
+  total: number;
+}
+
 export interface BoardResult {
   contractLabel: string;
   tricksDeclarer: number | null;
@@ -59,6 +74,8 @@ export interface BoardResult {
   pct: number;
   field: FieldEntry[];
   bidAccuracy: number | null;
+  /** Itemized scoring for the toll receipt; null on a pass-out. */
+  breakdown: ScoreBreakdown | null;
 }
 
 export interface BoardView {

@@ -24,6 +24,7 @@ import {
   matchpoints,
   partnerOf,
   playState,
+  scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
 import { recomputeElo } from './tournaments.js';
@@ -305,6 +306,11 @@ export function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number):
     pct: mine?.pct ?? 50,
     field: field.sort((a, b2) => b2.scoreNS - a.scoreNS),
     bidAccuracy: bidAccuracy(b.bidEvals),
+    // itemized duplicate scoring for the toll-receipt screen; null on a pass-out
+    breakdown:
+      b.contract && b.row.tricks_declarer != null
+        ? scoreBreakdown(b.contract, b.deal.vul, b.row.tricks_declarer)
+        : null,
   };
 }
 

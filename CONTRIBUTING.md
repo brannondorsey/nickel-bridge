@@ -45,7 +45,8 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page),
                 components/ds/ (design-system pieces) + components/game/ (auction, bid box,
-                fans, trick area, deal diagram), src/test/ (fixtures + apiMock pattern),
+                fans, trick area, deal diagram, toll-receipt score breakdown),
+                src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
@@ -163,8 +164,9 @@ module-level constants next to the functions that use them. Match that style.
    encoding or model weights change, and requires a Python venv with pinned jax — see the
    docstring in `tools/gen_fixtures.py`.
 3. **New SAYC convention ⇒ new spec-table row** in `packages/core/test/sayc.test.ts`.
-4. **`packages/core` stays dependency-free and I/O-free** — pure rules that both server and
-   web import.
+4. **`packages/core` stays dependency-free and I/O-free** — pure rules. The server imports
+   it; the web bundle deliberately does not (it mirrors the few helpers it needs in
+   `web/src/api.ts` and receives anything score-shaped pre-computed from the server).
 5. **`DEV_AUTH=1` must never be set in production** — it's unauthenticated login.
 
 ## Code style

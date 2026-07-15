@@ -117,6 +117,13 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.fieldtable')).toBeVisible();
   await expect(page.locator('.deal-diagram')).toBeVisible();
   await expect(page.locator('.board-actions .ds-btn').first()).toContainText(/NEXT BOARD|TOURNAMENT/);
+
+  // toll receipt: reopens from the result, itemizes the score, returns to the field
+  await page.click('.receipt-link');
+  await expect(page.locator('.receipt-panel')).toBeVisible();
+  await expect(page.locator('.receipt-total').first()).toContainText(/Toll (collected|refused)|Passed out/);
+  await page.click('text=SEE THE FIELD');
+  await expect(page.locator('.fieldtable')).toBeVisible();
 });
 
 /** Stats page wiring: bottom tab → own page, rankings row → other pages. */

@@ -115,6 +115,14 @@ await page.goto(`${base}/t/${tid}/b/1`);
 await page.waitForSelector('.result');
 await shot('11-board-result', true);
 
+// 11b — the toll receipt (reopened from the result; rows print in on a timer)
+await page.click('.receipt-link');
+await page.waitForSelector('.receipt-panel');
+await page.waitForTimeout(2600);
+await shot('11b-toll-receipt', true);
+await page.click('text=SEE THE FIELD');
+await page.waitForSelector('.fieldtable');
+
 // 12/13 — tournament result + reviewable sheet
 await page.goto(`${base}/t/${tid}`);
 await page.waitForSelector('.tourney-result-hero');
