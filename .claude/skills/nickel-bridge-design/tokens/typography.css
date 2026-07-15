@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Poiret+One&family=Crimson+Pro:wght@400;600&family=Besley:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Josefin+Sans:wght@400;600&display=swap');
+:root{
+  --font-display:'Poiret One',cursive;        /* wordmark ONLY */
+  --font-body:'Crimson Pro',serif;            /* body, titles, greetings */
+  --font-label:'Besley',serif;                /* tracked-caps labels, numerals, buttons, ticket text */
+  --font-stamp:'Josefin Sans',sans-serif;     /* ink stamps + postmark ONLY */
+  /* scale (Crimson runs small — bumped +1, weight 600 for UI text) */
+  --text-wordmark:17px;      /* Poiret One, letter-spacing .14em */
+  --text-title:21px;         /* Crimson 600 */
+  --text-heading:17px;       /* Crimson 600 */
+  --text-body-size:16px;     /* Crimson 400, lh 1.5 */
+  --text-caption:13.5px;     /* Crimson 400, --muted */
+  --text-label:10px;         /* Besley 700, letter-spacing .2em, caps, --muted */
+  --track-wordmark:.14em; --track-label:.2em; --track-wide:.3em;
+}
+body{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);margin:0}
+a{color:var(--ink)} a:hover{color:var(--accent)}

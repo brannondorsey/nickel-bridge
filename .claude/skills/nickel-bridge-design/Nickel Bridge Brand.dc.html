@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Limelight&family=Poiret+One&family=Josefin+Sans:wght@400;600&family=Besley:ital,wght@0,400;0,600;0,800;1,400&family=Crimson+Pro:wght@400;600&family=Old+Standard+TT:wght@400;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}a{color:#141414}a:hover{color:#C22F21}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}.dv-group{display:block;width:100%;font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;color:rgba(0,0,0,.45);padding:26px 0 12px}@keyframes gatearm{0%,15%{transform:rotate(0deg)}45%,70%{transform:rotate(-58deg)}100%{transform:rotate(0deg)}}
+@keyframes nbWordIn{from{opacity:0;letter-spacing:.34em}to{opacity:1;letter-spacing:.16em}}
+@keyframes nbSubIn{from{opacity:0}to{opacity:1}}
+@keyframes nbBridgeRise{from{transform:translateY(150px)}to{transform:translateY(0)}}
+@keyframes nbSplashOut{to{opacity:0;transform:translateY(-26px)}}
+@keyframes nbBridgeOut{to{transform:translateY(170px)}}
+@keyframes nbHomeIn{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}</style>
+</helmet>
+<section class="dv-turn" id="t7">
+<div class="dv-thd"><a class="dv-tid" href="#t7">7</a><span class="dv-tname">Intro animation — splash (<a class="dv-oid" href="#6c">6c</a>) pays the toll, crosses into Home</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="7a"><div class="dv-olabel"><a class="dv-oid" href="#7a">7a</a>Sequence: bridge rises → splash lifts, Home arrives</div>
+<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+<div class="dv-card" ref="{{ stageRef }}" style="width:390px;height:620px;background:#FCFBF8;position:relative;overflow:hidden">
+
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding-bottom:130px;animation:nbSplashOut .55s ease-in 2.1s forwards">
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:32px;letter-spacing:.16em;color:#141414;animation:nbWordIn .9s ease-out both">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:6px;animation:nbSubIn .6s ease-out .5s both">DUPLICATE · SAYC</div>
+</div>
+<div style="width:280px;background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px;animation:nbSubIn .6s ease-out .8s both">PLAY THE TOLL →</div>
+</div>
+
+<div style="position:absolute;bottom:0;left:0;width:390px;height:146px;animation:nbBridgeRise .9s cubic-bezier(.2,.7,.2,1) both, nbBridgeOut .6s ease-in 2.1s forwards">
+<svg width="390" height="146" viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice" style="display:block">
+<g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"></line><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"></line></g>
+<g stroke="#6F8F68" fill="none">
+<path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"></path>
+<path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"></path>
+<line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"></line><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"></line><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"></line><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"></line><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"></line>
+<line x1="40" y1="30" x2="40" y2="85" stroke-width="2"></line><line x1="120" y1="30" x2="120" y2="85" stroke-width="2"></line><line x1="200" y1="30" x2="200" y2="85" stroke-width="2"></line><line x1="280" y1="30" x2="280" y2="85" stroke-width="2"></line><line x1="360" y1="30" x2="360" y2="85" stroke-width="2"></line><line x1="440" y1="30" x2="440" y2="85" stroke-width="2"></line><line x1="520" y1="30" x2="520" y2="85" stroke-width="2"></line><line x1="600" y1="30" x2="600" y2="85" stroke-width="2"></line>
+</g>
+<g stroke="#6F8F68" stroke-width="1.2" fill="none">
+<line x1="80" y1="30" x2="120" y2="85"></line><line x1="120" y1="30" x2="160" y2="78"></line><line x1="240" y1="30" x2="200" y2="85"></line><line x1="200" y1="30" x2="160" y2="78"></line>
+<line x1="240" y1="30" x2="280" y2="85"></line><line x1="280" y1="30" x2="320" y2="78"></line><line x1="400" y1="30" x2="360" y2="85"></line><line x1="360" y1="30" x2="320" y2="78"></line>
+<line x1="400" y1="30" x2="440" y2="85"></line><line x1="440" y1="30" x2="480" y2="78"></line><line x1="560" y1="30" x2="520" y2="85"></line><line x1="520" y1="30" x2="480" y2="78"></line>
+<line x1="80" y1="30" x2="40" y2="85"></line><line x1="40" y1="30" x2="0" y2="78"></line><line x1="560" y1="30" x2="600" y2="85"></line><line x1="600" y1="30" x2="640" y2="78"></line>
+</g>
+<rect x="0" y="178" width="640" height="62" fill="#5E4B33"></rect>
+<g fill="#4E3E2B"><rect x="70" y="178" width="20" height="26"></rect><rect x="230" y="178" width="20" height="26"></rect><rect x="390" y="178" width="20" height="26"></rect><rect x="550" y="178" width="20" height="26"></rect></g>
+<g stroke="#745E41" stroke-width="1.5"><line x1="30" y1="212" x2="130" y2="212"></line><line x1="300" y1="220" x2="420" y2="220"></line><line x1="490" y1="208" x2="600" y2="208"></line><line x1="150" y1="228" x2="250" y2="228"></line></g>
+<g fill="#EDE8DC" stroke="#CBC3B0" stroke-width="1.5"><path d="M68 104 L92 104 L96 180 L64 180 Z"></path><path d="M228 104 L252 104 L256 180 L224 180 Z"></path><path d="M388 104 L412 104 L416 180 L384 180 Z"></path><path d="M548 104 L572 104 L576 180 L544 180 Z"></path></g>
+<g fill="#8D8272"><path d="M14 188 q8 -16 28 -13 q18 3 21 14 q-3 9 -24 9 q-20 0 -25 -10 Z"></path><path d="M130 192 q10 -18 32 -14 q16 3 19 13 q-4 9 -25 9 q-21 0 -26 -8 Z"></path><path d="M300 194 q7 -14 24 -12 q15 2 18 12 q-3 8 -21 8 q-17 0 -21 -8 Z"></path><path d="M462 190 q9 -16 28 -13 q16 3 19 13 q-3 9 -23 9 q-19 0 -24 -9 Z"></path><path d="M602 192 q7 -13 22 -11 q12 2 15 11 q-3 8 -18 8 q-15 0 -19 -8 Z"></path></g>
+<g fill="#6E6455"><path d="M182 196 q6 -11 18 -9 q10 2 12 9 q-2 7 -15 7 q-13 0 -15 -7 Z"></path><path d="M356 198 q5 -10 16 -8 q9 2 11 8 q-2 6 -13 6 q-11 0 -14 -6 Z"></path><path d="M540 198 q5 -9 15 -8 q8 1 10 8 q-2 6 -12 6 q-10 0 -13 -6 Z"></path></g>
+</svg>
+</div>
+
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;animation:nbHomeIn .7s cubic-bezier(.2,.7,.2,1) 2.45s both">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #141414">
+<div style="display:flex;align-items:center;gap:9px">
+<svg width="26" height="20" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"></line><path d="M8 112 Q80 38 152 112" stroke-width="10"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"></line></g></svg>
+<span style="font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em;color:#141414">NICKEL BRIDGE</span>
+</div>
+<span style="font-family:Besley,serif;font-size:8.5px;letter-spacing:.3em;color:#6E6A62">DUPLICATE · SAYC</span>
+</div>
+<div style="padding:20px 16px 0">
+<div style="font-family:'Crimson Pro',serif;font-weight:600;font-size:21px;color:#141414">Good evening, Margaret</div>
+<div style="font-family:'Crimson Pro',serif;font-size:14.5px;color:#6E6A62;margin-top:2px">The bridge is open.</div>
+</div>
+<div style="margin:16px 16px 0;background:#F1EFE9;border:1px solid #D8D5CE;padding:16px 14px;display:flex;flex-direction:column;gap:12px">
+<svg width="164" height="58" viewBox="0 0 184 66"><rect x="2" y="2" width="180" height="62" fill="#fff" stroke="#141414" stroke-width="3"></rect><line x1="126" y1="2" x2="126" y2="64" stroke="#141414" stroke-width="2" stroke-dasharray="3 5"></line><text x="16" y="26" font-family="Besley,serif" font-weight="700" font-size="11" letter-spacing="3" fill="#141414">BOARD</text><text x="16" y="52" font-family="Besley,serif" font-weight="800" font-size="24" fill="#141414">No. 1 of 4</text><text x="146" y="14" font-family="Besley,serif" font-weight="700" font-size="10" letter-spacing="2" fill="#141414" transform="rotate(90 146 14)">ADMIT ONE</text></svg>
+<div style="font-family:'Crimson Pro',serif;font-size:15px;color:#141414">Tournament #12 · tonight 7:30 · 12 pairs</div>
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:14.5px;letter-spacing:.06em;padding:12px;border-radius:2px">PLAY THE TOLL →</div>
+</div>
+<div style="padding:20px 16px 0">
+<div style="font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;color:#6E6A62">YESTERDAY'S CROSSINGS</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #E4E1D8"><span style="font-family:'Crimson Pro',serif;font-size:15px;color:#141414">Board 4 — 3NT+1 by S</span><span style="font-family:'Crimson Pro',serif;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums;color:#141414">62% · +630</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #E4E1D8"><span style="font-family:'Crimson Pro',serif;font-size:15px;color:#141414">Board 3 — 4♠−1 by E</span><span style="font-family:'Crimson Pro',serif;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums;color:#141414">48% · +100</span></div>
+</div>
+<div style="margin-top:auto;display:flex;justify-content:center;padding:14px 0 16px">
+<svg width="180" height="26" viewBox="0 0 320 46"><g stroke="#6F8F68" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"></line><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"></path><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"></line><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"></line><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"></line><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"></line><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"></line><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"></line><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"></line></g></svg>
+</div>
+</div>
+</div>
+<div onClick="{{ replay }}" style="cursor:pointer;border:1.5px solid #141414;border-radius:4px;padding:7px 16px;font:600 12px system-ui,sans-serif;color:#141414;background:#fff">↻ Replay animation</div>
+<div style="font:10.5px/1.5 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);max-width:390px">0s bridge rises from the river, wordmark tracks in · 2.1s splash lifts, bridge passes beneath · 2.5s Home arrives</div>
+</div></div>
+</div>
+<p class="dv-next">Timing &amp; easing are tuneable — say "hold the splash longer". Then: "roll it through the Board screens".</p>
+</section>
+<section class="dv-turn" id="t6">
+<div class="dv-thd"><a class="dv-tid" href="#t6">6</a><span class="dv-tname">Splash screens — 5a / 5b / 5c at 390×620 · Duplicate · SAYC · "Play the Toll"</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="6a"><div class="dv-olabel"><a class="dv-oid" href="#6a">6a</a>Splash — span tile (<a class="dv-oid" href="#5a">5a</a>)</div>
+<div class="dv-card" style="width:390px;height:620px;background:#FCFBF8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;position:relative">
+<div style="width:104px;height:104px;border:4px solid #6F8F68;display:flex;align-items:center;justify-content:center">
+<svg width="74" height="56" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"></line><path d="M8 112 Q80 38 152 112" stroke-width="7"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"></line><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"></line><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"></line><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"></line><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"></line></g></svg>
+</div>
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:30px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:6px">DUPLICATE · SAYC</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;width:280px;margin-top:6px">
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">PLAY THE TOLL →</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="6b"><div class="dv-olabel"><a class="dv-oid" href="#6b">6b</a>Splash — broadsheet lockup (<a class="dv-oid" href="#5b">5b</a>)</div>
+<div class="dv-card" style="width:390px;height:620px;background:#FCFBF8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;position:relative">
+<div style="display:flex;align-items:center;gap:8px;width:250px"><svg width="11" height="11" viewBox="0 0 12 12"><g stroke="#141414" stroke-width="1.6"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line><line x1="1.8" y1="1.8" x2="10.2" y2="10.2"></line><line x1="10.2" y1="1.8" x2="1.8" y2="10.2"></line></g></svg><div style="flex:1;height:2px;background:#141414"></div><svg width="11" height="11" viewBox="0 0 12 12"><g stroke="#141414" stroke-width="1.6"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line><line x1="1.8" y1="1.8" x2="10.2" y2="10.2"></line><line x1="10.2" y1="1.8" x2="1.8" y2="10.2"></line></g></svg></div>
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:32px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:6px">DUPLICATE · SAYC</div>
+</div>
+<svg width="292" height="42" viewBox="0 0 320 46"><g stroke="#141414" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"></line><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"></path><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"></line><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"></line><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"></line><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"></line><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"></line><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"></line><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"></line></g></svg>
+<div style="display:flex;flex-direction:column;gap:8px;width:280px;margin-top:6px">
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">PLAY THE TOLL →</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="6c"><div class="dv-olabel"><a class="dv-oid" href="#6c">6c</a>Splash — river vignette (<a class="dv-oid" href="#5c">5c</a>), James Tea footer</div>
+<div class="dv-card" style="width:390px;height:620px;background:#FCFBF8;display:flex;flex-direction:column;position:relative;overflow:hidden">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding-bottom:130px">
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:32px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:6px">DUPLICATE · SAYC</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;width:280px">
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">PLAY THE TOLL →</div>
+</div>
+</div>
+<svg width="390" height="146" viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice" style="position:absolute;bottom:0;left:0;display:block">
+<g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"></line><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"></line></g>
+<g stroke="#6F8F68" fill="none">
+<path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"></path>
+<path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"></path>
+<line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"></line><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"></line><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"></line><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"></line><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"></line>
+<line x1="40" y1="30" x2="40" y2="85" stroke-width="2"></line><line x1="120" y1="30" x2="120" y2="85" stroke-width="2"></line><line x1="200" y1="30" x2="200" y2="85" stroke-width="2"></line><line x1="280" y1="30" x2="280" y2="85" stroke-width="2"></line><line x1="360" y1="30" x2="360" y2="85" stroke-width="2"></line><line x1="440" y1="30" x2="440" y2="85" stroke-width="2"></line><line x1="520" y1="30" x2="520" y2="85" stroke-width="2"></line><line x1="600" y1="30" x2="600" y2="85" stroke-width="2"></line>
+</g>
+<g stroke="#6F8F68" stroke-width="1.2" fill="none">
+<line x1="80" y1="30" x2="120" y2="85"></line><line x1="120" y1="30" x2="160" y2="78"></line><line x1="240" y1="30" x2="200" y2="85"></line><line x1="200" y1="30" x2="160" y2="78"></line>
+<line x1="240" y1="30" x2="280" y2="85"></line><line x1="280" y1="30" x2="320" y2="78"></line><line x1="400" y1="30" x2="360" y2="85"></line><line x1="360" y1="30" x2="320" y2="78"></line>
+<line x1="400" y1="30" x2="440" y2="85"></line><line x1="440" y1="30" x2="480" y2="78"></line><line x1="560" y1="30" x2="520" y2="85"></line><line x1="520" y1="30" x2="480" y2="78"></line>
+<line x1="80" y1="30" x2="40" y2="85"></line><line x1="40" y1="30" x2="0" y2="78"></line><line x1="560" y1="30" x2="600" y2="85"></line><line x1="600" y1="30" x2="640" y2="78"></line>
+</g>
+<rect x="0" y="178" width="640" height="62" fill="#5E4B33"></rect>
+<g fill="#4E3E2B"><rect x="70" y="178" width="20" height="26"></rect><rect x="230" y="178" width="20" height="26"></rect><rect x="390" y="178" width="20" height="26"></rect><rect x="550" y="178" width="20" height="26"></rect></g>
+<g stroke="#745E41" stroke-width="1.5"><line x1="30" y1="212" x2="130" y2="212"></line><line x1="300" y1="220" x2="420" y2="220"></line><line x1="490" y1="208" x2="600" y2="208"></line><line x1="150" y1="228" x2="250" y2="228"></line></g>
+<g fill="#EDE8DC" stroke="#CBC3B0" stroke-width="1.5"><path d="M68 104 L92 104 L96 180 L64 180 Z"></path><path d="M228 104 L252 104 L256 180 L224 180 Z"></path><path d="M388 104 L412 104 L416 180 L384 180 Z"></path><path d="M548 104 L572 104 L576 180 L544 180 Z"></path></g>
+<g fill="#8D8272"><path d="M14 188 q8 -16 28 -13 q18 3 21 14 q-3 9 -24 9 q-20 0 -25 -10 Z"></path><path d="M130 192 q10 -18 32 -14 q16 3 19 13 q-4 9 -25 9 q-21 0 -26 -8 Z"></path><path d="M300 194 q7 -14 24 -12 q15 2 18 12 q-3 8 -21 8 q-17 0 -21 -8 Z"></path><path d="M462 190 q9 -16 28 -13 q16 3 19 13 q-3 9 -23 9 q-19 0 -24 -9 Z"></path><path d="M602 192 q7 -13 22 -11 q12 2 15 11 q-3 8 -18 8 q-15 0 -19 -8 Z"></path></g>
+<g fill="#6E6455"><path d="M182 196 q6 -11 18 -9 q10 2 12 9 q-2 7 -15 7 q-13 0 -15 -7 Z"></path><path d="M356 198 q5 -10 16 -8 q9 2 11 8 q-2 6 -13 6 q-11 0 -14 -6 Z"></path><path d="M540 198 q5 -9 15 -8 q8 1 10 8 q-2 6 -12 6 q-10 0 -13 -6 Z"></path></g>
+</svg>
+</div></div>
+</div>
+<p class="dv-next">Pick one — then: "lock __, roll it through the Board screens".</p>
+</section>
+<section class="dv-turn" id="t5">
+<div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">Round 5 — 4a/4b refined · Poiret One (per 1e) · palette &amp; rocks from your photos</span></div>
+<div class="dv-card" style="width:660px;padding:18px 22px;font:12.5px/1.6 system-ui,sans-serif;color:#333;margin-bottom:24px">
+<div style="font-weight:700;margin-bottom:4px;color:#141414">Pulled from the photographs</div>
+Verdigris-green steel, whitewashed tapered piers, tea-brown James water strewn with granite boulders — the rocks give the mark a <b>ground</b>, which every earlier bridge logo lacked. Wordmark switched to <b>Poiret One</b> throughout (its thin geometric strokes are literally truss-work). The 1925 broadsheet contributes the fleuron-and-rule divider in <a class="dv-oid" href="#5b">5b</a>.
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="5a"><div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a>Span tile — 4a in Poiret One, ink + verdigris</div>
+<div class="dv-card" style="width:310px;padding:26px 24px;background:#FCFBF8;display:flex;flex-direction:column;gap:18px;align-items:center">
+<div style="display:flex;gap:14px">
+<div style="width:88px;height:88px;border:4px solid #141414;display:flex;align-items:center;justify-content:center">
+<svg width="62" height="47" viewBox="0 0 160 122"><g stroke="#141414" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"></line><path d="M8 112 Q80 38 152 112" stroke-width="7"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"></line><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"></line><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"></line><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"></line><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"></line></g></svg>
+</div>
+<div style="width:88px;height:88px;border:4px solid #6F8F68;display:flex;align-items:center;justify-content:center">
+<svg width="62" height="47" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"></line><path d="M8 112 Q80 38 152 112" stroke-width="7"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"></line><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"></line><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"></line><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"></line><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"></line></g></svg>
+</div>
+</div>
+<div style="font-family:'Poiret One',cursive;font-size:24px;letter-spacing:.18em;color:#141414">NICKEL BRIDGE</div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">ink for UI chrome · truss verdigris #6F8F68 for brand moments</div>
+</div></div>
+
+<div class="dv-opt" id="5b"><div class="dv-olabel"><a class="dv-oid" href="#5b">5b</a>Broadsheet lockup — 4b band + the 1925 ad's fleuron rule</div>
+<div class="dv-card" style="width:360px;padding:28px 24px;background:#FCFBF8;display:flex;flex-direction:column;gap:14px;align-items:center">
+<div style="display:flex;align-items:center;gap:8px;width:250px"><svg width="11" height="11" viewBox="0 0 12 12"><g stroke="#141414" stroke-width="1.6"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line><line x1="1.8" y1="1.8" x2="10.2" y2="10.2"></line><line x1="10.2" y1="1.8" x2="1.8" y2="10.2"></line></g></svg><div style="flex:1;height:2px;background:#141414"></div><svg width="11" height="11" viewBox="0 0 12 12"><g stroke="#141414" stroke-width="1.6"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line><line x1="1.8" y1="1.8" x2="10.2" y2="10.2"></line><line x1="10.2" y1="1.8" x2="1.8" y2="10.2"></line></g></svg></div>
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:30px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10px;letter-spacing:.4em;color:#141414;margin-top:5px">RICHMOND · 1925</div>
+</div>
+<svg width="292" height="42" viewBox="0 0 320 46"><g stroke="#141414" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"></line><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"></path><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"></line><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"></line><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"></line><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"></line><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"></line><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"></line><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"></line></g></svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">fleuron rule straight off the Boulevard Bridge Corporation ad — headers, receipts, score sheets</div>
+</div></div>
+
+<div class="dv-opt" id="5c"><div class="dv-olabel"><a class="dv-oid" href="#5c">5c</a>River vignette — rocks &amp; the James, full photo palette</div>
+<div class="dv-card" style="width:460px;padding:28px 24px;background:#FCFBF8;display:flex;flex-direction:column;gap:18px;align-items:center">
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:32px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:5px">DUPLICATE · SAYC · 1925</div>
+</div>
+<svg width="404" height="152" viewBox="0 0 640 240">
+<g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"></line><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"></line></g>
+<g stroke="#6F8F68" fill="none"><path d="M80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104" stroke-width="5"></path><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"></line><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"></line><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"></line><line x1="120" y1="30" x2="120" y2="93" stroke-width="2"></line><line x1="200" y1="30" x2="200" y2="93" stroke-width="2"></line><line x1="280" y1="30" x2="280" y2="93" stroke-width="2"></line><line x1="360" y1="30" x2="360" y2="93" stroke-width="2"></line><line x1="440" y1="30" x2="440" y2="93" stroke-width="2"></line><line x1="520" y1="30" x2="520" y2="93" stroke-width="2"></line></g>
+<rect x="0" y="178" width="640" height="62" fill="#5E4B33"></rect>
+<g fill="#4E3E2B"><rect x="70" y="178" width="20" height="26"></rect><rect x="230" y="178" width="20" height="26"></rect><rect x="390" y="178" width="20" height="26"></rect><rect x="550" y="178" width="20" height="26"></rect></g>
+<g stroke="#745E41" stroke-width="1.5"><line x1="30" y1="212" x2="130" y2="212"></line><line x1="300" y1="220" x2="420" y2="220"></line><line x1="490" y1="208" x2="600" y2="208"></line><line x1="150" y1="228" x2="250" y2="228"></line></g>
+<g fill="#EDE8DC" stroke="#CBC3B0" stroke-width="1.5"><path d="M68 104 L92 104 L96 180 L64 180 Z"></path><path d="M228 104 L252 104 L256 180 L224 180 Z"></path><path d="M388 104 L412 104 L416 180 L384 180 Z"></path><path d="M548 104 L572 104 L576 180 L544 180 Z"></path></g>
+<g fill="#8D8272"><path d="M14 188 q8 -16 28 -13 q18 3 21 14 q-3 9 -24 9 q-20 0 -25 -10 Z"></path><path d="M130 192 q10 -18 32 -14 q16 3 19 13 q-4 9 -25 9 q-21 0 -26 -8 Z"></path><path d="M300 194 q7 -14 24 -12 q15 2 18 12 q-3 8 -21 8 q-17 0 -21 -8 Z"></path><path d="M462 190 q9 -16 28 -13 q16 3 19 13 q-3 9 -23 9 q-19 0 -24 -9 Z"></path><path d="M602 192 q7 -13 22 -11 q12 2 15 11 q-3 8 -18 8 q-15 0 -19 -8 Z"></path></g>
+<g fill="#6E6455"><path d="M182 196 q6 -11 18 -9 q10 2 12 9 q-2 7 -15 7 q-13 0 -15 -7 Z"></path><path d="M356 198 q5 -10 16 -8 q9 2 11 8 q-2 6 -13 6 q-11 0 -14 -6 Z"></path><path d="M540 198 q5 -9 15 -8 q8 1 10 8 q-2 6 -12 6 q-10 0 -13 -6 Z"></path></g>
+</svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">login / OG / empty states — verdigris truss, whitewashed piers, granite boulders in the tea-brown James</div>
+</div></div>
+
+<div class="dv-opt" id="5d"><div class="dv-olabel"><a class="dv-oid" href="#5d">5d</a>Palette — sampled from the photographs</div>
+<div class="dv-card" style="width:300px;padding:22px;background:#fff;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#141414;border-radius:3px"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>Rail Ink</b> #141414<br>type · UI chrome</div></div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#6F8F68;border-radius:3px"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>Truss Verdigris</b> #6F8F68<br>brand accent · the steel</div></div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#EDE8DC;border-radius:3px;border:1px solid rgba(0,0,0,.1)"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>Pier Whitewash</b> #EDE8DC<br>surfaces · cards</div></div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#5E4B33;border-radius:3px"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>James Tea</b> #5E4B33<br>dark surfaces · footers</div></div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#8D8272;border-radius:3px"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>Granite</b> #8D8272<br>muted text · dividers</div></div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:34px;background:#A65A2E;border-radius:3px"></div><div style="font:11px/1.4 ui-monospace,Menlo,monospace;color:#333"><b>Byrd Park Rust</b> #A65A2E<br>alerts · autumn accent</div></div>
+</div></div>
+</div>
+<p class="dv-next">Splash proof <a class="dv-oid" href="#2f">2f</a> now defaults to the verdigris span (<a class="dv-oid" href="#5a">5a</a>) and Poiret One. Then: "lock __, roll palette + band through the Board screens".</p>
+</section>
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">Marks from the real Boulevard "Nickel" Bridge — deck on top, truss below</span></div>
+<div class="dv-card" style="width:640px;padding:18px 22px;font:12.5px/1.6 system-ui,sans-serif;color:#333;margin-bottom:24px">
+<div style="font-weight:700;margin-bottom:4px;color:#141414">What the real bridge looks like (and why it fixes turn 1–2)</div>
+It's a <b>deck truss</b>, not an arch: the flat roadway rides on top, deep steel trusses hang underneath, and each continuous span's <b>bottom chord sweeps up in a shallow arch</b> between concrete piers — a Pratt/Warren hybrid with little "mini-trusses" inside each panel. So the ownable silhouette is <b>flat line on top, scalloped structure below</b> — the inverse of every generic bridge logo (and of my old arches). <a class="dv-oid" href="#4a">4a</a> evolves <a class="dv-oid" href="#1c">1c</a> to the real geometry; <a class="dv-oid" href="#4d">4d</a> is the calm answer to <a class="dv-oid" href="#1b">1b</a>.
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a"><div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Span tile — 1c's frame, real single-span geometry</div>
+<div class="dv-card" style="width:300px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:18px;align-items:center">
+<div style="width:96px;height:96px;border:4px solid #141414;display:flex;align-items:center;justify-content:center">
+<svg width="70" height="54" viewBox="0 0 160 122"><g stroke="#141414" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"></line><path d="M8 112 Q80 38 152 112" stroke-width="7"></path><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"></line><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"></line><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"></line><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"></line><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"></line><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"></line><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"></line></g></svg>
+</div>
+<div style="font-family:Limelight,serif;font-size:20px;letter-spacing:.12em;color:#141414">NICKEL BRIDGE</div>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="24" viewBox="0 0 160 160"><rect x="6" y="6" width="148" height="148" fill="none" stroke="#141414" stroke-width="12"></rect><line x1="24" y1="48" x2="136" y2="48" stroke="#141414" stroke-width="14"></line><path d="M32 122 Q80 68 128 122" fill="none" stroke="#141414" stroke-width="11"></path><line x1="32" y1="48" x2="32" y2="122" stroke="#141414" stroke-width="10"></line><line x1="128" y1="48" x2="128" y2="122" stroke="#141414" stroke-width="10"></line></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — drops interior web</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">deck on top, shallow-arch bottom chord, Pratt verticals + Warren diagonals — the actual span</div>
+</div></div>
+
+<div class="dv-opt" id="4b"><div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>Continuous-span band — 1c's band, corrected silhouette</div>
+<div class="dv-card" style="width:340px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<div style="text-align:center">
+<div style="font-family:Limelight,serif;font-size:26px;letter-spacing:.1em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10px;letter-spacing:.4em;color:#141414;margin-top:4px">RICHMOND · 1925</div>
+</div>
+<svg width="292" height="42" viewBox="0 0 320 46"><g stroke="#141414" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"></line><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"></path><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"></line><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"></line><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"></line><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"></line><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"></line><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"></line><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"></line></g></svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">flat deck over scalloped chords — reads "Nickel Bridge", not "generic bridge"; still works as divider, card-back &amp; section rule</div>
+</div></div>
+
+<div class="dv-opt" id="4c"><div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>Panel monogram — the Pratt/Warren bay as an abstract mark</div>
+<div class="dv-card" style="width:280px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<svg width="112" height="112" viewBox="0 0 120 120"><g stroke="#141414" fill="none"><rect x="6" y="6" width="108" height="108" stroke-width="9"></rect><line x1="60" y1="6" x2="60" y2="114" stroke-width="6"></line><line x1="6" y1="114" x2="60" y2="6" stroke-width="4"></line><line x1="60" y1="6" x2="114" y2="114" stroke-width="4"></line><line x1="33" y1="60" x2="33" y2="114" stroke-width="2.5"></line><line x1="87" y1="60" x2="87" y2="114" stroke-width="2.5"></line></g></svg>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="24" viewBox="0 0 120 120"><g stroke="#141414" fill="none"><rect x="8" y="8" width="104" height="104" stroke-width="14"></rect><line x1="8" y1="112" x2="60" y2="8" stroke-width="9"></line><line x1="60" y1="8" x2="112" y2="112" stroke-width="9"></line></g></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — frame + Λ</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">one truss bay with its mini-truss posts — least literal; tiles into the 4b band</div>
+</div></div>
+
+<div class="dv-opt" id="4d"><div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a>Quiet elevation — 1b's vignette, decluttered</div>
+<div class="dv-card" style="width:420px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:18px;align-items:center">
+<div style="text-align:center">
+<div style="font-family:Limelight,serif;font-size:30px;letter-spacing:.1em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.42em;color:#141414;margin-top:4px">DUPLICATE · SAYC · 1925</div>
+</div>
+<svg width="372" height="120" viewBox="0 0 640 206"><g stroke="#141414" fill="none"><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"></line><line x1="0" y1="18" x2="640" y2="18" stroke-width="2.5"></line><path d="M50 120 Q145 62 240 120 Q320 74 400 120 Q495 62 590 120" stroke-width="4"></path><line x1="145" y1="30" x2="145" y2="90" stroke-width="2"></line><line x1="320" y1="30" x2="320" y2="96" stroke-width="2"></line><line x1="495" y1="30" x2="495" y2="90" stroke-width="2"></line></g><g fill="#141414"><rect x="42" y="30" width="16" height="130"></rect><rect x="232" y="30" width="16" height="130"></rect><rect x="392" y="30" width="16" height="130"></rect><rect x="582" y="30" width="16" height="130"></rect></g><g stroke="#141414"><line x1="20" y1="180" x2="620" y2="180" stroke-width="2.5"></line><line x1="70" y1="194" x2="570" y2="194" stroke-width="1.5"></line></g></svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">login / OG / empty states — three continuous spans over the James, nothing else</div>
+</div></div>
+</div>
+<p class="dv-next">Tweaks panel now includes <a class="dv-oid" href="#4a">4a</a>–<a class="dv-oid" href="#4c">4c</a> for the splash proof in <a class="dv-oid" href="#2f">2f</a>. Then: "lock __, roll the band through the Board screens".</p>
+</section>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Splash marks — pick a mark, scale it, set the accent suit (Tweaks panel)</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Truss monogram — N built from the girder</div>
+<div class="dv-card" style="width:280px;padding:26px 22px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<svg width="120" height="120" viewBox="0 0 120 120"><rect x="4" y="4" width="112" height="112" fill="#141414"></rect><g stroke="#fff" stroke-width="9" fill="none"><line x1="26" y1="24" x2="26" y2="96"></line><line x1="94" y1="24" x2="94" y2="96"></line><line x1="26" y1="24" x2="94" y2="96"></line></g><line x1="14" y1="14" x2="106" y2="14" stroke="#fff" stroke-width="5"></line><line x1="14" y1="106" x2="106" y2="106" stroke="#fff" stroke-width="5"></line></svg>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="24" viewBox="0 0 120 120"><rect x="4" y="4" width="112" height="112" fill="#141414"></rect><g stroke="#fff" stroke-width="11" fill="none"><line x1="26" y1="24" x2="26" y2="96"></line><line x1="94" y1="24" x2="94" y2="96"></line><line x1="26" y1="24" x2="94" y2="96"></line></g></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — holds</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">boldest; N doubles as truss bay; pairs with 1c's band</div>
+</div></div>
+
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Arch reduction — one stroke, one deck</div>
+<div class="dv-card" style="width:280px;padding:26px 22px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<svg width="150" height="96" viewBox="0 0 160 100"><path d="M12 78 Q80 -10 148 78" fill="none" stroke="#141414" stroke-width="11"></path><line x1="4" y1="78" x2="156" y2="78" stroke="#141414" stroke-width="7"></line><line x1="46" y1="49" x2="46" y2="78" stroke="#141414" stroke-width="4"></line><line x1="80" y1="38" x2="80" y2="78" stroke="#141414" stroke-width="4"></line><line x1="114" y1="49" x2="114" y2="78" stroke="#141414" stroke-width="4"></line><circle cx="80" cy="92" r="4.5" fill="#141414"></circle></svg>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="24" viewBox="0 0 160 160"><path d="M14 108 Q80 6 146 108" fill="none" stroke="#141414" stroke-width="18"></path><line x1="4" y1="108" x2="156" y2="108" stroke="#141414" stroke-width="13"></line></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — drops verticals</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">quietest; the dot = the nickel toll rolling under</div>
+</div></div>
+
+<div class="dv-opt" id="2c"><div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Portal badge — through-truss gateway</div>
+<div class="dv-card" style="width:280px;padding:26px 22px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<svg width="118" height="128" viewBox="0 0 118 128"><path d="M8 124 L8 54 Q59 4 110 54 L110 124" fill="none" stroke="#141414" stroke-width="8"></path><path d="M24 124 L24 62 Q59 22 94 62 L94 124" fill="none" stroke="#141414" stroke-width="4"></path><g stroke="#141414" stroke-width="3"><line x1="8" y1="70" x2="24" y2="86"></line><line x1="8" y1="94" x2="24" y2="110"></line><line x1="110" y1="70" x2="94" y2="86"></line><line x1="110" y1="94" x2="94" y2="110"></line></g><text x="59" y="104" text-anchor="middle" font-family="Limelight,serif" font-size="26" fill="#141414">NB</text></svg>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="26" viewBox="0 0 118 128"><path d="M10 124 L10 54 Q59 2 108 54 L108 124" fill="none" stroke="#141414" stroke-width="14"></path><text x="59" y="108" text-anchor="middle" font-family="Limelight,serif" font-size="46" fill="#141414">N</text></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — NB→N</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">"drive through to play" — portal frames the wordmark on splash</div>
+</div></div>
+
+<div class="dv-opt" id="2d"><div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Coin, decluttered — 1a minus the engraving</div>
+<div class="dv-card" style="width:280px;padding:26px 22px;background:#fff;display:flex;flex-direction:column;gap:16px;align-items:center">
+<svg width="130" height="130" viewBox="0 0 240 240"><circle cx="120" cy="120" r="112" fill="none" stroke="#141414" stroke-width="10"></circle><g stroke="#141414" fill="none"><path d="M40 146 Q120 56 200 146" stroke-width="9"></path><line x1="28" y1="146" x2="212" y2="146" stroke-width="7"></line><line x1="80" y1="108" x2="80" y2="146" stroke-width="4"></line><line x1="120" y1="90" x2="120" y2="146" stroke-width="4"></line><line x1="160" y1="108" x2="160" y2="146" stroke-width="4"></line></g><text x="120" y="196" text-anchor="middle" font-family="Besley,serif" font-weight="800" font-size="30" letter-spacing="6" fill="#141414">5¢</text></svg>
+<div style="display:flex;align-items:center;gap:10px"><svg width="24" height="24" viewBox="0 0 240 240"><circle cx="120" cy="120" r="106" fill="none" stroke="#141414" stroke-width="20"></circle><path d="M44 150 Q120 52 196 150" fill="none" stroke="#141414" stroke-width="16"></path><line x1="32" y1="150" x2="208" y2="150" stroke="#141414" stroke-width="13"></line></svg><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — drops 5¢</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">keeps 1a's story, loses the ring text &amp; dashes; 5¢ = the toll</div>
+</div></div>
+
+<div class="dv-opt" id="2e"><div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>Josefin lockup — mark-free, letterform-led</div>
+<div class="dv-card" style="width:300px;padding:30px 22px;background:#fff;display:flex;flex-direction:column;gap:14px;align-items:center">
+<div style="text-align:center">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:30px;letter-spacing:.2em;color:#141414;line-height:1.1">NICKEL</div>
+<svg width="188" height="20" viewBox="0 0 188 20" style="display:block;margin:2px auto"><path d="M4 16 Q94 -8 184 16" fill="none" stroke="#141414" stroke-width="3.5"></path><line x1="0" y1="17.5" x2="188" y2="17.5" stroke="#141414" stroke-width="2"></line></svg>
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:30px;letter-spacing:.2em;color:#141414;line-height:1.1">BRIDGE</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:24px;height:24px;background:#141414;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:15px">N</div><span style="font:10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">favicon @ 24px — tile N</span></div>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45);text-align:center">arch lives between the words; commits you to 1f type</div>
+</div></div>
+</div>
+
+<div class="dv-group">SPLASH PROOF — driven by the Tweaks panel</div>
+<div class="dv-opts">
+<div class="dv-opt" id="2f"><div class="dv-olabel"><a class="dv-oid" href="#2f">2f</a>Splash @ 390×620 — mark {{ splashMarkId }} · use Tweaks to swap</div>
+<div class="dv-card" style="width:390px;height:620px;background:#FCFBF8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;position:relative">
+<div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:center"><svg width="390" height="14" viewBox="0 0 390 16" preserveAspectRatio="none"><g stroke="#141414" stroke-width="2" fill="none"><line x1="0" y1="2" x2="390" y2="2"></line><line x1="0" y1="14" x2="390" y2="14"></line><path d="M0 14 L15 2 L30 14 L45 2 L60 14 L75 2 L90 14 L105 2 L120 14 L135 2 L150 14 L165 2 L180 14 L195 2 L210 14 L225 2 L240 14 L255 2 L270 14 L285 2 L300 14 L315 2 L330 14 L345 2 L360 14 L375 2 L390 14"></path></g></svg></div>
+<div style="transform: {{ splashScaleTf }}">{{ splashMark }}</div>
+<div style="text-align:center">
+<div style="font-family:'Poiret One',cursive;font-size:28px;letter-spacing:.16em;color:#141414">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:10.5px;letter-spacing:.4em;color:#141414;margin-top:5px">DUPLICATE · SAYC · 1925</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;width:280px;margin-top:6px">
+<div style="background:#141414;color:#fff;text-align:center;font-family:Besley,serif;font-weight:800;font-size:15px;letter-spacing:.06em;padding:13px;border-radius:2px">PLAY TO TOLL →</div>
+<div style="border:1px solid #141414;text-align:center;font-family:Besley,serif;font-weight:700;font-size:12.5px;padding:10px;border-radius:2px;color:#141414">Sign in</div>
+</div>
+<div style="position:absolute;bottom:14px;font-family:Besley,serif;font-size:11px;color:#6E6A62">Accent suit: <b style="color: {{ accentHex }}">{{ accentGlyph }} {{ accentHex }}</b></div>
+</div></div>
+</div>
+
+<p class="dv-next">Open the Tweaks panel to flip the splash between <a class="dv-oid" href="#2a">2a</a>–<a class="dv-oid" href="#2e">2e</a>, scale the mark, and set the accent suit. Slogan locked: "Play to Toll". Then: "lock mark __, rebuild the Board frames".</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Original logo directions (turn 1) — kept for reference</span></div>
+<div class="dv-group">LOGO / ILLUSTRATION</div>
+<div class="dv-opts">
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Coin medallion — engraved nickel, bridge inside</div>
+<div class="dv-card" style="width:300px;padding:28px;display:flex;justify-content:center;background:#fff">
+<svg width="230" height="230" viewBox="0 0 240 240">
+<circle cx="120" cy="120" r="114" fill="none" stroke="#141414" stroke-width="6"></circle>
+<circle cx="120" cy="120" r="104" fill="none" stroke="#141414" stroke-width="3" stroke-dasharray="2 6"></circle>
+<defs><path id="arcT" d="M 34 120 A 86 86 0 0 1 206 120"></path><path id="arcB" d="M 26 120 A 94 94 0 0 0 214 120"></path></defs>
+<text font-family="Limelight,serif" font-size="19" fill="#141414" letter-spacing="4"><textPath href="#arcT" startOffset="50%" text-anchor="middle">NICKEL BRIDGE</textPath></text>
+<text font-family="Besley,serif" font-size="11" font-weight="700" fill="#141414" letter-spacing="4"><textPath href="#arcB" startOffset="50%" text-anchor="middle">RICHMOND · 1925</textPath></text>
+<g stroke="#141414" fill="none"><path d="M44 148 Q120 66 196 148" stroke-width="5"></path><path d="M52 148 Q120 78 188 148" stroke-width="2.5"></path><line x1="34" y1="136" x2="206" y2="136" stroke-width="4"></line><line x1="78" y1="112" x2="78" y2="136" stroke-width="2"></line><line x1="99" y1="98" x2="99" y2="136" stroke-width="2"></line><line x1="120" y1="93" x2="120" y2="136" stroke-width="2"></line><line x1="141" y1="98" x2="141" y2="136" stroke-width="2"></line><line x1="162" y1="112" x2="162" y2="136" stroke-width="2"></line><line x1="48" y1="158" x2="192" y2="158" stroke-width="2.5"></line><line x1="66" y1="168" x2="174" y2="168" stroke-width="2"></line><line x1="88" y1="178" x2="152" y2="178" stroke-width="1.5"></line></g>
+<circle cx="30" cy="120" r="2.5" fill="#141414"></circle><circle cx="210" cy="120" r="2.5" fill="#141414"></circle>
+</svg></div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Wordmark-first · full vignette reserved for login/OG</div>
+<div class="dv-card" style="width:420px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:20px;align-items:center">
+<div style="text-align:center">
+<div style="display:flex;align-items:center;gap:12px;justify-content:center"><div style="height:1px;width:56px;background:#141414"></div><div style="width:7px;height:7px;background:#141414;transform:rotate(45deg)"></div><div style="height:1px;width:56px;background:#141414"></div></div>
+<div style="font-family:Limelight,serif;font-size:34px;letter-spacing:.1em;color:#141414;margin:8px 0 4px">NICKEL BRIDGE</div>
+<div style="font-family:Besley,serif;font-size:11px;letter-spacing:.42em;color:#141414">DUPLICATE · SAYC · 1925</div>
+</div>
+<svg width="372" height="196" viewBox="0 0 640 336" style="display:block">
+<g stroke="#141414" stroke-width="2"><line x1="320" y1="200" x2="600" y2="155"></line><line x1="320" y1="200" x2="558" y2="64"></line><line x1="320" y1="200" x2="486" y2="-8"></line><line x1="320" y1="200" x2="395" y2="-50"></line><line x1="320" y1="200" x2="320" y2="-60"></line><line x1="320" y1="200" x2="245" y2="-50"></line><line x1="320" y1="200" x2="154" y2="-8"></line><line x1="320" y1="200" x2="82" y2="64"></line><line x1="320" y1="200" x2="40" y2="155"></line></g>
+<rect x="0" y="0" width="640" height="30" fill="#fff"></rect>
+<g stroke="#141414" fill="none"><path d="M60 260 Q320 -40 580 260" stroke-width="10"></path><path d="M60 260 Q320 20 580 260" stroke-width="4"></path>
+<line x1="140" y1="148" x2="140" y2="200" stroke-width="3"></line><line x1="180" y1="107" x2="180" y2="200" stroke-width="3"></line><line x1="220" y1="77" x2="220" y2="200" stroke-width="3"></line><line x1="260" y1="56" x2="260" y2="200" stroke-width="3"></line><line x1="300" y1="46" x2="300" y2="200" stroke-width="3"></line><line x1="340" y1="46" x2="340" y2="200" stroke-width="3"></line><line x1="380" y1="56" x2="380" y2="200" stroke-width="3"></line><line x1="420" y1="77" x2="420" y2="200" stroke-width="3"></line><line x1="460" y1="107" x2="460" y2="200" stroke-width="3"></line><line x1="500" y1="148" x2="500" y2="200" stroke-width="3"></line>
+<line x1="10" y1="200" x2="630" y2="200" stroke-width="8"></line><line x1="10" y1="212" x2="630" y2="212" stroke-width="3"></line></g>
+<g fill="#141414"><rect x="30" y="120" width="60" height="140"></rect><rect x="42" y="100" width="36" height="20"></rect><rect x="54" y="88" width="12" height="12"></rect><rect x="550" y="120" width="60" height="140"></rect><rect x="562" y="100" width="36" height="20"></rect><rect x="574" y="88" width="12" height="12"></rect></g>
+<g stroke="#141414" stroke-width="3"><line x1="40" y1="284" x2="600" y2="284"></line><line x1="80" y1="300" x2="560" y2="300"></line><line x1="140" y1="316" x2="500" y2="316" stroke-width="2"></line></g>
+</svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">wordmark = logo/favicon · vignette = login, OG image, empty states</div>
+</div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Abstract truss — pattern-as-mark</div>
+<div class="dv-card" style="width:300px;padding:26px 24px;background:#fff;display:flex;flex-direction:column;gap:18px;align-items:center">
+<div style="width:96px;height:96px;border:4px solid #141414;display:flex;align-items:center;justify-content:center">
+<svg width="72" height="60" viewBox="0 0 120 100"><g stroke="#141414" stroke-width="7" fill="none"><line x1="0" y1="10" x2="120" y2="10"></line><line x1="0" y1="90" x2="120" y2="90"></line><path d="M0 90 L30 10 L60 90 L90 10 L120 90"></path></g></svg>
+</div>
+<div style="font-family:Limelight,serif;font-size:20px;letter-spacing:.12em;color:#141414">NICKEL BRIDGE</div>
+<svg width="252" height="34" viewBox="0 0 300 40"><g stroke="#141414" stroke-width="3" fill="none"><line x1="0" y1="4" x2="300" y2="4"></line><line x1="0" y1="36" x2="300" y2="36"></line><path d="M0 36 L25 4 L50 36 L75 4 L100 36 L125 4 L150 36 L175 4 L200 36 L225 4 L250 36 L275 4 L300 36"></path></g></svg>
+<div style="font:10.5px/1.4 ui-monospace,Menlo,monospace;color:rgba(0,0,0,.45)">band doubles as divider, card-back &amp; section rule</div>
+</div></div>
+</div>
+
+
+<p class="dv-next">Foundations, type pairings &amp; screens live in <b>Nickel Bridge Explorations</b>.</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;1400px&quot;},&quot;splashMark&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;5a&quot;,&quot;options&quot;:[&quot;5a&quot;,&quot;4a&quot;,&quot;4b&quot;,&quot;4c&quot;,&quot;2a&quot;,&quot;2b&quot;,&quot;2c&quot;,&quot;2d&quot;,&quot;2e&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Splash logo&quot;},&quot;splashMarkScale&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0.6,&quot;max&quot;:1.6,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Splash logo&quot;},&quot;accentSuit&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;hearts&quot;,&quot;options&quot;:[&quot;spades&quot;,&quot;hearts&quot;,&quot;diamonds&quot;,&quot;clubs&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Splash logo&quot;}}">
+class Component extends DCLogic {
+  stageRef = React.createRef();
+  replay = () => {
+    const el = this.stageRef.current;
+    if (el && el.getAnimations) el.getAnimations({ subtree: true }).forEach(a => { a.currentTime = 0; a.play(); });
+  };
+  renderVals() {
+    const id = this.props.splashMark ?? '5a';
+    const scale = this.props.splashMarkScale ?? 1;
+    const suit = this.props.accentSuit ?? 'hearts';
+    const suits = { spades:['♠','#141414'], hearts:['♥','#C22F21'], diamonds:['♦','#9E6A00'], clubs:['♣','#00775A'] };
+    const svgs = {
+      '5a':'<svg width="128" height="98" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"/><path d="M8 112 Q80 38 152 112" stroke-width="7"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"/><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"/><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"/><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"/><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"/></g></svg>',
+      '4a':'<svg width="128" height="98" viewBox="0 0 160 122"><g stroke="#141414" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="10"/><path d="M8 112 Q80 38 152 112" stroke-width="7"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="7"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="7"/><line x1="44" y1="10" x2="44" y2="85" stroke-width="4"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="4"/><line x1="116" y1="10" x2="116" y2="85" stroke-width="4"/><line x1="44" y1="10" x2="80" y2="75" stroke-width="2.5"/><line x1="116" y1="10" x2="80" y2="75" stroke-width="2.5"/></g></svg>',
+      '4b':'<svg width="240" height="35" viewBox="0 0 320 46"><g stroke="#141414" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"/><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"/><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"/><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"/><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"/><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"/><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"/><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"/><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"/></g></svg>',
+      '4c':'<svg width="112" height="112" viewBox="0 0 120 120"><g stroke="#141414" fill="none"><rect x="6" y="6" width="108" height="108" stroke-width="9"/><line x1="60" y1="6" x2="60" y2="114" stroke-width="6"/><line x1="6" y1="114" x2="60" y2="6" stroke-width="4"/><line x1="60" y1="6" x2="114" y2="114" stroke-width="4"/><line x1="33" y1="60" x2="33" y2="114" stroke-width="2.5"/><line x1="87" y1="60" x2="87" y2="114" stroke-width="2.5"/></g></svg>',
+      '2a':'<svg width="120" height="120" viewBox="0 0 120 120"><rect x="4" y="4" width="112" height="112" fill="#141414"/><g stroke="#fff" stroke-width="9" fill="none"><line x1="26" y1="24" x2="26" y2="96"/><line x1="94" y1="24" x2="94" y2="96"/><line x1="26" y1="24" x2="94" y2="96"/></g><line x1="14" y1="14" x2="106" y2="14" stroke="#fff" stroke-width="5"/><line x1="14" y1="106" x2="106" y2="106" stroke="#fff" stroke-width="5"/></svg>',
+      '2b':'<svg width="150" height="96" viewBox="0 0 160 100"><path d="M12 78 Q80 -10 148 78" fill="none" stroke="#141414" stroke-width="11"/><line x1="4" y1="78" x2="156" y2="78" stroke="#141414" stroke-width="7"/><line x1="46" y1="49" x2="46" y2="78" stroke="#141414" stroke-width="4"/><line x1="80" y1="38" x2="80" y2="78" stroke="#141414" stroke-width="4"/><line x1="114" y1="49" x2="114" y2="78" stroke="#141414" stroke-width="4"/><circle cx="80" cy="92" r="4.5" fill="#141414"/></svg>',
+      '2c':'<svg width="118" height="128" viewBox="0 0 118 128"><path d="M8 124 L8 54 Q59 4 110 54 L110 124" fill="none" stroke="#141414" stroke-width="8"/><path d="M24 124 L24 62 Q59 22 94 62 L94 124" fill="none" stroke="#141414" stroke-width="4"/><g stroke="#141414" stroke-width="3"><line x1="8" y1="70" x2="24" y2="86"/><line x1="8" y1="94" x2="24" y2="110"/><line x1="110" y1="70" x2="94" y2="86"/><line x1="110" y1="94" x2="94" y2="110"/></g><text x="59" y="104" text-anchor="middle" font-family="Limelight,serif" font-size="26" fill="#141414">NB</text></svg>',
+      '2d':'<svg width="130" height="130" viewBox="0 0 240 240"><circle cx="120" cy="120" r="112" fill="none" stroke="#141414" stroke-width="10"/><g stroke="#141414" fill="none"><path d="M40 146 Q120 56 200 146" stroke-width="9"/><line x1="28" y1="146" x2="212" y2="146" stroke-width="7"/><line x1="80" y1="108" x2="80" y2="146" stroke-width="4"/><line x1="120" y1="90" x2="120" y2="146" stroke-width="4"/><line x1="160" y1="108" x2="160" y2="146" stroke-width="4"/></g><text x="120" y="196" text-anchor="middle" font-family="Besley,serif" font-weight="800" font-size="30" letter-spacing="6" fill="#141414">5¢</text></svg>',
+      '2e':'<div style="text-align:center"><div style="font-family:\'Josefin Sans\',sans-serif;font-weight:600;font-size:30px;letter-spacing:.2em;color:#141414;line-height:1.1">NICKEL</div><svg width="188" height="20" viewBox="0 0 188 20" style="display:block;margin:2px auto"><path d="M4 16 Q94 -8 184 16" fill="none" stroke="#141414" stroke-width="3.5"/><line x1="0" y1="17.5" x2="188" y2="17.5" stroke="#141414" stroke-width="2"/></svg><div style="font-family:\'Josefin Sans\',sans-serif;font-weight:600;font-size:30px;letter-spacing:.2em;color:#141414;line-height:1.1">BRIDGE</div></div>'
+    };
+    return {
+      stageRef: this.stageRef,
+      replay: this.replay,
+      splashMarkId: id,
+      splashScaleTf: 'scale(' + scale + ')',
+      splashMark: React.createElement('div', { dangerouslySetInnerHTML: { __html: svgs[id] || svgs['5a'] } }),
+      accentGlyph: suits[suit][0],
+      accentHex: suits[suit][1]
+    };
+  }
+}
+</script>
+</body>
+</html>

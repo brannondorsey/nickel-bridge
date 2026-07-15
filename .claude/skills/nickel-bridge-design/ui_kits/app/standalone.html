@@ -1,0 +1,38 @@
+<!-- @dsCard group="App" viewport="390x620" subtitle="Interactive click-through — splash → Home → tournament → board → result" name="Nickel Bridge app" -->
+<!-- @startingPoint section="App" subtitle="The full mobile app flow" viewport="390x620" -->
+<link rel="stylesheet" href="../../styles.css">
+<meta name="ext-resource-dependency" content="../../assets/bridge-river-scene.svg" data-resource-id="riverScene" />
+<template id="__bundler_thumbnail" data-bg-color="#6F8F68">
+  <svg viewBox="0 0 160 122" xmlns="http://www.w3.org/2000/svg"><g stroke="#FCFBF8" fill="none" transform="translate(0,4) scale(0.94)" transform-origin="80 61"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"/><path d="M8 112 Q80 38 152 112" stroke-width="10"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"/></g></svg>
+</template>
+<script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+<script src="./standalone-bundle.js"></script>
+<style>html,body{margin:0;background:var(--paper)}#root{width:390px;margin:0 auto}</style>
+<div id="root"></div>
+<script type="text/babel">
+const NS = window.NickelBridge || window.DS || {};
+const { HomeScreen, RankingsScreen, StatsScreen, TournamentSheetScreen, CallInspectorScreen, TournamentResultScreen, BoardBiddingScreen, BoardPlayScreen, BoardResultScreen, SplashIntro } = NS;
+function App() {
+  const [screen, setScreen] = React.useState('intro');
+  const go = (s) => setScreen({CROSSINGS:'home', HOME:'home', STATS:'stats', RANKINGS:'rankings'}[s] || s);
+  if (screen === 'intro') return <SplashIntro onDone={()=>{}} riverSrc={window.__resources.riverScene}><HomeScreen go={(s)=>go(s)}/></SplashIntro>;
+  const map = {
+    home: <HomeScreen go={go}/>, stats: <StatsScreen go={go}/>, rankings: <RankingsScreen go={go}/>,
+    sheet: <TournamentSheetScreen go={go}/>, inspector: <CallInspectorScreen go={go}/>, tresult: <TournamentResultScreen go={go}/>,
+    board: <BoardBiddingScreen go={go}/>, play: <BoardPlayScreen go={go}/>, result: <BoardResultScreen go={go}/>
+  };
+  return (
+    <div>
+      {map[screen] || map.home}
+      <div style={{display:'flex', flexWrap:'wrap', gap:6, padding:'14px 8px', justifyContent:'center', font:'600 10px system-ui,sans-serif'}}>
+        {Object.keys(map).concat('intro').map(k=>(
+          <span key={k} onClick={()=>setScreen(k)} style={{cursor:'pointer', padding:'3px 8px', borderRadius:4, background:k===screen?'#141414':'rgba(0,0,0,.07)', color:k===screen?'#fff':'#444'}}>{k}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
