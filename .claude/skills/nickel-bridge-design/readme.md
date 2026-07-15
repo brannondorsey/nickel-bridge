@@ -42,6 +42,7 @@ Usage: glyph for chrome; scene/footer for brand moments (splash, intro, empty st
 - `components/navigation/` — AppHeader, TabBar
 - `components/game/` — PlayingCard, StarGrade
 - `ui_kits/app/` — Splash/intro, Home, Tourneys, Tournament sheet, Call inspector, Tournament result, Stats, Rankings, Board (bidding / card play / board result)
+- `uploads/` — original bridge reference photographs from the brand explorations. **Inspiration only**: mood, era, linework, and palette reference for designers. The "no photography" rule under Imagery stands — these never appear in the product or in mocks.
 
 ## Intentional additions
 - `core/` fill-ins (Input, Select, Checkbox, Radio, Switch, Dialog, Toast) were not in the explorations; styled to match (square, ink borders, Besley labels) per user request.
