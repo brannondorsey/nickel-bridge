@@ -33,6 +33,7 @@ import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToa
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
 import { motionOK, stagePlaySteps } from '../components/game/playAnim';
+import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
 
@@ -53,6 +54,23 @@ export default function Board() {
   const [lastEval, setLastEval] = useState<BidEval | null>(null);
   const [inspect, setInspect] = useState<AuctionEntry | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The toll receipt auto-shows only when the board completes live in this
+  // visit (sawLive flips as soon as we render a bidding/playing state);
+  // revisiting an already-scored board goes straight to the field view, with
+  // a "view the toll receipt" affordance to reopen it.
+  const [showReceipt, setShowReceipt] = useState(false);
+  const sawLiveRef = useRef(false);
+  const boardState = board?.state;
+  useEffect(() => {
+    if (!boardState) return;
+    if (boardState !== 'done') {
+      sawLiveRef.current = true;
+    } else if (sawLiveRef.current) {
+      sawLiveRef.current = false;
+      setShowReceipt(true);
+    }
+  }, [boardState]);
 
   // Staged application of server responses: one card at a time on timers so
   // TrickArea can animate each play (see playAnim.ts). Bumping `gen`
@@ -98,6 +116,8 @@ export default function Board() {
     setLastEval(null);
     setInspect(null);
     setError(null);
+    setShowReceipt(false);
+    sawLiveRef.current = false;
     api
       .board(tournamentId, boardNo)
       .then(setBoard)
@@ -160,12 +180,19 @@ export default function Board() {
     <div className="board-page">
       <BoardHead board={board} />
       {board.state === 'done' ? (
-        <Result
-          board={board}
-          onNext={() =>
-            boardNo < board.totalBoards ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`) : navigate(`/t/${tournamentId}`)
-          }
-        />
+        showReceipt ? (
+          <ScoreReceipt board={board} onContinue={() => setShowReceipt(false)} />
+        ) : (
+          <Result
+            board={board}
+            onReceipt={() => setShowReceipt(true)}
+            onNext={() =>
+              boardNo < board.totalBoards
+                ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`)
+                : navigate(`/t/${tournamentId}`)
+            }
+          />
+        )
       ) : board.state === 'playing' ? (
         <PlayPhase
           board={board}
@@ -395,7 +422,7 @@ function PlayPhase({
   );
 }
 
-function Result({ board, onNext }: { board: BoardView; onNext: () => void }) {
+function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => void; onReceipt: () => void }) {
   const r = board.result!;
   const low = r.pct < 40;
   const others = Math.max(0, r.field.length - 1);
@@ -413,6 +440,9 @@ function Result({ board, onNext }: { board: BoardView; onNext: () => void }) {
           MATCHPOINTS · VS {others} OTHER {others === 1 ? 'PLAYER' : 'PLAYERS'}
           {r.bidAccuracy != null ? ` · BIDDING ${r.bidAccuracy}%` : ''}
         </div>
+        <button type="button" className="label-caps receipt-link" onClick={onReceipt}>
+          VIEW THE TOLL RECEIPT
+        </button>
       </div>
 
       <PerforatedPanel heading={`THE FIELD — BOARD ${board.boardNo}`} className="result-field">

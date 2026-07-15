@@ -281,3 +281,50 @@ describe('Board — result', () => {
     expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
   });
 });
+
+describe('Board — toll receipt', () => {
+  it('prints the receipt when the board completes live, then continues to the field', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: boardDone });
+    renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+
+    // the interstitial itemizes the score; the field view waits behind it
+    expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.getByText('Odd tricks')).toBeInTheDocument();
+    expect(screen.getByText('4 × 30')).toBeInTheDocument();
+    expect(screen.getByText('Game bonus')).toBeInTheDocument();
+    expect(screen.getByText('Toll collected')).toBeInTheDocument();
+    expect(screen.getByText('+620')).toBeInTheDocument();
+    expect(screen.getByText('10 of 13 tricks to declarer · NS vul')).toBeInTheDocument();
+    expect(document.querySelector('.fieldtable')).toBeNull();
+    // a made board gets the TOLL PAID postmark cancel
+    expect(document.querySelector('.receipt-postmark')).not.toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /SEE THE FIELD/ }));
+    expect(await screen.findByText('THE FIELD — BOARD 2')).toBeInTheDocument();
+    expect(document.querySelector('.receipt')).toBeNull();
+  });
+
+  it('revisits skip straight to the field; the receipt reopens on demand', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    expect(await screen.findByText('THE FIELD — BOARD 2')).toBeInTheDocument();
+    expect(document.querySelector('.receipt')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.getByText('Toll collected')).toBeInTheDocument();
+  });
+
+  it('itemizes a set contract as Toll refused with the penalty in red', async () => {
+    apiMock.board.mockResolvedValue(boardDoneLow);
+    renderBoard();
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('Down one')).toBeInTheDocument();
+    expect(screen.getByText('100, vulnerable')).toBeInTheDocument();
+    expect(screen.getByText('Toll refused')).toBeInTheDocument();
+    expect(screen.getAllByText('−100').length).toBe(2); // penalty line + total
+  });
+});

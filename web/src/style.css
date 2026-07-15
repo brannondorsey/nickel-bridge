@@ -2090,3 +2090,105 @@ a.board-row:hover {
   min-width: 38px;
   font-family: var(--font-label);
 }
+
+/* ---- toll receipt (interstitial before the field view) ---- */
+.receipt {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.receipt-panel {
+  margin: 18px 12px 0;
+}
+.receipt-row {
+  padding-top: 7px;
+}
+.receipt-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.receipt-label {
+  color: var(--ink);
+}
+.receipt-detail {
+  font-size: 12px;
+  color: var(--muted);
+}
+.receipt-amount {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 15px;
+}
+.receipt-caption {
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.receipt-rule {
+  border-top: 1.5px dashed var(--ink);
+  margin: 12px -14px 2px -20px;
+}
+.receipt-total .receipt-label {
+  font-size: 11px;
+}
+.receipt-total .receipt-amount {
+  font-size: 18px;
+}
+.receipt-postmark {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.receipt-link {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 4px; /* keeps the tap target comfortable */
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* rows print in one per beat; the postmark stamps last */
+@media (prefers-reduced-motion: no-preference) {
+  .receipt-row,
+  .receipt-rule,
+  .receipt-postmark {
+    opacity: 0;
+    animation: receipt-print 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+    animation-delay: calc(0.25s + var(--i, 0) * 0.4s);
+  }
+  .receipt-postmark {
+    animation-name: receipt-stamp;
+    animation-duration: 0.45s;
+  }
+}
+@keyframes receipt-print {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes receipt-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
