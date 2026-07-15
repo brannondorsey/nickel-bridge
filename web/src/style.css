@@ -889,7 +889,11 @@ a.ds-btn-secondary:hover {
 .pcard.suit-c {
   color: var(--suit-c);
 }
-.pcard.dimmed {
+/* dim only the glyphs, not the card face — opacity on .pcard itself would
+   make the (opaque, #fff) card background translucent too, letting
+   overlapping neighbors show through */
+.pcard.dimmed .rank,
+.pcard.dimmed .suit {
   opacity: 0.4;
 }
 .pcard-placeholder {
