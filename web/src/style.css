@@ -1184,9 +1184,8 @@ a.ds-btn-secondary:hover {
 
 /* ---- TrickArea ---- */
 .trick {
-  margin: 4px 12px 0;
-  border: 1px solid var(--ink);
-  background: var(--paper);
+  margin: 4px 0 0;
+  background: var(--surface);
   position: relative;
   height: 230px;
 }
@@ -1320,13 +1319,11 @@ a.ds-btn-secondary:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 0 10px 10px;
-  border-left: 1px solid var(--line);
+  padding: 10px 10px 10px 14px;
+  background: var(--panel);
 }
 .dummy-rail-left {
-  padding: 10px 10px 10px 0;
-  border-left: none;
-  border-right: 1px solid var(--line);
+  padding: 10px 14px 10px 10px;
   order: -1;
 }
 .dummy-rail-head {
@@ -2000,10 +1997,10 @@ a.board-row:hover {
   margin: 12px 12px 0;
 }
 .board-page .trick {
-  margin: 8px 12px 0;
+  margin: 8px 0 0;
 }
 .board-page .play-row {
-  margin: 8px 12px 0;
+  margin: 8px 0 0;
 }
 .board-page .play-row .trick {
   margin: 0;
