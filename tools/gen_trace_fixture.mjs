@@ -4,7 +4,13 @@
  *
  * The trace pins the exact auction, play, contract, and score the robots
  * produce on a fixed seed when the human always passes and always plays their
- * first legal card. server/test/game.test.ts replays it and fails on any
+ * first legal card — until/unless a laydown claim fires, at which point the
+ * server plays out the remaining cards DD-optimally for both sides instead
+ * (see `advanceRobots`/`resolveClaim` in server/src/game.ts), which can
+ * reorder the tail of `plays` relative to what "first legal card" alone
+ * would have produced. The final contract/score are unaffected by that
+ * reordering — a claim only fires once the outcome is already 100%
+ * determined. server/test/game.test.ts replays this trace and fails on any
  * difference — identical robots on identical deals is the fairness invariant
  * of duplicate scoring, so a diff here must be a *deliberate* robot change.
  *
@@ -50,6 +56,17 @@ for (let no = 1; no <= 4; no++) {
 }
 
 const out = new URL('../server/test/fixtures/robot-trace.json', import.meta.url).pathname;
-writeFileSync(out, JSON.stringify({ seed: TRACE_SEED, strategy: 'human passes; plays first legal card', boards }, null, 1));
+writeFileSync(
+  out,
+  JSON.stringify(
+    {
+      seed: TRACE_SEED,
+      strategy: 'human passes; plays first legal card (until a laydown claim plays the tail DD-optimally)',
+      boards,
+    },
+    null,
+    1,
+  ),
+);
 console.log(`wrote ${out}`);
 rmSync(dbDir, { recursive: true, force: true });

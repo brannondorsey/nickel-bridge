@@ -113,6 +113,8 @@ export interface BoardView {
   result?: BoardResult;
   allHands?: number[][];
   playHistory?: TrickCard[][];
+  /** true when this board completed via an automatic laydown claim, not full play-out */
+  claimed?: boolean;
 }
 
 export interface Standing {
