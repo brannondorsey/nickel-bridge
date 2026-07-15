@@ -3,11 +3,13 @@ import { capturePlayOrigin } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
 /**
- * Overlapping card fan. Every card that can't be tapped right now — because
- * it breaks follow-suit in the active fan, or because this fan isn't the one
- * to play from at all — is dimmed, so only genuinely playable cards read as
- * full color. Class names .handfan/.interactive/.cardbtn/.selected/.suitgap
- * are selected on by the e2e smoke test.
+ * Overlapping card fan. Passing `legal` opts the fan into dimming: cards not
+ * in it read as muted (whether because they break follow-suit, or because
+ * this fan isn't the one to play from right now). Omitting `legal` — as the
+ * read-only hand list on the bidding screen does — renders every card full
+ * color; there's no notion of a legal card outside of play. Class names
+ * .handfan/.interactive/.cardbtn/.selected/.suitgap are selected on by the
+ * e2e smoke test.
  */
 export function HandFan({
   cards,
@@ -27,6 +29,7 @@ export function HandFan({
     <div className={`handfan${interactive ? ' interactive' : ''}${small ? ' handfan-sm' : ''}`}>
       {cards.map((c, i) => {
         const playable = interactive && (!legal || legal.includes(c));
+        const dimmed = legal !== undefined && !legal.includes(c);
         const newSuit = i > 0 && cardSuit(c) !== cardSuit(cards[i - 1]);
         return (
           <button
@@ -46,7 +49,7 @@ export function HandFan({
             }
             aria-label={`${RANK_CHARS[cardRank(c)]} of ${SUIT_SYMBOLS[cardSuit(c)]}`}
           >
-            <PlayingCard card={c} small={small} dimmed={!playable} selected={selected === c} />
+            <PlayingCard card={c} small={small} dimmed={dimmed} selected={selected === c} />
           </button>
         );
       })}
