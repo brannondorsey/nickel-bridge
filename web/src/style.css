@@ -932,6 +932,12 @@ a.ds-btn-secondary:hover {
   padding: 0;
   margin-left: calc(var(--card-w) * -0.56);
   transition: transform 0.12s ease;
+  /* Without this, a dimmed card's opacity gives it its own stacking context,
+     which paints it above later (non-dimmed) siblings regardless of DOM
+     order — a disabled card would then intercept clicks meant for the
+     enabled card overlapping it. Isolating every card keeps fan stacking in
+     document order no matter which cards are dimmed. */
+  isolation: isolate;
 }
 .handfan .cardbtn:first-child {
   margin-left: 0;
