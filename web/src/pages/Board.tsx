@@ -11,6 +11,7 @@ import {
   cardRank,
   cardSuit,
   displaySort,
+  suitClass,
 } from '../api';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
@@ -413,7 +414,8 @@ function PlayPhase({
       {selectedCard !== null ? (
         <div className="board-hint num">
           {RANK_CHARS[cardRank(selectedCard)]}
-          {SUIT_SYMBOLS[cardSuit(selectedCard)]} selected — tap again to play
+          <span className={suitClass(cardSuit(selectedCard))}>{SUIT_SYMBOLS[cardSuit(selectedCard)]}</span> selected — tap again to
+          play
         </div>
       ) : board.myTurn ? (
         <div className="board-hint">

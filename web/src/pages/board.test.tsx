@@ -134,7 +134,7 @@ describe('Board — play', () => {
 
     const queen = screen.getByRole('button', { name: 'Q of ♠' });
     await userEvent.click(queen);
-    expect(screen.getByText(/Q♠ selected — tap again to play/)).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.textContent === 'Q♠ selected — tap again to play')).toBeInTheDocument();
     expect(apiMock.playCard).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
     expect(apiMock.playCard).toHaveBeenCalledWith(12, 2, boardPlaying.legalCards![1]);
