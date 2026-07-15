@@ -232,7 +232,7 @@ describe('Board — result', () => {
     apiMock.board.mockResolvedValue(boardDone);
     renderBoard();
     expect(await screen.findByText('SCORED')).toBeInTheDocument();
-    expect(screen.getByText('4♠ by S')).toBeInTheDocument();
+    expect(document.querySelector('.result-contract')!.textContent).toBe('4♠ by S');
     expect(screen.getByText('+620 for N–S · NS vul')).toBeInTheDocument();
     // pct-big keeps its class; 58% in flip digits
     const pct = document.querySelector('.pct-big')!;
@@ -245,7 +245,9 @@ describe('Board — result', () => {
     expect(screen.getByText('THE FIELD — BOARD 2')).toBeInTheDocument();
     const table = document.querySelector('.fieldtable')!;
     expect(within(table as HTMLElement).getByText('You').closest('tr')!.className).toContain('me');
-    expect(within(table as HTMLElement).getByText(/4♠\+1 by S · \+650/)).toBeInTheDocument();
+    expect(
+      within(table as HTMLElement).getByText((_, el) => el?.textContent === '4♠+1 by S · +650'),
+    ).toBeInTheDocument();
 
     // deal diagram from allHands, my seat emphasized
     expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();

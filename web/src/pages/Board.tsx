@@ -27,6 +27,7 @@ import { AuctionGrid } from '../components/game/AuctionGrid';
 import { BidBox } from '../components/game/BidBox';
 import { CallInspector } from '../components/game/CallInspector';
 import { CallText } from '../components/game/CallText';
+import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
 import { DummyRail } from '../components/game/DummyRail';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
@@ -232,7 +233,9 @@ function BoardHead({ board }: { board: BoardView }) {
           {board.state === 'playing' && board.contractLabel ? (
             <>
               {' · '}
-              <b>{board.contractLabel}</b>
+              <b>
+                <ContractLabel label={board.contractLabel} />
+              </b>
             </>
           ) : null}
         </div>
@@ -429,7 +432,9 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
   return (
     <div className="result">
       <div className="result-hero">
-        <div className="result-contract">{r.contractLabel}</div>
+        <div className="result-contract">
+          <ContractLabel label={r.contractLabel} />
+        </div>
         <div className="result-score num">
           {signedScore(r.scoreNS)} for N–S · {vulLabel(board.vul)}
         </div>
@@ -452,7 +457,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
               <tr key={f.userId} className={f.isMe ? 'me' : ''}>
                 <td className="fieldtable-name">{f.isMe ? 'You' : f.handle}</td>
                 <td className="fieldtable-contract">
-                  {f.contract} · {signedScore(f.scoreNS)}
+                  <ContractLabel label={f.contract} /> · {signedScore(f.scoreNS)}
                 </td>
                 <td className="fieldtable-pct">
                   <PctBar pct={f.pct} width={56} /> <b>{f.pct}</b>
