@@ -944,14 +944,6 @@ a.ds-btn-secondary:hover {
      document order no matter which cards are dimmed. */
   isolation: isolate;
 }
-/* in an interactive fan, playable cards win the overlap so their whole face
-   is tappable — otherwise a disabled neighbor swallows most of the tap area */
-.handfan.interactive .cardbtn:enabled {
-  z-index: 1;
-}
-.handfan.interactive .cardbtn.selected {
-  z-index: 2;
-}
 .handfan .cardbtn:first-child {
   margin-left: 0;
 }
