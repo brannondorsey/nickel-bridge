@@ -28,6 +28,7 @@ import { BidBox } from '../components/game/BidBox';
 import { CallInspector } from '../components/game/CallInspector';
 import { CallText } from '../components/game/CallText';
 import { DealDiagram } from '../components/game/DealDiagram';
+import { DummyRail } from '../components/game/DummyRail';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
@@ -171,6 +172,8 @@ export default function Board() {
           lastEval={lastEval}
           selectedCard={selectedCard}
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
+          inspect={inspect}
+          onInspect={(e) => setInspect(e === inspect ? null : e)}
         />
       ) : (
         <BiddingPhase
@@ -282,11 +285,15 @@ function PlayPhase({
   lastEval,
   selectedCard,
   onSelectCard,
+  inspect,
+  onInspect,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
   selectedCard: number | null;
   onSelectCard: (card: number) => void;
+  inspect: AuctionEntry | null;
+  onInspect: (entry: AuctionEntry) => void;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -317,8 +324,15 @@ function PlayPhase({
     activeHand !== undefined &&
     (board.legalCards?.length ?? 0) < activeHand.length;
 
+  // Dummy on East or West is always the opposing side's exposed hand — never
+  // one the human plays — so it renders as a rail on its true compass side
+  // (TrickArea.tsx already puts West at screen-left, East at screen-right)
+  // instead of the full-width fan a partner's dummy gets at the top.
+  const dummyOnSide = board.dummy === 1 || board.dummy === 3;
+
   return (
     <>
+      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
       {/* keep the last bid's grade visible when the auction ends on the human's
           own call — it clears as soon as they play a card */}
       {lastEval ? <GradeToast evaluation={lastEval} /> : null}
@@ -327,7 +341,7 @@ function PlayPhase({
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
         </Toast>
       ) : null}
-      {board.dummyHand ? (
+      {board.dummyHand && !dummyOnSide ? (
         <>
           <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
           <div className="board-fan">
@@ -343,7 +357,19 @@ function PlayPhase({
       {mustFollow && led !== null ? (
         <div className="board-follow">{SUIT_PLURALS[led]} are live — you must follow suit</div>
       ) : null}
-      <TrickArea board={board} />
+      {board.dummyHand && dummyOnSide ? (
+        <div className="play-row">
+          {board.dummy === 3 ? (
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
+          ) : null}
+          <TrickArea board={board} />
+          {board.dummy === 1 ? (
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
+          ) : null}
+        </div>
+      ) : (
+        <TrickArea board={board} />
+      )}
       <div className="board-fan">
         <HandFan
           cards={displaySort(board.hand)}
