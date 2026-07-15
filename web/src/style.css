@@ -1112,17 +1112,25 @@ a.ds-btn-secondary:hover {
   color: #fff;
   font-weight: 800;
 }
+/* suit glyph colors on dark ink backgrounds (bid box selection, primary CTA) —
+   --suit-s is near-black, so it needs an explicit override wherever the
+   background itself goes dark; the other suits are lightened for contrast. */
 .bidbox button.bid.selected .suit-s,
-.bidbox button.bid.selected .suit-nt {
+.bidbox button.bid.selected .suit-nt,
+.ds-btn.btn-primary .suit-s,
+.ds-btn.btn-primary .suit-nt {
   color: #fff;
 }
-.bidbox button.bid.selected .suit-h {
+.bidbox button.bid.selected .suit-h,
+.ds-btn.btn-primary .suit-h {
   color: #ff9d94;
 }
-.bidbox button.bid.selected .suit-d {
+.bidbox button.bid.selected .suit-d,
+.ds-btn.btn-primary .suit-d {
   color: #ffd34d;
 }
-.bidbox button.bid.selected .suit-c {
+.bidbox button.bid.selected .suit-c,
+.ds-btn.btn-primary .suit-c {
   color: #8fe3a1;
 }
 .bidbox-fold {
