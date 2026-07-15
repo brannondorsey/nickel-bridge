@@ -61,6 +61,31 @@ describe('Board — bidding', () => {
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
   });
 
+  it('credits a textbook bid and names the robot convention in the toast', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: {
+        call: bid2H,
+        bestCall: 18, // 4♣
+        userProb: 0,
+        bestProb: 0.85,
+        grade: 'good',
+        score: 0.75,
+        saycConsistent: true,
+        bestMeaning: { title: 'Splinter raise', description: 'Double jump in a new suit.', exact: true },
+      },
+      board: boardBiddingRobots,
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    await screen.findByText('Good');
+    const toast = document.querySelector('.grade-toast')!;
+    expect(toast).toHaveTextContent(/Good — you bid 2♥, a textbook SAYC bid; the robot chose 4♣ \(Splinter raise\)/);
+    expect(toast).not.toHaveTextContent(/%/);
+  });
+
   it('opens the call inspector dialog from a past auction call', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();
@@ -159,10 +184,11 @@ describe('Board — result', () => {
     expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();
     expect(screen.getByText('NORTH · DUMMY')).toBeInTheDocument();
 
-    // bidding recap with stars and AI comparison
+    // bidding recap with stars and the robot comparison (convention named when known)
     expect(screen.getByText('YOUR BIDDING')).toBeInTheDocument();
     expect(screen.getAllByRole('img', { name: /of 3 stars/ })).toHaveLength(4);
-    expect(screen.getAllByText(/AI preferred/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/robot bid/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\(Limit raise\)/).length).toBeGreaterThan(0);
 
     expect(screen.getByRole('button', { name: /NEXT BOARD — 3 OF 4/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');

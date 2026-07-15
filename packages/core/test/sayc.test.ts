@@ -41,6 +41,11 @@ const SPEC: Row[] = [
   { name: 'new suit 1-level forcing', calls: [b(1, 0), PASS], candidate: b(1, 3), title: 'New suit at the 1 level', points: '6+ pts' },
   { name: 'two-over-one', calls: [b(1, 3), PASS], candidate: b(2, 1), title: 'New suit at the 2 level', points: '10+ pts' },
   { name: 'jump shift response', calls: [b(1, 0), PASS], candidate: b(2, 3), title: 'Jump shift', points: '17+ pts' },
+  { name: 'jump shift is a single jump only', calls: [b(1, 2), PASS], candidate: b(2, 3), title: 'Jump shift', points: '17+ pts' },
+  { name: 'splinter 4♣ over 1♥', calls: [b(1, 2), PASS], candidate: b(4, 0), title: 'Splinter', points: '10–13 pts', artificial: true },
+  { name: 'splinter 3♠ over 1♥', calls: [b(1, 2), PASS], candidate: b(3, 3), title: 'Splinter', points: '10–13 pts', artificial: true },
+  { name: 'splinter 4♥ over 1♠', calls: [b(1, 3), PASS], candidate: b(4, 2), title: 'Splinter', points: '10–13 pts', artificial: true },
+  { name: 'no splinter over a minor — honest fallback', calls: [b(1, 0), PASS], candidate: b(3, 3), exact: false },
   { name: 'weak response pass', calls: [b(1, 3), PASS], candidate: PASS, points: '0–5 pts' },
 
   // ---- notrump machinery ----

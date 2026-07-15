@@ -28,10 +28,14 @@ covers how the code is organized, how to work on it, and which invariants you mu
 packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/PBN/HCP),
                 auction.ts + play.ts (state machines), score.ts (scoring + matchpoints),
                 elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
-                biggest file in core), types.ts, barrel in index.ts
+                biggest file in core), advisor.ts (checks a hand against a meaning's
+                machine-readable `req` constraints, feeds bid grading), types.ts,
+                barrel in index.ts
 packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 38 logits),
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
-                bidder.ts (chooseCall argmax + bid grading), play-ai.ts (DD-optimal card
+                bidder.ts (chooseCall argmax + bid grading: model probability ratio,
+                floored at 'good' when core's advisor confirms the call is a SAYC
+                convention the hand satisfies), play-ai.ts (DD-optimal card
                 play via vendor/bridge-dds WASM)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
@@ -44,7 +48,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 fans, trick area, deal diagram), src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype)
 tools           offline Python weight conversion + golden-fixture generation;
-                gen_trace_fixture.mjs regenerates the robot determinism trace
+                gen_trace_fixture.mjs regenerates the robot determinism trace;
+                policy_probe.mjs prints the model's policy for any hand + auction
+                (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`)
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign

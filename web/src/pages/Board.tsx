@@ -387,10 +387,11 @@ function Result({ board, onNext }: { board: BoardView; onNext: () => void }) {
                 {e.bestCall !== e.call ? (
                   <>
                     {' '}
-                    — AI preferred <CallText call={e.bestCall} />
+                    — robot bid <CallText call={e.bestCall} />
+                    {e.bestMeaning?.exact ? <> ({e.bestMeaning.title})</> : null}
                   </>
                 ) : (
-                  <> — the AI's choice too</>
+                  <> — the robot's choice too</>
                 )}
               </span>
             </div>

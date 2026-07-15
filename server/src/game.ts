@@ -50,7 +50,7 @@ export interface GameBoard {
   deal: Deal;
   calls: Call[];
   plays: Card[];
-  bidEvals: (BidEvaluation & { call: Call })[];
+  bidEvals: (BidEvaluation & { call: Call; bestMeaning?: BidMeaning | null })[];
   contract: Contract | null;
 }
 
@@ -146,12 +146,17 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
   }
 }
 
-export async function submitCall(b: GameBoard, call: Call): Promise<BidEvaluation & { call: Call }> {
+export async function submitCall(
+  b: GameBoard,
+  call: Call,
+): Promise<BidEvaluation & { call: Call; bestMeaning: BidMeaning | null }> {
   if (b.row.state !== 'bidding') throw httpError(409, 'not in bidding phase');
   const auction = auctionState(b.deal.dealer, b.calls);
   if (auction.isOver || auction.turn !== HUMAN_SEAT) throw httpError(409, 'not your turn');
   if (!legalCalls(auction)[call]) throw httpError(400, 'illegal call');
-  const evaluation = { ...bidder.evaluate(b.deal, b.calls, call), call };
+  const bare = bidder.evaluate(b.deal, b.calls, call);
+  // Name the robot's preferred call so the UI can teach, not just score.
+  const evaluation = { ...bare, call, bestMeaning: meaningFor(b.deal.dealer, b.calls, bare.bestCall) };
   b.calls.push(call);
   b.bidEvals.push(evaluation);
   await advanceRobots(b);

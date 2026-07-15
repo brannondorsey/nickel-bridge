@@ -180,18 +180,20 @@ describe('BidBox', () => {
 });
 
 describe('GradeToast', () => {
-  it('shows stars and the AI-differs sentence', () => {
-    render(<GradeToast evaluation={bidEvalsFixture[1]} />); // good, best 3♥
+  it('names the robot bid and its convention when the calls differ', () => {
+    render(<GradeToast evaluation={bidEvalsFixture[1]} />); // good, saycConsistent, best 3♥
     expect(screen.getByRole('status')).toHaveTextContent(/Good/);
     expect(screen.getByLabelText('2 of 3 stars')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(/AI prefers 3♥/);
+    expect(screen.getByRole('status')).toHaveTextContent(/a textbook SAYC bid; the robot chose 3♥ \(Limit raise\)/);
+    expect(screen.getByRole('status')).not.toHaveTextContent(/%/);
   });
 
-  it('shows the ✗ treatment for poor and the agreement sentence when the AI agrees', () => {
-    render(<GradeToast evaluation={bidEvalsFixture[3]} />); // poor
+  it('shows the ✗ treatment for poor and the agreement sentence when the robot agrees', () => {
+    render(<GradeToast evaluation={bidEvalsFixture[3]} />); // poor, no meaning attached
     expect(screen.getByLabelText('0 of 3 stars')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/the robot bid 4NT/);
     const agree = render(<GradeToast evaluation={bidEvalsFixture[0]} />); // excellent, same call
-    expect(agree.getAllByRole('status').at(-1)).toHaveTextContent(/the AI.s choice too/);
+    expect(agree.getAllByRole('status').at(-1)).toHaveTextContent(/the robot.s choice too/);
   });
 });
 

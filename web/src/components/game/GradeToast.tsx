@@ -16,9 +16,11 @@ export const GRADE_STARS: Record<BidEval['grade'], 0 | 1 | 2 | 3> = {
   poor: 0,
 };
 
-/** Post-bid grade toast: tier + stars (✗ for poor) + the AI comparison sentence. */
+/** Post-bid grade toast: tier + stars (✗ for poor) + the robot comparison sentence. */
 export function GradeToast({ evaluation }: { evaluation: BidEval }) {
   const differs = evaluation.bestCall !== evaluation.call;
+  // Name the robot's bid when it's a recognized convention, so the comparison teaches.
+  const bestTitle = evaluation.bestMeaning?.exact ? evaluation.bestMeaning.title : null;
   return (
     <Toast className={`grade-toast ${evaluation.grade}`} stamp={<StarGrade stars={GRADE_STARS[evaluation.grade]} size={14} />}>
       <b>{GRADE_TEXT[evaluation.grade]}</b> — you bid{' '}
@@ -27,14 +29,14 @@ export function GradeToast({ evaluation }: { evaluation: BidEval }) {
       </b>
       {differs ? (
         <>
-          ; the AI prefers{' '}
+          {evaluation.saycConsistent ? ', a textbook SAYC bid; the robot chose ' : '; the robot bid '}
           <b>
             <CallText call={evaluation.bestCall} />
-          </b>{' '}
-          ({Math.round(evaluation.bestProb * 100)}% vs {Math.round(evaluation.userProb * 100)}%)
+          </b>
+          {bestTitle ? <> ({bestTitle})</> : null}
         </>
       ) : (
-        <> — the AI’s choice too</>
+        <> — the robot’s choice too</>
       )}
       .
     </Toast>

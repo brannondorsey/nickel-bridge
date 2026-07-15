@@ -30,6 +30,10 @@ export interface BidEval {
   bestProb: number;
   grade: 'excellent' | 'good' | 'fair' | 'poor';
   score: number;
+  /** the call matches a defined SAYC convention the hand satisfies (absent on old boards) */
+  saycConsistent?: boolean;
+  /** meaning of the robot's preferred call, for teaching copy (absent on old boards) */
+  bestMeaning?: BidMeaning | null;
 }
 
 export interface TrickCard {

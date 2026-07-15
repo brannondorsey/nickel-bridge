@@ -37,6 +37,22 @@ export interface BidMeaning {
   artificial?: boolean;
   /** false when we fell back to a generic explanation */
   exact: boolean;
+  /**
+   * Machine-checkable hand requirements for this call, used by advisor.ts to
+   * verify "does this hand actually satisfy what the bid promises". Only
+   * populated for well-defined conventions (currently the responses-to-openings
+   * family). Authored in pure HCP: display ranges like "10–12 pts" include
+   * distribution points, so minima here sit ~1 HCP below them; maxima are kept
+   * as-is (length/shortness only push a hand's value up, never down).
+   */
+  req?: HandConstraint;
+}
+
+export interface HandConstraint {
+  minHcp?: number;
+  maxHcp?: number;
+  /** per-suit length bounds; strain is a suit strain only (0=♣ 1=♦ 2=♥ 3=♠) */
+  suits?: { strain: 0 | 1 | 2 | 3; min?: number; max?: number }[];
 }
 
 interface Ctx {
@@ -428,19 +444,31 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
         return meaning(
           `Single raise`,
           `Simple raise of partner's suit: ${major ? '3+ card support' : '4+ card support (minors are often raised with 5)'} and 6–10 points.`,
-          { points: '6–10 pts', shapePromise: `${major ? '3+' : '4+'} ${S[openStrain]}` },
+          {
+            points: '6–10 pts',
+            shapePromise: `${major ? '3+' : '4+'} ${S[openStrain]}`,
+            req: { minHcp: 5, maxHcp: 10, suits: [{ strain: openStrain, min: major ? 3 : 4 }] },
+          },
         );
       if (level === 3)
         return meaning(
           `Limit raise`,
           `Invitational jump raise: ${major ? '3+' : '4+'} card support and 10–12 points. Partner bids game with better than a minimum opening.`,
-          { points: '10–12 pts', shapePromise: `${major ? '3+' : '4+'} ${S[openStrain]}` },
+          {
+            points: '10–12 pts',
+            shapePromise: `${major ? '3+' : '4+'} ${S[openStrain]}`,
+            req: { minHcp: 9, maxHcp: 12, suits: [{ strain: openStrain, min: major ? 3 : 4 }] },
+          },
         );
       if (level === 4 && major)
         return meaning(
           `Raise to game`,
           'Preemptive-to-practical: 5+ card support with a shapely, weakish hand (not a strong slam try — strong hands go slower).',
-          { points: '~6–12 pts', shapePromise: `5+ ${S[openStrain]}` },
+          {
+            points: '~6–12 pts',
+            shapePromise: `5+ ${S[openStrain]}`,
+            req: { minHcp: 5, maxHcp: 12, suits: [{ strain: openStrain, min: 5 }] },
+          },
         );
     }
     // 1NT response
@@ -448,36 +476,64 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning(
         '1NT response',
         'A catch-all: 6–10 points, no suit you can show at the one level, not enough to bid at the two level.',
-        { points: '6–10 pts' },
+        { points: '6–10 pts', req: { minHcp: 5, maxHcp: 10 } },
       );
     // 2NT / 3NT responses
     if (call === makeBid(2, 4))
       return meaning('2NT response', 'Balanced 13–15 points without a fit — forcing to game in SAYC.', {
         points: '13–15 HCP',
         shapePromise: 'balanced',
+        req: { minHcp: 13, maxHcp: 15 },
       });
     if (call === makeBid(3, 4))
-      return meaning('3NT response', 'Balanced 16–18 points without a fit.', { points: '16–18 HCP', shapePromise: 'balanced' });
+      return meaning('3NT response', 'Balanced 16–18 points without a fit.', {
+        points: '16–18 HCP',
+        shapePromise: 'balanced',
+        req: { minHcp: 16, maxHcp: 18 },
+      });
     // new suits
     if (strain !== openStrain && strain !== 4) {
-      const isJump = call > makeBid(openLevel + (strain > openStrain ? 0 : 1), strain);
-      if (isJump)
+      // Minimum available level for this suit; +1 above it is a jump, +2 a double jump.
+      const minLevel = openLevel + (strain > openStrain ? 0 : 1);
+      // Splinter: a double jump in a new suit over a major opening — game-forcing
+      // raise with shortness. Not in the SAYC pamphlet proper, but a near-universal
+      // extension that the robot's system plays. Majors only for now: over minor
+      // openings splinters collide with inverted-minor treatments and we haven't
+      // verified the model bids them.
+      if (openStrain >= 2 && level === minLevel + 2)
+        return meaning(
+          'Splinter raise',
+          `Double jump in a new suit: a game-forcing raise with 4+ ${S[openStrain]} and a singleton or void in ${S[strain]}. A near-universal SAYC extension (not in the pamphlet proper) — the robot plays it.`,
+          {
+            points: '10–13 pts',
+            shapePromise: `4+ ${S[openStrain]}, singleton/void ${S[strain]}`,
+            artificial: true,
+            req: { minHcp: 9, maxHcp: 14, suits: [{ strain: openStrain, min: 4 }, { strain, max: 1 }] },
+          },
+        );
+      if (level === minLevel + 1)
         return meaning(
           'Jump shift',
           `A strong jump in a new suit: 17+ points with a good 5+ card ${S[strain]} suit. Game forcing, suggests slam.`,
-          { points: '17+ pts', shapePromise: `5+ ${S[strain]}` },
+          { points: '17+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 16, suits: [{ strain, min: 5 }] } },
         );
       if (level === 1)
         return meaning(
           `New suit at the 1 level`,
           `Natural and forcing one round: 4+ ${S[strain]} and 6+ points. Opener must bid again.`,
-          { points: '6+ pts', shapePromise: `4+ ${S[strain]}` },
+          { points: '6+ pts', shapePromise: `4+ ${S[strain]}`, req: { minHcp: 5, suits: [{ strain, min: 4 }] } },
         );
-      return meaning(
-        `New suit at the 2 level`,
-        `Natural and forcing: ${strain === 2 && openStrain === 3 ? '5+' : '4+'} ${S[strain]} and 10+ points (SAYC two-over-one shows real values).`,
-        { points: '10+ pts', shapePromise: `${strain === 2 && openStrain === 3 ? '5+' : '4+'} ${S[strain]}` },
-      );
+      if (level === minLevel)
+        return meaning(
+          `New suit at the 2 level`,
+          `Natural and forcing: ${strain === 2 && openStrain === 3 ? '5+' : '4+'} ${S[strain]} and 10+ points (SAYC two-over-one shows real values).`,
+          {
+            points: '10+ pts',
+            shapePromise: `${strain === 2 && openStrain === 3 ? '5+' : '4+'} ${S[strain]}`,
+            req: { minHcp: 10, suits: [{ strain, min: strain === 2 && openStrain === 3 ? 5 : 4 }] },
+          },
+        );
+      // triple jumps and beyond fall through to the honest generic below
     }
   }
 

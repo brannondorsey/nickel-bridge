@@ -65,7 +65,7 @@ export function AuctionGrid({
                       {entry ? (
                         <button
                           type="button"
-                          className={entry.meaning ? 'has-meaning' : ''}
+                          className={entry.meaning?.exact ? 'has-meaning' : ''}
                           onClick={() => onInspect(entry)}
                           title="what does this call mean?"
                           aria-label={entry.name}
@@ -82,7 +82,7 @@ export function AuctionGrid({
             </tbody>
           </table>
         </div>
-        <div className="auction-hint">dotted = has a SAYC meaning · tap any call to inspect</div>
+        <div className="auction-hint">dotted = exact SAYC meaning · tap any call to inspect</div>
       </div>
     </div>
   );
