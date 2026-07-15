@@ -18,13 +18,17 @@ export function satisfiesConstraint(hand: Card[], req: HandConstraint): boolean 
   const points = hcp(hand);
   if (req.minHcp !== undefined && points < req.minHcp) return false;
   if (req.maxHcp !== undefined && points > req.maxHcp) return false;
+  const lengths = shape(hand); // suit order ♠♥♦♣ — flip from strain order ♣♦♥♠
   if (req.suits) {
-    const lengths = shape(hand); // suit order ♠♥♦♣ — flip from strain order ♣♦♥♠
     for (const s of req.suits) {
       const len = lengths[3 - s.strain];
       if (s.min !== undefined && len < s.min) return false;
       if (s.max !== undefined && len > s.max) return false;
     }
+  }
+  if (req.balanced) {
+    if (lengths.some((len) => len < 2)) return false;
+    if (lengths.filter((len) => len === 2).length > 1) return false;
   }
   return true;
 }

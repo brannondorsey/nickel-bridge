@@ -39,11 +39,14 @@ export interface BidMeaning {
   exact: boolean;
   /**
    * Machine-checkable hand requirements for this call, used by advisor.ts to
-   * verify "does this hand actually satisfy what the bid promises". Only
-   * populated for well-defined conventions (currently the responses-to-openings
-   * family). Authored in pure HCP: display ranges like "10–12 pts" include
-   * distribution points, so minima here sit ~1 HCP below them; maxima are kept
-   * as-is (length/shortness only push a hand's value up, never down).
+   * verify "does this hand actually satisfy what the bid promises". Populated
+   * for the well-defined natural families (openings, responses, opener rebids,
+   * overcalls); deliberately absent from artificial relays (Stayman, transfers,
+   * Blackwood, Gerber, 2♦ waiting) and from doubles/Michaels, whose
+   * shortness-plus-support semantics don't fit these simple bounds. Authored in
+   * pure HCP: display ranges like "10–12 pts" include distribution points, so
+   * minima here sit ~1 HCP below them; maxima are kept as-is (length/shortness
+   * only push a hand's value up, never down).
    */
   req?: HandConstraint;
 }
@@ -53,6 +56,8 @@ export interface HandConstraint {
   maxHcp?: number;
   /** per-suit length bounds; strain is a suit strain only (0=♣ 1=♦ 2=♥ 3=♠) */
   suits?: { strain: 0 | 1 | 2 | 3; min?: number; max?: number }[];
+  /** no singleton or void, at most one doubleton */
+  balanced?: boolean;
 }
 
 interface Ctx {
@@ -143,11 +148,13 @@ function explainPass(ctx: Ctx): BidMeaning {
   if (!ctx.opening) {
     return meaning('Pass', 'Not enough to open: fewer than 13 points (HCP plus length).', {
       points: '0–12 pts',
+      req: { maxHcp: 12 },
     });
   }
   if (ctx.partnerOpened && ctx.myCalls.every((c) => c === PASS) && ctx.partnerCalls.length === 1) {
     return meaning('Pass', 'Fewer than 6 points — too weak to respond to partner’s opening.', {
       points: '0–5 pts',
+      req: { maxHcp: 5 },
     });
   }
   return generic('Pass', 'Nothing more to say: no extra strength or shape worth showing at this point.');
@@ -251,19 +258,20 @@ function explainOpening(level: number, strain: Strain): BidMeaning | null {
       return meaning('1NT opening', 'A balanced hand (no singleton or void, at most one doubleton) with 15–17 HCP.', {
         points: '15–17 HCP',
         shapePromise: 'balanced',
+        req: { minHcp: 15, maxHcp: 17, balanced: true },
       });
     if (strain >= 2)
       return meaning(
         `1${S[strain]} opening`,
         `Opening hand with a 5-card or longer ${S[strain]} suit. With two 5-card suits open the higher-ranking.`,
-        { points: '13–21 pts', shapePromise: `5+ ${S[strain]}` },
+        { points: '13–21 pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 12, maxHcp: 21, suits: [{ strain, min: 5 }] } },
       );
     return meaning(
       `1${S[strain]} opening`,
       `Opening hand without a 5-card major: your longer minor, ${
         strain === 0 ? 'possibly only 3 clubs ("could be short")' : '3 cards only when exactly 3–3 in the minors is impossible — usually 4+'
       }.`,
-      { points: '13–21 pts', shapePromise: `3+ ${S[strain]}` },
+      { points: '13–21 pts', shapePromise: `3+ ${S[strain]}`, req: { minHcp: 12, maxHcp: 21, suits: [{ strain, min: 3 }] } },
     );
   }
   if (level === 2) {
@@ -271,33 +279,38 @@ function explainOpening(level: number, strain: Strain): BidMeaning | null {
       return meaning(
         '2♣ opening',
         'Strong and artificial — says nothing about clubs. Almost game-forcing: 22+ HCP, or a hand within one trick of game. Partner must respond (2♦ is the usual "waiting" reply).',
-        { points: '22+ pts', artificial: true },
+        { points: '22+ pts', artificial: true, req: { minHcp: 21 } },
       );
     if (strain === 4)
       return meaning('2NT opening', 'A balanced 20–21 HCP. Not forcing; partner may pass with a very weak hand.', {
         points: '20–21 HCP',
         shapePromise: 'balanced',
+        req: { minHcp: 20, maxHcp: 21, balanced: true },
       });
     return meaning(
       `Weak two: 2${S[strain]}`,
       `A preempt: a good 6-card ${S[strain]} suit and 5–11 HCP, below an opening hand. Takes bidding space from the opponents.`,
-      { points: '5–11 HCP', shapePromise: `good 6-card ${S[strain]}` },
+      { points: '5–11 HCP', shapePromise: `good 6-card ${S[strain]}`, req: { minHcp: 5, maxHcp: 11, suits: [{ strain, min: 6 }] } },
     );
   }
   if (level === 3) {
     if (strain === 4)
-      return meaning('3NT opening', 'A balanced powerhouse: 25–27 HCP.', { points: '25–27 HCP', shapePromise: 'balanced' });
+      return meaning('3NT opening', 'A balanced powerhouse: 25–27 HCP.', {
+        points: '25–27 HCP',
+        shapePromise: 'balanced',
+        req: { minHcp: 25, maxHcp: 27, balanced: true },
+      });
     return meaning(
       `Preempt: 3${S[strain]}`,
       `A weak hand with a 7-card ${S[strain]} suit — obstruction, roughly "within 2–3 tricks of your bid". Usually 5–10 HCP with most strength in the suit.`,
-      { points: '5–10 HCP', shapePromise: `7-card ${S[strain]}` },
+      { points: '5–10 HCP', shapePromise: `7-card ${S[strain]}`, req: { minHcp: 5, maxHcp: 10, suits: [{ strain, min: 7 }] } },
     );
   }
   if (level === 4 && strain !== 4) {
     return meaning(
       `Preempt: 4${S[strain]}`,
       `A weak hand with a long, strong ${S[strain]} suit (usually 8 cards) — you expect to take about 8 tricks with ${S[strain]} as trumps and little defense.`,
-      { points: '5–10 HCP', shapePromise: `8-card ${S[strain]}` },
+      { points: '5–10 HCP', shapePromise: `8-card ${S[strain]}`, req: { minHcp: 5, maxHcp: 10, suits: [{ strain, min: 8 }] } },
     );
   }
   return generic(
@@ -483,13 +496,13 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning('2NT response', 'Balanced 13–15 points without a fit — forcing to game in SAYC.', {
         points: '13–15 HCP',
         shapePromise: 'balanced',
-        req: { minHcp: 13, maxHcp: 15 },
+        req: { minHcp: 13, maxHcp: 15, balanced: true },
       });
     if (call === makeBid(3, 4))
       return meaning('3NT response', 'Balanced 16–18 points without a fit.', {
         points: '16–18 HCP',
         shapePromise: 'balanced',
-        req: { minHcp: 16, maxHcp: 18 },
+        req: { minHcp: 16, maxHcp: 18, balanced: true },
       });
     // new suits
     if (strain !== openStrain && strain !== 4) {
@@ -542,9 +555,13 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning(
         `Positive response`,
         `Natural and positive opposite the strong 2♣: a good 5+ card ${S[strain]} suit and 8+ points. (With less, respond 2♦ waiting.)`,
-        { points: '8+ pts', shapePromise: `5+ ${S[strain]}` },
+        { points: '8+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 7, suits: [{ strain, min: 5 }] } },
       );
-    return meaning('2NT positive', 'Balanced 8+ points opposite the strong 2♣ opening.', { points: '8+ HCP', shapePromise: 'balanced' });
+    return meaning('2NT positive', 'Balanced 8+ points opposite the strong 2♣ opening.', {
+      points: '8+ HCP',
+      shapePromise: 'balanced',
+      req: { minHcp: 8, balanced: true },
+    });
   }
 
   // responses to weak twos / preempts
@@ -559,11 +576,12 @@ function explainResponse(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning(
         'New suit over the preempt',
         `Natural and forcing: a good 5+ card ${S[strain]} suit and interest in game.`,
-        { points: '15+ pts', shapePromise: `5+ ${S[strain]}` },
+        { points: '15+ pts', shapePromise: `5+ ${S[strain]}`, req: { minHcp: 14, suits: [{ strain, min: 5 }] } },
       );
     if (strain === 4 && level === 3)
       return meaning('3NT over the preempt', 'To play: stoppers in the unbid suits and expectation of nine tricks (often with a fit or source of tricks).', {
         points: '~15+ pts',
+        req: { minHcp: 14 },
       });
   }
 
@@ -588,11 +606,13 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
         return meaning('1NT rebid', 'A balanced minimum that opened a suit: 12–14 HCP, no fit for partner, no second suit worth showing.', {
           points: '12–14 HCP',
           shapePromise: 'balanced',
+          req: { minHcp: 12, maxHcp: 14, balanced: true },
         });
       if (level === 2 && call > response + 4)
         return meaning('2NT jump rebid', 'A balanced 18–19 HCP — too strong to open 1NT.', {
           points: '18–19 HCP',
           shapePromise: 'balanced',
+          req: { minHcp: 18, maxHcp: 19, balanced: true },
         });
     }
     if (strain === openStrain) {
@@ -601,10 +621,12 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
         return meaning('Jump rebid of your suit', `A good 6+ card ${S[strain]} suit with 16–18 points — invitational.`, {
           points: '16–18 pts',
           shapePromise: `6+ ${S[strain]}`,
+          req: { minHcp: 15, maxHcp: 18, suits: [{ strain, min: 6 }] },
         });
       return meaning('Rebid of your suit', `A minimum opening with a 6+ card ${S[strain]} suit and nothing better to say.`, {
         points: '13–15 pts',
         shapePromise: `6+ ${S[strain]}`,
+        req: { minHcp: 12, maxHcp: 15, suits: [{ strain, min: 6 }] },
       });
     }
     if (isBid(response) && strain === bidStrain(response)) {
@@ -613,10 +635,12 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
         return meaning('Jump raise of responder', `4-card support for partner's suit with 17–18 points — invitational to game.`, {
           points: '17–18 pts',
           shapePromise: `4 ${S[strain]}`,
+          req: strain !== 4 ? { minHcp: 16, maxHcp: 18, suits: [{ strain, min: 4 }] } : { minHcp: 16, maxHcp: 18 },
         });
       return meaning('Raise of responder', `4-card support for partner's suit with a minimum-range opening (13–16 points).`, {
         points: '13–16 pts',
         shapePromise: `4 ${S[strain]}`,
+        req: strain !== 4 ? { minHcp: 12, maxHcp: 16, suits: [{ strain, min: 4 }] } : { minHcp: 12, maxHcp: 16 },
       });
     }
     if (strain !== 4 && strain !== openStrain) {
@@ -627,16 +651,22 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
         return meaning('Jump shift by opener', 'A very strong two-suiter: about 19+ points. Game forcing.', {
           points: '19+ pts',
           shapePromise: `4+ ${S[strain]}`,
+          req: { minHcp: 18, suits: [{ strain, min: 4 }] },
         });
       if (isReverse)
         return meaning(
           'Reverse',
           `A new suit at the two level above your first suit: shows 17+ points and at least 5–4 shape (first suit longer). Forcing one round.`,
-          { points: '17+ pts', shapePromise: `4+ ${S[strain]}, longer ${S[openStrain]}` },
+          {
+            points: '17+ pts',
+            shapePromise: `4+ ${S[strain]}, longer ${S[openStrain]}`,
+            req: { minHcp: 16, suits: [{ strain, min: 4 }] },
+          },
         );
       return meaning('New suit rebid', `Natural: 4+ ${S[strain]}, typically an unbalanced opening (13–18 points). Not forcing.`, {
         points: '13–18 pts',
         shapePromise: `4+ ${S[strain]}`,
+        req: { minHcp: 12, maxHcp: 18, suits: [{ strain, min: 4 }] },
       });
     }
   }
@@ -666,6 +696,7 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
       return meaning('1NT overcall', 'Like a strong notrump opening: 15–18 HCP, balanced, with at least one stopper in their suit.', {
         points: '15–18 HCP',
         shapePromise: 'balanced, stopper in their suit',
+        req: { minHcp: 15, maxHcp: 18, balanced: true },
       });
     return generic(`${level}NT overcall`, 'Unusual notrump territory: typically shows the two lowest unbid suits (5–5).', {
       artificial: true,
@@ -678,15 +709,18 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
     return meaning('Weak jump overcall', `Preemptive, like a weak two/three opening: a good 6+ card ${S[strain]} suit, 5–11 HCP.`, {
       points: '5–11 HCP',
       shapePromise: `6+ ${S[strain]}`,
+      req: { minHcp: 5, maxHcp: 11, suits: [{ strain, min: 6 }] },
     });
   if (level === 1)
     return meaning('One-level overcall', `Natural: a decent 5+ card ${S[strain]} suit and about 8–16 points.`, {
       points: '8–16 pts',
       shapePromise: `5+ ${S[strain]}`,
+      req: { minHcp: 7, maxHcp: 16, suits: [{ strain, min: 5 }] },
     });
   return meaning('Two-level overcall', `Natural: a good 5+ card ${S[strain]} suit and opening-ish values, about 10–16 points.`, {
     points: '10–16 pts',
     shapePromise: `5+ ${S[strain]}`,
+    req: { minHcp: 9, maxHcp: 16, suits: [{ strain, min: 5 }] },
   });
 }
 

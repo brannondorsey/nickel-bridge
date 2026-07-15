@@ -73,4 +73,16 @@ describe('Bidder.evaluate with the sl model', () => {
     expect(ev.grade).toBe('excellent');
     expect(ev.score).toBe(1);
   });
+
+  it('floors textbook openings too (weak two where the model preempts higher)', () => {
+    // 7-card suit, 6 HCP: the model opens 3♠ (~100%), but a 2♠ weak two still
+    // keeps its promises (5–11 HCP, 6+ spades) — judgment call, not a blunder.
+    const preempt = dealWithSouth(hand('KQJT952.T95.4.72'));
+    preempt.dealer = 2;
+    const ev = bidder.evaluate(preempt, [], b(2, 3));
+    expect(ev.bestCall).toBe(b(3, 3));
+    expect(ev.saycConsistent).toBe(true);
+    expect(ev.grade).toBe('good');
+    expect(ev.score).toBe(0.75);
+  });
 });
