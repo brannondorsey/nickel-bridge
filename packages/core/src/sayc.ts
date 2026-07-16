@@ -387,6 +387,54 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
     }
   }
 
+  // --- opener's reply after their own 1NT/2NT OPENING to partner's Stayman ask or Jacoby transfer ---
+  const openerReplyToNT =
+    ctx.iOpened &&
+    ctx.opening !== null &&
+    bidStrain(ctx.opening.call) === 4 &&
+    ctx.myCalls.filter((c) => c !== PASS).length === 1 &&
+    !ctx.interference;
+  if (openerReplyToNT && ctx.opening !== null && partnerBid !== null) {
+    const ntLevel = bidLevel(ctx.opening.call);
+    const askLevel = ntLevel + 1;
+    if (bidLevel(partnerBid) === askLevel && bidStrain(partnerBid) === 0) {
+      // partner's ask was Stayman (asking level, clubs)
+      if (level === askLevel && strain === 1) {
+        return meaning(
+          'Stayman response: no major',
+          `Artificial: denies a 4-card major. (${askLevel}♥ or ${askLevel}♠ would show one instead.)`,
+          { artificial: true },
+        );
+      }
+      if (level === askLevel && (strain === 2 || strain === 3)) {
+        return meaning(
+          `Stayman response: ${S[strain]}`,
+          `Artificial reply, though it does show real shape: a 4-card ${S[strain]} suit. (With both majors, show ♥ first.)`,
+          { artificial: true, shapePromise: `4+ ${S[strain]}` },
+        );
+      }
+    }
+    if (bidLevel(partnerBid) === askLevel && (bidStrain(partnerBid) === 1 || bidStrain(partnerBid) === 2)) {
+      // partner's ask was a Jacoby transfer (asking level, diamonds = to hearts, hearts = to spades)
+      const majorStrain = bidStrain(partnerBid) === 1 ? 2 : 3;
+      const major = S[majorStrain];
+      if (level === askLevel && strain === majorStrain) {
+        return meaning(
+          `Accepts the transfer to ${major}`,
+          `Artificial: completes partner's Jacoby transfer by bidding ${major} at the cheapest level. Says nothing extra about your hand — partner is captain and may pass, invite, or drive to game/slam next.`,
+          { artificial: true },
+        );
+      }
+      if (level === askLevel + 1 && strain === majorStrain) {
+        return meaning(
+          'Super-accept of the transfer',
+          `Jumps a level to accept: shows 4-card support for ${major} and a maximum notrump. Extra shape and strength, inviting partner toward slam.`,
+          { artificial: true, shapePromise: `4+ ${major}` },
+        );
+      }
+    }
+  }
+
   // --- Blackwood 4NT after suit bidding ---
   if (call === makeBid(4, 4) && ctx.lastBid !== null && bidStrain(ctx.lastBid) !== 4) {
     return meaning(

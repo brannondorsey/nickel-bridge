@@ -57,6 +57,11 @@ const SPEC: Row[] = [
   { name: 'Gerber over NT', calls: [b(1, 4), PASS], candidate: b(4, 0), title: 'Gerber', artificial: true },
   { name: 'quantitative 4NT', calls: [b(1, 4), PASS], candidate: b(4, 4), title: 'Quantitative' },
   { name: 'Stayman over 2NT', calls: [b(2, 4), PASS], candidate: b(3, 0), title: 'Stayman', artificial: true },
+  { name: 'Stayman response: no major', dealer: 2, calls: [b(1, 4), PASS, b(2, 0), PASS], candidate: b(2, 1), title: 'no major', artificial: true },
+  { name: 'Stayman response: shows a major', dealer: 2, calls: [b(1, 4), PASS, b(2, 0), PASS], candidate: b(2, 2), title: 'Stayman response', artificial: true },
+  { name: 'accepts transfer to hearts', dealer: 2, calls: [b(1, 4), PASS, b(2, 1), PASS], candidate: b(2, 2), title: 'Accepts the transfer', artificial: true },
+  { name: 'accepts transfer to spades', dealer: 2, calls: [b(1, 4), PASS, b(2, 2), PASS], candidate: b(2, 3), title: 'Accepts the transfer', artificial: true },
+  { name: 'super-accept of transfer', dealer: 2, calls: [b(1, 4), PASS, b(2, 2), PASS], candidate: b(3, 3), title: 'Super-accept', artificial: true },
 
   // ---- strong 2♣ machinery ----
   { name: '2♦ waiting', calls: [b(2, 0), PASS], candidate: b(2, 1), title: '2♦ waiting', artificial: true },
