@@ -7,6 +7,7 @@
  *   Poiret One   — the wordmark ONLY
  *   Crimson Pro  — body text, titles, greetings
  *   Besley       — tracked-caps labels, numerals, buttons, ticket text
+ *                  (variable font; its tabular figures are broken — see .num)
  *   Josefin Sans — ink stamps + postmarks ONLY
  *
  * NOTE ON CLASS NAMES: .bidbox .bid .callrow .confirm-row .meaning-panel
@@ -58,7 +59,7 @@
 :root {
   --font-display: 'Poiret One', cursive; /* wordmark ONLY */
   --font-body: 'Crimson Pro', serif; /* body, titles, greetings */
-  --font-label: 'Besley', serif; /* tracked-caps labels, numerals, buttons, ticket text */
+  --font-label: 'Besley Variable', 'Besley', serif; /* tracked-caps labels, numerals, buttons, ticket text */
   --font-stamp: 'Josefin Sans', sans-serif; /* ink stamps + postmark ONLY */
   /* scale (Crimson runs small — bumped +1, weight 600 for UI text) */
   --text-wordmark: 17px; /* Poiret One, letter-spacing .14em */
@@ -153,8 +154,14 @@ input {
 
 /* ---- shared utilities ---- */
 
+/* Numeral hook. MUST NOT set font-variant-numeric: tabular-nums — Besley's
+ * tabular figures are broken in every published build (fontsource and Google's
+ * CDN alike): the tnum feature swaps digits for glyphs uniFF10-19, and the
+ * tabular zero (uniFF10) has no weight-variation deltas, so at weights 600-800
+ * every digit boldens except the zero, which stays thin and narrow. Besley's
+ * default (proportional) figures interpolate correctly at all weights. */
 .num {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: normal;
 }
 
 /* Besley tracked-caps micro label */

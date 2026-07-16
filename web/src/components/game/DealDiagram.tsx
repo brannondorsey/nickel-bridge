@@ -62,16 +62,16 @@ export function DealDiagram({
           <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
             <line x1="24" y1="14" x2="24" y2="34" stroke="var(--line)" strokeWidth="1.5" />
             <line x1="14" y1="24" x2="34" y2="24" stroke="var(--line)" strokeWidth="1.5" />
-            <text x="24" y="10" textAnchor="middle" fontFamily="Besley,serif" fontWeight="700" fontSize="10" fill="var(--ink)">
+            <text x="24" y="10" textAnchor="middle" fontFamily="'Besley Variable', Besley, serif" fontWeight="700" fontSize="10" fill="var(--ink)">
               N
             </text>
-            <text x="24" y="45" textAnchor="middle" fontFamily="Besley,serif" fontSize="10" fill="var(--muted)">
+            <text x="24" y="45" textAnchor="middle" fontFamily="'Besley Variable', Besley, serif" fontSize="10" fill="var(--muted)">
               S
             </text>
-            <text x="7" y="27.5" textAnchor="middle" fontFamily="Besley,serif" fontSize="10" fill="var(--muted)">
+            <text x="7" y="27.5" textAnchor="middle" fontFamily="'Besley Variable', Besley, serif" fontSize="10" fill="var(--muted)">
               W
             </text>
-            <text x="41" y="27.5" textAnchor="middle" fontFamily="Besley,serif" fontSize="10" fill="var(--muted)">
+            <text x="41" y="27.5" textAnchor="middle" fontFamily="'Besley Variable', Besley, serif" fontSize="10" fill="var(--muted)">
               E
             </text>
           </svg>
