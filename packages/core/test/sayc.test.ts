@@ -68,6 +68,8 @@ const SPEC: Row[] = [
   // ---- strong 2♣ machinery ----
   { name: '2♦ waiting', calls: [b(2, 0), PASS], candidate: b(2, 1), title: '2♦ waiting', artificial: true },
   { name: 'positive response to 2♣', calls: [b(2, 0), PASS], candidate: b(2, 3), title: 'Positive response', points: '8+ pts' },
+  { name: 'opener rebid after 2♦ waiting: suit', calls: [b(2, 0), PASS, b(2, 1), PASS], candidate: b(2, 2), title: 'Rebid after 2♣', points: '22+ pts', forcing: 'game' },
+  { name: 'opener rebid after 2♦ waiting: balanced', calls: [b(2, 0), PASS, b(2, 1), PASS], candidate: b(2, 4), title: 'Rebid after 2♣', points: '22+ HCP', forcing: 'game' },
 
   // ---- weak two machinery ----
   { name: '2NT feature ask', calls: [b(2, 2), PASS], candidate: b(2, 4), title: '2NT over a weak two', artificial: true },

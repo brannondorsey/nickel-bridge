@@ -679,6 +679,24 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
   const openStrain = bidStrain(opening);
   const openLevel = bidLevel(opening);
   const response = ctx.partnerLastBid;
+
+  // Rebid after 2♣ – 2♦ waiting: still within the 22+/game-forcing frame the
+  // 2♣ opening already promised, so this is opener's real suit/shape at
+  // strength, not a fresh 13–18-point suit rebid.
+  if (openLevel === 2 && openStrain === 0 && response === makeBid(2, 1)) {
+    if (strain === 4)
+      return meaning(
+        'Rebid after 2♣: balanced',
+        'Shows a balanced 22+ HCP hand — too strong for a direct 2NT opening. Game forcing.',
+        { points: '22+ HCP', shapePromise: 'balanced', forcing: 'game', req: { minHcp: 21, balanced: true } },
+      );
+    return meaning(
+      `Rebid after 2♣: ${S[strain]}`,
+      `Shows opener's real suit — ${S[strain]} — with the 22+ points already promised by the 2♣ opening. Game forcing.`,
+      { points: '22+ pts', shapePromise: S[strain], forcing: 'game', req: { minHcp: 21 } },
+    );
+  }
+
   if (response === null || openLevel !== 1) {
     return explainContinuation(ctx, call, level, strain);
   }
