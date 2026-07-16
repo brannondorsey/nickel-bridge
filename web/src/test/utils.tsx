@@ -40,6 +40,9 @@ function freshApiMock(): ApiMock {
     playCard: stub(),
     playerStats: stub(),
     leaderboard: stub(),
+    demoScenarios: stub(),
+    runDemoScenario: stub(),
+    resetDemo: stub(),
   };
 }
 

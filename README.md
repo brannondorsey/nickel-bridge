@@ -125,6 +125,10 @@ CI (`.github/workflows/ci.yml`) deploys automatically once CI passes:
   deployed on every push to the PR and linked in a PR comment. Preview apps run with
   `DEV_AUTH=1` (name-only login, no Google account needed) instead of real Google OAuth,
   since OAuth needs a redirect URI registered in advance and preview URLs are per-PR.
+  They also run with `DEMO=1`: the PR comment's `/demo` link opens a scenario gallery,
+  already signed in, that jumps straight into prepared game states for click-testing, with
+  seeded demo data behind it (see CONTRIBUTING.md "Demo mode"). Neither flag is ever set in
+  production — the production deploy job refuses to run if they are.
   `.github/workflows/pr-preview-teardown.yml` destroys the app (and its volume) when the PR
   closes, so preview cost never outlives the PR.
 - **Every push to `main`** deploys straight to the production app (`nickel-bridge`), no manual
@@ -184,6 +188,7 @@ automatically — there's no separate manual first deploy to do.
 | `PORT` | `3000` | listen port |
 | `AI_MODEL` | `sl` | `sl` or `rl-fsp` |
 | `DEV_AUTH` | off | `1` enables name-only dev login — never in production |
+| `DEMO` | off | `1` enables the demo-mode gallery + seeding (previews) — never in production |
 
 ## Repo layout
 

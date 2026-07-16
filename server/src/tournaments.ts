@@ -7,10 +7,16 @@ const stmtDoneBoards = db.prepare(
   `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.state = 'done'`,
 );
+// Both placement queries exclude demo-mode exhibit tournaments (named
+// 'Exhibit: <seed>' by server/src/demo.ts): a half-played scenario board must
+// never hijack the resume tier or grace-capture other players. Production is
+// unaffected — real tournaments are always renamed 'Tournament #N' below, so
+// the filter matches nothing there.
 const stmtMyUnfinished = db.prepare(
   `SELECT t.* FROM tournaments t
    WHERE EXISTS (SELECT 1 FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ?)
      AND (SELECT COUNT(*) FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ? AND b.state = 'done') < ?
+     AND t.name NOT LIKE 'Exhibit:%'
    ORDER BY t.created_at LIMIT 1`,
 );
 // Every tournament the user has never touched, created within the backlog
@@ -29,6 +35,7 @@ const stmtCandidates = db.prepare(
    LEFT JOIN boards b ON b.tournament_id = t.id
    WHERE t.created_at > ?
      AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
+     AND t.name NOT LIKE 'Exhibit:%'
    GROUP BY t.id`,
 );
 const stmtCreateTournament = db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, ?) RETURNING *`);

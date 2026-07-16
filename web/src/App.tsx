@@ -10,6 +10,7 @@ import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
 import Player from './pages/Player';
+import Scenarios from './pages/Scenarios';
 import Tournament from './pages/Tournament';
 import { splashOnReturn, stampVisit } from './splash';
 
@@ -39,13 +40,16 @@ export default function App() {
   useEffect(refresh, []);
 
   // Returning-visitor gate: decide from the previous stamp BEFORE writing
-  // today's, or the splash would never show again.
+  // today's, or the splash would never show again. Demo mode (PR previews)
+  // suppresses it entirely — testers only see the splash by opening its
+  // exhibit on the /scenarios gallery.
   const authed = Boolean(me?.user?.handle);
+  const demo = Boolean(me?.demo);
   useEffect(() => {
-    if (!authed) return;
+    if (!authed || demo) return;
     if (splashOnReturn()) setSplash(true);
     stampVisit();
-  }, [authed]);
+  }, [authed, demo]);
 
   if (!loaded) {
     return (
@@ -70,6 +74,7 @@ export default function App() {
               <Route path="/players/:id" element={<Player />} />
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
+              <Route path="/scenarios" element={<Scenarios />} />
             </Routes>
             {tab ? <TabBar myId={me.user.id} active={tab} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}

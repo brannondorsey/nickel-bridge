@@ -4,6 +4,8 @@ export interface Me {
   user: { id: number; handle: string | null; picture: string | null; elo: number } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
+  /** demo mode (preview deployments): /scenarios gallery on, auto-splash off */
+  demo?: boolean;
 }
 
 export interface BidMeaning {
@@ -184,6 +186,14 @@ export interface PlayerStats {
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
 }
 
+/** A demo-mode gallery exhibit (see server/src/scenarios.ts). */
+export interface DemoScenario {
+  id: string;
+  label: string;
+  description: string;
+  category: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -217,6 +227,11 @@ export const api = {
       body: JSON.stringify({ card }),
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
+  // demo mode only (404 elsewhere): the /scenarios gallery
+  demoScenarios: () => request<{ scenarios: DemoScenario[] }>('/api/demo/scenarios'),
+  runDemoScenario: (id: string) =>
+    request<{ tournamentId: number; boardNo: number }>(`/api/demo/scenarios/${id}`, { method: 'POST' }),
+  resetDemo: () => request<{ ok: boolean }>('/api/demo/reset', { method: 'POST' }),
   leaderboard: () =>
     request<{
       leaderboard: {

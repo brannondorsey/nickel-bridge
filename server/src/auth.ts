@@ -55,7 +55,7 @@ export function requireUserWithHandle(req: FastifyRequest, reply: FastifyReply):
   return user;
 }
 
-function startSession(reply: FastifyReply, userId: number): void {
+export function startSession(reply: FastifyReply, userId: number): void {
   const sid = randomBytes(32).toString('base64url');
   stmtInsertSession.run(sid, userId, SESSION_TTL_S);
   reply.setCookie(SESSION_COOKIE, sid, {
@@ -67,7 +67,7 @@ function startSession(reply: FastifyReply, userId: number): void {
   });
 }
 
-function upsertGoogleUser(googleId: string, email: string | null, name: string, picture: string | null): UserRow {
+export function upsertGoogleUser(googleId: string, email: string | null, name: string, picture: string | null): UserRow {
   const existing = stmtUserByGoogleId.get(googleId) as UserRow | undefined;
   if (existing) {
     stmtTouchUser.run(email ?? existing.email, name || existing.name, picture ?? existing.picture, googleId);
@@ -151,6 +151,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       user: user ? { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo } : null,
       devAuth: process.env.DEV_AUTH === '1',
       googleAuth: Boolean(clientId),
+      demo: process.env.DEMO === '1',
     });
   });
 

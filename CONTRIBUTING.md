@@ -40,10 +40,13 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
-                tournaments.ts (JIT placement, standings, recomputeElo), stats.ts
+                tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
+                demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 preview-only demo mode —
+                see "Demo mode" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
-                pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page),
+                pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page;
+                Scenarios.tsx is the demo-mode gallery),
                 components/ds/ (design-system pieces) + components/game/ (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown),
                 src/test/ (fixtures + apiMock pattern),
@@ -51,7 +54,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
-                (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`)
+                (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`);
+                find_scenarios.mjs records/mines demo-scenario replay recipes (offline —
+                results are hand-curated into server/src/scenarios.ts)
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign
@@ -101,6 +106,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never in production** |
+| `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `scenarios.ts`, `demo-seed.ts`) — **never in production** (CI enforces this, see invariant 5) |
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
@@ -161,6 +167,20 @@ the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
 still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
+**Demo mode (`DEMO=1`, PR previews only):** the preview comment's `/demo` link signs the
+visitor in as a shared "Inspector" persona and lands on `/scenarios` — a gallery of
+"exhibits" that jump straight into hard-to-reach game states for click-testing. An exhibit
+is a replay recipe (seed + board + scripted human actions, `server/src/scenarios.ts`)
+executed through the real engine per user, deliberately stopping one action short of
+delta-driven UI (grade toast, claim fast-forward, live receipt) so the tester triggers it
+live. Exhibit tournaments are named `Exhibit: <seed>` and excluded from placement by a name
+filter in `tournaments.ts` (production tournaments are always `Tournament #N`, so the filter
+is inert there); nobody ever completes all four exhibit boards, so they never rate. A boot
+seeder (`demo-seed.ts`, async after listen) plays bots through backdated tournaments to
+populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds.
+Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
+suppresses the automatic returning-visitor splash (`App.tsx`).
+
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
@@ -186,7 +206,10 @@ module-level constants next to the functions that use them. Match that style.
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that
-   reordering and the score is unchanged — before accepting a new fixture.
+   reordering and the score is unchanged — before accepting a new fixture. The demo-mode
+   scenario recipes in `server/src/scenarios.ts` are replay-sensitive the same way: a
+   deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive
+   the action lists with `node tools/find_scenarios.mjs` and re-curate the copy by hand.
 2. **`packages/ai/src/encode.ts` is a bit-for-bit port** of the pgx `bridge_bidding`
    observation encoding, verified by golden tests against the original JAX output. Do not
    refactor it for style. Regenerating `packages/ai/test/fixtures.json` is only needed if the
@@ -196,7 +219,9 @@ module-level constants next to the functions that use them. Match that style.
 4. **`packages/core` stays dependency-free and I/O-free** — pure rules. The server imports
    it; the web bundle deliberately does not (it mirrors the few helpers it needs in
    `web/src/api.ts` and receives anything score-shaped pre-computed from the server).
-5. **`DEV_AUTH=1` must never be set in production** — it's unauthenticated login.
+5. **`DEV_AUTH=1` and `DEMO=1` must never be set in production** — the former is
+   unauthenticated login, the latter hands out sessions and can wipe the database. CI's
+   `deploy-production` job refuses to deploy if either secret exists on the production app.
 
 ## Design system
 

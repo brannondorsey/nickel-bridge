@@ -7,6 +7,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3000',
       '/auth': 'http://localhost:3000',
+      '/demo': 'http://localhost:3000',
     },
   },
   test: {
