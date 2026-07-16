@@ -78,6 +78,10 @@ const SPEC: Row[] = [
   { name: 'feature response: shows a feature', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 0), title: 'Feature response', artificial: true },
   { name: '3NT after feature ask', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 4), title: '3NT after feature ask' },
 
+  // ---- fourth suit forcing ----
+  { name: 'fourth suit forcing', calls: [b(1, 0), PASS, b(1, 1), PASS, b(1, 2), PASS], candidate: b(1, 3), title: 'Fourth-suit forcing', artificial: true, forcing: 'one-round' },
+  { name: 'new suit rebid is not fourth-suit forcing with only 2 suits shown', dealer: 2, calls: [b(1, 1), PASS, b(1, 3), PASS], candidate: b(2, 2), title: 'Reverse' },
+
   // ---- Blackwood ----
   { name: 'Blackwood 4NT', calls: [b(1, 3), PASS, b(3, 3), PASS], candidate: b(4, 4), title: 'Blackwood', artificial: true },
   { name: 'Blackwood 5♦ = 1 ace', dealer: 2, calls: [b(1, 3), PASS, b(3, 3), PASS, b(4, 4), PASS], candidate: b(5, 1), title: 'Blackwood response', artificial: true },

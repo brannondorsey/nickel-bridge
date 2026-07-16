@@ -500,6 +500,33 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
     );
   }
 
+  // --- Fourth suit forcing: the one remaining unbid suit, at the cheapest
+  // level, once our side has already introduced 3 different suits between
+  // the two hands. Not a real suit — an artificial relay asking partner to
+  // describe further (stopper, support, shape).
+  if (
+    strain !== 4 &&
+    !ctx.interference &&
+    ctx.oppCalls.every((c) => c === PASS) &&
+    ctx.opening !== null &&
+    isBid(ctx.opening.call) &&
+    bidStrain(ctx.opening.call) !== 4 &&
+    ctx.myCalls.some((c) => c !== PASS) &&
+    ctx.lastBid !== null
+  ) {
+    const bidStrains = new Set(
+      ctx.seq.filter((x) => isBid(x.call) && bidStrain(x.call) !== 4).map((x) => bidStrain(x.call)),
+    );
+    const isCheapest = level === bidLevel(ctx.lastBid) + (strain > bidStrain(ctx.lastBid) ? 0 : 1);
+    if (bidStrains.size === 3 && !bidStrains.has(strain) && isCheapest) {
+      return meaning(
+        'Fourth-suit forcing',
+        `Artificial: the fourth, still-unbid suit, at the cheapest level. Not a real suit — asks partner to describe further (bid notrump with a stopper, support one of your suits, or clarify shape). Forcing.`,
+        { artificial: true, forcing: 'one-round' },
+      );
+    }
+  }
+
   return null;
 }
 
