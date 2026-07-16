@@ -38,7 +38,8 @@ const FRONT_DOOR: { key: Overlay; label: string; description: string }[] = [
   {
     key: 'handle',
     label: 'Choose your handle',
-    description: 'The first-crossing handle prompt. Submitting really renames the Inspector — harmless, and it demonstrates the taken-handle error too.',
+    description:
+      'The first-crossing handle prompt, prefilled with a name that’s already taken — submit it as-is and the live "handle already taken" error fires on the spot.',
   },
 ];
 
@@ -47,6 +48,9 @@ export default function Scenarios() {
   const navigate = useNavigate();
   const demo = Boolean(me?.demo);
   const [scenarios, setScenarios] = useState<DemoScenario[] | null>(null);
+  const [newCrosserId, setNewCrosserId] = useState<number | null>(null);
+  const [richProfileId, setRichProfileId] = useState<number | null>(null);
+  const [collisionHandle, setCollisionHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -57,7 +61,12 @@ export default function Scenarios() {
     if (!demo) return;
     api
       .demoScenarios()
-      .then((r) => setScenarios(r.scenarios))
+      .then((r) => {
+        setScenarios(r.scenarios);
+        setNewCrosserId(r.newCrosserId ?? null);
+        setRichProfileId(r.richProfileId ?? null);
+        setCollisionHandle(r.collisionHandle ?? '');
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'failed to load the exhibits'));
   }, [demo]);
 
@@ -168,6 +177,50 @@ export default function Scenarios() {
             ))}
           </PerforatedPanel>
 
+          <PerforatedPanel heading="PROFILES" className="exhibit-panel">
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>The field, ranked</b>
+                <span className="exhibit-row-desc">The all-time Elo ladder, populated by the ambient field.</span>
+              </div>
+              <Button variant="secondary" onClick={() => navigate('/leaderboard')}>
+                ENTER →
+              </Button>
+            </div>
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>A well-traveled stats page</b>
+                <span className="exhibit-row-desc">
+                  Rating trend, matchpoint history, bid-accuracy trend, and the percentile panel — all with real
+                  numbers behind them.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => richProfileId != null && navigate(`/players/${richProfileId}`)}
+                disabled={richProfileId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>A stats page with nothing on it yet</b>
+                <span className="exhibit-row-desc">
+                  A permanent, never-played persona — the empty state a first-time player's own stats page shows
+                  before their first crossing.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => newCrosserId != null && navigate(`/players/${newCrosserId}`)}
+                disabled={newCrosserId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+          </PerforatedPanel>
+
           <PerforatedPanel heading="HOUSEKEEPING" dashed className="exhibit-panel">
             <div className="exhibit-row">
               <div className="exhibit-row-text">
@@ -201,7 +254,7 @@ export default function Scenarios() {
             <Splash onDone={() => setOverlay(null)} />
           ) : (
             <>
-              {overlay === 'login' ? <Login /> : <CreateHandle />}
+              {overlay === 'login' ? <Login /> : <CreateHandle initialHandle={collisionHandle} />}
               <button type="button" className="exhibit-overlay-close label-caps" onClick={() => setOverlay(null)}>
                 ✕ CLOSE EXHIBIT
               </button>

@@ -41,8 +41,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
-                demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 preview-only demo mode —
-                see "Demo mode" below)
+                demo.ts + scenarios.ts + demo-seed.ts + bot-play.ts (DEMO=1 preview-only
+                demo mode — see "Demo mode" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page;
@@ -180,7 +180,17 @@ URL), and from stats/leaderboard sweeps (`stats.ts`, `app.ts`) — all filters i
 production, where every tournament is `'standard'`. A boot
 seeder (`demo-seed.ts`, async after listen) plays bots through backdated tournaments to
 populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds
-(wipes and seeds share one queue, so they never interleave).
+(wipes and seeds share one queue, so they never interleave). Bot-driven board play
+(`playBoard`/`playThrough` in `bot-play.ts`) is shared between the ambient seeder and any
+scenario that needs boards pre-completed before the tester arrives: a `completesTournament`
+scenario (the `results` category's `tournament-complete`) pre-plays the acting user through
+its earlier boards and seeds bots through the whole tournament, so finishing the last board
+live reveals a genuine tournament-summary screen instead of just one board's receipt. Two
+`GET /api/demo/scenarios` fields back client-only, non-scripted gallery rows: `newCrosserId`
+(a permanent, never-played persona for the stats page's cold-start empty state) and
+`richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
+(the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
+error is guaranteed to fire on the first submit.
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash (`App.tsx`). **Shipping a new
 hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenarios.ts`** (mine
