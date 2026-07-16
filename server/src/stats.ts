@@ -13,16 +13,24 @@ const stmtEloSeries = db.prepare(
    FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id
    WHERE h.user_id = ? ORDER BY h.tournament_id`,
 );
+// Every board/tournament sweep here excludes demo-mode exhibits
+// (tournaments.kind = 'exhibit'): a scenario board someone jumped into must
+// not inflate boardsCompleted, chart series, or anyone's percentile pool.
+// Inert in production, where every tournament is 'standard'.
 const stmtDoneBoards = db.prepare(
   `SELECT b.tournament_id, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at, t.name AS tournament_name
-   FROM boards b JOIN tournaments t ON t.id = b.tournament_id
+   FROM boards b JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
    WHERE b.user_id = ? AND b.state = 'done' ORDER BY b.updated_at, b.id`,
 );
 const stmtRatedElos = db.prepare(
   `SELECT elo FROM users WHERE EXISTS (SELECT 1 FROM elo_history h WHERE h.user_id = users.id)`,
 );
-const stmtAllDoneEvals = db.prepare(`SELECT user_id, bid_evals FROM boards WHERE state = 'done'`);
-const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments ORDER BY id`);
+const stmtAllDoneEvals = db.prepare(
+  `SELECT b.user_id, b.bid_evals FROM boards b
+   JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   WHERE b.state = 'done'`,
+);
+const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
 
 export interface StatPoint {
   tournamentId: number;

@@ -73,7 +73,7 @@ jobs:
           if [ "$count" -eq 0 ]; then
             flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
           fi
-          flyctl secrets set DEV_AUTH=1 BASE_URL="https://$APP.fly.dev" --app "$APP"
+          flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://$APP.fly.dev" --app "$APP"
       - name: Deploy preview
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
       - name: Comment preview URL on the PR
@@ -83,7 +83,9 @@ jobs:
           message: |
             🚀 Preview deployed: https://${{ env.APP }}.fly.dev
 
-            Log in with any name — dev auth is enabled on preview apps only, no Google account needed.
+            **Demo tour:** https://${{ env.APP }}.fly.dev/demo — opens the scenario gallery already signed in as Inspector; jump straight into prepared game states for click-testing.
+
+            Or log in with any name — dev auth is enabled on preview apps only, no Google account needed.
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).
@@ -96,4 +98,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Enforce CLAUDE.md invariant 5: DEV_AUTH (unauthenticated login) and
+      # DEMO (auto-login + data reset) must never reach production. Fails the
+      # deploy if either secret is set on the production app.
+      - name: Refuse to deploy with demo/dev secrets set
+        # Fail CLOSED: capturing into a variable makes a flyctl failure fail
+        # the step (default shell is bash -e), instead of a broken listing
+        # reading as "no forbidden secrets" and waving the deploy through.
+        run: |
+          secrets=$(flyctl secrets list --app nickel-bridge)
+          if echo "$secrets" | grep -qE '^\s*(DEV_AUTH|DEMO)\s'; then
+            echo "::error::DEV_AUTH/DEMO secret found on the production app — remove it before deploying"
+            exit 1
+          fi
       - run: flyctl deploy --app nickel-bridge --config fly.toml --remote-only --ha=false

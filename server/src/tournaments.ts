@@ -7,10 +7,17 @@ const stmtDoneBoards = db.prepare(
   `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.state = 'done'`,
 );
+// Placement, the lobby list, and the Elo replay all exclude demo-mode
+// exhibit tournaments (kind = 'exhibit', created only by demo.ts): a
+// half-played scenario board must never hijack the resume tier,
+// grace-capture other players, head the lobby's crossings, or enter the
+// rating replay. Production is unaffected — every tournament created here is
+// kind 'standard' (the schema default), so the filter matches nothing there.
 const stmtMyUnfinished = db.prepare(
   `SELECT t.* FROM tournaments t
    WHERE EXISTS (SELECT 1 FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ?)
      AND (SELECT COUNT(*) FROM boards b WHERE b.tournament_id = t.id AND b.user_id = ? AND b.state = 'done') < ?
+     AND t.kind = 'standard'
    ORDER BY t.created_at LIMIT 1`,
 );
 // Every tournament the user has never touched, created within the backlog
@@ -29,6 +36,7 @@ const stmtCandidates = db.prepare(
    LEFT JOIN boards b ON b.tournament_id = t.id
    WHERE t.created_at > ?
      AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
+     AND t.kind = 'standard'
    GROUP BY t.id`,
 );
 const stmtCreateTournament = db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, ?) RETURNING *`);
@@ -38,9 +46,12 @@ const stmtMyBoardCount = db.prepare(
 );
 const stmtMyTournaments = db.prepare(
   `SELECT DISTINCT t.* FROM tournaments t JOIN boards b ON b.tournament_id = t.id
-   WHERE b.user_id = ? ORDER BY t.created_at DESC LIMIT 20`,
+   WHERE b.user_id = ? AND t.kind = 'standard' ORDER BY t.created_at DESC LIMIT 20`,
 );
-const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments ORDER BY id`);
+// kind filter: "exhibits never rate" is enforced here, not assumed — even if
+// testers complete all four boards of an exhibit by direct URL, it never
+// enters the replay.
+const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
 const stmtClearEloHistory = db.prepare(`DELETE FROM elo_history`);
 const stmtResetElo = db.prepare(`UPDATE users SET elo = ?`);
 const stmtSetElo = db.prepare(`UPDATE users SET elo = ? WHERE id = ?`);

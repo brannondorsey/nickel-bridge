@@ -93,3 +93,22 @@ describe('App — authenticated', () => {
     expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
   });
 });
+
+describe('App — demo mode', () => {
+  it('suppresses the returning-visitor splash entirely', async () => {
+    // no nb:lastVisit stamp → an ordinary deployment WOULD splash here
+    apiMock.me.mockResolvedValue({ ...meFixture, demo: true });
+    apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+    renderApp();
+    expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+    expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
+  });
+
+  it('serves the Exhibit Hall on /scenarios with no tab bar', async () => {
+    apiMock.me.mockResolvedValue({ ...meFixture, demo: true });
+    apiMock.demoScenarios.mockResolvedValue({ scenarios: [] });
+    renderApp('/scenarios');
+    expect(await screen.findByText('The Exhibit Hall')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
+  });
+});

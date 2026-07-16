@@ -2291,3 +2291,85 @@ a.board-row:hover {
     transform: scale(1);
   }
 }
+
+/* ---- Exhibit Hall (demo-mode scenario gallery, /scenarios) ---- */
+.exhibit {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 16px;
+  padding-bottom: 40px;
+}
+.exhibit-head {
+  padding: 20px 16px 0;
+}
+.exhibit-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  margin: 4px 0 0;
+}
+.exhibit-hint {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.exhibit-panel {
+  margin: 0 16px;
+}
+.exhibit-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 0;
+}
+.exhibit-row .ds-btn {
+  align-self: flex-end;
+}
+.exhibit-row + .exhibit-row {
+  border-top: var(--border-hairline);
+}
+.exhibit-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.exhibit-row-desc {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+}
+.exhibit-reset-armed {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+.exhibit-foot {
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--muted);
+  text-align: center;
+}
+.exhibit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--paper);
+  overflow-y: auto;
+}
+.exhibit-overlay-close {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 41;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 8px 12px;
+  cursor: pointer;
+}
