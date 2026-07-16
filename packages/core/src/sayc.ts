@@ -250,8 +250,71 @@ function explainBidCall(ctx: Ctx, call: Call): BidMeaning | null {
     return explainOvercall(ctx, call, level, strain);
   }
 
+  // ----- Advancer's reply to partner's takeout double -----
+  if (isAdvanceOfTakeoutDouble(ctx)) {
+    const advance = explainDoubleAdvance(ctx, call, level, strain);
+    if (advance) return advance;
+  }
+
   // ----- Generic continuations -----
   return explainContinuation(ctx, call, level, strain);
+}
+
+/**
+ * Direct advance of partner's takeout double: their side opened at a low
+ * level, partner doubled for takeout, RHO passed, and we haven't bid yet.
+ * Scoped to the simple direct sequence (no extra interference) so we don't
+ * misfire on more complex competitive auctions the pamphlet doesn't cover.
+ */
+function isAdvanceOfTakeoutDouble(ctx: Ctx): boolean {
+  return (
+    ctx.calls.length === 3 &&
+    ctx.oppsOpened &&
+    ctx.partnerCalls.length === 1 &&
+    ctx.partnerCalls[0] === DOUBLE &&
+    ctx.myCalls.every((c) => c === PASS) &&
+    ctx.lastBid !== null &&
+    ctx.lastBidBySide === 'theirs' &&
+    bidLevel(ctx.lastBid) <= 3 &&
+    bidStrain(ctx.lastBid) !== 4
+  );
+}
+
+function explainDoubleAdvance(ctx: Ctx, call: Call, level: number, strain: Strain): BidMeaning | null {
+  const theirBid = ctx.lastBid!;
+  const theirStrain = bidStrain(theirBid);
+
+  if (strain === theirStrain) {
+    return meaning(
+      'Cue-bid of the double',
+      `Artificial: forcing to game (or very close) with no clear suit preference of your own, or a big hand. Asks partner to describe further.`,
+      { points: '12+ pts', artificial: true, forcing: 'game' },
+    );
+  }
+  if (strain === 4) {
+    if (level === 1)
+      return meaning(
+        '1NT response to double',
+        'Shows 8–10 points, balanced, with a stopper in their suit — you can leave the double in for penalties another time.',
+        { points: '8–10 pts', shapePromise: 'balanced, stopper', req: { minHcp: 8, maxHcp: 10, balanced: true } },
+      );
+    return null;
+  }
+  const minLevel = theirBid < makeBid(1, strain) ? 1 : 2;
+  const isJump = level > minLevel;
+  if (isJump)
+    return meaning(
+      'Jump response to double',
+      `Invitational: about 9–11 points and a decent ${S[strain]} suit. Not forcing — partner may pass.`,
+      { points: '9–11 pts', req: { minHcp: 8, maxHcp: 11 } },
+    );
+  if (level === minLevel)
+    return meaning(
+      'Response to double',
+      `A minimum reply — 0–8 points. Doubles are for takeout, so you must bid your best suit even with nothing; this promises no extra length or strength.`,
+      { points: '0–8 pts', req: { maxHcp: 8 } },
+    );
+  return null;
 }
 
 function explainOpening(level: number, strain: Strain): BidMeaning | null {
