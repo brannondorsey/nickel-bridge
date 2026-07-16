@@ -47,7 +47,8 @@ jobs:
   # Deploys a throwaway Fly.io app per open PR (nickel-bridge-pr-<number>) so a change can be
   # reviewed live at a URL instead of run locally. Uses DEV_AUTH (name-only login) instead of
   # Google OAuth, since OAuth needs a pre-registered redirect URI and preview URLs are per-PR.
-  # Never enable DEV_AUTH on the production app (see .claude/CLAUDE.md invariant #5).
+  # Never enable DEV_AUTH on the production app (see .claude/CLAUDE.md invariant #5); the
+  # permanent demo app (deploy-demo below) intentionally shares this DEV_AUTH+DEMO shape.
   # Torn down by pr-preview-teardown.yml when the PR closes.
   deploy-preview:
     needs: [test, e2e, docker]
@@ -86,6 +87,37 @@ jobs:
             **Demo tour:** https://${{ env.APP }}.fly.dev/demo — opens the scenario gallery already signed in as Inspector; jump straight into prepared game states for click-testing.
 
             Or log in with any name — dev auth is enabled on preview apps only, no Google account needed.
+
+  # Keeps the single permanent demo instance (nickel-bridge-demo, demo.bridge.brannon.online)
+  # in lockstep with production code on every push to main. Same DEMO/DEV_AUTH shape as PR
+  # previews — it is deliberately NOT production, so invariant 5 (which is scoped to the
+  # production app) does not apply here. Unlike previews it never gets torn down: it's a
+  # stable URL for automation and human click-testers. Self-provisioning and idempotent,
+  # except the one-time cert + DNS setup documented in README.md "Deployment".
+  deploy-demo:
+    needs: [test, e2e, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-demo
+      cancel-in-progress: true
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: nickel-bridge-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Ensure demo app + volume exist
+        run: |
+          flyctl apps create "$APP" --org personal || true
+          count=$(flyctl volumes list --app "$APP" --json 2>/dev/null | jq 'length' 2>/dev/null)
+          count=${count:-0}
+          if [ "$count" -eq 0 ]; then
+            flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
+          fi
+          flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo.bridge.brannon.online" --app "$APP"
+      - name: Deploy demo
+        run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).

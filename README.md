@@ -127,14 +127,21 @@ CI (`.github/workflows/ci.yml`) deploys automatically once CI passes:
   since OAuth needs a redirect URI registered in advance and preview URLs are per-PR.
   They also run with `DEMO=1`: the PR comment's `/demo` link opens a scenario gallery,
   already signed in, that jumps straight into prepared game states for click-testing, with
-  seeded demo data behind it (see CONTRIBUTING.md "Demo mode"). Neither flag is ever set in
-  production — the production deploy job refuses to run if they are.
+  seeded demo data behind it (see CONTRIBUTING.md "Demo mode"). Neither flag is ever set on
+  the production app — the production deploy job refuses to run if they are.
   `.github/workflows/pr-preview-teardown.yml` destroys the app (and its volume) when the PR
   closes, so preview cost never outlives the PR.
 - **Every push to `main`** deploys straight to the production app (`nickel-bridge`), no manual
   approval step.
+- **Every push to `main` also redeploys the permanent demo app** (`nickel-bridge-demo`,
+  https://demo.bridge.brannon.online) — same `DEMO=1`/`DEV_AUTH=1` shape as previews, but at a
+  stable URL that never gets torn down. It exists as a canonical target for automation (e.g.
+  pointing an AI agent at the app to explore it) and occasional human click-testing, unlike
+  per-PR preview URLs that die when the PR closes. Visit `/demo` to be signed in as the
+  Inspector with no login, or `POST /api/demo/reset` to restore pristine seeded state. It has
+  its own volume/database and never touches production data.
 
-Both jobs share one `fly.toml` — the `app = 'nickel-bridge'` line in it is only a default for
+All three deploy jobs share one `fly.toml` — the `app = 'nickel-bridge'` line in it is only a default for
 local/manual use; CI always passes `--app <name>` explicitly. Fly bills the always-on parts
 (machines) near-zero when idle (`auto_stop_machines`/`min_machines_running = 0` in `fly.toml`),
 so the main cost driver of adding previews is one small volume per currently-open PR — check
@@ -174,6 +181,13 @@ deploy).
    ```
    fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://bridge.brannon.online --app nickel-bridge
    ```
+8. Point the demo domain at the demo app. Unlike production, there is no manual app/volume/
+   secrets creation here — the `deploy-demo` CI job self-provisions all of that on the first
+   push to `main` (and the app is reachable at `https://nickel-bridge-demo.fly.dev` right
+   away). After that first deploy, run `fly certs add demo.bridge.brannon.online --app
+   nickel-bridge-demo`, add a **DNS-only** (unproxied) CNAME `demo.bridge →
+   nickel-bridge-demo.fly.dev`, and wait for `fly certs check demo.bridge.brannon.online
+   --app nickel-bridge-demo` to go green.
 
 Once `FLY_API_TOKEN` is set, the very next PR and the next merge to `main` will deploy
 automatically — there's no separate manual first deploy to do.
@@ -187,8 +201,8 @@ automatically — there's no separate manual first deploy to do.
 | `DB_PATH` | `./data/bridge.db` | SQLite location |
 | `PORT` | `3000` | listen port |
 | `AI_MODEL` | `sl` | `sl` or `rl-fsp` |
-| `DEV_AUTH` | off | `1` enables name-only dev login — never in production |
-| `DEMO` | off | `1` enables the demo-mode gallery + seeding (previews) — never in production |
+| `DEV_AUTH` | off | `1` enables name-only dev login (previews + the demo app) — never on the production app |
+| `DEMO` | off | `1` enables the demo-mode gallery + seeding (previews + the demo app) — never on the production app |
 
 ## Repo layout
 
