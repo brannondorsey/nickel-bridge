@@ -99,6 +99,10 @@ export function TrickArea({ board }: { board: BoardView }) {
   const defTricks = board.defenderTricks ?? 0;
   const needed = board.contract ? 6 + board.contract.level : undefined;
   const humanDeclaring = (board.declarer ?? 2) % 2 === 0;
+  // declCrossed and defCrossed can never both be true: that would need
+  // declTricks + defTricks >= needed + (14 - needed) = 14, but only 13
+  // tricks exist per deal — making the contract and defeating it are
+  // mutually exclusive, so the two fills never show red and green at once.
   const declCrossed = needed !== undefined && declTricks >= needed;
   const defCrossed = needed !== undefined && defTricks >= 14 - needed;
   const fillClass = (mine: boolean, crossed: boolean, tricks: number) =>
