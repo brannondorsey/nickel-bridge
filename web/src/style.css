@@ -1300,6 +1300,7 @@ a.ds-btn-secondary:hover {
   position: relative;
   height: 9px;
   background: var(--chart-track);
+  border: 1px solid var(--ink);
 }
 .trick-meter-fill {
   position: absolute;
