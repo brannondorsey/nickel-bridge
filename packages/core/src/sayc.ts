@@ -433,6 +433,15 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
         );
       }
     }
+    if (partnerBid === makeBid(4, 0) && level === 4 && strain >= 1) {
+      // partner's ask was Gerber (always fixed at the 4-level, unlike Stayman/transfers)
+      const aces = ['0 or 4', '1', '2', '3'][strain - 1];
+      return meaning(
+        `Gerber response: ${level}${S[strain]}`,
+        `Artificial answer to partner's Gerber ace-ask: shows ${aces} ace${aces === '1' ? '' : 's'}.`,
+        { artificial: true },
+      );
+    }
   }
 
   // --- Blackwood 4NT after suit bidding ---
