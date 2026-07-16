@@ -17,6 +17,23 @@ import { Bidder } from '../src/bidder.js';
 import { loadPolicyModel } from '../src/model.js';
 import { chooseCard, pickFromSolve, solveFutureTricks } from '../src/play-ai.js';
 
+/**
+ * Search-size tripwire for assertClaimIsUnbeatable. The pinned-seed cases
+ * below observed 14-212 nodes; the hand-crafted micro-deals observed
+ * single digits. This cap is ~10x the largest of those, so ordinary
+ * variation won't trip it, but it exists specifically because the
+ * pinned-seed cases are only *empirically* small — their tree size is a
+ * side effect of the current model weights and DDS tie-breaks (the exact
+ * things invariant 1 in CLAUDE.md calls out as requiring a robot-trace
+ * fixture regen when deliberately changed). If a future change to robot
+ * behavior shifts one of those seeds' claim boundary deeper into the hand,
+ * the tree can blow up fast — one case hit during this audit reached
+ * ~400,000 nodes and 37s. Failing loud here on a clear assertion, instead
+ * of silently costing CI tens of seconds (or hitting vitest's default
+ * per-test timeout with an opaque error), is the point.
+ */
+const MAX_SEARCH_NODES = 2000;
+
 const rank = (ch: string) => RANK_CHARS.indexOf(ch as (typeof RANK_CHARS)[number]);
 const card = (suit: Suit, ch: string): Card => makeCard(suit, rank(ch));
 
@@ -124,6 +141,7 @@ describe('claim soundness: hand-crafted positions with real branching for the lo
     );
     const { nodes } = await assertClaimIsUnbeatable(deal, contract, []);
     expect(nodes).toBeGreaterThan(4); // confirms the defense's alternatives were actually explored
+    expect(nodes).toBeLessThan(MAX_SEARCH_NODES);
   });
 
   it('declarer is denied every remaining trick, however the defense orders its winners', async () => {
@@ -138,6 +156,7 @@ describe('claim soundness: hand-crafted positions with real branching for the lo
     );
     const { nodes } = await assertClaimIsUnbeatable(deal, contract, []);
     expect(nodes).toBeGreaterThan(4);
+    expect(nodes).toBeLessThan(MAX_SEARCH_NODES);
   });
 });
 
@@ -186,5 +205,9 @@ describe('claim soundness: real dealt-and-bid boards, replayed to the actual cla
     expect(remaining).toBeGreaterThan(0);
     const { nodes } = await assertClaimIsUnbeatable(deal, contract, plays);
     expect(nodes).toBeGreaterThan(1); // sanity: the losing side actually had a choice to explore
+    // See MAX_SEARCH_NODES's docstring: this seed was hand-picked for a small
+    // claim boundary under *today's* robot behavior; that's not guaranteed
+    // to stay small if bidding/play logic changes deliberately later.
+    expect(nodes).toBeLessThan(MAX_SEARCH_NODES);
   });
 });
