@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { boardScoreNS, legalCards, playState } from '@bridge/core';
 import { freshDbEnv } from './helpers.js';
 
 freshDbEnv('game');
@@ -67,7 +68,9 @@ describe('declarer scenarios (pinned seeds)', () => {
     expect(playViews.every((v) => v.flipped === true && v.playingSeat === 0)).toBe(true);
     const handsPlayed = new Set(playViews.filter((v) => v.myTurn).map((v) => v.handToPlay));
     expect(handsPlayed).toEqual(new Set([0, 2])); // both declarer hand and dummy
-    expect(b.row.score_ns).toBe(-150);
+    // A laydown claim plays the tail DD-optimally instead of driveBoard's
+    // naive "first legal card" strategy, which does better here than -150.
+    expect(b.row.score_ns).toBe(110);
   });
 
   it('South declares: human plays South and dummy North, no flip', async () => {
@@ -95,6 +98,57 @@ describe('declarer scenarios (pinned seeds)', () => {
     expect(b.contract).toBeNull();
     expect(b.row.score_ns).toBe(0);
     expect(b.row.tricks_declarer).toBeNull();
+  });
+});
+
+describe('automatic laydown claims', () => {
+  // Known (via the robot-trace fixture) to hit a claim partway through play —
+  // see tools/gen_trace_fixture.mjs and the fixture's tail-reordering diff.
+  it('short-circuits a determined board in one request instead of one per remaining card', async () => {
+    const { t, b } = await loadBoardFor('robot-trace-v1', 2);
+    const views = await driveBoard(t, b);
+    expect(b.row.state).toBe('done');
+    expect(b.claimed).toBe(true);
+    expect(views[views.length - 1].claimed).toBe(true);
+
+    // dummyHand must still be sent once the board is 'done', not just while
+    // 'playing' — the client's claim fast-forward animation reconstructs
+    // dummy's hand shrinking trick-by-trick from this field, and a claim can
+    // resolve many tricks (dummy still holding cards) in the same response
+    // that flips state to 'done'. An omitted field here (vs. an empty array)
+    // would make dummy's whole fan vanish instantly instead of animating.
+    expect(views[views.length - 1].dummyHand).toEqual([]);
+
+    // ordinary play resolves at most one trick boundary per request — the
+    // human plays at least one card every trick (see playAnim.ts's staging
+    // docstring) — so a claim is the only way more than one trick's worth of
+    // play can land between two consecutive 'playing'-state responses.
+    const lastPlaying = [...views].reverse().find((v) => v.state === 'playing');
+    const tricksResolvedAtOnce = 13 - (lastPlaying?.completedTricks ?? 0);
+    expect(tricksResolvedAtOnce).toBeGreaterThan(1);
+
+    // the claimed line is a complete, legal deal: every card was legal when
+    // played, all 13 tricks are accounted for, and the persisted score
+    // matches the persisted trick count
+    expect(b.plays).toHaveLength(52);
+    let ps = playState(b.deal, b.contract!, []);
+    for (let i = 0; i < b.plays.length; i++) {
+      const card = b.plays[i];
+      expect(legalCards(b.deal, ps), `card ${i}`).toContain(card);
+      ps = playState(b.deal, b.contract!, b.plays.slice(0, i + 1));
+    }
+    expect(ps.isOver).toBe(true);
+    expect(ps.declarerTricks + ps.defenderTricks).toBe(13);
+    expect(ps.declarerTricks).toBe(b.row.tricks_declarer);
+    expect(b.row.score_ns).toBe(boardScoreNS(b.contract!, b.deal.vul, ps.declarerTricks));
+  });
+
+  it('does not fire on a board that never becomes fully determined early', async () => {
+    const { t, b } = await loadBoardFor('robot-trace-v1', 4);
+    await driveBoard(t, b);
+    expect(b.row.state).toBe('done');
+    expect(b.contract).not.toBeNull();
+    expect(b.claimed).toBeUndefined();
   });
 });
 

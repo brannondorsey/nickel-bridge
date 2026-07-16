@@ -159,11 +159,16 @@ deploy).
    Use an org token, not a single-app `fly tokens create deploy --app <name>` token — CI
    creates a brand-new Fly app per open PR (`nickel-bridge-pr-<number>`), which an app-scoped
    token isn't allowed to do (it can only manage the one app it was minted for).
-6. Register `https://nickel-bridge.fly.dev/auth/google/callback` as an authorized redirect URI
+6. Point the production domain at the app: `fly certs add bridge.brannon.online --app
+   nickel-bridge`, add a **DNS-only** (unproxied) CNAME `bridge → nickel-bridge.fly.dev` at
+   the DNS host, and wait for `fly certs check bridge.brannon.online --app nickel-bridge` to
+   go green. (Fly terminates TLS itself; a proxied/orange-cloud Cloudflare record breaks cert
+   issuance.)
+7. Register `https://bridge.brannon.online/auth/google/callback` as an authorized redirect URI
    (see "Google sign-in setup" above), then set the production app's real secrets — **only**
    on the production app, never on a preview app:
    ```
-   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://nickel-bridge.fly.dev --app nickel-bridge
+   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://bridge.brannon.online --app nickel-bridge
    ```
 
 Once `FLY_API_TOKEN` is set, the very next PR and the next merge to `main` will deploy
