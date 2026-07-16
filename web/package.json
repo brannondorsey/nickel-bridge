@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fontsource/besley": "^5.2.8",
+    "@fontsource-variable/besley": "^5.2.8",
     "@fontsource/crimson-pro": "^5.2.8",
     "@fontsource/josefin-sans": "^5.2.8",
     "@fontsource/poiret-one": "^5.2.8",
