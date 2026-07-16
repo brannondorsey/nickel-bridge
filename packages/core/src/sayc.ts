@@ -256,8 +256,61 @@ function explainBidCall(ctx: Ctx, call: Call): BidMeaning | null {
     if (advance) return advance;
   }
 
+  // ----- Advancer's reply to partner's Michaels cue-bid -----
+  if (isAdvanceOfMichaels(ctx)) {
+    const advance = explainMichaelsAdvance(ctx, call, level, strain);
+    if (advance) return advance;
+  }
+
   // ----- Generic continuations -----
   return explainContinuation(ctx, call, level, strain);
+}
+
+/**
+ * Direct advance of partner's Michaels cue-bid: their side opened, partner
+ * cue-bid the opening suit (Michaels), RHO passed, and we haven't bid yet.
+ */
+function isAdvanceOfMichaels(ctx: Ctx): boolean {
+  if (ctx.calls.length !== 3 || !ctx.oppsOpened || ctx.opening === null) return false;
+  const theirOpen = ctx.opening.call;
+  if (!isBid(theirOpen) || bidStrain(theirOpen) === 4) return false;
+  const cue = ctx.partnerCalls[0];
+  return (
+    ctx.partnerCalls.length === 1 &&
+    isBid(cue) &&
+    bidStrain(cue) === bidStrain(theirOpen) &&
+    bidLevel(cue) === bidLevel(theirOpen) + 1 &&
+    ctx.myCalls.every((c) => c === PASS)
+  );
+}
+
+function explainMichaelsAdvance(ctx: Ctx, call: Call, level: number, strain: Strain): BidMeaning | null {
+  const theirStrain = bidStrain(ctx.opening!.call);
+  if (theirStrain >= 2) {
+    // Michaels over a major shows the OTHER major plus an unspecified 5+ minor.
+    const otherMajor = (5 - theirStrain) as Strain;
+    if (strain === otherMajor)
+      return meaning(
+        `Advance: ${S[otherMajor]}`,
+        `Picks partner's known major as trumps; bid higher with extra support or strength.`,
+        { shapePromise: `${S[otherMajor]} support` },
+      );
+    if (strain === 4 && level === bidLevel(ctx.partnerCalls[0]))
+      return meaning(
+        '2NT relay',
+        'Artificial: asks the Michaels bidder to name their minor suit rather than guessing which one to play.',
+        { artificial: true },
+      );
+    return null;
+  }
+  // Michaels over a minor shows both majors, 5-5.
+  if (strain === 2 || strain === 3)
+    return meaning(
+      `Advance: ${S[strain]}`,
+      `Picks one of partner's known majors as trumps; bid higher with extra support or strength.`,
+      { shapePromise: `${S[strain]} support` },
+    );
+  return null;
 }
 
 /**
