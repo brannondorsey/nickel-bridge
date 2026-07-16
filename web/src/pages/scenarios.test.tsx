@@ -18,6 +18,9 @@ const catalog = {
   scenarios: [
     { id: 'your-call', label: 'An opening bid, your call', description: 'Bid it yourself.', category: 'bidding' },
     { id: 'claim-fires', label: 'The defense claims the rest', description: 'Play the ♦4.', category: 'claims' },
+    // a category the frontend has never heard of must still render — section
+    // order is derived from the catalog, not a hardcoded list
+    { id: 'brand-new', label: 'A brand new exhibit', description: 'Fresh from the mine.', category: 'oddities' },
   ],
 };
 
@@ -38,6 +41,9 @@ describe('Scenarios (the Exhibit Hall)', () => {
 
     expect(await screen.findByText('BIDDING')).toBeInTheDocument();
     expect(screen.getByText('CLAIMS')).toBeInTheDocument();
+    // unknown categories render too, in catalog order
+    expect(screen.getByText('ODDITIES')).toBeInTheDocument();
+    expect(screen.getByText('A brand new exhibit')).toBeInTheDocument();
     const row = rowFor('An opening bid, your call');
     await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
     expect(apiMock.runDemoScenario).toHaveBeenCalledWith('your-call');

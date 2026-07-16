@@ -182,7 +182,10 @@ seeder (`demo-seed.ts`, async after listen) plays bots through backdated tournam
 populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds
 (wipes and seeds share one queue, so they never interleave).
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
-suppresses the automatic returning-visitor splash (`App.tsx`).
+suppresses the automatic returning-visitor splash (`App.tsx`). **Shipping a new
+hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenarios.ts`** (mine
+the recipe with the tool, label it from the tester's point of view) — the drift-guard test
+keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id

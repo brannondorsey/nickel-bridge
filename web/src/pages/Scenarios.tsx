@@ -19,8 +19,6 @@ import Login from './Login';
  * themselves through the ordinary Board UI and use browser back to return.
  */
 
-const CATEGORY_ORDER = ['bidding', 'card play', 'claims', 'scoring'];
-
 /** The client-only overlay exhibit screens. */
 type Overlay = 'splash' | 'login' | 'handle';
 
@@ -105,7 +103,10 @@ export default function Scenarios() {
     }
   };
 
-  const categories = CATEGORY_ORDER.filter((c) => scenarios?.some((s) => s.category === c));
+  // Section order comes from the catalog itself (first appearance wins), so
+  // a new category added in server/src/scenarios.ts renders with no frontend
+  // change — a hardcoded list here would silently drop it.
+  const categories = [...new Set((scenarios ?? []).map((s) => s.category))];
 
   return (
     <div className="exhibit">
