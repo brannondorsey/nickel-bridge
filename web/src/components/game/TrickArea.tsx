@@ -31,7 +31,6 @@ export function TrickArea({ board }: { board: BoardView }) {
         { pos: 'w', seat: 3 },
       ];
   const trick = board.currentTrick ?? [];
-  const trickNo = Math.min((board.completedTricks ?? 0) + 1, 13);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const slotEls = useRef(new Map<number, HTMLDivElement | null>());
@@ -88,6 +87,27 @@ export function TrickArea({ board }: { board: BoardView }) {
     return roles.join(' · ');
   };
 
+  // toll meter: declarer's tricks fill in from the left, defense's from the right,
+  // with a solid marker at the contract's target trick count. Each fill is colored
+  // relative to the human's own side (partnership is always seats N/S — HUMAN_SEAT
+  // = 2 in server/src/game.ts, so an even declarer seat means the human is
+  // declaring): the human's own fill is black, turning verdigris the moment it
+  // crosses the marker (their side reached its trick target); the opponents' fill
+  // is a diagonal hatch, turning accent red the moment IT crosses the marker (the
+  // opponents reached theirs). The marker itself never changes color.
+  const declTricks = board.declarerTricks ?? 0;
+  const defTricks = board.defenderTricks ?? 0;
+  const needed = board.contract ? 6 + board.contract.level : undefined;
+  const humanDeclaring = (board.declarer ?? 2) % 2 === 0;
+  // declCrossed and defCrossed can never both be true: that would need
+  // declTricks + defTricks >= needed + (14 - needed) = 14, but only 13
+  // tricks exist per deal — making the contract and defeating it are
+  // mutually exclusive, so the two fills never show red and green at once.
+  const declCrossed = needed !== undefined && declTricks >= needed;
+  const defCrossed = needed !== undefined && defTricks >= 14 - needed;
+  const fillClass = (mine: boolean, crossed: boolean, tricks: number) =>
+    mine ? `mine${crossed ? ' made' : ''}` : `theirs${crossed ? ' failed' : ''}${tricks > 0 ? ' capped' : ''}`;
+
   return (
     <div className="trick" ref={boxRef}>
       {seats.map(({ pos, seat }) => {
@@ -107,17 +127,28 @@ export function TrickArea({ board }: { board: BoardView }) {
           </div>
         );
       })}
-      <div className="tricks-count">
-        <div className="tricks-cells num">
-          <span className={`tricks-cell tricks-decl${stamp === 'decl' ? ' stamp' : ''}`}>
-            {board.declarerTricks ?? 0}
+      <div className="trick-meter">
+        <div className="trick-meter-num num">
+          <span className={`trick-meter-side${humanDeclaring ? ' mine' : ''}${stamp === 'decl' ? ' stamp' : ''}`}>
+            {declTricks}
           </span>
-          <span className={`tricks-cell${stamp === 'def' ? ' stamp' : ''}`}>{board.defenderTricks ?? 0}</span>
+          <span className="trick-meter-dash">–</span>
+          <span className={`trick-meter-side${!humanDeclaring ? ' mine' : ''}${stamp === 'def' ? ' stamp' : ''}`}>
+            {defTricks}
+          </span>
         </div>
-        <div className="tricks-caption">
-          DECL · DEF
-          <br />
-          TRICK {trickNo} OF 13
+        <div className="trick-meter-track">
+          <div
+            className={`trick-meter-fill left ${fillClass(humanDeclaring, declCrossed, declTricks)}`}
+            style={{ width: `${(declTricks / 13) * 100}%` }}
+          />
+          <div
+            className={`trick-meter-fill right ${fillClass(!humanDeclaring, defCrossed, defTricks)}`}
+            style={{ width: `${(defTricks / 13) * 100}%` }}
+          />
+          {needed !== undefined ? (
+            <div className="trick-meter-post" style={{ left: `${(needed / 13) * 100}%` }} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -126,7 +157,7 @@ export function TrickArea({ board }: { board: BoardView }) {
 
 /** Which seat takes this completed trick (contract strain, else server hint). */
 function winnerOf(trick: { seat: number; card: number }[], board: BoardView): number {
-  const strain = (board.contract as { strain?: number } | undefined)?.strain;
+  const strain = board.contract?.strain;
   if (strain !== undefined) return trickWinner(trick, strain);
   return board.handToPlay ?? trick[0].seat;
 }

@@ -78,6 +78,14 @@ export interface BoardResult {
   breakdown: ScoreBreakdown | null;
 }
 
+export interface Contract {
+  level: number;
+  strain: number;
+  declarer: number;
+  doubled?: boolean;
+  redoubled?: boolean;
+}
+
 export interface BoardView {
   tournamentId: number;
   tournamentName: string;
@@ -95,7 +103,7 @@ export interface BoardView {
   /** SAYC meaning per legal call (null = no convention entry), sent while bidding on my turn */
   legalCallMeanings?: Record<number, BidMeaning | null>;
   myTurn?: boolean;
-  contract?: unknown;
+  contract?: Contract;
   contractLabel?: string;
   declarer?: number;
   dummy?: number;

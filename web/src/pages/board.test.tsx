@@ -115,7 +115,7 @@ describe('Board — bidding', () => {
   it('opens the call inspector dialog from a past auction call', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();
-    await screen.findByText('SOUTH — YOU');
+    await screen.findByText('SOUTH · YOU');
     await userEvent.click(inAuction().getByRole('button', { name: '1♥' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Opening, one of a major/)).toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('Board — bidding', () => {
   it('shows my hand with the HCP badge and seat label', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();
-    expect(await screen.findByText('SOUTH — YOU')).toBeInTheDocument();
+    expect(await screen.findByText('SOUTH · YOU')).toBeInTheDocument();
     expect(screen.getByText('12 HCP')).toBeInTheDocument();
   });
 });
@@ -136,8 +136,8 @@ describe('Board — play', () => {
     apiMock.board.mockResolvedValue(boardPlaying);
     apiMock.playCard.mockResolvedValue({ board: boardPlaying });
     renderBoard();
-    expect(await screen.findByText('NORTH — DUMMY · YOURS')).toBeInTheDocument();
-    expect(screen.getByText('SOUTH — YOU · YOUR TURN')).toBeInTheDocument();
+    expect(await screen.findByText('NORTH · DUMMY')).toBeInTheDocument();
+    expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();
     // follow-suit helper: spades led, only spades legal
     expect(screen.getByText(/spades are live — you must follow suit/)).toBeInTheDocument();
 
@@ -152,7 +152,7 @@ describe('Board — play', () => {
   it('keeps the auction visible and inspectable during play', async () => {
     apiMock.board.mockResolvedValue(boardPlaying);
     renderBoard();
-    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    await screen.findByText('SOUTH · YOU');
     expect(document.querySelector('.auction')).toBeInTheDocument();
     // the completed auction, no pending "?" for a phase that's already over
     expect(screen.queryByText('?')).not.toBeInTheDocument();
@@ -164,7 +164,7 @@ describe('Board — play', () => {
   it('switches the interactive fan to dummy on dummy’s turn', async () => {
     apiMock.board.mockResolvedValue(boardPlayingDummyTurn);
     renderBoard();
-    expect(await screen.findByText('NORTH — DUMMY · YOURS — YOUR TURN')).toBeInTheDocument();
+    expect(await screen.findByText('NORTH · DUMMY')).toBeInTheDocument();
     expect(screen.getByText(/playing from dummy/)).toBeInTheDocument();
     // a dummy card is playable
     const dummyCard = boardPlayingDummyTurn.dummyHand![0];
@@ -178,8 +178,8 @@ describe('Board — play', () => {
     renderBoard();
     expect(await screen.findByText(/Partner won the auction — board flipped/)).toBeInTheDocument();
     // my North hand at the bottom, South hand shown as dummy
-    expect(screen.getByText('NORTH — YOU, FOR PARTNER · YOUR TURN')).toBeInTheDocument();
-    expect(screen.getByText('SOUTH — YOUR HAND, DUMMY')).toBeInTheDocument();
+    expect(screen.getByText('NORTH · YOU')).toBeInTheDocument();
+    expect(screen.getByText('SOUTH · DUMMY')).toBeInTheDocument();
     // compass rotated: North (declarer, mine) rendered in the bottom slot
     const bottom = document.querySelector('.trick .seatpos.s')!;
     expect(bottom.textContent).toContain('N · DECL · YOU');
@@ -190,7 +190,7 @@ describe('Board — play', () => {
   it('keeps both orientations straight on unflipped boards', async () => {
     apiMock.board.mockResolvedValue(boardPlaying);
     renderBoard();
-    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    await screen.findByText('SOUTH · YOU');
     const bottom = document.querySelector('.trick .seatpos.s')!;
     expect(bottom.textContent).toContain('S · DECL · YOU');
     const top = document.querySelector('.trick .seatpos.n')!;
@@ -203,9 +203,9 @@ describe('Board — play', () => {
   it('shows an East dummy as a rail on the right, not the top fan', async () => {
     apiMock.board.mockResolvedValue(boardPlayingEastDummy);
     renderBoard();
-    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    await screen.findByText('SOUTH · YOU');
     // no top-fan seat line for dummy — East never plays into the human's hands
-    expect(screen.queryByText(/EAST — DUMMY/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/EAST · DUMMY/)).not.toBeInTheDocument();
     const rail = document.querySelector('.dummy-rail-right')!;
     expect(rail).toBeInTheDocument();
     expect(rail.textContent).toContain('EAST');
@@ -224,7 +224,7 @@ describe('Board — play', () => {
   it('shows a West dummy as a rail on the left', async () => {
     apiMock.board.mockResolvedValue(boardPlayingWestDummy);
     renderBoard();
-    await screen.findByText('SOUTH — YOU · YOUR TURN');
+    await screen.findByText('SOUTH · YOU');
     const rail = document.querySelector('.dummy-rail-left')!;
     expect(rail).toBeInTheDocument();
     expect(rail.textContent).toContain('WEST');
@@ -332,7 +332,7 @@ describe('Board — claims', () => {
     vi.useFakeTimers();
     try {
       renderBoard();
-      await vi.waitFor(() => expect(screen.getByText('SOUTH — YOU · YOUR TURN')).toBeInTheDocument());
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
       const queen = screen.getByRole('button', { name: 'Q of ♠' });
       fireEvent.click(queen);
       fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
