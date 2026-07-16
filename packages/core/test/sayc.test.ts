@@ -57,14 +57,30 @@ const SPEC: Row[] = [
   { name: 'Gerber over NT', calls: [b(1, 4), PASS], candidate: b(4, 0), title: 'Gerber', artificial: true },
   { name: 'quantitative 4NT', calls: [b(1, 4), PASS], candidate: b(4, 4), title: 'Quantitative' },
   { name: 'Stayman over 2NT', calls: [b(2, 4), PASS], candidate: b(3, 0), title: 'Stayman', artificial: true },
+  { name: 'Stayman response: no major', dealer: 2, calls: [b(1, 4), PASS, b(2, 0), PASS], candidate: b(2, 1), title: 'no major', artificial: true },
+  { name: 'Stayman response: shows a major', dealer: 2, calls: [b(1, 4), PASS, b(2, 0), PASS], candidate: b(2, 2), title: 'Stayman response', artificial: true },
+  { name: 'accepts transfer to hearts', dealer: 2, calls: [b(1, 4), PASS, b(2, 1), PASS], candidate: b(2, 2), title: 'Accepts the transfer', artificial: true },
+  { name: 'accepts transfer to spades', dealer: 2, calls: [b(1, 4), PASS, b(2, 2), PASS], candidate: b(2, 3), title: 'Accepts the transfer', artificial: true },
+  { name: 'super-accept of transfer', dealer: 2, calls: [b(1, 4), PASS, b(2, 2), PASS], candidate: b(3, 3), title: 'Super-accept', artificial: true },
+  { name: 'Gerber response: 0 or 4 aces', dealer: 2, calls: [b(1, 4), PASS, b(4, 0), PASS], candidate: b(4, 1), title: 'Gerber response', artificial: true },
+  { name: 'Gerber response: 2 aces', dealer: 2, calls: [b(1, 4), PASS, b(4, 0), PASS], candidate: b(4, 3), title: 'Gerber response', artificial: true },
 
   // ---- strong 2♣ machinery ----
   { name: '2♦ waiting', calls: [b(2, 0), PASS], candidate: b(2, 1), title: '2♦ waiting', artificial: true },
   { name: 'positive response to 2♣', calls: [b(2, 0), PASS], candidate: b(2, 3), title: 'Positive response', points: '8+ pts' },
+  { name: 'opener rebid after 2♦ waiting: suit', calls: [b(2, 0), PASS, b(2, 1), PASS], candidate: b(2, 2), title: 'Rebid after 2♣', points: '22+ pts', forcing: 'game' },
+  { name: 'opener rebid after 2♦ waiting: balanced', calls: [b(2, 0), PASS, b(2, 1), PASS], candidate: b(2, 4), title: 'Rebid after 2♣', points: '22+ HCP', forcing: 'game' },
 
   // ---- weak two machinery ----
   { name: '2NT feature ask', calls: [b(2, 2), PASS], candidate: b(2, 4), title: '2NT over a weak two', artificial: true },
   { name: 'RONF raise', calls: [b(2, 2), PASS], candidate: b(3, 2), title: 'Raise of the preempt' },
+  { name: 'feature response: minimum', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 2), title: 'Feature response: minimum' },
+  { name: 'feature response: shows a feature', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 0), title: 'Feature response', artificial: true },
+  { name: '3NT after feature ask', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 4), title: '3NT after feature ask' },
+
+  // ---- fourth suit forcing ----
+  { name: 'fourth suit forcing', calls: [b(1, 0), PASS, b(1, 1), PASS, b(1, 2), PASS], candidate: b(1, 3), title: 'Fourth-suit forcing', artificial: true, forcing: 'one-round' },
+  { name: 'new suit rebid is not fourth-suit forcing with only 2 suits shown', dealer: 2, calls: [b(1, 1), PASS, b(1, 3), PASS], candidate: b(2, 2), title: 'Reverse' },
 
   // ---- Blackwood ----
   { name: 'Blackwood 4NT', calls: [b(1, 3), PASS, b(3, 3), PASS], candidate: b(4, 4), title: 'Blackwood', artificial: true },
@@ -79,7 +95,15 @@ const SPEC: Row[] = [
   { name: '1NT overcall', calls: [b(1, 2)], candidate: b(1, 4), title: '1NT overcall', points: '15–18 HCP' },
   { name: 'weak jump overcall', calls: [b(1, 0)], candidate: b(2, 3), title: 'Weak jump overcall', points: '5–11 HCP' },
   { name: 'Michaels cue-bid', calls: [b(1, 2)], candidate: b(2, 2), title: 'Michaels', artificial: true },
+  { name: 'Unusual 2NT over a major', calls: [b(1, 2)], candidate: b(2, 4), title: 'Unusual 2NT', artificial: true },
   { name: 'redouble shows 10+', calls: [b(1, 3), DOUBLE], candidate: REDOUBLE, title: 'Redouble', points: '10+ HCP' },
+  { name: 'advance of takeout double: minimum', calls: [b(1, 2), DOUBLE, PASS], candidate: b(1, 3), title: 'Response to double', points: '0–8 pts' },
+  { name: 'advance of takeout double: jump', calls: [b(1, 2), DOUBLE, PASS], candidate: b(2, 3), title: 'Jump response to double', points: '9–11 pts' },
+  { name: 'advance of takeout double: cue-bid', calls: [b(1, 2), DOUBLE, PASS], candidate: b(2, 2), title: 'Cue-bid of the double', points: '12+ pts', artificial: true, forcing: 'game' },
+  { name: 'advance of takeout double: 1NT', calls: [b(1, 2), DOUBLE, PASS], candidate: b(1, 4), title: '1NT response to double', points: '8–10 pts' },
+  { name: 'Michaels advance over a minor: picks a major', calls: [b(1, 0), b(2, 0), PASS], candidate: b(2, 2), title: 'Advance' },
+  { name: 'Michaels advance over a major: picks the other major', calls: [b(1, 2), b(2, 2), PASS], candidate: b(2, 3), title: 'Advance' },
+  { name: 'Michaels advance over a major: 2NT relay for the minor', calls: [b(1, 2), b(2, 2), PASS], candidate: b(2, 4), title: '2NT relay', artificial: true },
 
   // ---- opener rebids ----
   { name: '1NT rebid 12–14', dealer: 2, calls: [b(1, 0), PASS, b(1, 3), PASS], candidate: b(1, 4), title: '1NT rebid', points: '12–14 HCP' },

@@ -250,8 +250,124 @@ function explainBidCall(ctx: Ctx, call: Call): BidMeaning | null {
     return explainOvercall(ctx, call, level, strain);
   }
 
+  // ----- Advancer's reply to partner's takeout double -----
+  if (isAdvanceOfTakeoutDouble(ctx)) {
+    const advance = explainDoubleAdvance(ctx, call, level, strain);
+    if (advance) return advance;
+  }
+
+  // ----- Advancer's reply to partner's Michaels cue-bid -----
+  if (isAdvanceOfMichaels(ctx)) {
+    const advance = explainMichaelsAdvance(ctx, call, level, strain);
+    if (advance) return advance;
+  }
+
   // ----- Generic continuations -----
   return explainContinuation(ctx, call, level, strain);
+}
+
+/**
+ * Direct advance of partner's Michaels cue-bid: their side opened, partner
+ * cue-bid the opening suit (Michaels), RHO passed, and we haven't bid yet.
+ */
+function isAdvanceOfMichaels(ctx: Ctx): boolean {
+  if (ctx.calls.length !== 3 || !ctx.oppsOpened || ctx.opening === null) return false;
+  const theirOpen = ctx.opening.call;
+  if (!isBid(theirOpen) || bidStrain(theirOpen) === 4) return false;
+  const cue = ctx.partnerCalls[0];
+  return (
+    ctx.partnerCalls.length === 1 &&
+    isBid(cue) &&
+    bidStrain(cue) === bidStrain(theirOpen) &&
+    bidLevel(cue) === bidLevel(theirOpen) + 1 &&
+    ctx.myCalls.every((c) => c === PASS)
+  );
+}
+
+function explainMichaelsAdvance(ctx: Ctx, call: Call, level: number, strain: Strain): BidMeaning | null {
+  const theirStrain = bidStrain(ctx.opening!.call);
+  if (theirStrain >= 2) {
+    // Michaels over a major shows the OTHER major plus an unspecified 5+ minor.
+    const otherMajor = (5 - theirStrain) as Strain;
+    if (strain === otherMajor)
+      return meaning(
+        `Advance: ${S[otherMajor]}`,
+        `Picks partner's known major as trumps; bid higher with extra support or strength.`,
+        { shapePromise: `${S[otherMajor]} support` },
+      );
+    if (strain === 4 && level === bidLevel(ctx.partnerCalls[0]))
+      return meaning(
+        '2NT relay',
+        'Artificial: asks the Michaels bidder to name their minor suit rather than guessing which one to play.',
+        { artificial: true },
+      );
+    return null;
+  }
+  // Michaels over a minor shows both majors, 5-5.
+  if (strain === 2 || strain === 3)
+    return meaning(
+      `Advance: ${S[strain]}`,
+      `Picks one of partner's known majors as trumps; bid higher with extra support or strength.`,
+      { shapePromise: `${S[strain]} support` },
+    );
+  return null;
+}
+
+/**
+ * Direct advance of partner's takeout double: their side opened at a low
+ * level, partner doubled for takeout, RHO passed, and we haven't bid yet.
+ * Scoped to the simple direct sequence (no extra interference) so we don't
+ * misfire on more complex competitive auctions the pamphlet doesn't cover.
+ */
+function isAdvanceOfTakeoutDouble(ctx: Ctx): boolean {
+  return (
+    ctx.calls.length === 3 &&
+    ctx.oppsOpened &&
+    ctx.partnerCalls.length === 1 &&
+    ctx.partnerCalls[0] === DOUBLE &&
+    ctx.myCalls.every((c) => c === PASS) &&
+    ctx.lastBid !== null &&
+    ctx.lastBidBySide === 'theirs' &&
+    bidLevel(ctx.lastBid) <= 3 &&
+    bidStrain(ctx.lastBid) !== 4
+  );
+}
+
+function explainDoubleAdvance(ctx: Ctx, call: Call, level: number, strain: Strain): BidMeaning | null {
+  const theirBid = ctx.lastBid!;
+  const theirStrain = bidStrain(theirBid);
+
+  if (strain === theirStrain) {
+    return meaning(
+      'Cue-bid of the double',
+      `Artificial: forcing to game (or very close) with no clear suit preference of your own, or a big hand. Asks partner to describe further.`,
+      { points: '12+ pts', artificial: true, forcing: 'game' },
+    );
+  }
+  if (strain === 4) {
+    if (level === 1)
+      return meaning(
+        '1NT response to double',
+        'Shows 8–10 points, balanced, with a stopper in their suit — you can leave the double in for penalties another time.',
+        { points: '8–10 pts', shapePromise: 'balanced, stopper', req: { minHcp: 8, maxHcp: 10, balanced: true } },
+      );
+    return null;
+  }
+  const minLevel = theirBid < makeBid(1, strain) ? 1 : 2;
+  const isJump = level > minLevel;
+  if (isJump)
+    return meaning(
+      'Jump response to double',
+      `Invitational: about 9–11 points and a decent ${S[strain]} suit. Not forcing — partner may pass.`,
+      { points: '9–11 pts', req: { minHcp: 8, maxHcp: 11 } },
+    );
+  if (level === minLevel)
+    return meaning(
+      'Response to double',
+      `A minimum reply — 0–8 points. Doubles are for takeout, so you must bid your best suit even with nothing; this promises no extra length or strength.`,
+      { points: '0–8 pts', req: { maxHcp: 8 } },
+    );
+  return null;
 }
 
 function explainOpening(level: number, strain: Strain): BidMeaning | null {
@@ -387,6 +503,63 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
     }
   }
 
+  // --- opener's reply after their own 1NT/2NT OPENING to partner's Stayman ask or Jacoby transfer ---
+  const openerReplyToNT =
+    ctx.iOpened &&
+    ctx.opening !== null &&
+    bidStrain(ctx.opening.call) === 4 &&
+    ctx.myCalls.filter((c) => c !== PASS).length === 1 &&
+    !ctx.interference;
+  if (openerReplyToNT && ctx.opening !== null && partnerBid !== null) {
+    const ntLevel = bidLevel(ctx.opening.call);
+    const askLevel = ntLevel + 1;
+    if (bidLevel(partnerBid) === askLevel && bidStrain(partnerBid) === 0) {
+      // partner's ask was Stayman (asking level, clubs)
+      if (level === askLevel && strain === 1) {
+        return meaning(
+          'Stayman response: no major',
+          `Artificial: denies a 4-card major. (${askLevel}♥ or ${askLevel}♠ would show one instead.)`,
+          { artificial: true },
+        );
+      }
+      if (level === askLevel && (strain === 2 || strain === 3)) {
+        return meaning(
+          `Stayman response: ${S[strain]}`,
+          `Artificial reply, though it does show real shape: a 4-card ${S[strain]} suit. (With both majors, show ♥ first.)`,
+          { artificial: true, shapePromise: `4+ ${S[strain]}` },
+        );
+      }
+    }
+    if (bidLevel(partnerBid) === askLevel && (bidStrain(partnerBid) === 1 || bidStrain(partnerBid) === 2)) {
+      // partner's ask was a Jacoby transfer (asking level, diamonds = to hearts, hearts = to spades)
+      const majorStrain = bidStrain(partnerBid) === 1 ? 2 : 3;
+      const major = S[majorStrain];
+      if (level === askLevel && strain === majorStrain) {
+        return meaning(
+          `Accepts the transfer to ${major}`,
+          `Artificial: completes partner's Jacoby transfer by bidding ${major} at the cheapest level. Says nothing extra about your hand — partner is captain and may pass, invite, or drive to game/slam next.`,
+          { artificial: true },
+        );
+      }
+      if (level === askLevel + 1 && strain === majorStrain) {
+        return meaning(
+          'Super-accept of the transfer',
+          `Jumps a level to accept: shows 4-card support for ${major} and a maximum notrump. Extra shape and strength, inviting partner toward slam.`,
+          { artificial: true, shapePromise: `4+ ${major}` },
+        );
+      }
+    }
+    if (partnerBid === makeBid(4, 0) && level === 4 && strain >= 1) {
+      // partner's ask was Gerber (always fixed at the 4-level, unlike Stayman/transfers)
+      const aces = ['0 or 4', '1', '2', '3'][strain - 1];
+      return meaning(
+        `Gerber response: ${level}${S[strain]}`,
+        `Artificial answer to partner's Gerber ace-ask: shows ${aces} ace${aces === '1' ? '' : 's'}.`,
+        { artificial: true },
+      );
+    }
+  }
+
   // --- Blackwood 4NT after suit bidding ---
   if (call === makeBid(4, 4) && ctx.lastBid !== null && bidStrain(ctx.lastBid) !== 4) {
     return meaning(
@@ -441,6 +614,33 @@ function explainConventions(ctx: Ctx, call: Call, level: number, strain: Strain)
       'Forcing enquiry: asks opener to show an outside feature (ace or king) with a maximum, or rebid the suit with a minimum. Shows game interest (about 15+ points).',
       { points: '15+ pts', artificial: true },
     );
+  }
+
+  // --- Fourth suit forcing: the one remaining unbid suit, at the cheapest
+  // level, once our side has already introduced 3 different suits between
+  // the two hands. Not a real suit — an artificial relay asking partner to
+  // describe further (stopper, support, shape).
+  if (
+    strain !== 4 &&
+    !ctx.interference &&
+    ctx.oppCalls.every((c) => c === PASS) &&
+    ctx.opening !== null &&
+    isBid(ctx.opening.call) &&
+    bidStrain(ctx.opening.call) !== 4 &&
+    ctx.myCalls.some((c) => c !== PASS) &&
+    ctx.lastBid !== null
+  ) {
+    const bidStrains = new Set(
+      ctx.seq.filter((x) => isBid(x.call) && bidStrain(x.call) !== 4).map((x) => bidStrain(x.call)),
+    );
+    const isCheapest = level === bidLevel(ctx.lastBid) + (strain > bidStrain(ctx.lastBid) ? 0 : 1);
+    if (bidStrains.size === 3 && !bidStrains.has(strain) && isCheapest) {
+      return meaning(
+        'Fourth-suit forcing',
+        `Artificial: the fourth, still-unbid suit, at the cheapest level. Not a real suit — asks partner to describe further (bid notrump with a stopper, support one of your suits, or clarify shape). Forcing.`,
+        { artificial: true, forcing: 'one-round' },
+      );
+    }
   }
 
   return null;
@@ -622,6 +822,43 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
   const openStrain = bidStrain(opening);
   const openLevel = bidLevel(opening);
   const response = ctx.partnerLastBid;
+
+  // Rebid after 2♣ – 2♦ waiting: still within the 22+/game-forcing frame the
+  // 2♣ opening already promised, so this is opener's real suit/shape at
+  // strength, not a fresh 13–18-point suit rebid.
+  if (openLevel === 2 && openStrain === 0 && response === makeBid(2, 1)) {
+    if (strain === 4)
+      return meaning(
+        'Rebid after 2♣: balanced',
+        'Shows a balanced 22+ HCP hand — too strong for a direct 2NT opening. Game forcing.',
+        { points: '22+ HCP', shapePromise: 'balanced', forcing: 'game', req: { minHcp: 21, balanced: true } },
+      );
+    return meaning(
+      `Rebid after 2♣: ${S[strain]}`,
+      `Shows opener's real suit — ${S[strain]} — with the 22+ points already promised by the 2♣ opening. Game forcing.`,
+      { points: '22+ pts', shapePromise: S[strain], forcing: 'game', req: { minHcp: 21 } },
+    );
+  }
+
+  // Reply to the 2NT feature ask over opener's own weak two.
+  if (openLevel === 2 && openStrain >= 1 && openStrain <= 3 && response === makeBid(2, 4)) {
+    if (strain === openStrain)
+      return meaning(
+        'Feature response: minimum',
+        `Rebids the weak two suit: a minimum for the preempt, no outside ace or king to show.`,
+      );
+    if (strain !== 4)
+      return meaning(
+        `Feature response: ${S[strain]}`,
+        `Artificial: shows an outside ace or king in ${S[strain]} — a maximum for the weak two with extra defense.`,
+        { artificial: true, shapePromise: `feature in ${S[strain]}` },
+      );
+    return meaning(
+      '3NT after feature ask',
+      'To play: suggests notrump is the winning strain, typically built on the long suit plus scattered outside help.',
+    );
+  }
+
   if (response === null || openLevel !== 1) {
     return explainContinuation(ctx, call, level, strain);
   }
@@ -727,9 +964,22 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
         shapePromise: 'balanced, stopper in their suit',
         req: { minHcp: 15, maxHcp: 18, balanced: true },
       });
-    return generic(`${level}NT overcall`, 'Unusual notrump territory: typically shows the two lowest unbid suits (5–5).', {
-      artificial: true,
-    });
+    // Directly over a one-level major opening, 2NT unambiguously means the
+    // "Unusual" convention showing both minors — pamphlet-exact. Other
+    // levels/positions (over a minor, in balancing seat, etc.) genuinely vary
+    // by partnership agreement, so stay generic there.
+    if (level === 2 && ctx.calls.length === 1 && (bidStrain(theirBid) === 2 || bidStrain(theirBid) === 3)) {
+      return meaning(
+        'Unusual 2NT',
+        `Artificial: directly over their ${bidLevel(theirBid)}${S[bidStrain(theirBid)]} opening, shows both minors (5+ ♣ and 5+ ♦) — typically a two-suited hand willing to compete or sacrifice.`,
+        { artificial: true, shapePromise: '5+ ♣, 5+ ♦' },
+      );
+    }
+    return generic(
+      `${level}NT overcall`,
+      'Unusual notrump territory: typically shows the two lowest unbid suits (5–5) — the exact suits shown vary with the auction position and level.',
+      { artificial: true },
+    );
   }
 
   const minLevel = theirBid < makeBid(1, strain) ? 1 : 2;
