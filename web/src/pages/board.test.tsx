@@ -332,7 +332,7 @@ describe('Board — claims', () => {
     vi.useFakeTimers();
     try {
       renderBoard();
-      await vi.waitFor(() => expect(screen.getByText('SOUTH — YOU · YOUR TURN')).toBeInTheDocument());
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
       const queen = screen.getByRole('button', { name: 'Q of ♠' });
       fireEvent.click(queen);
       fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
