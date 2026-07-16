@@ -41,8 +41,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
-                demo.ts + scenarios.ts + demo-seed.ts + bot-play.ts (DEMO=1 preview-only
-                demo mode — see "Demo mode" below)
+                demo.ts + scenarios.ts + demo-seed.ts + bot-play.ts (DEMO=1 demo mode,
+                on PR previews + the permanent demo app — see "Demo mode" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page;
@@ -76,8 +76,10 @@ npm run dev -w web       # Vite dev server on :5173, proxies /api, /auth, /demo 
 Checks — run all three before pushing; CI runs exactly these plus the Playwright smoke and a
 Docker build (`.github/workflows/ci.yml`, on pushes to `main` and all PRs). Once those pass,
 CI also deploys: every open PR gets its own Fly.io preview app (destroyed on close by
-`.github/workflows/pr-preview-teardown.yml`), and every push to `main` deploys to production —
-see README.md "Deployment" for the one-time Fly setup and how preview auth (`DEV_AUTH`) works:
+`.github/workflows/pr-preview-teardown.yml`), and every push to `main` deploys to production
+*and* redeploys the permanent demo app (`nickel-bridge-demo`, demo.bridge.brannon.online — a
+stable DEMO=1 instance for automation and click-testing) — see README.md "Deployment" for the
+one-time Fly setup and how preview auth (`DEV_AUTH`) works:
 
 ```bash
 npm run build
@@ -105,8 +107,8 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `PORT` | `3000` | listen port (`server/src/index.ts`) |
 | `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
-| `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never in production** |
-| `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never in production** (CI enforces this, see invariant 5) |
+| `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never on the production app** (previews + the demo app are deliberate exceptions) |
+| `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
@@ -152,9 +154,10 @@ human's untaken decisions, so they interact directly with the robot-trace fixtur
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
 **exactly one machine** — no horizontal scaling. On Fly.io this means every environment
-(production, and each per-PR preview) is its own separate app with its own volume — `fly.toml`
-is shared across all of them, with the app name always overridden per-environment via `--app`
-in CI (see `.github/workflows/ci.yml`'s `deploy-preview`/`deploy-production` jobs).
+(production, the permanent demo app, and each per-PR preview) is its own separate app with its
+own volume — `fly.toml` is shared across all of them, with the app name always overridden
+per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
+`deploy-preview`/`deploy-demo`/`deploy-production` jobs).
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
@@ -167,7 +170,8 @@ the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
 still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
-**Demo mode (`DEMO=1`, PR previews only):** the preview comment's `/demo` link signs the
+**Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo.bridge.brannon.online):**
+the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the
 visitor in as a shared "Inspector" persona and lands on `/scenarios` — a gallery of
 "exhibits" that jump straight into hard-to-reach game states for click-testing. An exhibit
 is a replay recipe (seed + board + scripted human actions, `server/src/scenarios.ts`)
@@ -235,9 +239,11 @@ module-level constants next to the functions that use them. Match that style.
 4. **`packages/core` stays dependency-free and I/O-free** — pure rules. The server imports
    it; the web bundle deliberately does not (it mirrors the few helpers it needs in
    `web/src/api.ts` and receives anything score-shaped pre-computed from the server).
-5. **`DEV_AUTH=1` and `DEMO=1` must never be set in production** — the former is
-   unauthenticated login, the latter hands out sessions and can wipe the database. CI's
-   `deploy-production` job refuses to deploy if either secret exists on the production app.
+5. **`DEV_AUTH=1` and `DEMO=1` must never be set on the production app (`nickel-bridge`)** —
+   the former is unauthenticated login, the latter hands out sessions and can wipe the
+   database. CI's `deploy-production` job refuses to deploy if either secret exists on the
+   production app. PR previews and the permanent demo app (`nickel-bridge-demo`) are separate
+   apps with their own throwaway databases where both flags are intentional.
 
 ## Design system
 

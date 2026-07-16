@@ -1,9 +1,11 @@
 # Fly.io deployment (~$2–3/month for a shared-cpu-1x + a few GB volume, per app).
 #
-# This one file is shared by every environment: production and every per-PR preview app
-# (see .github/workflows/ci.yml and pr-preview-teardown.yml). `app = 'nickel-bridge'` below is
-# only the default for local/manual `fly deploy` — CI always passes `--app <name>` explicitly
-# (`nickel-bridge` for production, `nickel-bridge-pr-<number>` for previews), which overrides it.
+# This one file is shared by every environment: production, the permanent demo app, and every
+# per-PR preview app (see .github/workflows/ci.yml and pr-preview-teardown.yml).
+# `app = 'nickel-bridge'` below is only the default for local/manual `fly deploy` — CI always
+# passes `--app <name>` explicitly (`nickel-bridge` for production, `nickel-bridge-demo` for
+# the demo app at demo.bridge.brannon.online, `nickel-bridge-pr-<number>` for previews),
+# which overrides it.
 #
 # One-time production setup (see README.md "Deployment" for the full checklist):
 #   fly apps create nickel-bridge
@@ -12,8 +14,8 @@
 #   fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... BASE_URL=https://bridge.brannon.online --app nickel-bridge
 #
 # SQLite lives on the volume; keep exactly one machine per app (no horizontal scaling). Preview
-# apps still get a small 1GB volume (see ci.yml) since they're ephemeral; the auto-extend
-# settings below apply to every environment but only kick in once actually needed.
+# and demo apps get a small 1GB volume (see ci.yml) since their data is throwaway; the
+# auto-extend settings below apply to every environment but only kick in once actually needed.
 app = 'nickel-bridge'
 primary_region = 'ewr'
 
