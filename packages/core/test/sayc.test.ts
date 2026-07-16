@@ -95,6 +95,7 @@ const SPEC: Row[] = [
   { name: '1NT overcall', calls: [b(1, 2)], candidate: b(1, 4), title: '1NT overcall', points: '15–18 HCP' },
   { name: 'weak jump overcall', calls: [b(1, 0)], candidate: b(2, 3), title: 'Weak jump overcall', points: '5–11 HCP' },
   { name: 'Michaels cue-bid', calls: [b(1, 2)], candidate: b(2, 2), title: 'Michaels', artificial: true },
+  { name: 'Unusual 2NT over a major', calls: [b(1, 2)], candidate: b(2, 4), title: 'Unusual 2NT', artificial: true },
   { name: 'redouble shows 10+', calls: [b(1, 3), DOUBLE], candidate: REDOUBLE, title: 'Redouble', points: '10+ HCP' },
   { name: 'advance of takeout double: minimum', calls: [b(1, 2), DOUBLE, PASS], candidate: b(1, 3), title: 'Response to double', points: '0–8 pts' },
   { name: 'advance of takeout double: jump', calls: [b(1, 2), DOUBLE, PASS], candidate: b(2, 3), title: 'Jump response to double', points: '9–11 pts' },

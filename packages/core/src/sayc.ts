@@ -964,9 +964,22 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
         shapePromise: 'balanced, stopper in their suit',
         req: { minHcp: 15, maxHcp: 18, balanced: true },
       });
-    return generic(`${level}NT overcall`, 'Unusual notrump territory: typically shows the two lowest unbid suits (5–5).', {
-      artificial: true,
-    });
+    // Directly over a one-level major opening, 2NT unambiguously means the
+    // "Unusual" convention showing both minors — pamphlet-exact. Other
+    // levels/positions (over a minor, in balancing seat, etc.) genuinely vary
+    // by partnership agreement, so stay generic there.
+    if (level === 2 && ctx.calls.length === 1 && (bidStrain(theirBid) === 2 || bidStrain(theirBid) === 3)) {
+      return meaning(
+        'Unusual 2NT',
+        `Artificial: directly over their ${bidLevel(theirBid)}${S[bidStrain(theirBid)]} opening, shows both minors (5+ ♣ and 5+ ♦) — typically a two-suited hand willing to compete or sacrifice.`,
+        { artificial: true, shapePromise: '5+ ♣, 5+ ♦' },
+      );
+    }
+    return generic(
+      `${level}NT overcall`,
+      'Unusual notrump territory: typically shows the two lowest unbid suits (5–5) — the exact suits shown vary with the auction position and level.',
+      { artificial: true },
+    );
   }
 
   const minLevel = theirBid < makeBid(1, strain) ? 1 : 2;
