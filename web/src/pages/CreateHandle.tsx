@@ -5,9 +5,9 @@ import { Button } from '../components/ds/Button';
 import { Input } from '../components/ds/Input';
 
 /** One-time interstitial after first sign-in: pick the name everyone else sees. */
-export default function CreateHandle() {
+export default function CreateHandle({ initialHandle = '' }: { initialHandle?: string }) {
   const { refresh } = useMe();
-  const [handle, setHandleValue] = useState('');
+  const [handle, setHandleValue] = useState(initialHandle);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

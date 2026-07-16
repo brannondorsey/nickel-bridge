@@ -1,5 +1,8 @@
+import type { FastifyBaseLogger } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { TestClient, freshDbEnv, makeApp } from './helpers.js';
+
+const silentLog = { info() {}, error() {}, warn() {}, debug() {} } as unknown as FastifyBaseLogger;
 
 /**
  * Demo-mode routes (DEMO=1): the /demo front door, the scenario API, reset,
@@ -24,12 +27,47 @@ describe('demo mode', () => {
   });
 
   it('lists the scenario catalog', async () => {
-    const { scenarios } = await inspector.get('/api/demo/scenarios');
+    const { scenarios, newCrosserId, richProfileId, collisionHandle } = await inspector.get('/api/demo/scenarios');
     expect(scenarios.length).toBeGreaterThan(0);
     const one = scenarios.find((s: { id: string }) => s.id === 'your-call');
     expect(one).toMatchObject({ label: expect.any(String), description: expect.any(String), category: 'bidding' });
     // the wire shape is presentation-only — no seeds or action lists leak
     expect(Object.keys(one).sort()).toEqual(['category', 'description', 'id', 'label']);
+    // the two profile-exhibit personas and the guaranteed-taken handle exist
+    // synchronously, on the very first request — no seeder timing dependency
+    expect(Number.isInteger(newCrosserId)).toBe(true);
+    expect(Number.isInteger(richProfileId)).toBe(true);
+    expect(collisionHandle).toBe('New Crosser');
+  });
+
+  it('the New Crosser is a permanent, always-empty persona', async () => {
+    const { newCrosserId } = await inspector.get('/api/demo/scenarios');
+    const stats = await inspector.get(`/api/users/${newCrosserId}/stats`);
+    expect(stats.totals.boardsCompleted).toBe(0);
+  });
+
+  it('the rich profile points at a bot with genuine played history', async () => {
+    // seedDemo is normally fired in the background on boot (index.ts) — this
+    // test drives it directly, on a tiny profile that still names the same
+    // bot (Margaret) the rich-profile exhibit looks up, so her stats page is
+    // populated the way a preview deployment's would be after boot seeding.
+    const seeder = await import('../src/demo-seed.js');
+    await seeder.seedDemo(silentLog, {
+      bots: ['Margaret'],
+      tournaments: [{ seed: 'demo-test-rich', ageS: 86400, players: [0] }],
+      exhibitFields: false,
+    });
+    const { richProfileId } = await inspector.get('/api/demo/scenarios');
+    const stats = await inspector.get(`/api/users/${richProfileId}/stats`);
+    expect(stats.totals.boardsCompleted).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('the handle-collision exhibit prefill is guaranteed to 409', async () => {
+    const { collisionHandle } = await inspector.get('/api/demo/scenarios');
+    const visitor = new TestClient(app, 'Handle Collision Visitor');
+    await visitor.post('/auth/dev', { name: visitor.name });
+    const res = await visitor.raw('POST', '/api/handle', { handle: collisionHandle });
+    expect(res.statusCode).toBe(409);
   });
 
   it('runs a scenario and lands the board in its expected state', async () => {

@@ -20,7 +20,7 @@
 
 // Extending this union is all a new gallery section needs — the frontend
 // derives section order from catalog order, so no web change is required.
-export type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring';
+export type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring' | 'results';
 
 export interface ScenarioAction {
   kind: 'call' | 'card';
@@ -44,6 +44,16 @@ export interface Scenario {
   expect: 'bidding' | 'playing' | 'done';
   /** seeder pre-plays this many bots through the SAME board, so completing it live shows a real matchpoint field */
   fieldBots?: number;
+  /**
+   * This is the tournament's last board, and finishing it live should reveal
+   * a genuine tournament-summary screen — not just this one board's receipt.
+   * The executor pre-completes the acting user's boards 1..(boardNo - 1)
+   * first (see demo.ts's runScenarioNow), and the seeder pre-plays
+   * `fieldBots` through every board instead of just this one (demo-seed.ts),
+   * so there's a real field to rank against when the tester's last play
+   * finishes both the board and the tournament in the same live response.
+   */
+  completesTournament?: boolean;
 }
 
 const call = (value: number): ScenarioAction => ({ kind: 'call', value });
@@ -187,6 +197,36 @@ export const SCENARIOS: Scenario[] = [
     ],
     expect: 'playing',
     fieldBots: 3,
+  },
+
+  // ---- results ----
+  {
+    id: 'tournament-complete',
+    label: 'A tournament, paid in full',
+    description:
+      'Board 4 of 4, one card left. Play it and the receipt prints — then, because it’s the last board, TOURNAMENT SUMMARY unlocks: match percentage, rank, and every board’s toll at once. (No rating line: exhibits never rate, same as any unrated tournament — not a bug.)',
+    category: 'results',
+    seed: 'finale-1',
+    boardNo: 4,
+    actions: [
+      call(0),
+      call(0),
+      card(0),
+      card(31),
+      card(45),
+      card(51),
+      card(4),
+      card(18),
+      card(32),
+      card(6),
+      card(35),
+      card(20),
+      card(11),
+      card(12),
+    ],
+    expect: 'playing',
+    fieldBots: 3,
+    completesTournament: true,
   },
 ];
 

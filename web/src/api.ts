@@ -236,7 +236,10 @@ export const api = {
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   // demo mode only (404 elsewhere): the /scenarios gallery
-  demoScenarios: () => request<{ scenarios: DemoScenario[] }>('/api/demo/scenarios'),
+  demoScenarios: () =>
+    request<{ scenarios: DemoScenario[]; newCrosserId: number; richProfileId: number; collisionHandle: string }>(
+      '/api/demo/scenarios',
+    ),
   runDemoScenario: (id: string) =>
     request<{ tournamentId: number; boardNo: number }>(`/api/demo/scenarios/${id}`, { method: 'POST' }),
   resetDemo: () => request<{ ok: boolean }>('/api/demo/reset', { method: 'POST' }),

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
+import { playThrough, tick } from './bot-play.js';
 import { TournamentRow, UserRow, db } from './db.js';
 import { ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
@@ -21,6 +22,9 @@ const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed, kind)
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
 
 const DEMO_HANDLE = 'Inspector';
+const NEW_CROSSER_HANDLE = 'New Crosser';
+/** A seeded bot (see demo-seed.ts's DEFAULT_PROFILE) with a genuinely rich history — the "populated stats page" exhibit points here. */
+const RICH_PROFILE_HANDLE = 'Margaret';
 
 export function demoEnabled(): boolean {
   return process.env.DEMO === '1';
@@ -48,6 +52,18 @@ export function ensureDemoUser(): UserRow {
 }
 
 /**
+ * A permanently empty persona: zero boards, forever. It exists purely so a
+ * tester can reach Player.tsx's cold-start empty state without hunting for a
+ * real teammate who hasn't played, and so the handle-collision exhibit
+ * always has a guaranteed-taken name to prefill — both need it to exist
+ * synchronously, so it's ensured here (called from /api/demo/scenarios),
+ * not only in the background seeder.
+ */
+export function ensureNewCrosser(): UserRow {
+  return claimHandleWithSuffix(upsertGoogleUser('demo:new-crosser', null, NEW_CROSSER_HANDLE, null), NEW_CROSSER_HANDLE);
+}
+
+/**
  * Exhibit tournaments hold scenario boards, identified by (kind='exhibit',
  * seed) — the seed must stay the literal string the recipe was mined against
  * (deals derive from it). The kind column also keeps them out of placement,
@@ -57,8 +73,6 @@ export function ensureExhibitTournament(seed: string): TournamentRow {
   const existing = stmtExhibitBySeed.get(seed) as TournamentRow | undefined;
   return existing ?? (stmtCreateExhibit.get(exhibitName(seed), seed) as TournamentRow);
 }
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 /**
  * Serialize scenario runs per user: every visitor shares the Inspector, and
@@ -88,6 +102,13 @@ export function runScenario(userId: number, s: Scenario): Promise<{ tournamentId
  */
 async function runScenarioNow(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
   const t = ensureExhibitTournament(s.seed);
+  if (s.completesTournament) {
+    // The "TOURNAMENT SUMMARY →" reveal only shows a real result if the
+    // other boards are actually complete — bot-play the acting user through
+    // them with the same deterministic strategy the ambient seeder uses for
+    // real players (see bot-play.ts).
+    await playThrough(t, userId, s.boardNo - 1, (no) => `exhibit-prior:${s.seed}:${no}`);
+  }
   stmtDeleteBoard.run(t.id, userId, s.boardNo);
   const b = loadBoard(t, userId, s.boardNo, true)!;
   await ensureAdvanced(b);
@@ -115,11 +136,23 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     return reply.redirect('/scenarios');
   });
 
-  app.get('/api/demo/scenarios', (req, reply) => {
+  app.get('/api/demo/scenarios', async (req, reply) => {
     if (!demoEnabled()) return reply.code(404).send({ error: 'not found' });
     if (!requireUserWithHandle(req, reply)) return;
+    const newCrosser = ensureNewCrosser();
+    // Dynamic import mirrors /api/demo/reset below — it avoids a
+    // module-load-time circular import between demo.ts and demo-seed.ts.
+    const { ensureBot } = await import('./demo-seed.js');
+    const richProfile = ensureBot(RICH_PROFILE_HANDLE);
     return reply.send({
       scenarios: SCENARIOS.map(({ id, label, description, category }) => ({ id, label, description, category })),
+      newCrosserId: newCrosser.id,
+      richProfileId: richProfile.id,
+      // Guaranteed taken (just claimed above, in this same request) — the
+      // handle-collision exhibit prefills the picker with this so the live
+      // 409 fires on the very first submit, with no dependency on the
+      // ambient bot seeder having finished yet.
+      collisionHandle: newCrosser.handle ?? NEW_CROSSER_HANDLE,
     });
   });
 
