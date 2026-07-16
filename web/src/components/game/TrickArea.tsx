@@ -101,7 +101,8 @@ export function TrickArea({ board }: { board: BoardView }) {
   const humanDeclaring = (board.declarer ?? 2) % 2 === 0;
   const declCrossed = needed !== undefined && declTricks >= needed;
   const defCrossed = needed !== undefined && defTricks >= 14 - needed;
-  const fillClass = (mine: boolean, crossed: boolean) => (mine ? `mine${crossed ? ' made' : ''}` : `theirs${crossed ? ' failed' : ''}`);
+  const fillClass = (mine: boolean, crossed: boolean, tricks: number) =>
+    mine ? `mine${crossed ? ' made' : ''}` : `theirs${crossed ? ' failed' : ''}${tricks > 0 ? ' capped' : ''}`;
 
   return (
     <div className="trick" ref={boxRef}>
@@ -134,11 +135,11 @@ export function TrickArea({ board }: { board: BoardView }) {
         </div>
         <div className="trick-meter-track">
           <div
-            className={`trick-meter-fill left ${fillClass(humanDeclaring, declCrossed)}`}
+            className={`trick-meter-fill left ${fillClass(humanDeclaring, declCrossed, declTricks)}`}
             style={{ width: `${(declTricks / 13) * 100}%` }}
           />
           <div
-            className={`trick-meter-fill right ${fillClass(!humanDeclaring, defCrossed)}`}
+            className={`trick-meter-fill right ${fillClass(!humanDeclaring, defCrossed, defTricks)}`}
             style={{ width: `${(defTricks / 13) * 100}%` }}
           />
           {needed !== undefined ? (

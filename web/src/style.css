@@ -1303,9 +1303,9 @@ a.ds-btn-secondary:hover {
   background: repeating-linear-gradient(
     -45deg,
     var(--line-dashed),
-    var(--line-dashed) 2px,
-    transparent 2px,
-    transparent 4px
+    var(--line-dashed) 1.5px,
+    transparent 1.5px,
+    transparent 3px
   );
   transition:
     width 0.25s ease,
@@ -1325,6 +1325,14 @@ a.ds-btn-secondary:hover {
 }
 .trick-meter-fill.theirs.failed {
   background: var(--accent);
+}
+/* caps the hatch's growing edge with a solid line instead of leaving the
+   diagonal stripes trailing off into the empty track */
+.trick-meter-fill.theirs.left.capped {
+  border-right: 1px solid var(--ink);
+}
+.trick-meter-fill.theirs.right.capped {
+  border-left: 1px solid var(--ink);
 }
 /* solid marker at the declarer's target trick count — never changes color */
 .trick-meter-post {
