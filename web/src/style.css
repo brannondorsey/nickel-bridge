@@ -1244,9 +1244,10 @@ a.ds-btn-secondary:hover {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
 }
 /* ---- trick-meter: declarer tricks fill from the left, defense from the right,
-   with a dashed marker at the contract's target trick count. Only the human's own
-   side is judged for color — neutral ink until decided, verdigris once their
-   objective is locked in, accent red once it's mathematically lost. Same chart
+   with a solid marker at the contract's target trick count. The human's own
+   fill is a flat ink block, turning verdigris the moment it crosses the marker;
+   the opponents' fill is a diagonal hatch, turning accent red the moment IT
+   crosses the marker. The marker itself never changes color. Same chart
    convention as .pctbar (flat ink fill on a --chart-track background). ---- */
 .trick-meter {
   position: absolute;
@@ -1267,13 +1268,6 @@ a.ds-btn-secondary:hover {
 }
 .trick-meter-side.mine {
   color: var(--ink);
-  transition: color 0.25s ease;
-}
-.trick-meter-side.mine.made {
-  color: var(--verdigris);
-}
-.trick-meter-side.mine.failed {
-  color: var(--accent);
 }
 .trick-meter-dash {
   color: var(--line-dashed);
@@ -1306,7 +1300,13 @@ a.ds-btn-secondary:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: var(--line-dashed);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--line-dashed),
+    var(--line-dashed) 2px,
+    transparent 2px,
+    transparent 4px
+  );
   transition:
     width 0.25s ease,
     background 0.25s ease;
@@ -1323,21 +1323,15 @@ a.ds-btn-secondary:hover {
 .trick-meter-fill.mine.made {
   background: var(--verdigris);
 }
-.trick-meter-fill.mine.failed {
+.trick-meter-fill.theirs.failed {
   background: var(--accent);
 }
-/* dashed marker at the declarer's target trick count */
+/* solid marker at the declarer's target trick count — never changes color */
 .trick-meter-post {
   position: absolute;
-  top: -4px;
-  bottom: -1px;
-  border-left: 1.5px dashed var(--ink);
-}
-.trick-meter-post.made {
-  border-left-color: var(--verdigris);
-}
-.trick-meter-post.failed {
-  border-left-color: var(--accent);
+  top: -3px;
+  bottom: -3px;
+  border-left: 1px solid var(--ink);
 }
 
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */

@@ -88,27 +88,20 @@ export function TrickArea({ board }: { board: BoardView }) {
   };
 
   // toll meter: declarer's tricks fill in from the left, defense's from the right,
-  // with a dashed marker at the contract's target trick count. Only the human's own
-  // side's fill/readout is judged — neutral ink while undecided, verdigris the instant
-  // their side's objective is mathematically locked in, accent red the instant it's
-  // mathematically lost. The human's partnership is always seats N/S (HUMAN_SEAT = 2
-  // in server/src/game.ts), so an even declarer seat means the human is declaring.
+  // with a solid marker at the contract's target trick count. Each fill is colored
+  // relative to the human's own side (partnership is always seats N/S — HUMAN_SEAT
+  // = 2 in server/src/game.ts, so an even declarer seat means the human is
+  // declaring): the human's own fill is black, turning verdigris the moment it
+  // crosses the marker (their side reached its trick target); the opponents' fill
+  // is a diagonal hatch, turning accent red the moment IT crosses the marker (the
+  // opponents reached theirs). The marker itself never changes color.
   const declTricks = board.declarerTricks ?? 0;
   const defTricks = board.defenderTricks ?? 0;
-  const remaining = 13 - (board.completedTricks ?? 0);
   const needed = board.contract ? 6 + board.contract.level : undefined;
   const humanDeclaring = (board.declarer ?? 2) % 2 === 0;
-  const yourTricks = humanDeclaring ? declTricks : defTricks;
-  const yourNeeded = needed !== undefined ? (humanDeclaring ? needed : 14 - needed) : undefined;
-  const meterState: 'neutral' | 'made' | 'failed' =
-    yourNeeded === undefined
-      ? 'neutral'
-      : yourTricks >= yourNeeded
-        ? 'made'
-        : yourTricks + remaining < yourNeeded
-          ? 'failed'
-          : 'neutral';
-  const mineState = meterState === 'neutral' ? '' : ` ${meterState}`;
+  const declCrossed = needed !== undefined && declTricks >= needed;
+  const defCrossed = needed !== undefined && defTricks >= 14 - needed;
+  const fillClass = (mine: boolean, crossed: boolean) => (mine ? `mine${crossed ? ' made' : ''}` : `theirs${crossed ? ' failed' : ''}`);
 
   return (
     <div className="trick" ref={boxRef}>
@@ -131,29 +124,25 @@ export function TrickArea({ board }: { board: BoardView }) {
       })}
       <div className="trick-meter">
         <div className="trick-meter-num num">
-          <span
-            className={`trick-meter-side${humanDeclaring ? ` mine${mineState}` : ''}${stamp === 'decl' ? ' stamp' : ''}`}
-          >
+          <span className={`trick-meter-side${humanDeclaring ? ' mine' : ''}${stamp === 'decl' ? ' stamp' : ''}`}>
             {declTricks}
           </span>
           <span className="trick-meter-dash">–</span>
-          <span
-            className={`trick-meter-side${!humanDeclaring ? ` mine${mineState}` : ''}${stamp === 'def' ? ' stamp' : ''}`}
-          >
+          <span className={`trick-meter-side${!humanDeclaring ? ' mine' : ''}${stamp === 'def' ? ' stamp' : ''}`}>
             {defTricks}
           </span>
         </div>
         <div className="trick-meter-track">
           <div
-            className={`trick-meter-fill left${humanDeclaring ? ` mine${mineState}` : ''}`}
+            className={`trick-meter-fill left ${fillClass(humanDeclaring, declCrossed)}`}
             style={{ width: `${(declTricks / 13) * 100}%` }}
           />
           <div
-            className={`trick-meter-fill right${!humanDeclaring ? ` mine${mineState}` : ''}`}
+            className={`trick-meter-fill right ${fillClass(!humanDeclaring, defCrossed)}`}
             style={{ width: `${(defTricks / 13) * 100}%` }}
           />
           {needed !== undefined ? (
-            <div className={`trick-meter-post${mineState}`} style={{ left: `${(needed / 13) * 100}%` }} />
+            <div className="trick-meter-post" style={{ left: `${(needed / 13) * 100}%` }} />
           ) : null}
         </div>
       </div>
