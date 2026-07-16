@@ -55,12 +55,20 @@ describe('demo mode', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('keeps exhibit tournaments out of placement for everyone', async () => {
-    // The Inspector has unfinished exhibit boards from the tests above: the
-    // resume tier must NOT hand them back on PLAY THE TOLL...
-    const { tournaments } = await inspector.get('/api/tournaments');
-    const exhibitIds = new Set<number>(tournaments.map((t: { id: number }) => t.id));
+  it('keeps exhibit tournaments out of placement and the lobby for everyone', async () => {
+    // The Inspector has unfinished exhibit boards from the tests above
+    // (their ids come back from the scenario API)...
+    const exhibitIds = new Set<number>();
+    for (const id of ['your-call', 'partner-declares']) {
+      exhibitIds.add((await inspector.post(`/api/demo/scenarios/${id}`)).tournamentId);
+    }
     expect(exhibitIds.size).toBeGreaterThan(0);
+
+    // ...but they never surface in the lobby list (kind = 'exhibit')...
+    const { tournaments } = await inspector.get('/api/tournaments');
+    for (const t of tournaments as { id: number }[]) expect(exhibitIds.has(t.id)).toBe(false);
+
+    // ...the resume tier must NOT hand them back on PLAY THE TOLL...
     const placed = await inspector.post('/api/play');
     expect(exhibitIds.has(placed.tournamentId)).toBe(false);
 
@@ -69,7 +77,7 @@ describe('demo mode', () => {
     await visitor.login();
     const visitorPlaced = await visitor.post('/api/play');
     expect(exhibitIds.has(visitorPlaced.tournamentId)).toBe(false);
-  });
+  }, 120_000);
 
   it('reset wipes the database and keeps the requester signed in', async () => {
     const before = await inspector.get('/api/leaderboard');

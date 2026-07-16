@@ -260,7 +260,9 @@ function evaluatePredicates(traj, wanted, counters, maxPer) {
             id: `sayc-divergence-${suffix}`,
             seed,
             boardNo,
-            actions: actions.slice(0, seen === 0 ? 0 : actionIndexOfNthCall(actions, seen)),
+            // bidding fully precedes play, so the human's call actions are a
+            // strict prefix of the action list: nth call = action index n
+            actions: actions.slice(0, seen),
             expect: 'bidding',
             note: `bid ${callName(call)} (SAYC-consistent, graded ≥ good) — the robot itself prefers ${callName(ev.bestCall)}`,
           });
@@ -287,18 +289,6 @@ function callsBefore(b, nthHumanCall) {
     }
   }
   return b.calls;
-}
-
-/** Index in the action list of the human's nth call action. */
-function actionIndexOfNthCall(actions, n) {
-  let seen = 0;
-  for (let i = 0; i < actions.length; i++) {
-    if (actions[i].kind === 'call') {
-      if (seen === n) return i;
-      seen++;
-    }
-  }
-  return actions.length;
 }
 
 // ---- modes ----

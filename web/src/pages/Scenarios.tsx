@@ -21,6 +21,9 @@ import Login from './Login';
 
 const CATEGORY_ORDER = ['bidding', 'card play', 'claims', 'scoring'];
 
+/** The client-only overlay exhibit screens. */
+type Overlay = 'splash' | 'login' | 'handle';
+
 /** Client-only exhibits: the entry screens, shown as overlays on demand. */
 const FRONT_DOOR: { key: Overlay; label: string; description: string }[] = [
   {
@@ -41,8 +44,6 @@ const FRONT_DOOR: { key: Overlay; label: string; description: string }[] = [
   },
 ];
 
-type Overlay = 'splash' | 'login' | 'handle' | null;
-
 export default function Scenarios() {
   const { me, refresh } = useMe();
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function Scenarios() {
   const [scenarios, setScenarios] = useState<DemoScenario[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
 

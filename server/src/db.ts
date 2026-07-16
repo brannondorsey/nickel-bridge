@@ -74,6 +74,18 @@ if (!userColumns.has('handle')) db.exec(`ALTER TABLE users ADD COLUMN handle TEX
 if (!userColumns.has('handle_key')) db.exec(`ALTER TABLE users ADD COLUMN handle_key TEXT`);
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
 
+// Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
+// created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
+// first-class column — not a name convention — because placement, the Elo
+// replay, the lobby list, and stats all must exclude exhibits, and hanging
+// that on a display string would break the moment tournament naming changes.
+const tournamentColumns = new Set(
+  (db.prepare(`PRAGMA table_info(tournaments)`).all() as { name: string }[]).map((c) => c.name),
+);
+if (!tournamentColumns.has('kind')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN kind TEXT NOT NULL DEFAULT 'standard'`);
+}
+
 export interface UserRow {
   id: number;
   google_id: string;
@@ -91,6 +103,8 @@ export interface TournamentRow {
   id: number;
   name: string;
   seed: string;
+  /** 'standard' = real play; 'exhibit' = demo-mode scenario holder, excluded from placement/rating/lobby/stats */
+  kind: 'standard' | 'exhibit';
   created_at: number;
 }
 

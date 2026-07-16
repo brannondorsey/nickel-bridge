@@ -1,6 +1,8 @@
+import { seededRng } from '@bridge/core';
 import type { FastifyBaseLogger } from 'fastify';
+import { upsertGoogleUser } from './auth.js';
 import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
-import { ensureDemoUser, ensureExhibitTournament } from './demo.js';
+import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { SCENARIOS } from './scenarios.js';
 
@@ -14,18 +16,22 @@ import { SCENARIOS } from './scenarios.js';
  * Everything is played through the REAL engine (submitCall/submitPlay), not
  * fabricated rows: bid grades, contracts, claims, Elo, and accuracy series
  * only exist when the engine produces them (see stats.ts). The only direct
- * writes are timestamps — tournaments are backdated at creation and board
- * updated_at is aligned to the tournament's age — which shifts *when* things
- * appear to have happened, never *what* happened.
+ * writes are timestamps — tournaments and bot accounts are backdated at
+ * creation and board updated_at is aligned to the tournament's age — which
+ * shifts *when* things appear to have happened, never *what* happened.
  *
  * Deterministic: bot strategies draw from an rng seeded per (bot,
- * tournament, board), so reseeding a wiped volume reproduces identical data.
+ * tournament, board), and a board interrupted mid-play is wiped and replayed
+ * from scratch on resume, so reseeding a wiped volume reproduces identical
+ * data.
  *
- * Runs fire-and-forget after listen (index.ts) so Fly's /health check is
- * never blocked by DDS solves; ~40 boards fill in over the first minute or
- * two. Idempotent two ways: a demo_meta marker short-circuits a fully seeded
- * database, and every step is check-before-create so a crashed or
- * reset-interrupted half-seed self-heals on the next run.
+ * Runs fire-and-forget after listen (index.ts) with an event-loop yield
+ * after every action, so /health stays responsive between the synchronous
+ * DDS solves. Idempotent: every step is check-before-create, so reruns
+ * no-op cheaply and a crashed or reset-interrupted half-seed self-heals on
+ * the next run. All entry points (seedDemo, wipeDemoData) go through one
+ * queue, so a reset's wipe waits out an in-flight seed instead of yanking
+ * rows from under it.
  */
 
 export interface SeedProfile {
@@ -65,13 +71,9 @@ export const DEFAULT_PROFILE: SeedProfile = {
   exhibitFields: true,
 };
 
-const SEED_VERSION = 'v1'; // bump whenever the seed design changes
+/** Seeded accounts predate the oldest seeded tournament ("Learning since"). */
+const USER_AGE_S = 40 * 86400;
 
-const stmtUserByGoogle = db.prepare(`SELECT * FROM users WHERE google_id = ?`);
-const stmtInsertBot = db.prepare(
-  `INSERT INTO users (google_id, name, handle, handle_key) VALUES (?, ?, ?, ?) RETURNING *`,
-);
-const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ?`);
 const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = ?`);
 const stmtInsertBackdated = db.prepare(
   `INSERT INTO tournaments (name, seed, created_at) VALUES ('Tournament', ?, ?) RETURNING *`,
@@ -83,57 +85,39 @@ const stmtDoneCount = db.prepare(
 const stmtBoardExists = db.prepare(
   `SELECT 1 FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`,
 );
+// A half-played board resumes with a restarted rng stream and would complete
+// differently than an uninterrupted run — wipe it and replay from scratch so
+// interrupted seeds stay deterministic.
+const stmtDeleteUnfinished = db.prepare(
+  `DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND state != 'done'`,
+);
 const stmtBackdateBoards = db.prepare(`UPDATE boards SET updated_at = ? WHERE tournament_id = ? AND user_id = ?`);
-
-function ensureMeta(): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS demo_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
-}
+// only ever moves a timestamp backward, so reruns are stable
+const stmtBackdateUser = db.prepare(`UPDATE users SET created_at = ? WHERE id = ? AND created_at > ?`);
 
 /**
- * Full wipe for the gallery's reset action. Children before parents
- * (foreign_keys is ON). The requester's session dies with the rest — the
- * reset handler re-creates the Inspector and re-issues a cookie in the same
- * response.
+ * Full wipe for the gallery's reset action, queued like seeding. Children
+ * before parents (foreign_keys is ON). The requester's session dies with the
+ * rest — the reset handler re-creates the Inspector and re-issues a cookie
+ * in the same response.
  */
-export function wipeAllData(): void {
-  ensureMeta();
-  db.exec(
-    `DELETE FROM demo_meta;
-     DELETE FROM elo_history;
-     DELETE FROM boards;
-     DELETE FROM sessions;
-     DELETE FROM tournaments;
-     DELETE FROM users;`,
-  );
-}
-
-// Deterministic rng: fnv-1a string hash feeding mulberry32.
-function rngFor(key: string): () => number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < key.length; i++) {
-    h ^= key.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  let a = h >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+export function wipeDemoData(): Promise<void> {
+  return enqueue(() => {
+    db.exec(
+      `DELETE FROM elo_history;
+       DELETE FROM boards;
+       DELETE FROM sessions;
+       DELETE FROM tournaments;
+       DELETE FROM users;`,
+    );
+  });
 }
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function ensureBot(name: string): UserRow {
-  const gid = `demo:bot:${name.toLowerCase()}`;
-  const existing = stmtUserByGoogle.get(gid) as UserRow | undefined;
-  if (existing) return existing;
-  // A tester may have claimed the bot's handle first — suffix until free.
-  let handle = name;
-  for (let i = 2; stmtHandleTaken.get(handle.toLowerCase()); i++) handle = `${name} ${i}`;
-  return stmtInsertBot.get(gid, name, handle, handle.toLowerCase()) as UserRow;
+  const user = upsertGoogleUser(`demo:bot:${name.toLowerCase()}`, null, name, null);
+  return user.handle ? user : claimHandleWithSuffix(user, name);
 }
 
 function ensureAmbientTournament(seed: string, createdAt: number): TournamentRow {
@@ -151,7 +135,10 @@ function ensureAmbientTournament(seed: string, createdAt: number): TournamentRow
  * Play one board to completion as `userId` with a deterministic, slightly
  * erratic strategy: mostly passes with the occasional low bid (spreads bid
  * grades across the whole excellent→poor range) and rng-chosen legal cards
- * (spreads scores so matchpoint fields aren't all ties).
+ * (spreads scores so matchpoint fields aren't all ties). Yields the event
+ * loop after every action — the DDS solves inside each submit are
+ * synchronous WASM, so this is what keeps /health and live requests
+ * responsive while the seeder works.
  */
 async function playBoard(t: TournamentRow, userId: number, boardNo: number, rng: () => number): Promise<void> {
   const b = loadBoard(t, userId, boardNo, true)!;
@@ -170,6 +157,7 @@ async function playBoard(t: TournamentRow, userId: number, boardNo: number, rng:
     } else {
       throw new Error(`seed stuck on ${t.seed} board ${boardNo}: ${view.state}`);
     }
+    await tick();
     view = boardView(t, b, 1200);
   }
   if (safety <= 0) throw new Error(`seed runaway on ${t.seed} board ${boardNo}`);
@@ -196,15 +184,16 @@ async function seedTournament(
       }
       continue;
     }
+    stmtDeleteUnfinished.run(t.id, player.id);
     const done = (stmtDoneCount.get(t.id, player.id) as { n: number }).n;
-    if (done >= target) continue;
     for (let no = done + 1; no <= target; no++) {
-      await playBoard(t, player.id, no, rngFor(`${player.google_id}:${spec.seed}:${no}`));
-      await tick();
+      await playBoard(t, player.id, no, seededRng(`${player.google_id}:${spec.seed}:${no}`));
     }
     // Timestamp realism: finished boards look played shortly after the
     // tournament opened, staggered per player (drives monthlyEloDelta,
-    // stats series ordering, and the lobby's "last played").
+    // stats series ordering, and the lobby's "last played"). Runs even when
+    // the boards already existed, so a seed interrupted between playing and
+    // backdating heals on the next pass.
     stmtBackdateBoards.run(createdAt + 3600 + pi * 1800, t.id, player.id);
   }
   return t;
@@ -212,29 +201,27 @@ async function seedTournament(
 
 let queue: Promise<void> = Promise.resolve();
 
-/**
- * Serialized entry point: a reset's reseed queues behind a still-running
- * boot seed instead of interleaving with it. If the wipe yanked the data out
- * from under an in-flight run, that run fails (logged) and the queued one
- * rebuilds from the empty database — every step re-checks existence.
- */
-export function seedDemo(log: FastifyBaseLogger, profile: SeedProfile = DEFAULT_PROFILE): Promise<void> {
-  const run = queue.then(() => doSeed(log, profile));
-  queue = run.catch(() => {});
+/** One queue for every seeder entry point: wipes and seeds never interleave. */
+function enqueue<T>(fn: () => T | Promise<T>): Promise<T> {
+  const run = queue.then(fn);
+  queue = run.then(
+    () => undefined,
+    () => undefined,
+  );
   return run;
 }
 
-async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<void> {
-  ensureMeta();
-  const seeded = db.prepare(`SELECT value FROM demo_meta WHERE key = 'seeded'`).get() as
-    | { value: string }
-    | undefined;
-  if (seeded?.value === SEED_VERSION) return;
+export function seedDemo(log: FastifyBaseLogger, profile: SeedProfile = DEFAULT_PROFILE): Promise<void> {
+  return enqueue(() => doSeed(log, profile));
+}
 
+async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<void> {
   const started = Date.now();
   const now = Math.floor(started / 1000);
   const inspector = ensureDemoUser();
   const bots = profile.bots.map(ensureBot);
+  // "Learning since" on stats pages must predate the backdated results
+  for (const u of [inspector, ...bots]) stmtBackdateUser.run(now - USER_AGE_S, u.id, now - USER_AGE_S);
 
   for (const spec of profile.tournaments) {
     const t = await seedTournament(spec, bots, inspector, now);
@@ -243,23 +230,20 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
 
   if (profile.exhibitFields) {
     // Result-view exhibits deserve a real matchpoint field: pre-play bots
-    // through just the scenario's board. Nobody ever completes all four
-    // boards of an exhibit, so exhibits never enter the Elo replay.
+    // through just the scenario's board. Exhibit tournaments never rate or
+    // surface in placement/lobby/stats — enforced by kind = 'exhibit'
+    // filters in tournaments.ts/stats.ts, not by convention.
     for (const s of SCENARIOS) {
       if (!s.fieldBots) continue;
       const t = ensureExhibitTournament(s.seed);
       for (const bot of bots.slice(0, s.fieldBots)) {
+        stmtDeleteUnfinished.run(t.id, bot.id);
         if ((stmtDoneCount.get(t.id, bot.id) as { n: number }).n > 0) continue;
-        await playBoard(t, bot.id, s.boardNo, rngFor(`${bot.google_id}:exhibit:${s.seed}:${s.boardNo}`));
-        await tick();
+        await playBoard(t, bot.id, s.boardNo, seededRng(`${bot.google_id}:exhibit:${s.seed}:${s.boardNo}`));
       }
       log.info(`demo seed: exhibit field for '${s.id}' ready`);
     }
   }
 
-  db.prepare(
-    `INSERT INTO demo_meta (key, value) VALUES ('seeded', ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-  ).run(SEED_VERSION);
   log.info(`demo seed: complete in ${Math.round((Date.now() - started) / 1000)}s`);
 }

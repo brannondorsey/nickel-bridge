@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
+import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { TournamentRow, UserRow, db } from './db.js';
 import { ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
-import { validateHandle } from './handle.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 
 /**
@@ -17,49 +16,65 @@ import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
  * can jump into prepared game states.
  */
 
-const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
-const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
-const stmtUser = db.prepare(`SELECT * FROM users WHERE id = ?`);
-const stmtTournamentByName = db.prepare(`SELECT * FROM tournaments WHERE name = ?`);
-const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, ?) RETURNING *`);
+const stmtExhibitBySeed = db.prepare(`SELECT * FROM tournaments WHERE kind = 'exhibit' AND seed = ?`);
+const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES (?, ?, 'exhibit') RETURNING *`);
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
 
-export const DEMO_HANDLE = 'Inspector';
+const DEMO_HANDLE = 'Inspector';
 
 export function demoEnabled(): boolean {
   return process.env.DEMO === '1';
 }
 
 /**
- * The shared demo identity. The `demo:` google_id prefix keeps it disjoint
- * from `dev:` (POST /auth/dev) users, so a tester dev-logging-in as
- * "inspector" can't collide with or hijack it. The handle is claimed lazily
- * (with a numeric-suffix fallback in the unlikely case a tester took
- * "Inspector" first) because /api/* routes are gated on having one.
+ * Claim `base` as the user's handle, falling back to numeric suffixes when a
+ * tester got there first ("Inspector 2", …). Shared with the seeder's bots.
  */
-export function ensureDemoUser(): UserRow {
-  let user = upsertGoogleUser('demo:inspector', null, DEMO_HANDLE, null);
-  if (!user.handle) {
-    for (let i = 0; i < 50 && !user.handle; i++) {
-      const v = validateHandle(i === 0 ? DEMO_HANDLE : `${DEMO_HANDLE} ${i + 1}`);
-      if (!v.ok || stmtHandleTaken.get(v.key, user.id)) continue;
-      stmtSetHandle.run(v.handle, v.key, user.id);
-      user = stmtUser.get(user.id) as UserRow;
-    }
+export function claimHandleWithSuffix(user: UserRow, base: string): UserRow {
+  for (let i = 0; i < 50 && !user.handle; i++) {
+    user = claimHandle(user.id, i === 0 ? base : `${base} ${i + 1}`) ?? user;
   }
   return user;
 }
 
 /**
- * Exhibit tournaments hold scenario boards. They are looked up by their
- * `Exhibit: <seed>` name — which also keeps them out of JIT placement (see
- * the name filter in tournaments.ts) — because the seed must stay the
- * literal string the recipe was mined against (deals derive from it).
+ * The shared demo identity. The `demo:` google_id prefix keeps it disjoint
+ * from `dev:` (POST /auth/dev) users, so a tester dev-logging-in as
+ * "inspector" can't collide with or hijack it. The handle is claimed lazily
+ * because /api/* routes are gated on having one.
+ */
+export function ensureDemoUser(): UserRow {
+  return claimHandleWithSuffix(upsertGoogleUser('demo:inspector', null, DEMO_HANDLE, null), DEMO_HANDLE);
+}
+
+/**
+ * Exhibit tournaments hold scenario boards, identified by (kind='exhibit',
+ * seed) — the seed must stay the literal string the recipe was mined against
+ * (deals derive from it). The kind column also keeps them out of placement,
+ * the lobby, the Elo replay, and stats (see db.ts and tournaments.ts).
  */
 export function ensureExhibitTournament(seed: string): TournamentRow {
-  const name = exhibitName(seed);
-  const existing = stmtTournamentByName.get(name) as TournamentRow | undefined;
-  return existing ?? (stmtCreateExhibit.get(name, seed) as TournamentRow);
+  const existing = stmtExhibitBySeed.get(seed) as TournamentRow | undefined;
+  return existing ?? (stmtCreateExhibit.get(exhibitName(seed), seed) as TournamentRow);
+}
+
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/**
+ * Serialize scenario runs per user: every visitor shares the Inspector, and
+ * a replay spans many awaits (DDS solves), so two concurrent clicks on
+ * exhibits sharing a (seed, boardNo) would otherwise interleave
+ * delete-then-replay on the same board row — the loser's save() would then
+ * silently update a deleted row id. Chaining per user makes the second click
+ * wait for (and then reset) the first.
+ */
+const scenarioRuns = new Map<number, Promise<unknown>>();
+
+export function runScenario(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
+  const prev = scenarioRuns.get(userId) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(() => runScenarioNow(userId, s));
+  scenarioRuns.set(userId, run);
+  return run;
 }
 
 /**
@@ -71,7 +86,7 @@ export function ensureExhibitTournament(seed: string): TournamentRow {
  * actions produce, fail loudly rather than dropping the tester mid-nowhere
  * (server/test/scenarios.test.ts catches this before it ever deploys).
  */
-export async function runScenario(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
+async function runScenarioNow(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
   const t = ensureExhibitTournament(s.seed);
   stmtDeleteBoard.run(t.id, userId, s.boardNo);
   const b = loadBoard(t, userId, s.boardNo, true)!;
@@ -79,6 +94,7 @@ export async function runScenario(userId: number, s: Scenario): Promise<{ tourna
   for (const a of s.actions) {
     if (a.kind === 'call') await submitCall(b, a.value);
     else await submitPlay(b, a.value);
+    await tick(); // let other requests interleave between synchronous DD solves
   }
   if (b.row.state !== s.expect) {
     throw httpError(500, `scenario ${s.id} drifted: expected ${s.expect}, got ${b.row.state}`);
@@ -118,15 +134,20 @@ export function registerDemoRoutes(app: FastifyInstance): void {
 
   // Full wipe + reseed, for starting a click-testing round from a pristine
   // state (preview volumes persist across pushes, so debris accumulates).
-  // The wipe kills every session including the requester's — re-create the
-  // Inspector and hand back a fresh cookie in the same response, then let
-  // the reseed refill ambient data in the background exactly like boot.
+  // The wipe goes through the seeder's queue, so it waits out any in-flight
+  // seed instead of yanking rows from under it. It kills every session
+  // including the requester's — re-create the Inspector and hand back a
+  // fresh cookie in the same response, then let the reseed refill ambient
+  // data in the background exactly like boot. (A non-seed request already in
+  // flight across the wipe can still lose its writes — save() is scoped to
+  // exact row identity in game.ts, so that write drops instead of
+  // corrupting reseeded rows.)
   app.post('/api/demo/reset', async (req, reply) => {
     if (!demoEnabled()) return reply.code(404).send({ error: 'not found' });
     if (!requireUserWithHandle(req, reply)) return;
     const { reseed = true } = (req.body ?? {}) as { reseed?: boolean };
     const seeder = await import('./demo-seed.js');
-    seeder.wipeAllData();
+    await seeder.wipeDemoData();
     const user = ensureDemoUser();
     startSession(reply, user.id);
     if (reseed) seeder.seedDemo(req.log).catch((err) => req.log.error(err, 'demo reseed failed'));

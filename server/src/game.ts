@@ -40,8 +40,14 @@ const stmtBoard = db.prepare(`SELECT * FROM boards WHERE tournament_id = ? AND u
 const stmtCreateBoard = db.prepare(
   `INSERT INTO boards (tournament_id, user_id, board_no) VALUES (?, ?, ?) RETURNING *`,
 );
+// Scoped to full row identity, not bare id: SQLite reuses rowids after
+// deletes, so a request that held a GameBoard across an await while demo
+// mode's reset wiped and reseeded the database could otherwise UPDATE a
+// recycled id belonging to a different user's board. With the full scope the
+// stale write matches nothing and drops harmlessly.
 const stmtSaveBoard = db.prepare(
-  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch() WHERE id = ?`,
+  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch()
+   WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
   `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
@@ -89,6 +95,8 @@ function save(b: GameBoard): void {
     b.row.tricks_declarer,
     b.row.score_ns,
     b.row.id,
+    b.row.tournament_id,
+    b.row.user_id,
   );
 }
 

@@ -70,7 +70,7 @@ docs            design-brief.md — requirements spec for the visual redesign
 npm install
 npm run build            # builds core → ai → server → web, in that order (order matters)
 DEV_AUTH=1 npm run dev   # server on :3000 with name-only login (no Google creds needed)
-npm run dev -w web       # Vite dev server on :5173, proxies /api and /auth to :3000
+npm run dev -w web       # Vite dev server on :5173, proxies /api, /auth, /demo to :3000
 ```
 
 Checks — run all three before pushing; CI runs exactly these plus the Playwright smoke and a
@@ -106,7 +106,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never in production** |
-| `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `scenarios.ts`, `demo-seed.ts`) — **never in production** (CI enforces this, see invariant 5) |
+| `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never in production** (CI enforces this, see invariant 5) |
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
@@ -173,11 +173,14 @@ visitor in as a shared "Inspector" persona and lands on `/scenarios` — a galle
 is a replay recipe (seed + board + scripted human actions, `server/src/scenarios.ts`)
 executed through the real engine per user, deliberately stopping one action short of
 delta-driven UI (grade toast, claim fast-forward, live receipt) so the tester triggers it
-live. Exhibit tournaments are named `Exhibit: <seed>` and excluded from placement by a name
-filter in `tournaments.ts` (production tournaments are always `Tournament #N`, so the filter
-is inert there); nobody ever completes all four exhibit boards, so they never rate. A boot
+live. Exhibit tournaments carry `kind = 'exhibit'` (a `tournaments` column defaulting to
+`'standard'`, see `db.ts`), which excludes them from placement and the lobby list
+(`tournaments.ts`), from the Elo replay (so they can never rate, even if fully played out by
+URL), and from stats/leaderboard sweeps (`stats.ts`, `app.ts`) — all filters inert in
+production, where every tournament is `'standard'`. A boot
 seeder (`demo-seed.ts`, async after listen) plays bots through backdated tournaments to
-populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds.
+populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds
+(wipes and seeds share one queue, so they never interleave).
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash (`App.tsx`).
 

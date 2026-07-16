@@ -50,13 +50,19 @@ describe('demo seeder', () => {
         .get(bots[0].id) as { at: number };
       expect(finishedAt.at).toBeLessThan(Date.now() / 1000 - 86400);
 
+      // seeded accounts predate their backdated results ("Learning since")
+      const botCreated = (db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(bots[0].id) as {
+        created_at: number;
+      }).created_at;
+      expect(botCreated).toBeLessThan(finishedAt.at);
+
       // the Inspector is provisioned even when no tournament includes them
       const inspector = db.prepare(`SELECT * FROM users WHERE google_id = 'demo:inspector'`).get() as {
         handle: string;
       };
       expect(inspector.handle).toBe('Inspector');
 
-      // rerun is a marker-guarded no-op
+      // rerun is a no-op: every step is check-before-create
       const boardsBefore = (db.prepare(`SELECT COUNT(*) AS n FROM boards`).get() as { n: number }).n;
       await seedDemo(log, tiny);
       expect((db.prepare(`SELECT COUNT(*) AS n FROM boards`).get() as { n: number }).n).toBe(boardsBefore);

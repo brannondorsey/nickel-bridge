@@ -102,8 +102,12 @@ jobs:
       # DEMO (auto-login + data reset) must never reach production. Fails the
       # deploy if either secret is set on the production app.
       - name: Refuse to deploy with demo/dev secrets set
+        # Fail CLOSED: capturing into a variable makes a flyctl failure fail
+        # the step (default shell is bash -e), instead of a broken listing
+        # reading as "no forbidden secrets" and waving the deploy through.
         run: |
-          if flyctl secrets list --app nickel-bridge | grep -qE '^\s*(DEV_AUTH|DEMO)\s'; then
+          secrets=$(flyctl secrets list --app nickel-bridge)
+          if echo "$secrets" | grep -qE '^\s*(DEV_AUTH|DEMO)\s'; then
             echo "::error::DEV_AUTH/DEMO secret found on the production app — remove it before deploying"
             exit 1
           fi

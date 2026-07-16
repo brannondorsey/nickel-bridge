@@ -24,6 +24,7 @@ const stmtInsertUser = db.prepare(
 const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?`);
 const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
+const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
 export function userFromRequest(req: FastifyRequest): UserRow | null {
   const sid = req.cookies[SESSION_COOKIE];
@@ -65,6 +66,20 @@ export function startSession(reply: FastifyReply, userId: number): void {
     secure: (process.env.BASE_URL ?? '').startsWith('https'),
     maxAge: SESSION_TTL_S,
   });
+}
+
+/**
+ * Claim `raw` as userId's display handle if it validates and is free; returns
+ * the updated row, or null when invalid/taken. The one shared implementation
+ * of the validate → uniqueness-check → set sequence — demo mode's Inspector
+ * and seeded bots go through here too, so key derivation (NFC-normalized
+ * lowercase, see handle.ts) can never diverge between signup paths.
+ */
+export function claimHandle(userId: number, raw: string): UserRow | null {
+  const result = validateHandle(raw);
+  if (!result.ok || stmtHandleTaken.get(result.key, userId)) return null;
+  stmtSetHandle.run(result.handle, result.key, userId);
+  return stmtUserById.get(userId) as UserRow;
 }
 
 export function upsertGoogleUser(googleId: string, email: string | null, name: string, picture: string | null): UserRow {

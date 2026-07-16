@@ -119,7 +119,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       .prepare(
         `SELECT u.id, u.handle, u.picture, u.elo,
                 (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
-                (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b WHERE b.user_id = u.id) AS played_tournaments
+                (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
+                  JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+                  WHERE b.user_id = u.id) AS played_tournaments
          FROM users u ORDER BY u.elo DESC, u.handle`,
       )
       .all() as { id: number }[];

@@ -41,13 +41,14 @@ export default function App() {
 
   // Returning-visitor gate: decide from the previous stamp BEFORE writing
   // today's, or the splash would never show again. Demo mode (PR previews)
-  // suppresses it entirely — testers only see the splash by opening its
-  // exhibit on the /scenarios gallery.
+  // suppresses the splash itself — testers only see it by opening its
+  // exhibit on the /scenarios gallery — but still stamps the visit, so the
+  // record stays correct if the same origin ever leaves demo mode.
   const authed = Boolean(me?.user?.handle);
   const demo = Boolean(me?.demo);
   useEffect(() => {
-    if (!authed || demo) return;
-    if (splashOnReturn()) setSplash(true);
+    if (!authed) return;
+    if (!demo && splashOnReturn()) setSplash(true);
     stampVisit();
   }, [authed, demo]);
 
