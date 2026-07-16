@@ -74,6 +74,9 @@ const SPEC: Row[] = [
   // ---- weak two machinery ----
   { name: '2NT feature ask', calls: [b(2, 2), PASS], candidate: b(2, 4), title: '2NT over a weak two', artificial: true },
   { name: 'RONF raise', calls: [b(2, 2), PASS], candidate: b(3, 2), title: 'Raise of the preempt' },
+  { name: 'feature response: minimum', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 2), title: 'Feature response: minimum' },
+  { name: 'feature response: shows a feature', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 0), title: 'Feature response', artificial: true },
+  { name: '3NT after feature ask', calls: [b(2, 2), PASS, b(2, 4), PASS], candidate: b(3, 4), title: '3NT after feature ask' },
 
   // ---- Blackwood ----
   { name: 'Blackwood 4NT', calls: [b(1, 3), PASS, b(3, 3), PASS], candidate: b(4, 4), title: 'Blackwood', artificial: true },

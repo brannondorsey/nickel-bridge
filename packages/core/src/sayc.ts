@@ -697,6 +697,25 @@ function explainOpenerRebid(ctx: Ctx, call: Call, level: number, strain: Strain)
     );
   }
 
+  // Reply to the 2NT feature ask over opener's own weak two.
+  if (openLevel === 2 && openStrain >= 1 && openStrain <= 3 && response === makeBid(2, 4)) {
+    if (strain === openStrain)
+      return meaning(
+        'Feature response: minimum',
+        `Rebids the weak two suit: a minimum for the preempt, no outside ace or king to show.`,
+      );
+    if (strain !== 4)
+      return meaning(
+        `Feature response: ${S[strain]}`,
+        `Artificial: shows an outside ace or king in ${S[strain]} — a maximum for the weak two with extra defense.`,
+        { artificial: true, shapePromise: `feature in ${S[strain]}` },
+      );
+    return meaning(
+      '3NT after feature ask',
+      'To play: suggests notrump is the winning strain, typically built on the long suit plus scattered outside help.',
+    );
+  }
+
   if (response === null || openLevel !== 1) {
     return explainContinuation(ctx, call, level, strain);
   }
