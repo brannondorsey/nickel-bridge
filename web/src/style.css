@@ -1300,7 +1300,7 @@ a.ds-btn-secondary:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: repeating-linear-gradient(-45deg, var(--line-dashed), var(--line-dashed) 1px, transparent 1px, transparent 2px);
+  background: repeating-linear-gradient(-45deg, var(--ink), var(--ink) 1px, transparent 1px, transparent 1.5px);
   transition:
     width 0.25s ease,
     background 0.25s ease;
