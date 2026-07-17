@@ -1,15 +1,20 @@
 import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit } from '../../api';
+import { fanMarginLeft } from './fanLayout';
 import { capturePlayOrigin } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
 /**
- * Overlapping card fan. Passing `legal` opts the fan into dimming: cards not
+ * Overlapping card fan, optically spaced: each card's margin (computed in
+ * fanLayout.ts) exposes the previous card's printed value plus a fixed gap,
+ * so the visible values sit at an even rhythm regardless of how wide each
+ * glyph is. Passing `legal` opts the fan into dimming: cards not
  * in it read as muted (whether because they break follow-suit, or because
  * this fan isn't the one to play from right now). Omitting `legal` — as the
  * read-only hand list on the bidding screen does — renders every card full
  * color; there's no notion of a legal card outside of play. Class names
  * .handfan/.interactive/.cardbtn/.selected/.suitgap are selected on by the
- * e2e smoke test.
+ * e2e smoke test (.suitgap no longer spaces differently, but still marks the
+ * first card of each suit).
  */
 export function HandFan({
   cards,
@@ -37,6 +42,7 @@ export function HandFan({
             type="button"
             data-card={c}
             className={`cardbtn${selected === c ? ' selected' : ''}${newSuit ? ' suitgap' : ''}`}
+            style={i > 0 ? { marginLeft: fanMarginLeft(cards[i - 1], small) } : undefined}
             disabled={!playable}
             onClick={
               playable

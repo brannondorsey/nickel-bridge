@@ -18,6 +18,7 @@ import { BidBox } from './BidBox';
 import { BoardTicketRow } from './BoardTicketRow';
 import { CallInspector } from './CallInspector';
 import { DealDiagram } from './DealDiagram';
+import { fanMarginLeft } from './fanLayout';
 import { GradeToast } from './GradeToast';
 import { HandFan } from './HandFan';
 import { MeaningPanel } from './MeaningPanel';
@@ -81,6 +82,37 @@ describe('HandFan', () => {
 
     const { container: readOnly } = render(<HandFan cards={southHand} />);
     expect(readOnly.querySelectorAll('.pcard.dimmed').length).toBe(0);
+  });
+
+  it('spaces cards optically: an inline token-scaled margin on every card but the first', () => {
+    const { container } = render(<HandFan cards={southHand} />);
+    const buttons = [...container.querySelectorAll<HTMLElement>('.cardbtn')];
+    expect(buttons[0].getAttribute('style')).toBeNull();
+    for (const btn of buttons.slice(1)) {
+      expect(btn.getAttribute('style')).toContain('var(--card-h)');
+    }
+    // the fan's margins come straight from fanLayout for the preceding card
+    expect(buttons[3].getAttribute('style')).toContain(fanMarginLeft(southHand[2]));
+  });
+});
+
+describe('fanLayout', () => {
+  // southHand[2] = ♠10 (widest value), southHand[7] = ♥3 (narrow)
+  const coeff = (margin: string) => Number(margin.match(/\* (-?[\d.]+) \+/)![1]);
+
+  it('emits a token-scaled negative overlap plus the fixed value gap', () => {
+    const m = fanMarginLeft(southHand[7]);
+    expect(m).toMatch(/^calc\(var\(--card-h\) \* -0\.\d+ \+ 6px\)$/);
+  });
+
+  it('yields a wide "10" more room than a narrow rank (less negative overlap)', () => {
+    expect(coeff(fanMarginLeft(southHand[2]))).toBeGreaterThan(coeff(fanMarginLeft(southHand[7])));
+  });
+
+  it('scales card body and value by 0.8 in the small variant', () => {
+    // full: (−46 + 5 + v)/66 vs small: (−36.8 + 5 + 0.8v)/66 — small overlaps less
+    expect(coeff(fanMarginLeft(southHand[7], true))).toBeGreaterThan(coeff(fanMarginLeft(southHand[7])));
+    expect(fanMarginLeft(southHand[7], true)).not.toBe(fanMarginLeft(southHand[7]));
   });
 });
 
