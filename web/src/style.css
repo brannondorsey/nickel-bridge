@@ -847,7 +847,17 @@ a.ds-btn-secondary:hover {
 /* ================= game components ================= */
 
 :root {
-  --card-h: clamp(56px, 16.9vw, 66px);
+  /* Fit-derived card size: as big as lets a worst-case 13-card fan (optically
+     spaced, see fanLayout.ts) span the shell minus 10px margins each side.
+       h = 66 · (shellW − 2·10 margins − 12·6px gaps) / D
+     where D = 46 (the fully-shown last card) + Σ over the other 12 cards of
+     (5px corner pad + printed-value width) for a wide canonical hand (three
+     10s plus honors) from the fanLayout.ts width table: D = 255.27, so the
+     factor is 66 / 255.27 = 0.2586. Capped at 82.5px (125% of the old 66px
+     card); the 56px floor is the old minimum, kept purely as a readability
+     guard — it only wins below a ~300px shell. Resolves to ≈77px on a 390px
+     phone, ≈69px at 360px, 82.5px from 411px up (and on desktop). */
+  --card-h: clamp(56px, calc((min(100vw, 430px) - 92px) * 0.2586), 82.5px);
   --card-w: calc(var(--card-h) * 46 / 66);
 }
 
@@ -859,7 +869,9 @@ a.ds-btn-secondary:hover {
   border: 1px solid var(--line-dashed);
   border-radius: var(--radius-card);
   box-shadow: var(--card-shadow);
-  padding: 3px 0 0 5px;
+  /* the 3px/5px corner inset of the 66px reference card, scaled with the
+     token; fanLayout.ts assumes the 5px/66 left pad when computing slivers */
+  padding: calc(var(--card-h) * 3 / 66) 0 0 calc(var(--card-h) * 5 / 66);
   font-family: var(--font-label);
   font-weight: 800;
   flex: none;
@@ -946,7 +958,8 @@ a.ds-btn-secondary:hover {
 }
 .handfan .cardbtn {
   padding: 0;
-  margin-left: calc(var(--card-w) * -0.56);
+  /* card overlaps (margin-left) are per-card inline styles computed in
+     fanLayout.ts — optical spacing keyed to each printed value's width */
   transition: transform 0.12s ease;
   position: relative;
   /* Without this, a dimmed card's opacity gives it its own stacking context,
@@ -956,23 +969,8 @@ a.ds-btn-secondary:hover {
      document order no matter which cards are dimmed. */
   isolation: isolate;
 }
-.handfan .cardbtn:first-child {
-  margin-left: 0;
-}
-.handfan .cardbtn.suitgap {
-  margin-left: calc(var(--card-w) * -0.43);
-}
 .handfan .cardbtn.selected {
-  transform: translateY(-12px);
-}
-.handfan.handfan-sm .cardbtn {
-  margin-left: calc(var(--card-w) * -0.62);
-}
-.handfan.handfan-sm .cardbtn:first-child {
-  margin-left: 0;
-}
-.handfan.handfan-sm .cardbtn.suitgap {
-  margin-left: calc(var(--card-w) * -0.5);
+  transform: translateY(calc(var(--card-h) * -12 / 66));
 }
 
 /* ---- AuctionGrid: double-bordered frame ---- */
@@ -1194,7 +1192,10 @@ a.ds-btn-secondary:hover {
   margin: 4px 0 0;
   background: var(--surface);
   position: relative;
-  height: 230px;
+  /* grows with the card token so the bigger trick slots keep their air
+     (two 0.8-card slots + labels + meter); identical to 230px at the old
+     66px card */
+  height: max(230px, calc(var(--card-h) * 1.6 + 110px));
 }
 .seatpos {
   position: absolute;
@@ -1353,10 +1354,10 @@ a.ds-btn-secondary:hover {
   flex: 1;
   min-width: 0;
   /* stretches to match the rail's content height instead of the fixed
-     230px .trick normally uses, so a long suit never gets clipped and a
+     height .trick normally uses, so a long suit never gets clipped and a
      short one never leaves the box looking squashed */
   height: auto;
-  min-height: 230px;
+  min-height: max(230px, calc(var(--card-h) * 1.6 + 110px));
 }
 .dummy-rail {
   width: 96px;
