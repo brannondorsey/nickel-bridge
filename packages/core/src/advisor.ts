@@ -38,3 +38,17 @@ export function saycConsistent(hand: Card[], dealer: Seat, calls: Call[], call: 
   const m: BidMeaning | null = explainBid(dealer, calls, call);
   return m !== null && m.exact && m.req !== undefined && satisfiesConstraint(hand, m.req);
 }
+
+/**
+ * True iff `call` has an exact, constraint-carrying SAYC meaning that `hand`
+ * FAILS — i.e. making this call would promise partner something the hand
+ * doesn't hold (a weak two on a 5-card suit, a 1♠ opening on 11 HCP, a pass
+ * of a hand too strong to pass). Calls whose meaning is generic or carries no
+ * machine-checkable requirements (artificial conventions like Stayman,
+ * transfers, Blackwood; doubles) are never violations — we can't check them,
+ * so we don't forbid them.
+ */
+export function saycViolation(hand: Card[], dealer: Seat, calls: Call[], call: Call): boolean {
+  const m: BidMeaning | null = explainBid(dealer, calls, call);
+  return m !== null && m.exact && m.req !== undefined && !satisfiesConstraint(hand, m.req);
+}

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { Card, Deal, PASS, RANK_CHARS, makeBid, makeCard } from '@bridge/core';
+import {
+  Call,
+  Card,
+  Deal,
+  PASS,
+  RANK_CHARS,
+  auctionState,
+  dealBoard,
+  isBid,
+  makeBid,
+  makeCard,
+  saycViolation,
+} from '@bridge/core';
 import { Bidder, gradeFromProbs } from '../src/bidder.js';
 import { loadPolicyModel } from '../src/model.js';
 
@@ -84,5 +96,79 @@ describe('Bidder.evaluate with the sl model', () => {
     expect(ev.saycConsistent).toBe(true);
     expect(ev.grade).toBe('good');
     expect(ev.score).toBe(0.75);
+  });
+});
+
+describe('SAYC-constrained robot bidding', () => {
+  const bidder = new Bidder(loadPolicyModel('sl'));
+
+  /** The model's unconstrained preference, for before/after contrast. */
+  function rawArgmax(deal: Deal, calls: Call[]): Call {
+    const { probs } = bidder.policyFor(deal, calls);
+    let best = 0;
+    for (let a = 1; a < 38; a++) if (probs[a] > probs[best]) best = a;
+    return best;
+  }
+
+  // Pinned instances (found by sweeping sayc-sweep-* seeds) where the raw
+  // model's argmax is a bid that violates its own SAYC meaning's hand
+  // requirements. chooseCall must refuse each and pick an admissible call.
+  const violations: [string, string, number, Call[], Call, Call][] = [
+    // [description, seed, boardNo, calls so far, raw model bid, constrained choice]
+    ['2♠ weak two on a 5-card suit → pass', 'sayc-sweep-0', 5, [], b(2, 3), PASS],
+    ['1♠ opening on 11 HCP → pass', 'sayc-sweep-0', 6, [], b(1, 3), PASS],
+    ['jump shift rebid without the points → the honest raise', 'sayc-sweep-0', 10, [b(1, 3), PASS, b(2, 0), PASS], b(4, 1), b(3, 0)],
+  ];
+
+  it.each(violations)('refuses %s', (_name, seed, boardNo, calls, rawBid, constrained) => {
+    const deal = dealBoard(seed, boardNo);
+    const seat = auctionState(deal.dealer, calls).turn;
+    expect(rawArgmax(deal, calls)).toBe(rawBid); // the model still wants the violation…
+    expect(saycViolation(deal.hands[seat], deal.dealer, calls, rawBid)).toBe(true);
+    expect(bidder.chooseCall(deal, calls)).toBe(constrained); // …and chooseCall refuses it
+  });
+
+  it('grades against the constrained choice: agreeing with the robot is excellent', () => {
+    const deal = dealBoard('sayc-sweep-0', 5); // the 5-card weak-two hand
+    const ev = bidder.evaluate(deal, [], PASS);
+    expect(ev.bestCall).toBe(PASS);
+    expect(ev.grade).toBe('excellent');
+  });
+
+  it('never bids a call that violates its own SAYC meaning, across whole auctions', () => {
+    for (let boardNo = 1; boardNo <= 8; boardNo++) {
+      const deal = dealBoard('sayc-guard-0', boardNo);
+      const calls: Call[] = [];
+      let state = auctionState(deal.dealer, calls);
+      while (!state.isOver) {
+        const call = bidder.chooseCall(deal, calls);
+        if (isBid(call)) {
+          expect(
+            saycViolation(deal.hands[state.turn], deal.dealer, calls, call),
+            `board ${boardNo}, after [${calls.join(' ')}]: call ${call}`,
+          ).toBe(false);
+        }
+        calls.push(call);
+        state = auctionState(deal.dealer, calls);
+      }
+    }
+  });
+
+  // Artificial conventions carry no machine-checkable req (deliberately —
+  // see BidMeaning.req), so the constraint must never mask them. Each row is
+  // a textbook hand where the model's conventional call has to survive.
+  const conventions: [string, string, number, Call[], Call][] = [
+    // [convention, south hand, dealer, calls (N opens), expected call]
+    ['Stayman', 'KQ52.A874.752.63', 0, [b(1, 4), PASS], b(2, 0)],
+    ['Jacoby transfer to hearts', '84.J9832.Q75.862', 0, [b(1, 4), PASS], b(2, 1)],
+    ['Jacoby transfer to spades', 'J9832.84.Q75.862', 0, [b(1, 4), PASS], b(2, 2)],
+    ['2♦ waiting over 2♣', '764.J983.752.8632', 0, [b(2, 0), PASS], b(2, 1)],
+    ['Blackwood over partner’s preempt', 'KJT.AK96.AT9.A54', 3, [PASS, b(3, 1), PASS], b(4, 4)],
+  ];
+
+  it.each(conventions)('still bids %s', (_name, pbn, dealer, calls, expected) => {
+    const deal = dealWithSouth(hand(pbn));
+    deal.dealer = dealer as 0 | 1 | 2 | 3;
+    expect(bidder.chooseCall(deal, calls)).toBe(expected);
   });
 });

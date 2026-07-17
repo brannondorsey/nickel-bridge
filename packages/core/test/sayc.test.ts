@@ -48,6 +48,7 @@ const SPEC: Row[] = [
   { name: 'splinter 4♥ over 1♠', calls: [b(1, 3), PASS], candidate: b(4, 2), title: 'Splinter', points: '10–13 pts', artificial: true },
   { name: 'no splinter over a minor — honest fallback', calls: [b(1, 0), PASS], candidate: b(3, 3), exact: false },
   { name: 'weak response pass', calls: [b(1, 3), PASS], candidate: PASS, points: '0–5 pts' },
+  { name: 'pass over a preempt is not the 0–5 response pass', calls: [b(2, 2), PASS], candidate: PASS, exact: false },
 
   // ---- notrump machinery ----
   { name: 'Stayman', calls: [b(1, 4), PASS], candidate: b(2, 0), title: 'Stayman', artificial: true },
