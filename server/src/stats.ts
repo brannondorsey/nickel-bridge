@@ -2,7 +2,7 @@ import { Contract, ELO_INITIAL } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
-const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ?`);
+const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ? AND handle IS NOT NULL`);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
 // so created_at is meaningless there — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.

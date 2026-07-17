@@ -98,6 +98,28 @@ describe('handle (first-login username)', () => {
     expect(allowed.statusCode).toBe(200);
   });
 
+  it('excludes handle-less signups from the leaderboard, then includes them once they register', async () => {
+    const kate = new TestClient(app, 'Kate');
+    await kate.login();
+    const judy = new TestClient(app, 'Judy');
+    await judy.post('/auth/dev', { name: judy.name }); // signed in, never claims a handle
+
+    let { leaderboard } = await kate.get('/api/leaderboard');
+    expect(leaderboard.every((r: { handle: string | null }) => r.handle !== null)).toBe(true);
+    expect(leaderboard.some((r: { handle: string }) => r.handle === 'Judy')).toBe(false);
+
+    // registration itself is untouched by the leaderboard filter — Judy can
+    // still complete onboarding at any point after her initial sign-in
+    await judy.post('/api/handle', { handle: 'Judy' });
+    const me = await judy.get('/api/me');
+    expect(me.user.handle).toBe('Judy');
+
+    ({ leaderboard } = await kate.get('/api/leaderboard'));
+    const judyRow = leaderboard.find((r: { handle: string }) => r.handle === 'Judy');
+    expect(judyRow).toBeTruthy();
+    expect(judyRow.elo).toBe(1200);
+  });
+
   it('rejects invalid handles', async () => {
     const grace = new TestClient(app, 'Grace');
     await grace.post('/auth/dev', { name: grace.name });
