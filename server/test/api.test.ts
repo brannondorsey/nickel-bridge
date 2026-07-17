@@ -98,6 +98,16 @@ describe('handle (first-login username)', () => {
     expect(allowed.statusCode).toBe(200);
   });
 
+  it('excludes handle-less signups from the leaderboard', async () => {
+    const kate = new TestClient(app, 'Kate');
+    await kate.login();
+    const judy = new TestClient(app, 'Judy');
+    await judy.post('/auth/dev', { name: judy.name }); // signed in, never claims a handle
+
+    const { leaderboard } = await kate.get('/api/leaderboard');
+    expect(leaderboard.every((r: { handle: string | null }) => r.handle !== null)).toBe(true);
+  });
+
   it('rejects invalid handles', async () => {
     const grace = new TestClient(app, 'Grace');
     await grace.post('/auth/dev', { name: grace.name });
