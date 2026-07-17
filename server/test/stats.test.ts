@@ -34,6 +34,14 @@ describe('player stats', () => {
     expect((await alice.raw('GET', '/api/users/abc/stats')).statusCode).toBe(404);
   });
 
+  it('404s on a signed-in user who never claimed a handle, instead of leaking a blank-name profile', async () => {
+    const ghost = new TestClient(app, 'StatsGhost');
+    await ghost.post('/auth/dev', { name: ghost.name }); // signed in, never claims a handle
+    const ghostId = (await ghost.get('/api/me')).user.id;
+
+    expect((await alice.raw('GET', `/api/users/${ghostId}/stats`)).statusCode).toBe(404);
+  });
+
   it('returns an empty-but-valid payload for a user with no boards', async () => {
     const stats = await carol.get(`/api/users/${await userId(carol)}/stats`);
     expect(stats.totals.boardsCompleted).toBe(0);
