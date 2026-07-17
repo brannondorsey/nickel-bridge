@@ -38,7 +38,8 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 convention the hand satisfies), play-ai.ts (DD-optimal card
                 play via vendor/bridge-dds WASM)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
-                auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
+                auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL,
+                DATA_EPOCH — bump for a one-shot full data wipe on next deploy),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 demo.ts + scenarios.ts + demo-seed.ts + bot-play.ts (DEMO=1 demo mode,

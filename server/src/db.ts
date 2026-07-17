@@ -10,6 +10,48 @@ export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+/**
+ * One-shot full data reset, keyed to SQLite's built-in `user_version` pragma
+ * (0 on any fresh or pre-epoch database file).
+ *
+ * Bump DATA_EPOCH when the data already on disk is no longer comparable with
+ * what the current build produces — the motivating case is a deliberate
+ * robot-behavior change (CLAUDE.md invariant 1): boards in old tournaments
+ * were played against robots that no longer exist, so duplicate scoring and
+ * the from-scratch Elo replay would rank apples against oranges. On boot,
+ * a database stamped with an older epoch is wiped — every table dropped, the
+ * schema DDL below recreates them empty — exactly once, then stamped. Fresh
+ * databases are stamped without dropping anything, and ordinary deploys
+ * (stored epoch == DATA_EPOCH) never touch data at all.
+ *
+ * This wipes EVERYTHING, users and sessions included, on every environment
+ * that deploys the bump (production, the demo app, open PR previews). That is
+ * the point — bump it only in a PR whose stated purpose is a reset.
+ */
+export const DATA_EPOCH = 1;
+
+/** Exported for tests; runs against the module db at boot. Returns true if data was wiped. */
+export function applyDataEpoch(handle: Database.Database, epoch: number = DATA_EPOCH): boolean {
+  const stored = handle.pragma('user_version', { simple: true }) as number;
+  if (stored >= epoch) return false;
+  const tables = handle
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+    .all() as { name: string }[];
+  // FK enforcement would constrain drop order; this is a full wipe, so just
+  // suspend it rather than topo-sort the schema.
+  handle.pragma('foreign_keys = OFF');
+  for (const { name } of tables) handle.exec(`DROP TABLE IF EXISTS "${name}"`);
+  handle.pragma('foreign_keys = ON');
+  handle.pragma(`user_version = ${epoch}`);
+  return tables.length > 0;
+}
+
+if (applyDataEpoch(db)) {
+  // db.ts has no logger (it loads before the Fastify app); a reset is rare
+  // and operationally significant enough to warrant the raw console line.
+  console.warn(`DATA_EPOCH ${DATA_EPOCH}: stale data wiped from ${DB_PATH}; starting empty`);
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
