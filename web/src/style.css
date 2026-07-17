@@ -2012,14 +2012,6 @@ a.board-row:hover {
 .seat-line-active {
   color: var(--ink);
 }
-.board-follow {
-  text-align: center;
-  font-size: 10.5px;
-  color: var(--muted);
-  letter-spacing: 0.06em;
-  font-family: var(--font-label);
-  padding: 6px 16px 0;
-}
 .board-hint {
   text-align: center;
   font-style: italic;

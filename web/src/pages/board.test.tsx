@@ -138,8 +138,6 @@ describe('Board — play', () => {
     renderBoard();
     expect(await screen.findByText('NORTH · DUMMY')).toBeInTheDocument();
     expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();
-    // follow-suit helper: spades led, only spades legal
-    expect(screen.getByText(/spades are live — you must follow suit/)).toBeInTheDocument();
 
     const queen = screen.getByRole('button', { name: 'Q of ♠' });
     await userEvent.click(queen);

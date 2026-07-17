@@ -51,7 +51,6 @@ import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
-const SUIT_PLURALS = ['spades', 'hearts', 'diamonds', 'clubs'];
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -458,14 +457,6 @@ function PlayPhase({
   const dummyLabel = board.dummy !== undefined ? `${SEAT_NAMES[board.dummy]} · DUMMY` : '';
   const bottomLabel = `${SEAT_NAMES[playingSeat]} · YOU`;
 
-  // follow-suit helper: the led suit constrains this turn's legal cards
-  const led = board.currentTrick?.length ? cardSuit(board.currentTrick[0].card) : null;
-  const activeHand = board.handToPlay === board.dummy ? board.dummyHand : board.hand;
-  const mustFollow =
-    Boolean(board.myTurn) &&
-    led !== null &&
-    activeHand !== undefined &&
-    (board.legalCards?.length ?? 0) < activeHand.length;
 
   // Dummy on East or West is always the opposing side's exposed hand — never
   // one the human plays — so it renders as a rail on its true compass side
@@ -509,9 +500,6 @@ function PlayPhase({
             />
           </div>
         </>
-      ) : null}
-      {mustFollow && led !== null ? (
-        <div className="board-follow">{SUIT_PLURALS[led]} are live — you must follow suit</div>
       ) : null}
       {board.dummyHand && dummyOnSide ? (
         <div className="play-row">
