@@ -1,6 +1,7 @@
 # Design handoff screenshots
 
-Real, rendered UI states from the current app — a companion to
+Real, rendered UI states from the **pre-redesign** app — the "before" to
+[`../images-redesign/`](../images-redesign/README.md)'s "after" — a companion to
 [`design-brief.md`](../design-brief.md) and [`design-moodboard.md`](../design-moodboard.md).
 Captured at the brief's phone-portrait reference size (390×844, @2x) plus a few desktop
 (1440×900) shots; all show live data from a seeded local instance (`DEV_AUTH=1`), not mockups.

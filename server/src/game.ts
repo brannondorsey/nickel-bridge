@@ -31,7 +31,7 @@ import {
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
 import { recomputeElo } from './tournaments.js';
 
-export const HUMAN_SEAT: Seat = 2; // South
+const HUMAN_SEAT: Seat = 2; // South
 export { BOARDS_PER_TOURNAMENT };
 
 const bidder = new Bidder(loadPolicyModel((process.env.AI_MODEL as 'sl' | 'rl-fsp') ?? 'sl'));
@@ -54,7 +54,7 @@ const stmtBoardResults = db.prepare(
    WHERE b.tournament_id = ? AND b.board_no = ? AND b.state = 'done' ORDER BY b.updated_at`,
 );
 
-export interface GameBoard {
+interface GameBoard {
   row: BoardRow;
   deal: Deal;
   calls: Call[];
@@ -339,7 +339,7 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
 }
 
 /** Result + field comparison for a completed board. */
-export function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
+function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
   const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & { user_handle: string })[];
   const scores = rows.map((r) => r.score_ns ?? 0);
   const mps = matchpoints(scores);
@@ -371,7 +371,7 @@ function tricksOf(r: BoardRow): number | undefined {
   return r.tricks_declarer ?? undefined;
 }
 
-export function bidAccuracy(evals: { score: number }[]): number | null {
+function bidAccuracy(evals: { score: number }[]): number | null {
   if (!evals.length) return null;
   return Math.round((evals.reduce((s, e) => s + e.score, 0) / evals.length) * 100);
 }

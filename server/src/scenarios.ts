@@ -20,9 +20,9 @@
 
 // Extending this union is all a new gallery section needs — the frontend
 // derives section order from catalog order, so no web change is required.
-export type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring' | 'results';
+type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring' | 'results';
 
-export interface ScenarioAction {
+interface ScenarioAction {
   kind: 'call' | 'card';
   value: number;
 }

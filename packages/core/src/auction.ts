@@ -125,6 +125,3 @@ export function applyCall(dealer: Seat, calls: Call[], call: Call): Call[] {
   }
   return [...calls, call];
 }
-
-export { nextSeat };
-export type { Deal };

@@ -55,8 +55,7 @@ CREATE TABLE IF NOT EXISTS elo_history (
   user_id INTEGER NOT NULL REFERENCES users(id),
   tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
   before INTEGER NOT NULL,
-  after INTEGER NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  after INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_boards_tournament ON boards(tournament_id, board_no);

@@ -32,7 +32,7 @@ const stmtDeleteUnfinished = db.prepare(
  * synchronous WASM, so this is what keeps /health and live requests
  * responsive while bots play.
  */
-export async function playBoard(t: TournamentRow, userId: number, boardNo: number, rng: () => number): Promise<void> {
+async function playBoard(t: TournamentRow, userId: number, boardNo: number, rng: () => number): Promise<void> {
   const b = loadBoard(t, userId, boardNo, true)!;
   await ensureAdvanced(b);
   let view = boardView(t, b, 1200);

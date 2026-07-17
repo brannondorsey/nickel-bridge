@@ -26,7 +26,7 @@ const NEW_CROSSER_HANDLE = 'New Crosser';
 /** A seeded bot (see demo-seed.ts's DEFAULT_PROFILE) with a genuinely rich history — the "populated stats page" exhibit points here. */
 const RICH_PROFILE_HANDLE = 'Margaret';
 
-export function demoEnabled(): boolean {
+function demoEnabled(): boolean {
   return process.env.DEMO === '1';
 }
 

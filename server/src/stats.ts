@@ -4,7 +4,7 @@ import { standings } from './tournaments.js';
 
 const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ? AND handle IS NOT NULL`);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
-// so created_at is meaningless there — tournament_id IS the rating timeline.
+// so its rows carry no timestamp — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.
 const stmtEloSeries = db.prepare(
   `SELECT h.tournament_id, h.after, t.name AS tournament_name,
@@ -32,13 +32,13 @@ const stmtAllDoneEvals = db.prepare(
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
 
-export interface StatPoint {
+interface StatPoint {
   tournamentId: number;
   tournamentName: string;
   finishedAt: number | null;
 }
 
-export interface PlayerStats {
+interface PlayerStats {
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
   totals: {
     boardsCompleted: number;

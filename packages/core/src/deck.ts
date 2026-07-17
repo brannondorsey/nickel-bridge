@@ -61,10 +61,6 @@ export function hcp(cards: Card[]): number {
   return cards.reduce((sum, c) => sum + HCP_BY_RANK[cardRank(c)], 0);
 }
 
-export function suitCards(cards: Card[], suit: Suit): Card[] {
-  return cards.filter((c) => cardSuit(c) === suit);
-}
-
 /** Suit lengths [♠,♥,♦,♣]. */
 export function shape(cards: Card[]): [number, number, number, number] {
   const lens: [number, number, number, number] = [0, 0, 0, 0];

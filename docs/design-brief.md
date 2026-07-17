@@ -9,6 +9,15 @@ else is the designer's call.
 Section references like `web/src/pages/Board.tsx` point at the source of truth in this repo,
 so claims here can be verified against the running product.
 
+> **Status: the redesign this brief specified has shipped** (the toll-bridge ticket design,
+> PR #8). Kept as the requirements record, this document still describes the *pre-redesign*
+> app wherever it says "current" — including code that no longer exists (`Cards.tsx` is now
+> `web/src/components/game/PlayingCard.tsx` and friends; the Recharts stats charts are now
+> hand-rolled SVG sparklines, `web/src/components/ds/Sparkline.tsx`; fonts are no longer a
+> system stack). For the shipped design, see `.claude/skills/nickel-bridge-design/` and the
+> before/after galleries in [`images/`](images/README.md) and
+> [`images-redesign/`](images-redesign/README.md).
+
 ## 1. What the product is
 
 Nickel Bridge is a free, self-hostable web app for **learning SAYC bridge bidding** and playing

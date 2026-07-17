@@ -14,7 +14,6 @@ export const SEAT_NAMES = ['N', 'E', 'S', 'W'] as const;
 
 export type Suit = 0 | 1 | 2 | 3; // ♠ ♥ ♦ ♣
 export const SUIT_SYMBOLS = ['♠', '♥', '♦', '♣'] as const;
-export const SUIT_LETTERS = ['S', 'H', 'D', 'C'] as const;
 
 export type Card = number; // 0..51
 export const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'] as const;

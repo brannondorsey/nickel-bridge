@@ -17,7 +17,7 @@ import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
 
 let ddsInstance: Dds | null = null;
 
-export async function getDds(): Promise<Dds> {
+async function getDds(): Promise<Dds> {
   if (!ddsInstance) {
     ddsInstance = new Dds(await loadDds());
   }
@@ -126,5 +126,3 @@ function maskToRanks(mask: number): number[] {
   for (let r = 2; r <= 14; r++) if (mask & (1 << r)) ranks.push(r);
   return ranks;
 }
-
-export type { PlayState };

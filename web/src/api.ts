@@ -45,7 +45,7 @@ export interface TrickCard {
   card: number;
 }
 
-export interface FieldEntry {
+interface FieldEntry {
   userId: number;
   handle: string;
   contract: string;
@@ -69,7 +69,7 @@ export interface ScoreBreakdown {
   total: number;
 }
 
-export interface BoardResult {
+interface BoardResult {
   contractLabel: string;
   tricksDeclarer: number | null;
   scoreNS: number;
@@ -80,7 +80,7 @@ export interface BoardResult {
   breakdown: ScoreBreakdown | null;
 }
 
-export interface Contract {
+interface Contract {
   level: number;
   strain: number;
   declarer: number;
@@ -127,7 +127,7 @@ export interface BoardView {
   claimed?: boolean;
 }
 
-export interface Standing {
+interface Standing {
   userId: number;
   handle: string;
   boardsDone: number;
@@ -136,7 +136,7 @@ export interface Standing {
   rank?: number;
 }
 
-export interface MyBoardSummary {
+interface MyBoardSummary {
   no: number;
   state: 'bidding' | 'playing' | 'done';
   contractLabel: string | null;
@@ -158,7 +158,7 @@ export interface TournamentInfo {
   standings: Standing[];
 }
 
-export interface StatPoint {
+interface StatPoint {
   tournamentId: number;
   tournamentName: string;
   finishedAt: number | null;
@@ -262,13 +262,13 @@ export const api = {
 
 export const SUIT_SYMBOLS = ['♠', '♥', '♦', '♣'];
 export const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-export const STRAIN_SYMBOLS = ['♣', '♦', '♥', '♠', 'NT'];
+const STRAIN_SYMBOLS = ['♣', '♦', '♥', '♠', 'NT'];
 export const SEAT_SHORT = ['N', 'E', 'S', 'W'];
 
 export const cardSuit = (c: number) => Math.floor(c / 13);
 export const cardRank = (c: number) => c % 13;
 /** four-color deck: ♠ black, ♥ red, ♦ yellow, ♣ green */
-export const SUIT_CLASSES = ['suit-s', 'suit-h', 'suit-d', 'suit-c'];
+const SUIT_CLASSES = ['suit-s', 'suit-h', 'suit-d', 'suit-c'];
 export const suitClass = (suit: number) => SUIT_CLASSES[suit];
 /** strain (♣♦♥♠NT bid order) → color class */
 export const strainClass = (strain: number) => (strain === 4 ? 'suit-nt' : SUIT_CLASSES[3 - strain]);

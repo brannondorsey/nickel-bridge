@@ -26,13 +26,13 @@ const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WH
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
-export function userFromRequest(req: FastifyRequest): UserRow | null {
+function userFromRequest(req: FastifyRequest): UserRow | null {
   const sid = req.cookies[SESSION_COOKIE];
   if (!sid) return null;
   return (stmtSessionUser.get(sid) as UserRow | undefined) ?? null;
 }
 
-export function requireUser(req: FastifyRequest, reply: FastifyReply): UserRow | null {
+function requireUser(req: FastifyRequest, reply: FastifyReply): UserRow | null {
   const user = userFromRequest(req);
   if (!user) {
     reply.code(401).send({ error: 'not signed in' });

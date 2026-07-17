@@ -6,7 +6,7 @@
  * from pre-tournament ratings and applied simultaneously.
  */
 export const ELO_INITIAL = 1200;
-export const ELO_K = 24;
+const ELO_K = 24;
 
 export interface EloResult {
   userId: number;
