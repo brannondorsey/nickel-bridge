@@ -4,7 +4,7 @@ import { standings } from './tournaments.js';
 
 const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ?`);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
-// so created_at is meaningless there — tournament_id IS the rating timeline.
+// so its rows carry no timestamp — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.
 const stmtEloSeries = db.prepare(
   `SELECT h.tournament_id, h.after, t.name AS tournament_name,

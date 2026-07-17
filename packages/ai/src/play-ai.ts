@@ -126,5 +126,3 @@ function maskToRanks(mask: number): number[] {
   for (let r = 2; r <= 14; r++) if (mask & (1 << r)) ranks.push(r);
   return ranks;
 }
-
-export type { PlayState };
