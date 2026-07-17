@@ -3,6 +3,7 @@ import {
   Card,
   PASS,
   RANK_CHARS,
+  explainBidForHand,
   makeBid,
   makeCard,
   satisfiesConstraint,
@@ -83,5 +84,34 @@ describe('saycConsistent', () => {
     const rebid = hand('KQ2.T95.AQJT5.72'); // 13 HCP balanced (5332)
     expect(saycConsistent(rebid, 2, [b(1, 1), PASS, b(1, 3), PASS], b(1, 4))).toBe(true);
     expect(saycConsistent(rebid, 2, [b(1, 1), PASS, b(1, 3), PASS], b(2, 3))).toBe(false); // only 3 spades
+  });
+});
+
+describe('explainBidForHand', () => {
+  // Regression for a reported bug: North advancing South's 1NT overcall with
+  // 2♠ falls through every specific bucket in sayc.ts to explainContinuation's
+  // generic "Natural: length in ♠" fallback, which the model's chooseCall
+  // isn't guaranteed to actually satisfy.
+  const AUCTION = [PASS, b(1, 2), b(1, 4), PASS]; // N Pass, E 1H, S 1NT, W Pass — N to act with 2S
+
+  it('flags the generic natural-length fallback when the hand does not have the length', () => {
+    const shortSpades = hand('62.J8753.63.A854'); // only 2 spades
+    const m = explainBidForHand(shortSpades, 0, AUCTION, b(2, 3));
+    expect(m?.exact).toBe(false);
+    expect(m?.title).toBe('2♠');
+    expect(m?.handMismatch).toBe(true);
+  });
+
+  it('does not flag the same fallback when the hand actually backs it up', () => {
+    const longSpades = hand('KQT62.J87.63.A85'); // 5 spades
+    const m = explainBidForHand(longSpades, 0, AUCTION, b(2, 3));
+    expect(m?.handMismatch).toBeUndefined();
+  });
+
+  it('passes through untouched when the meaning has no machine-checkable req', () => {
+    // Stayman (artificial) deliberately carries no req — nothing to check.
+    const hand1 = hand('K98.QT95.A542.72');
+    const m = explainBidForHand(hand1, 2, [b(1, 4), PASS], b(2, 0));
+    expect(m?.handMismatch).toBeUndefined();
   });
 });

@@ -37,6 +37,9 @@ export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose
           <div className="meaning-body">
             <SuitText text={m.description} />
           </div>
+          {m.handMismatch ? (
+            <div className="meaning-caveat meaning-caveat-warn">This hand doesn't actually back this up — the bidder didn't really have it.</div>
+          ) : null}
           {!m.exact ? <div className="meaning-caveat">Beyond the SAYC pamphlet — general guidance only.</div> : null}
         </>
       ) : (

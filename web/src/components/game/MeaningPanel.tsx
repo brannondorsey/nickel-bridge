@@ -59,6 +59,9 @@ export function MeaningPanel({
       <div className="meaning-body">
         <SuitText text={meaning.description} />
       </div>
+      {meaning.handMismatch ? (
+        <div className="meaning-caveat meaning-caveat-warn">This hand doesn't actually back this up — the bidder didn't really have it.</div>
+      ) : null}
       {!meaning.exact ? <div className="meaning-caveat">Beyond the SAYC pamphlet — general guidance only.</div> : null}
     </div>
   );

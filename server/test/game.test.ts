@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { boardScoreNS, legalCards, playState } from '@bridge/core';
+import { boardScoreNS, legalCards, playState, satisfiesConstraint } from '@bridge/core';
 import { freshDbEnv } from './helpers.js';
 
 freshDbEnv('game');
@@ -185,9 +185,9 @@ describe('board completion side effects', () => {
   });
 });
 
-describe('robot determinism golden trace', () => {
-  const fixture = JSON.parse(readFileSync(join(here, 'fixtures/robot-trace.json'), 'utf8'));
+const fixture = JSON.parse(readFileSync(join(here, 'fixtures/robot-trace.json'), 'utf8'));
 
+describe('robot determinism golden trace', () => {
   it('replays byte-identically (fairness invariant of duplicate scoring)', async () => {
     for (const expected of fixture.boards) {
       const { t, b } = await loadBoardFor(fixture.seed, expected.boardNo);
@@ -206,5 +206,37 @@ describe('robot determinism golden trace', () => {
     await driveBoard(second.t, second.b);
     expect(second.b.calls).toEqual(first.b.calls);
     expect(second.b.plays).toEqual(first.b.plays);
+  });
+});
+
+describe('auction meanings vs. actual hands', () => {
+  // Bug: a call's SAYC explanation (e.g. "Natural: length in ♠") can be true
+  // to the auction but false to the bidder's actual hand, since chooseCall
+  // isn't guaranteed to match the story explainBid tells for a position.
+  // boardView must only cross-check a call against its bidder's real hand
+  // once every hand is already exposed to the client ('done') — doing so
+  // earlier would leak a hidden hand's shape through the meaning panel.
+  it('never exposes a hand-consistency verdict before the board is done', async () => {
+    const { t, b } = await loadBoardFor(fixture.seed, 1);
+    let view = game.boardView(t, b, 1200);
+    while (view.state !== 'done') {
+      expect((view.auction as any[]).every((entry) => entry.meaning?.handMismatch === undefined)).toBe(true);
+      if (view.state === 'bidding' && view.myTurn) await game.submitCall(b, 0);
+      else if (view.state === 'playing' && view.myTurn) await game.submitPlay(b, (view.legalCards as number[])[0]);
+      view = game.boardView(t, b, 1200);
+    }
+  });
+
+  it('flags every "done" auction meaning consistently with the real hand that made the call', async () => {
+    for (const expected of fixture.boards) {
+      const { t, b } = await loadBoardFor(fixture.seed, expected.boardNo);
+      await driveBoard(t, b);
+      const view = game.boardView(t, b, 1200);
+      for (const entry of view.auction as any[]) {
+        if (!entry.meaning?.req) continue;
+        const consistent = satisfiesConstraint(b.deal.hands[entry.seat], entry.meaning.req);
+        expect(entry.meaning.handMismatch).toBe(consistent ? undefined : true);
+      }
+    }
   });
 });

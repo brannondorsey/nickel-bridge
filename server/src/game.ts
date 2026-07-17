@@ -19,6 +19,7 @@ import {
   contractLabel,
   dealBoard,
   explainBid,
+  explainBidForHand,
   finalContract,
   hcp,
   legalCalls,
@@ -242,20 +243,45 @@ function meaningFor(dealer: Seat, callsBefore: Call[], call: Call): BidMeaning |
   }
 }
 
+/**
+ * Same as meaningFor, but flags calls whose bidder didn't actually have what
+ * the SAYC story promises (the model's chooseCall isn't guaranteed to match
+ * the textbook explanation for a given auction). Only used once a board is
+ * 'done': every hand is already sent to the client at that point (see
+ * `view.allHands` below), so checking against the real hand can't leak
+ * anything a still-hidden hand would.
+ */
+function meaningForHand(dealer: Seat, callsBefore: Call[], call: Call, hand: Card[]): BidMeaning | null {
+  try {
+    return explainBidForHand(hand, dealer, callsBefore, call);
+  } catch {
+    return null;
+  }
+}
+
 /** The client-facing view of a board, redacted for the acting user. */
 export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Record<string, unknown> {
   const deal = b.deal;
   const auction = auctionState(deal.dealer, b.calls);
   const seatNames = ['North', 'East', 'South (you)', 'West'];
 
+  // Once the board is 'done' every hand is exposed anyway (view.allHands
+  // below), so it's safe to check each call against its actual bidder's hand
+  // and flag a bid that doesn't back up the SAYC story explainBid tells for
+  // it. Before that, hands are still legitimately hidden — stick to the
+  // hand-agnostic explanation so nothing about a hidden hand leaks early.
   const auctionView = b.calls.map((call, i) => {
     const seat = ((deal.dealer + i) % 4) as Seat;
+    const callsBefore = b.calls.slice(0, i);
     return {
       seat,
       call,
       name: callName(call),
       isHuman: seat === HUMAN_SEAT,
-      meaning: meaningFor(deal.dealer, b.calls.slice(0, i), call),
+      meaning:
+        b.row.state === 'done'
+          ? meaningForHand(deal.dealer, callsBefore, call, deal.hands[seat])
+          : meaningFor(deal.dealer, callsBefore, call),
     };
   });
 

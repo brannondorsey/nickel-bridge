@@ -17,6 +17,8 @@ export interface BidMeaning {
   /** partner may not pass: forcing for one round, or forcing to game */
   forcing?: 'one-round' | 'game';
   exact: boolean;
+  /** true when the bidder's actual hand (shown once the board is done) didn't back up this story */
+  handMismatch?: boolean;
 }
 
 export interface AuctionEntry {

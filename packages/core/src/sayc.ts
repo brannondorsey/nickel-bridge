@@ -51,6 +51,13 @@ export interface BidMeaning {
    * only push a hand's value up, never down).
    */
   req?: HandConstraint;
+  /**
+   * Set post-hoc by advisor.ts's explainBidForHand, never by this file:
+   * true when the actual bidder's hand contradicts `req`. Lets the UI show
+   * an honest "the model didn't really have this" note instead of asserting
+   * a textbook story a hand doesn't back up.
+   */
+  handMismatch?: boolean;
 }
 
 export interface HandConstraint {
@@ -1019,5 +1026,12 @@ function explainContinuation(ctx: Ctx, call: Call, level: number, strain: Strain
     if (level === 3) return generic('3NT', 'Offers to play game in notrump: stoppers in the unbid suits and enough combined strength (~25 HCP).');
     return generic(`${level}NT`, 'Natural notrump: balanced values with stoppers, proposing to play here or inviting more.');
   }
-  return generic(`${level}${S[strain]}`, `Natural: length in ${S[strain]}. Exact ranges in this sequence are beyond the SAYC pamphlet.`);
+  return generic(`${level}${S[strain]}`, `Natural: length in ${S[strain]}. Exact ranges in this sequence are beyond the SAYC pamphlet.`, {
+    shapePromise: `4+ ${S[strain]}`,
+    // Exact HCP/length ranges are genuinely uncatalogued here, but "natural"
+    // still makes a floor claim worth checking: at least 4 cards. Lets
+    // explainBidForHand (advisor.ts) catch a bid the model made that doesn't
+    // even meet that floor, rather than asserting a false "length" story.
+    req: { suits: [{ strain, min: 4 }] },
+  });
 }

@@ -29,8 +29,10 @@ packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/P
                 auction.ts + play.ts (state machines), score.ts (scoring + matchpoints),
                 elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
                 biggest file in core), advisor.ts (checks a hand against a meaning's
-                machine-readable `req` constraints, feeds bid grading), types.ts,
-                barrel in index.ts
+                machine-readable `req` constraints: feeds bid grading, and flags a call's
+                auction-history explanation as `handMismatch` when the actual bidder's hand
+                contradicts it — the model's own bidding isn't guaranteed to fit the SAYC
+                story explainBid tells for a position), types.ts, barrel in index.ts
 packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 38 logits),
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall argmax + bid grading: model probability ratio,

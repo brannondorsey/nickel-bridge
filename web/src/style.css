@@ -1084,6 +1084,11 @@ a.ds-btn-secondary:hover {
   font-style: italic;
   margin-top: 8px;
 }
+.meaning-caveat-warn {
+  color: var(--negative);
+  font-style: normal;
+  font-weight: 700;
+}
 
 /* ---- BidBox ---- */
 .bidbox-wrap {

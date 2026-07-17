@@ -38,3 +38,21 @@ export function saycConsistent(hand: Card[], dealer: Seat, calls: Call[], call: 
   const m: BidMeaning | null = explainBid(dealer, calls, call);
   return m !== null && m.exact && m.req !== undefined && satisfiesConstraint(hand, m.req);
 }
+
+/**
+ * Explain `call` the way explainBid does, but flag when the actual bidder's
+ * hand contradicts what the meaning promises (`req`) — e.g. a "natural,
+ * length in ♠" story for a hand with a doubleton. This exists because
+ * `chooseCall` (the model's own bidding) isn't guaranteed to fit the SAYC
+ * story explainBid tells for a given auction; without this check the UI can
+ * assert something false about a hand it actually knows.
+ *
+ * Only call this where showing the actual bidder's hand shape is already
+ * safe (e.g. reviewing a completed board) — `handMismatch` leaks a coarse
+ * fact about a hand that may still be legitimately hidden mid-auction/play.
+ */
+export function explainBidForHand(hand: Card[], dealer: Seat, calls: Call[], call: Call): BidMeaning | null {
+  const m = explainBid(dealer, calls, call);
+  if (m && m.req && !satisfiesConstraint(hand, m.req)) return { ...m, handMismatch: true };
+  return m;
+}
