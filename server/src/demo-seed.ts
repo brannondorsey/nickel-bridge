@@ -34,7 +34,7 @@ import { SCENARIOS } from './scenarios.js';
  * rows from under it.
  */
 
-export interface SeedProfile {
+interface SeedProfile {
   /** bot display names; handles are claimed as-is */
   bots: string[];
   tournaments: {
@@ -59,7 +59,7 @@ export interface SeedProfile {
  * different decay; E sits inside the 48h grace window with < 4 starters, so
  * a tester's first PLAY THE TOLL force-joins it and meets a live field.
  */
-export const DEFAULT_PROFILE: SeedProfile = {
+const DEFAULT_PROFILE: SeedProfile = {
   bots: ['Margaret', 'Walter', 'Edith', 'Harold', 'Pearl', 'Clarence'],
   tournaments: [
     { seed: 'demo-ambient-a', ageS: 35 * 86400, players: [0, 1, 2], inspector: true },

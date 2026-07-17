@@ -32,13 +32,13 @@ const stmtAllDoneEvals = db.prepare(
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
 
-export interface StatPoint {
+interface StatPoint {
   tournamentId: number;
   tournamentName: string;
   finishedAt: number | null;
 }
 
-export interface PlayerStats {
+interface PlayerStats {
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
   totals: {
     boardsCompleted: number;

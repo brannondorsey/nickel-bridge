@@ -50,7 +50,3 @@ Captured at the brief's phone-portrait reference size (390×844, @2x) plus a few
 - Not captured: the "Robots are thinking…" waiting state (robot replies are near-instant, per
   the brief) and a passed-out board. Both exist in the code (`web/src/pages/Board.tsx`) if you
   need a reference beyond these screenshots.
-
-The `bid-advice/` subfolder is not part of this gallery: those are post-redesign screenshots
-embedded in [PR #11](https://github.com/brannondorsey/nickel-bridge/pull/11)'s description
-(SAYC bid-grading feedback).

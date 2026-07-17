@@ -71,7 +71,7 @@ const stmtMyBoards = db.prepare(
   `SELECT * FROM boards WHERE tournament_id = ? AND user_id = ? ORDER BY board_no`,
 );
 
-export interface Standing {
+interface Standing {
   userId: number;
   handle: string;
   boardsDone: number;
@@ -313,7 +313,7 @@ export function myEloDelta(tournamentId: number, userId: number): { before: numb
   return row ?? null;
 }
 
-export interface MyBoardSummary {
+interface MyBoardSummary {
   no: number;
   state: BoardRow['state'];
   contractLabel: string | null;

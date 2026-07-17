@@ -17,7 +17,7 @@ import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
 
 let ddsInstance: Dds | null = null;
 
-export async function getDds(): Promise<Dds> {
+async function getDds(): Promise<Dds> {
   if (!ddsInstance) {
     ddsInstance = new Dds(await loadDds());
   }

@@ -23,7 +23,7 @@ export const GLIDE_MS = 260;
 export const ROBOT_GAP_MS = 450;
 export const HOLD_MS = 300;
 export const COLLECT_MS = 260;
-export const STAMP_MS = 420;
+const STAMP_MS = 420;
 
 // A forced (single-legal-card) turn auto-plays after this delay — long
 // enough to read the hint before the card moves, short enough not to stall.
@@ -35,7 +35,7 @@ export const AUTO_PLAY_DELAY_MS = 1000;
 // them compress. The announcement banner (Board.tsx) pops up right as the
 // fast-forward starts and stays in place for the whole burst — no separate
 // hold beat or terminal stamp needed.
-export const CLAIM_GAP_MS = 130;
+const CLAIM_GAP_MS = 130;
 export const CLAIM_TRICK_GAP_MS = 110;
 
 // Without motion (reduced-motion, or no WAAPI) there's no fast-forward to
