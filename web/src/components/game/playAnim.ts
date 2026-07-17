@@ -25,9 +25,10 @@ export const HOLD_MS = 300;
 export const COLLECT_MS = 260;
 export const STAMP_MS = 420;
 
-// A forced (single-legal-card) turn auto-plays after this delay — long
-// enough to read the hint before the card moves, short enough not to stall.
-export const AUTO_PLAY_DELAY_MS = 1000;
+// A forced (single-legal-card) turn auto-plays after this delay — just long
+// enough to register as a deliberate play (not an instant jump) without
+// making the player wait to see a card they had no choice over.
+export const AUTO_PLAY_DELAY_MS = 250;
 
 // A claim's fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+
 // STAMP_MS since a claim can span many tricks — the glide/collect beats
