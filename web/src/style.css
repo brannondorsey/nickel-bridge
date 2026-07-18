@@ -62,7 +62,7 @@
   --ticket-shadow: 3px 3px 0 rgba(20, 20, 20, 0.12);
   /* card-face tokens — pinned, identical in every theme: playing cards are always
      printed paper under a lamp, never dark-mode surfaces (see PlayingCard usage below). */
-  --cardface: #f6f2e9;
+  --cardface: #ffffff;
   --cardface-ink: #141414;
   --cardface-line: #b9b4a9;
   --cardface-suit-s: #141414;
