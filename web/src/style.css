@@ -60,8 +60,10 @@
   --onprimary-suit-c: #8fe3a1;
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
   --ticket-shadow: 3px 3px 0 rgba(20, 20, 20, 0.12);
-  /* card-face tokens — pinned, identical in every theme: playing cards are always
-     printed paper under a lamp, never dark-mode surfaces (see PlayingCard usage below). */
+  /* card-face tokens — the ink/line/suit structure is pinned identical in every theme
+     (see PlayingCard usage below); only --cardface itself (the paper color) shifts with
+     ambient light, same as --paper: stark daylight white here, warmed to lamplit cream
+     in the night override below. */
   --cardface: #ffffff;
   --cardface-ink: #141414;
   --cardface-line: #b9b4a9;
@@ -73,9 +75,11 @@
 
 /* ---- night theme — token swap only, never per-component dark styles.
    Everything below is a straight override of the base tokens above; the semantic
-   aliases (--text-body, --border-*, --surface-page, etc.) and the --cardface-* tokens
-   reference them via var() and update automatically. Keep the [data-theme="night"]
-   block and its @media twin below in sync — same values, two activation paths. ---- */
+   aliases (--text-body, --border-*, --surface-page, etc.) reference them via var()
+   and update automatically. --cardface-ink/-line/-suit-* are pinned literals, not
+   overridden here — only --cardface itself gets a night value (see above). Keep the
+   [data-theme="night"] block and its @media twin below in sync — same values, two
+   activation paths. ---- */
 [data-theme='night'] {
   --ink: #ece7dc;
   --paper: #171512;
@@ -105,6 +109,9 @@
   --onprimary-suit-c: var(--cardface-suit-c);
   --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
   --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  /* cards read as paper under a lamp at night — warmed off the daylight white, ink/line/
+     suit structure unchanged. */
+  --cardface: #f6f2e9;
 }
 /* 'system' preference: no data-theme attribute, so the OS setting decides. Scoped to
    :not([data-theme]) so an explicit Day/Night override (which always sets the
@@ -137,6 +144,7 @@
     --onprimary-suit-c: var(--cardface-suit-c);
     --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
     --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+    --cardface: #f6f2e9;
   }
 }
 /* light-on-dark serif renders heavier; night-only smoothing, never as a compensating
