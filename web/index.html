@@ -6,6 +6,31 @@
     <meta name="theme-color" content="#fcfbf8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Nickel Bridge — learn &amp; play duplicate bridge</title>
+    <!--
+      Night mode: apply the persisted theme.ts preference before first paint, so
+      there's no light-mode flash for a Night/System-into-dark-OS visitor. Plain,
+      blocking (non-module) JS because this must run before the deferred module
+      script graph (main.tsx, theme.ts) loads — see theme.ts for the same logic
+      in the form the rest of the app uses. Keep the two in sync.
+    -->
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('nb:theme');
+          if (pref !== 'day' && pref !== 'night') pref = 'system';
+          if (pref !== 'system') {
+            document.documentElement.setAttribute('data-theme', pref === 'night' ? 'night' : 'light');
+          }
+          var isNight = pref === 'night' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isNight) {
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#171512');
+          }
+        } catch (e) {
+          /* ignore — worst case is a light-mode flash */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

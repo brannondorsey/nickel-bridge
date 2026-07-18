@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice">
+<g stroke="#ECE7DC" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"></line><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"></line></g>
+<g stroke="#8CAB84" fill="none">
+<path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"></path>
+<path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"></path>
+<line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"></line><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"></line><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"></line><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"></line><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"></line>
+<line x1="40" y1="30" x2="40" y2="85" stroke-width="2"></line><line x1="120" y1="30" x2="120" y2="85" stroke-width="2"></line><line x1="200" y1="30" x2="200" y2="85" stroke-width="2"></line><line x1="280" y1="30" x2="280" y2="85" stroke-width="2"></line><line x1="360" y1="30" x2="360" y2="85" stroke-width="2"></line><line x1="440" y1="30" x2="440" y2="85" stroke-width="2"></line><line x1="520" y1="30" x2="520" y2="85" stroke-width="2"></line><line x1="600" y1="30" x2="600" y2="85" stroke-width="2"></line>
+</g>
+<g stroke="#8CAB84" stroke-width="1.2" fill="none">
+<line x1="80" y1="30" x2="120" y2="85"></line><line x1="120" y1="30" x2="160" y2="78"></line><line x1="240" y1="30" x2="200" y2="85"></line><line x1="200" y1="30" x2="160" y2="78"></line>
+<line x1="240" y1="30" x2="280" y2="85"></line><line x1="280" y1="30" x2="320" y2="78"></line><line x1="400" y1="30" x2="360" y2="85"></line><line x1="360" y1="30" x2="320" y2="78"></line>
+<line x1="400" y1="30" x2="440" y2="85"></line><line x1="440" y1="30" x2="480" y2="78"></line><line x1="560" y1="30" x2="520" y2="85"></line><line x1="520" y1="30" x2="480" y2="78"></line>
+<line x1="80" y1="30" x2="40" y2="85"></line><line x1="40" y1="30" x2="0" y2="78"></line><line x1="560" y1="30" x2="600" y2="85"></line><line x1="600" y1="30" x2="640" y2="78"></line>
+</g>
+<rect x="0" y="178" width="640" height="62" fill="#5E4B33"></rect>
+<g fill="#4E3E2B"><rect x="70" y="178" width="20" height="26"></rect><rect x="230" y="178" width="20" height="26"></rect><rect x="390" y="178" width="20" height="26"></rect><rect x="550" y="178" width="20" height="26"></rect></g>
+<g stroke="#745E41" stroke-width="1.5"><line x1="30" y1="212" x2="130" y2="212"></line><line x1="300" y1="220" x2="420" y2="220"></line><line x1="490" y1="208" x2="600" y2="208"></line><line x1="150" y1="228" x2="250" y2="228"></line></g>
+<g fill="#EDE8DC" stroke="#CBC3B0" stroke-width="1.5"><path d="M68 104 L92 104 L96 180 L64 180 Z"></path><path d="M228 104 L252 104 L256 180 L224 180 Z"></path><path d="M388 104 L412 104 L416 180 L384 180 Z"></path><path d="M548 104 L572 104 L576 180 L544 180 Z"></path></g>
+<g fill="#8D8272"><path d="M14 188 q8 -16 28 -13 q18 3 21 14 q-3 9 -24 9 q-20 0 -25 -10 Z"></path><path d="M130 192 q10 -18 32 -14 q16 3 19 13 q-4 9 -25 9 q-21 0 -26 -8 Z"></path><path d="M300 194 q7 -14 24 -12 q15 2 18 12 q-3 8 -21 8 q-17 0 -21 -8 Z"></path><path d="M462 190 q9 -16 28 -13 q16 3 19 13 q-3 9 -23 9 q-19 0 -24 -9 Z"></path><path d="M602 192 q7 -13 22 -11 q12 2 15 11 q-3 8 -18 8 q-15 0 -19 -8 Z"></path></g>
+<g fill="#6E6455"><path d="M182 196 q6 -11 18 -9 q10 2 12 9 q-2 7 -15 7 q-13 0 -15 -7 Z"></path><path d="M356 198 q5 -10 16 -8 q9 2 11 8 q-2 6 -13 6 q-11 0 -14 -6 Z"></path><path d="M540 198 q5 -9 15 -8 q8 1 10 8 q-2 6 -12 6 q-10 0 -13 -6 Z"></path></g>
+</svg>
