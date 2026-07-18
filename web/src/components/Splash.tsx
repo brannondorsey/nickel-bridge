@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import riverScene from '../assets/bridge-river-scene.svg';
+import riverSceneNight from '../assets/bridge-river-scene-night.svg';
 
 /**
  * The toll-gate splash — wordmark, "DUPLICATE · SAYC", and the river scene
@@ -33,7 +34,8 @@ export function Splash({ onDone, cta, pitch }: { onDone?: () => void; cta?: Reac
         {pitch ? <p className="splash-pitch">{pitch}</p> : null}
       </div>
       <div className="splash-bridge">
-        <img src={riverScene} width="390" height="146" alt="" />
+        <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
+        <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
       </div>
     </div>
   );

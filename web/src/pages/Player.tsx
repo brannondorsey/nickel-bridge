@@ -11,6 +11,37 @@ import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
 import { StarGrade } from '../components/ds/StarGrade';
 import { shortDate } from '../format';
+import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
+
+const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
+  { pref: 'day', label: 'DAY' },
+  { pref: 'night', label: 'NIGHT' },
+  { pref: 'system', label: 'SYSTEM' },
+];
+
+/** Day/Night/System segmented switch — the runtime override on top of the OS default. */
+function ThemeSwitch() {
+  const [pref, setPref] = useState<ThemePref>(() => readThemePref());
+  return (
+    <div className="theme-switch" role="group" aria-label="Appearance">
+      {THEME_OPTIONS.map((o) => (
+        <button
+          key={o.pref}
+          type="button"
+          className={o.pref === pref ? 'active' : ''}
+          aria-pressed={o.pref === pref}
+          onClick={() => {
+            setPref(o.pref);
+            storeThemePref(o.pref);
+            applyThemePref(o.pref);
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const GRADE_ROWS = [
   { stars: 3, key: 'excellent' },
@@ -237,6 +268,12 @@ export default function Player() {
           ) : null}
         </>
       )}
+
+      {isMe ? (
+        <PerforatedPanel heading="APPEARANCE" className="stats-appearance">
+          <ThemeSwitch />
+        </PerforatedPanel>
+      ) : null}
 
       {isMe ? (
         <div className="stats-footer">
