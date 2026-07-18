@@ -193,9 +193,9 @@ describe('claim soundness: real dealt-and-bid boards, replayed to the actual cla
   // boundaries) so the brute-force search stays fast — real bidding, real
   // play, real DD-determined boards, not toy suits.
   const cases: [string, number][] = [
-    ['audit-scan-2', 1], // declarer-side laydown, bestScore === remaining
-    ['audit-scan-26', 2], // declarer-side laydown, bestScore === remaining
-    ['audit-scan-0', 2], // defense fully denied, bestScore === 0
+    ['audit-scan-10', 2], // side-to-move laydown, bestScore === remaining
+    ['audit-scan-15', 1], // side-to-move laydown, bestScore === remaining
+    ['audit-scan-0', 1], // defense fully denied, bestScore === 0
   ];
 
   it.each(cases)('seed %s board %i: no legal defense/declarer deviation steals a trick', async (seed, boardNo) => {

@@ -153,7 +153,14 @@ function explainPass(ctx: Ctx): BidMeaning {
       req: { maxHcp: 12 },
     });
   }
-  if (ctx.partnerOpened && ctx.myCalls.every((c) => c === PASS) && ctx.partnerCalls.length === 1) {
+  if (
+    ctx.partnerOpened &&
+    ctx.myCalls.every((c) => c === PASS) &&
+    ctx.partnerCalls.length === 1 &&
+    bidLevel(ctx.opening!.call) === 1
+  ) {
+    // Only over a 1-level opening: passing partner's preempt or 2♣ says
+    // nothing about being under 6 points.
     return meaning('Pass', 'Fewer than 6 points — too weak to respond to partner’s opening.', {
       points: '0–5 pts',
       req: { maxHcp: 5 },

@@ -45,6 +45,13 @@ judgment, not card luck.
   - `rl-fsp`: the stronger RL+fictitious-self-play model (+1.24 IMPs/board vs WBridge5).
     Set `AI_MODEL=rl-fsp` to use it; note its style can drift from textbook SAYC.
 
+  Either way, robot bids pass through a SAYC guardrail: any bid that would break the
+  machine-checkable hand requirements of its own SAYC meaning (a weak two on a five-card
+  suit, an 11-HCP one-of-a-major opening) is excluded before the argmax, so the robots
+  never make a bid the in-app explanation would contradict. Conventions the explainer
+  can't hand-check (Stayman, transfers, Blackwood…) are untouched. See
+  `docs/rule-based-bidding.md` for the design space beyond this guardrail.
+
   The observation encoding is a bit-for-bit port of the [pgx](https://github.com/sotetsuk/pgx)
   `bridge_bidding` environment, verified by golden tests against the original JAX code.
 - **Card play** is double-dummy optimal via Bo Haglund & Soren Hein's

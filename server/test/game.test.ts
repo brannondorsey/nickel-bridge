@@ -61,20 +61,18 @@ describe('declarer scenarios (pinned seeds)', () => {
   });
 
   it('North declares: board flips and the human plays both N and dummy S', async () => {
-    const { t, b } = await loadBoardFor('hunt-0', 3);
+    const { t, b } = await loadBoardFor('hunt-1', 2);
     const views = await driveBoard(t, b);
     expect(b.contract!.declarer).toBe(0);
     const playViews = views.filter((v) => v.state === 'playing');
     expect(playViews.every((v) => v.flipped === true && v.playingSeat === 0)).toBe(true);
     const handsPlayed = new Set(playViews.filter((v) => v.myTurn).map((v) => v.handToPlay));
     expect(handsPlayed).toEqual(new Set([0, 2])); // both declarer hand and dummy
-    // A laydown claim plays the tail DD-optimally instead of driveBoard's
-    // naive "first legal card" strategy, which does better here than -150.
-    expect(b.row.score_ns).toBe(110);
+    expect(b.row.score_ns).toBe(170); // deterministic outcome for this seed
   });
 
   it('South declares: human plays South and dummy North, no flip', async () => {
-    const { t, b } = await loadBoardFor('hunt2-2', 4);
+    const { t, b } = await loadBoardFor('hunt-6', 1);
     let bidOnce = true;
     const views = await driveBoard(t, b, (view) => {
       if (bidOnce && view.legalCalls.includes(7)) {
