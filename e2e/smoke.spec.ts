@@ -72,7 +72,10 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
     await page.click('.confirm-row .btn-primary');
     await page.waitForTimeout(400);
   }
-  await expect(page.locator('.trick, .result').first()).toBeVisible({ timeout: 30_000 });
+  // Generous: the transition into play runs the robots' first card burst, and
+  // double-dummy solves have a documented heavy tail on rare deals (seconds,
+  // occasionally tens of seconds on slow CI hardware).
+  await expect(page.locator('.trick, .result').first()).toBeVisible({ timeout: 60_000 });
 
   // if we're defending/declaring, tap-tap plays a card and the hand shrinks
   if (await page.locator('.trick').isVisible().catch(() => false)) {

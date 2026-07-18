@@ -16,7 +16,9 @@ const dbPath = join(mkdtempSync(join(tmpdir(), 'bridge-e2e-')), 'e2e.db');
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  // Room for the rare heavy-tail double-dummy solve on slow CI hardware (the
+  // in-test waits allow up to 60s for the first play burst alone).
+  timeout: 120_000,
   retries: 0,
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -27,6 +29,10 @@ export default defineConfig({
     command: 'node server/dist/index.js',
     port: PORT,
     reuseExistingServer: false,
+    // Surface server logs in test output — without this a server-side error
+    // during a failure is invisible in CI.
+    stdout: 'pipe',
+    stderr: 'pipe',
     env: {
       PORT: String(PORT),
       DB_PATH: dbPath,

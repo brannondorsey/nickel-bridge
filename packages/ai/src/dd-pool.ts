@@ -22,10 +22,22 @@ import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
 /** cap: each worker holds a ~5 MB WASM heap; solves split K/size ways */
 const POOL_SIZE = Math.max(1, Math.min(availableParallelism() - 1, 4));
 
+/**
+ * Deadline for one pool solve. DDS has a documented heavy tail — a real deal
+ * once cost ~37s (see claim-soundness.test.ts) — and a wedged or lost worker
+ * would otherwise stall its callers forever. On expiry the promise rejects
+ * and the caller re-runs the SAME request on the main-thread instance:
+ * timing may change WHERE a solve runs, never whether its result is used, so
+ * robot determinism is untouched. A late worker reply after expiry is
+ * discarded (its pending entry is gone).
+ */
+const SOLVE_TIMEOUT_MS = 15_000;
+
 interface Pending {
   resolve: (res: FutureTricks) => void;
   reject: (err: Error) => void;
   workerIndex: number;
+  timer: NodeJS.Timeout;
 }
 
 export class DdPool {
@@ -41,7 +53,8 @@ export class DdPool {
       worker.unref();
       worker.on('message', (msg: { id: number; res?: FutureTricks; error?: string }) => {
         const p = this.pending.get(msg.id);
-        if (!p) return;
+        if (!p) return; // timed out earlier — late reply discarded
+        clearTimeout(p.timer);
         this.pending.delete(msg.id);
         this.busy[p.workerIndex]--;
         if (msg.error !== undefined) p.reject(new Error(msg.error));
@@ -49,7 +62,11 @@ export class DdPool {
       });
       worker.on('error', (err: unknown) => this.fail(err instanceof Error ? err : new Error(String(err))));
       worker.on('exit', (code) => {
-        if (!this.dead && code !== 0) this.fail(new Error(`dd-worker exited with code ${code}`));
+        // ANY exit while requests are in flight loses their replies — fail so
+        // callers fall back, whatever the exit code claims.
+        if (!this.dead && (code !== 0 || this.pending.size > 0)) {
+          this.fail(new Error(`dd-worker exited with code ${code}`));
+        }
       });
       this.workers.push(worker);
       this.busy.push(0);
@@ -59,7 +76,10 @@ export class DdPool {
   /** reject everything in flight and mark the pool unusable (callers fall back) */
   private fail(err: Error): void {
     this.dead = true;
-    for (const p of this.pending.values()) p.reject(err);
+    for (const p of this.pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(err);
+    }
     this.pending.clear();
   }
 
@@ -76,7 +96,15 @@ export class DdPool {
     const id = this.nextId++;
     this.busy[workerIndex]++;
     return new Promise<FutureTricks>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, workerIndex });
+      const timer = setTimeout(() => {
+        const p = this.pending.get(id);
+        if (!p) return;
+        this.pending.delete(id);
+        this.busy[p.workerIndex]--;
+        p.reject(new Error(`dd pool solve exceeded ${SOLVE_TIMEOUT_MS}ms`));
+      }, SOLVE_TIMEOUT_MS);
+      timer.unref();
+      this.pending.set(id, { resolve, reject, workerIndex, timer });
       this.workers[workerIndex].postMessage({ id, req });
     });
   }
