@@ -1110,13 +1110,6 @@ a.ds-btn-secondary:hover {
   max-height: 216px;
   overflow-y: auto;
 }
-/* Bidding: pin the scroll frame to a constant height so the table doesn't sink
-   as each round adds a row — the bid box beneath it must hold its place between
-   turns. Holds ~3 rounds before scrolling (autoscrolled to the newest row);
-   play omits .auction-stable and keeps the growing frame. */
-.auction-stable .auction-scroll {
-  height: 104px;
-}
 .auction table {
   width: 100%;
   border-collapse: collapse;
@@ -1293,15 +1286,24 @@ a.ds-btn-secondary:hover {
   margin-top: 12px;
 }
 
-/* ---- bid lane ---- the meaning/grade feedback, moved BELOW the bid box so its
-   height changes grow downward into empty space instead of shoving the controls
-   above it (see BiddingPhase). Children keep their own margins; the lane only
-   groups them and holds a little breathing room at the page's foot. */
-.bid-lane {
-  padding-bottom: 4px;
+/* ---- bid feedback slot ---- one reserved region above the fan that holds the
+   selected call's meaning, the grade of your last bid, or the placeholder — one
+   at a time. The min-height is sized to the tallest meaning the SAYC explainer
+   can produce (measured ~192px at the 390px design width, incl. a wrapping
+   title, chips and the beyond-SAYC caveat), so switching between calls — or the
+   grade landing — never resizes it and the fan + bid box below stay put. It's a
+   floor, not a cap: a longer description on a narrower phone grows the panel
+   rather than clipping. Update this if a longer convention description ships. */
+:root {
+  --bid-feedback-min: 196px;
 }
-.bid-lane .board-hint {
-  padding-top: 2px;
+.bid-feedback > * {
+  min-height: var(--bid-feedback-min);
+}
+/* the grade toast is a centered flex row by default; top-align it here so it
+   reads like the meaning panel it shares the slot with, content at the top. */
+.bid-feedback > .grade-toast {
+  align-items: flex-start;
 }
 
 /* ---- GradeToast ---- */

@@ -402,19 +402,16 @@ function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
 }) {
   const meanings = board.legalCallMeanings ?? {};
-  // Everything that changes height — the selected call's meaning, the grade of
-  // your last bid — lives in a lane BELOW the bid table, so it can only grow
-  // into empty space instead of shoving the controls your thumb is on. Before
-  // you bid the lane previews the selected call (and signposts tap-again-to-bid,
-  // the same gesture card play uses); after, it shows the grade of your bid.
-  const lane = board.myTurn ? (
+  // The feedback that changes height — the selected call's meaning, the grade of
+  // your last bid, the placeholder — shares one slot with a reserved min-height
+  // (.bid-feedback) sized to the tallest meaning the app can produce. Holding
+  // that height constant is what stops the fan and bid box beneath it from
+  // jumping every time you select a different call or land one. The three states
+  // are mutually exclusive: preview the selected call, else your last grade,
+  // else the placeholder (which also teaches tap-again-to-bid).
+  const feedback = board.myTurn ? (
     selectedCall !== null ? (
-      <>
-        <div className="board-hint">
-          <CallText call={selectedCall} /> selected — tap again to bid
-        </div>
-        <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
-      </>
+      <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
@@ -426,13 +423,8 @@ function BiddingPhase({
 
   return (
     <>
-      <AuctionGrid
-        auction={board.auction}
-        dealer={board.dealer}
-        myTurn={Boolean(board.myTurn)}
-        onInspect={onInspect}
-        stableHeight
-      />
+      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+      {feedback ? <div className="bid-feedback">{feedback}</div> : null}
       <div className="board-fan">
         <HandFan cards={displaySort(board.hand)} />
       </div>
@@ -448,7 +440,6 @@ function BiddingPhase({
       ) : (
         <div className="notice">Robots are thinking…</div>
       )}
-      {lane ? <div className="bid-lane">{lane}</div> : null}
     </>
   );
 }
