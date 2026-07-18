@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { Difficulty } from '@bridge/ai';
 
 const DB_PATH = process.env.DB_PATH ?? './data/bridge.db';
 
@@ -71,6 +72,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 const userColumns = new Set((db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name));
 if (!userColumns.has('handle')) db.exec(`ALTER TABLE users ADD COLUMN handle TEXT`);
 if (!userColumns.has('handle_key')) db.exec(`ALTER TABLE users ADD COLUMN handle_key TEXT`);
+// Migration: robot difficulty preference — the tier a user wants placement to
+// match them into (see tournaments.difficulty below). Backend-only for now:
+// settable via POST /api/me/difficulty, no web UI yet.
+if (!userColumns.has('difficulty')) db.exec(`ALTER TABLE users ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'expert'`);
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
@@ -84,6 +89,14 @@ const tournamentColumns = new Set(
 if (!tournamentColumns.has('kind')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN kind TEXT NOT NULL DEFAULT 'standard'`);
 }
+// Migration: robot card-play difficulty, stamped at creation from the
+// creating user's preference and immutable thereafter — every player on a
+// board must face identical robots (invariant 1), so difficulty can never be
+// per-user at play time. The ADD COLUMN default backfills all existing
+// tournaments as 'expert', i.e. exactly the historical true-DD robots.
+if (!tournamentColumns.has('difficulty')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'expert'`);
+}
 
 export interface UserRow {
   id: number;
@@ -93,6 +106,8 @@ export interface UserRow {
   picture: string | null;
   handle: string | null;
   handle_key: string | null;
+  /** robot difficulty preference — drives placement (see tournaments.difficulty) */
+  difficulty: Difficulty;
   elo: number;
   created_at: number;
 }
@@ -104,6 +119,8 @@ export interface TournamentRow {
   seed: string;
   /** 'standard' = real play; 'exhibit' = demo-mode scenario holder, excluded from placement/rating/lobby/stats */
   kind: 'standard' | 'exhibit';
+  /** robot card-play tier for every board of this tournament ('expert' = historical true-DD) */
+  difficulty: Difficulty;
   created_at: number;
 }
 

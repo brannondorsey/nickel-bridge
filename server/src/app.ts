@@ -36,7 +36,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.post('/api/play', (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    const { tournament, nextBoard } = placeUser(user.id);
+    const { tournament, nextBoard } = placeUser(user.id, user.difficulty);
     return reply.send({ tournamentId: tournament.id, boardNo: nextBoard });
   });
 
@@ -46,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const mine = myTournaments(user.id).map((t) => ({
       id: t.id,
       name: t.name,
+      difficulty: t.difficulty,
       myDone: t.myDone,
       createdAt: t.created_at,
       myLastPlayedAt: t.myLastPlayedAt,
@@ -63,6 +64,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({
       id: t.id,
       name: t.name,
+      difficulty: t.difficulty,
       createdAt: t.created_at,
       myDone: myBoards.filter((b) => b.state === 'done').length,
       myEloDelta: myEloDelta(t.id, user.id),

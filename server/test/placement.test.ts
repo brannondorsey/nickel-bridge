@@ -141,7 +141,7 @@ describe('placeUser over the database', () => {
 
   it('creates and names a tournament when the backlog is empty', () => {
     const u = addUser('creator');
-    const { tournament, nextBoard } = placeUser(u, { nowSec: NOW, rng: rng0 });
+    const { tournament, nextBoard } = placeUser(u, 'expert', { nowSec: NOW, rng: rng0 });
     expect(tournament.name).toBe(`Tournament #${tournament.id}`);
     expect(nextBoard).toBe(1);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournament.id); // keep later backlogs clean
@@ -156,7 +156,7 @@ describe('placeUser over the database', () => {
     const tDuo = addTournament('duo', NOW - days(3));
     finishBoards(tDuo, duoA, 1);
     finishBoards(tDuo, duoB, 1);
-    const { tournament } = placeUser(joiner, { nowSec: NOW, rng: rng0 });
+    const { tournament } = placeUser(joiner, 'expert', { nowSec: NOW, rng: rng0 });
     expect(tournament.id).toBe(tDuo);
     db.prepare(`DELETE FROM boards WHERE tournament_id IN (?, ?)`).run(tSolo, tDuo);
     db.prepare(`DELETE FROM tournaments WHERE id IN (?, ?)`).run(tSolo, tDuo);
@@ -171,7 +171,7 @@ describe('placeUser over the database', () => {
     finishBoards(tFreshSmall, finishers[0], 1);
     finishBoards(tFreshSmall, finishers[1], 1); // 2 finishers, past grace TTL
     expect(tournamentScore(5, days(10))).toBeGreaterThan(tournamentScore(2, days(2.5)));
-    const { tournament } = placeUser(joiner, { nowSec: NOW, rng: rng0 });
+    const { tournament } = placeUser(joiner, 'expert', { nowSec: NOW, rng: rng0 });
     expect(tournament.id).toBe(tOldPopular);
     db.prepare(`DELETE FROM boards WHERE tournament_id IN (?, ?)`).run(tOldPopular, tFreshSmall);
     db.prepare(`DELETE FROM tournaments WHERE id IN (?, ?)`).run(tOldPopular, tFreshSmall);
@@ -182,11 +182,11 @@ describe('placeUser over the database', () => {
     const returner = addUser('returner');
     const tArchived = addTournament('ancient', NOW - days(31));
     for (const v of veterans) finishBoards(tArchived, v, 4); // huge field, out of window
-    const fresh = placeUser(returner, { nowSec: NOW, rng: rng0 });
+    const fresh = placeUser(returner, 'expert', { nowSec: NOW, rng: rng0 });
     expect(fresh.tournament.id).not.toBe(tArchived);
     // ...but their own unfinished boards in an archived tournament still resume
     finishBoards(tArchived, returner, 2);
-    const resumed = placeUser(returner, { nowSec: NOW, rng: rng0 });
+    const resumed = placeUser(returner, 'expert', { nowSec: NOW, rng: rng0 });
     expect(resumed.tournament.id).toBe(tArchived);
     expect(resumed.nextBoard).toBe(3);
     db.prepare(`DELETE FROM boards WHERE tournament_id = ?`).run(tArchived);
@@ -195,15 +195,15 @@ describe('placeUser over the database', () => {
 
   it('funnels requesters into a fresh tournament until the grace cap, then creates', () => {
     const group = ['g1', 'g2', 'g3', 'g4', 'g5'].map(addUser);
-    const first = placeUser(group[0], { nowSec: NOW, rng: rng0 });
+    const first = placeUser(group[0], 'expert', { nowSec: NOW, rng: rng0 });
     startBoard(first.tournament.id, group[0]);
     for (const uid of group.slice(1, PLACEMENT.GRACE_CAP)) {
-      const placed = placeUser(uid, { nowSec: NOW, rng: rng0 });
+      const placed = placeUser(uid, 'expert', { nowSec: NOW, rng: rng0 });
       expect(placed.tournament.id).toBe(first.tournament.id);
       startBoard(placed.tournament.id, uid);
     }
     // grace cap reached, nobody has finished a board → score 0 → fresh one
-    const overflow = placeUser(group[PLACEMENT.GRACE_CAP], { nowSec: NOW, rng: rng0 });
+    const overflow = placeUser(group[PLACEMENT.GRACE_CAP], 'expert', { nowSec: NOW, rng: rng0 });
     expect(overflow.tournament.id).not.toBe(first.tournament.id);
   });
 });

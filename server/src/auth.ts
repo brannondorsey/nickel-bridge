@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { DIFFICULTIES, type Difficulty } from '@bridge/ai';
 import { db, UserRow } from './db.js';
 import { validateHandle } from './handle.js';
 
@@ -23,6 +24,7 @@ const stmtInsertUser = db.prepare(
 );
 const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?`);
 const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
+const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -163,10 +165,28 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   app.get('/api/me', (req, reply) => {
     const user = userFromRequest(req);
     return reply.send({
-      user: user ? { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo } : null,
+      user: user
+        ? { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty: user.difficulty }
+        : null,
       devAuth: process.env.DEV_AUTH === '1',
       googleAuth: Boolean(clientId),
       demo: process.env.DEMO === '1',
+    });
+  });
+
+  // Robot-difficulty preference: future placements match tournaments of this
+  // tier (already-started tournaments keep their stamped difficulty). Backend
+  // only for now — no web UI sets this yet.
+  app.post('/api/me/difficulty', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    const { difficulty } = (req.body ?? {}) as { difficulty?: string };
+    if (!DIFFICULTIES.includes(difficulty as Difficulty)) {
+      return reply.code(400).send({ error: 'bad difficulty' });
+    }
+    stmtSetDifficulty.run(difficulty, user.id);
+    return reply.send({
+      user: { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty },
     });
   });
 
