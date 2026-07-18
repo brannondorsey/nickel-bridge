@@ -164,22 +164,30 @@ each newly-completed trick by its actual winner rather than assuming the whole b
 the claiming side. See invariant 1 below — claims change what `advanceRobots` records for a
 human's untaken decisions, so they interact directly with the robot-trace fixture.
 
-**Robot difficulty (sampled-DD play):** every tournament carries a `difficulty` column
-(`'beginner' | 'intermediate' | 'expert'`, default `'expert'`) stamped at creation from the
-creating user's preference (`users.difficulty`, set via `POST /api/me/difficulty` — backend
-only, no web UI yet) and immutable after. Placement only matches users into tournaments of
-their preferred tier (resume of an already-started tournament is deliberately
-difficulty-blind). At `'expert'`, robot card play is the historical true-deal DD-optimal
-path, byte for byte. Below expert, `robotCard` in `game.ts` routes non-forced robot decisions
-through `chooseCardSampled` (`packages/ai/src/play-mc.ts`): K seeded layouts of the cards the
-acting player can't see — constrained by the auction's machine-checkable SAYC `req`s and by
-shown-out voids, with a deterministic relaxation ladder — each solved double-dummy, best
-aggregate card played. K per tier lives in `MC_SAMPLES` (`difficulty.ts`); robot North (only
-ever the human's defensive partner) uses a floored `kPartner ≥ kOpp`. Claim detection and
-`resolveClaim` stay true-DD at every tier. Sampled solves run through a lazy `worker_threads`
-DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential fallback when unavailable);
-DDS is deterministic, so the pool affects latency only. Nothing here consults env vars —
-difficulty flows from the tournament row.
+**Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
+duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
+tier, resolved by `boardDifficulty()` in `tournaments.ts` from two tournament columns:
+`difficulty` (the placement-tier label) and `board_difficulties` (JSON `Difficulty[4]`, NULL
+= uniform at the label). `placeUser` stamps both from the creating user's preference
+(`users.difficulty`, default `'intermediate'`, set via `POST /api/me/difficulty` — backend
+only, no web UI yet); today's schedules are always uniform, so ramps/mixed schedules are a
+data change. Placement only matches users into tournaments of their preferred tier (resume
+of an already-started tournament is deliberately preference-blind). The player-facing tiers
+(`MC_SAMPLES` in `difficulty.ts`) all use `chooseCardSampled` (`packages/ai/src/play-mc.ts`)
+— K seeded layouts of the cards the acting player can't see, constrained by shown-out voids
+and (unless the tier is auction-blind) the auction's machine-checkable SAYC `req`s with a
+deterministic relaxation ladder, each solved double-dummy, best aggregate card played:
+`expert` kOpp=8, `intermediate` kOpp=1, `beginner` kOpp=1 **auction-blind** (opponents
+ignore the bidding entirely). Robot North — only ever the human's defensive partner — is
+always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)`. The fourth value,
+`'perfect'`, is the **hidden legacy tier**: true-deal DD-optimal play, byte for byte the
+pre-difficulty behavior; it's the schema default (so legacy tournaments, the robot-trace
+fixture, and demo exhibits all resolve to it) and is not settable through the API. Demo
+ambient tournaments are stamped `'intermediate'` so default-preference placement joins them.
+Claim detection and `resolveClaim` stay true-DD at every tier. Sampled solves run through a
+lazy `worker_threads` DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential
+fallback when unavailable); DDS is deterministic, so the pool affects latency only. Nothing
+here consults env vars — difficulty flows from the tournament row.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
@@ -246,19 +254,19 @@ module-level constants next to the functions that use them. Match that style.
 ## Invariants — do not break
 
 1. **Robot determinism is the fairness invariant of the whole product.** Bidding is model
-   argmax; card play at `difficulty = 'expert'` is DD-optimal with a deterministic tie-break,
-   and below expert it is sampled-DD (`play-mc.ts`) — fallible by design but still a pure
-   function of (tournament seed, board, public game state, tier K constants); deals derive
-   from the tournament seed. Every player must face identical robots on identical deals or
-   duplicate scoring is meaningless. The trace fixture `server/test/fixtures/robot-trace.json`
-   guards the expert path (every fixture/demo/scenario tournament is expert by default). If
-   you *deliberately* change robot behavior (model, encoding, tie-breaks, dealing),
-   regenerate it: `npm run build && node tools/gen_trace_fixture.mjs`. If that diff surprises
-   you, you were about to silently break comparability of live tournaments — stop and figure
-   out why. Changing the non-expert K constants (`MC_SAMPLES`/`PARTNER_FLOOR` in
-   `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
-   non-expert tournaments: it breaks comparability for in-flight ones, so calibrate
-   (`tools/calibrate_k.mjs`) before real non-expert play exists, or accept the break
+   argmax; card play at the hidden legacy `'perfect'` tier is DD-optimal with a deterministic
+   tie-break, and at the player-facing tiers it is sampled-DD (`play-mc.ts`) — fallible by
+   design but still a pure function of (board difficulty, tournament seed, board, public game
+   state, tier constants); deals derive from the tournament seed. Every player must face
+   identical robots on identical deals or duplicate scoring is meaningless. The trace fixture
+   `server/test/fixtures/robot-trace.json` guards the perfect path (every fixture/exhibit
+   tournament is perfect by default). If you *deliberately* change robot behavior (model,
+   encoding, tie-breaks, dealing), regenerate it: `npm run build && node
+   tools/gen_trace_fixture.mjs`. If that diff surprises you, you were about to silently break
+   comparability of live tournaments — stop and figure out why. Changing the sampled-tier
+   constants (`MC_SAMPLES`/`PARTNER_FLOOR` in `packages/ai/src/difficulty.ts`) is the same
+   kind of deliberate robot change scoped to non-perfect tournaments: it breaks comparability
+   for in-flight ones, so calibrate (`tools/calibrate_k.mjs`) first, or accept the break
    knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can

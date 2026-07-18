@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Difficulty } from '@bridge/ai';
+import type { Difficulty, SettableDifficulty } from '@bridge/ai';
 
 const DB_PATH = process.env.DB_PATH ?? './data/bridge.db';
 
@@ -74,8 +74,11 @@ if (!userColumns.has('handle')) db.exec(`ALTER TABLE users ADD COLUMN handle TEX
 if (!userColumns.has('handle_key')) db.exec(`ALTER TABLE users ADD COLUMN handle_key TEXT`);
 // Migration: robot difficulty preference — the tier a user wants placement to
 // match them into (see tournaments.difficulty below). Backend-only for now:
-// settable via POST /api/me/difficulty, no web UI yet.
-if (!userColumns.has('difficulty')) db.exec(`ALTER TABLE users ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'expert'`);
+// settable via POST /api/me/difficulty, no web UI yet. Default is the middle
+// tier — nobody faces the legacy perfect-knowledge robots unknowingly.
+if (!userColumns.has('difficulty')) {
+  db.exec(`ALTER TABLE users ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'intermediate'`);
+}
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
@@ -89,13 +92,19 @@ const tournamentColumns = new Set(
 if (!tournamentColumns.has('kind')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN kind TEXT NOT NULL DEFAULT 'standard'`);
 }
-// Migration: robot card-play difficulty, stamped at creation from the
-// creating user's preference and immutable thereafter — every player on a
-// board must face identical robots (invariant 1), so difficulty can never be
-// per-user at play time. The ADD COLUMN default backfills all existing
-// tournaments as 'expert', i.e. exactly the historical true-DD robots.
+// Migration: robot card-play difficulty. `difficulty` is the tournament's
+// placement-tier label, stamped at creation from the creating user's
+// preference and immutable thereafter; `board_difficulties` is the per-board
+// truth (JSON Difficulty[4], NULL = uniform at `difficulty`) — difficulty is
+// a PER-BOARD property resolved via boardDifficulty() in tournaments.ts,
+// identical for every player on a board (invariant 1), never per-user. The
+// ADD COLUMN defaults backfill all existing tournaments as 'perfect' with a
+// NULL schedule, i.e. exactly the historical true-DD robots on every board.
 if (!tournamentColumns.has('difficulty')) {
-  db.exec(`ALTER TABLE tournaments ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'expert'`);
+  db.exec(`ALTER TABLE tournaments ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'perfect'`);
+}
+if (!tournamentColumns.has('board_difficulties')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN board_difficulties TEXT`);
 }
 
 export interface UserRow {
@@ -106,8 +115,8 @@ export interface UserRow {
   picture: string | null;
   handle: string | null;
   handle_key: string | null;
-  /** robot difficulty preference — drives placement (see tournaments.difficulty) */
-  difficulty: Difficulty;
+  /** robot difficulty preference — drives placement (see tournaments.difficulty); never 'perfect' */
+  difficulty: SettableDifficulty;
   elo: number;
   created_at: number;
 }
@@ -119,8 +128,10 @@ export interface TournamentRow {
   seed: string;
   /** 'standard' = real play; 'exhibit' = demo-mode scenario holder, excluded from placement/rating/lobby/stats */
   kind: 'standard' | 'exhibit';
-  /** robot card-play tier for every board of this tournament ('expert' = historical true-DD) */
+  /** placement-tier label ('perfect' = legacy true-DD); per-board truth via boardDifficulty() */
   difficulty: Difficulty;
+  /** JSON Difficulty[4], one entry per board; NULL = uniform at `difficulty` */
+  board_difficulties: string | null;
   created_at: number;
 }
 

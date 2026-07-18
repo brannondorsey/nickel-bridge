@@ -38,11 +38,15 @@ function addUser(name: string): number {
 }
 
 function addTournament(name: string, createdAt: number): number {
+  // Stamp 'expert' explicitly: these are placement candidates for the
+  // placeUser(…, 'expert', …) calls below, and the schema default is the
+  // legacy 'perfect' tier, which the difficulty filter would exclude.
   return (
-    db.prepare(`INSERT INTO tournaments (name, seed, created_at) VALUES (?, 'seed', ?) RETURNING id`).get(
-      name,
-      createdAt,
-    ) as { id: number }
+    db
+      .prepare(
+        `INSERT INTO tournaments (name, seed, difficulty, created_at) VALUES (?, 'seed', 'expert', ?) RETURNING id`,
+      )
+      .get(name, createdAt) as { id: number }
   ).id;
 }
 

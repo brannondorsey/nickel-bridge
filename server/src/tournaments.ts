@@ -3,6 +3,24 @@ import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
 
+/**
+ * The effective robot difficulty of one board — difficulty is a PER-BOARD
+ * property (the duplicate-fairness unit is the board, so every player on
+ * (tournament, boardNo) gets this same value). `board_difficulties` is a JSON
+ * Difficulty[BOARDS_PER_TOURNAMENT]; NULL means uniform at the tournament's
+ * tier label, which is also how legacy rows resolve to 'perfect' everywhere.
+ * Today placeUser stamps uniform schedules; ramps/mixed schedules are a data
+ * change, not a code change.
+ */
+export function boardDifficulty(t: TournamentRow, boardNo: number): Difficulty {
+  if (t.board_difficulties) {
+    const schedule = JSON.parse(t.board_difficulties) as Difficulty[];
+    const d = schedule[boardNo - 1];
+    if (d) return d;
+  }
+  return t.difficulty;
+}
+
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
 const stmtDoneBoards = db.prepare(
   `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
@@ -47,7 +65,7 @@ const stmtCandidates = db.prepare(
    GROUP BY t.id`,
 );
 const stmtCreateTournament = db.prepare(
-  `INSERT INTO tournaments (name, seed, difficulty) VALUES (?, ?, ?) RETURNING *`,
+  `INSERT INTO tournaments (name, seed, difficulty, board_difficulties) VALUES (?, ?, ?, ?) RETURNING *`,
 );
 const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtMyBoardCount = db.prepare(
@@ -268,7 +286,13 @@ export function placeUser(
     t = chooseTournament(candidates, nowSec, rng) ?? undefined;
   }
   if (!t) {
-    t = stmtCreateTournament.get('Tournament', randomBytes(16).toString('hex'), difficulty) as TournamentRow;
+    const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill(difficulty));
+    t = stmtCreateTournament.get(
+      'Tournament',
+      randomBytes(16).toString('hex'),
+      difficulty,
+      schedule,
+    ) as TournamentRow;
     stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
     t.name = `Tournament #${t.id}`;
   }

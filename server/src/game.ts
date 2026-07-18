@@ -34,7 +34,7 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
-import { recomputeElo } from './tournaments.js';
+import { boardDifficulty, recomputeElo } from './tournaments.js';
 
 const HUMAN_SEAT: Seat = 2; // South
 export { BOARDS_PER_TOURNAMENT };
@@ -198,25 +198,30 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
 }
 
 /**
- * The robot's card at a non-forced, non-claim node. 'expert' is byte-for-byte
- * the historical path: pickFromSolve on the true-deal solve advanceRobots
- * already ran for the claim gate. Below expert, the card comes from sampled
- * double-dummy play (packages/ai/play-mc.ts) — a pure function of public
- * state + tournament seed, so every player on this board still faces the
- * identical robot (invariant 1); only the tier's K constants set its skill.
- * Robot North exists only as the human's defensive partner (humanControls
- * gives the human every N-S hand when N-S declares), so actor seat 0 gets
- * kPartner; robot E-W — declaring, controlling their dummy, or defending —
- * get kOpp.
+ * The robot's card at a non-forced, non-claim node. Difficulty is resolved
+ * PER BOARD (boardDifficulty): 'perfect' — the legacy value every
+ * pre-difficulty tournament resolves to — is byte-for-byte the historical
+ * path, pickFromSolve on the true-deal solve advanceRobots already ran for
+ * the claim gate. The player-facing tiers use sampled double-dummy play
+ * (packages/ai/play-mc.ts) — a pure function of public state + tournament
+ * seed, so every player on this board still faces the identical robot
+ * (invariant 1); the tier sets K and whether OPPONENTS may infer from the
+ * auction (beginner is auction-blind). Robot North exists only as the
+ * human's defensive partner (humanControls gives the human every N-S hand
+ * when N-S declares), so actor seat 0 gets kPartner and is always
+ * auction-aware; robot E-W — declaring, controlling their dummy, or
+ * defending — get the tier's kOpp/auctionAware.
  */
 async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSolve): Promise<Card> {
-  const difficulty = b.tournament.difficulty;
-  if (difficulty === 'expert') return pickFromSolve(legal, solve);
+  const difficulty = boardDifficulty(b.tournament, b.row.board_no);
+  if (difficulty === 'perfect') return pickFromSolve(legal, solve);
   const dummy = partnerOf(b.contract!.declarer);
   const actor = ps.handToPlay === dummy ? b.contract!.declarer : ps.handToPlay;
-  const { kOpp, kPartner } = MC_SAMPLES[difficulty];
+  const isPartner = actor === 0;
+  const tier = MC_SAMPLES[difficulty];
   return chooseCardSampled(b.deal, b.contract!, b.plays, {
-    k: actor === 0 ? kPartner : kOpp,
+    k: isPartner ? tier.kPartner : tier.kOpp,
+    useAuction: isPartner ? true : tier.auctionAware,
     seed: mcDecisionSeed(b.tournament.seed, b.row.board_no, b.plays.length),
     dealer: b.deal.dealer,
     calls: b.calls,
@@ -304,7 +309,7 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
   const view: Record<string, unknown> = {
     tournamentId: t.id,
     tournamentName: t.name,
-    difficulty: t.difficulty,
+    difficulty: boardDifficulty(t, b.row.board_no),
     boardNo: b.row.board_no,
     totalBoards: BOARDS_PER_TOURNAMENT,
     state: b.row.state,

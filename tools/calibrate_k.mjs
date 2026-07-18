@@ -21,7 +21,10 @@
  * promoting non-expert play, or accept the beta caveat.
  *
  * Usage (from repo root, after npm run build):
- *   node tools/calibrate_k.mjs [--seed cal-1] [--boards 40] [--k 4,8,16,32,64] [--json out.json]
+ *   node tools/calibrate_k.mjs [--seed cal-1] [--boards 40] [--k 4,8,16,32,64] [--json out.json] [--blind]
+ *
+ * --blind runs sampled actors with useAuction: false (no SAYC constraints on
+ * hidden hands, voids only) — the beginner tier's auction-blind configuration.
  */
 import { writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
@@ -39,6 +42,7 @@ const SEED = opt('seed', 'cal-1');
 const BOARDS = Number(opt('boards', '40'));
 const K_GRID = opt('k', '4,8,16,32,64').split(',').map(Number);
 const JSON_OUT = opt('json', null);
+const BLIND = args.includes('--blind');
 
 const bidder = new ai.Bidder(ai.loadPolicyModel('sl'));
 
@@ -74,6 +78,7 @@ async function playOut(deal, contract, calls, sampledSide, k, timings) {
     plays.push(
       await ai.chooseCardSampled(deal, contract, plays, {
         k,
+        useAuction: !BLIND,
         seed: ai.mcDecisionSeed(`${SEED}#cal`, 0, plays.length),
         dealer: deal.dealer,
         calls,
@@ -143,7 +148,9 @@ for (const k of K_GRID) {
 }
 
 // ---- report --------------------------------------------------------------
-console.log(`\n${boards.length} boards, seed '${SEED}' — tricks conceded per board vs true-DD reference`);
+console.log(
+  `\n${boards.length} boards, seed '${SEED}'${BLIND ? ' [BLIND: no auction constraints]' : ''} — tricks conceded per board vs true-DD reference`,
+);
 console.log(`(defense = sampled robots defending a DD declarer; declarer = sampled robot declaring vs DD defense)`);
 console.log(
   `\n   K | def mean  def max | decl mean  decl max | |ΔNS score| | partner(≥${partnerFloor}) | ms/decision t1 / all / max`,

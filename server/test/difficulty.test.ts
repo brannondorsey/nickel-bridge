@@ -16,20 +16,21 @@ beforeAll(async () => {
 });
 
 describe('difficulty defaults and preference endpoint', () => {
-  it('a bare tournament insert and a fresh user both default to expert', async () => {
+  it('a bare tournament insert defaults to legacy perfect; a fresh user to intermediate', async () => {
     const { db } = await import('../src/db.js');
     const t = db
       .prepare(`INSERT INTO tournaments (name, seed) VALUES ('legacy', 'legacy-seed') RETURNING *`)
       .get() as any;
-    expect(t.difficulty).toBe('expert');
+    expect(t.difficulty).toBe('perfect');
+    expect(t.board_difficulties).toBeNull();
 
     const alice = new TestClient(app, 'DefaultAlice');
     await alice.login();
     const me = await alice.get('/api/me');
-    expect(me.user.difficulty).toBe('expert');
+    expect(me.user.difficulty).toBe('intermediate');
   });
 
-  it('POST /api/me/difficulty updates the preference; bad values 400', async () => {
+  it('POST /api/me/difficulty updates the preference; bad and hidden values 400', async () => {
     const bob = new TestClient(app, 'PrefBob');
     await bob.login();
     const res = await bob.post('/api/me/difficulty', { difficulty: 'beginner' });
@@ -38,6 +39,9 @@ describe('difficulty defaults and preference endpoint', () => {
 
     const bad = await bob.raw('POST', '/api/me/difficulty', { difficulty: 'impossible' });
     expect(bad.statusCode).toBe(400);
+    // 'perfect' is the internal legacy tier — never player-selectable
+    const hidden = await bob.raw('POST', '/api/me/difficulty', { difficulty: 'perfect' });
+    expect(hidden.statusCode).toBe(400);
   });
 });
 
@@ -54,6 +58,7 @@ describe('difficulty-matched placement', () => {
     // tournament, grace window notwithstanding.
     const exp1 = new TestClient(app, 'ExpOne');
     await exp1.login();
+    await exp1.post('/api/me/difficulty', { difficulty: 'expert' });
     const expPlaced = await exp1.post('/api/play');
     expect(expPlaced.tournamentId).not.toBe(placed.tournamentId);
     const t2 = await exp1.get(`/api/tournaments/${expPlaced.tournamentId}`);
@@ -67,13 +72,33 @@ describe('difficulty-matched placement', () => {
     expect(joined.tournamentId).toBe(placed.tournamentId);
   });
 
-  it('boardView carries the tournament difficulty', async () => {
+  it('boardView carries the per-board difficulty, and a uniform schedule is stamped at creation', async () => {
     const carol = new TestClient(app, 'ViewCarol');
     await carol.login();
-    await carol.post('/api/me/difficulty', { difficulty: 'intermediate' });
+    await carol.post('/api/me/difficulty', { difficulty: 'expert' });
     const placed = await carol.post('/api/play');
     const view = await carol.get(`/api/tournaments/${placed.tournamentId}/boards/1`);
-    expect(view.difficulty).toBe('intermediate');
+    expect(view.difficulty).toBe('expert');
+    const { db } = await import('../src/db.js');
+    const row = db.prepare(`SELECT * FROM tournaments WHERE id = ?`).get(placed.tournamentId) as any;
+    expect(JSON.parse(row.board_difficulties)).toEqual(['expert', 'expert', 'expert', 'expert']);
+  });
+
+  it('difficulty is a per-board property: a mixed schedule resolves per board', async () => {
+    const { db } = await import('../src/db.js');
+    const t = db
+      .prepare(
+        `INSERT INTO tournaments (name, seed, difficulty, board_difficulties)
+         VALUES ('mixed', 'mixed-seed', 'expert', ?) RETURNING *`,
+      )
+      .get(JSON.stringify(['beginner', 'intermediate', 'expert', 'perfect'])) as any;
+    const dana = new TestClient(app, 'MixedDana');
+    await dana.login();
+    const views = [];
+    for (let no = 1; no <= 4; no++) views.push(await dana.get(`/api/tournaments/${t.id}/boards/${no}`));
+    expect(views.map((v) => v.difficulty)).toEqual(['beginner', 'intermediate', 'expert', 'perfect']);
+    const detail = await dana.get(`/api/tournaments/${t.id}`);
+    expect(detail.boardDifficulties).toEqual(['beginner', 'intermediate', 'expert', 'perfect']);
   });
 });
 

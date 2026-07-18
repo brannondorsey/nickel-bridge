@@ -381,6 +381,12 @@ export interface SampledChooseOpts {
   dealer: Seat;
   /** the completed auction, for hand constraints on hidden seats */
   calls: Call[];
+  /**
+   * When false, sampling ignores the auction entirely (no SAYC constraints
+   * on hidden hands — only shown-out voids bind): the beginner tier's
+   * "doesn't count HCP from the bidding" blindness. Default true.
+   */
+  useAuction?: boolean;
 }
 
 /**
@@ -400,7 +406,8 @@ export async function chooseCardSampled(
   if (legal.length === 1) return legal[0]; // forced — free at every difficulty, no rng consumed
 
   const know = deriveKnowledge(deal, contract, plays, opts.dealer, opts.calls);
-  const constraints = hoistAuctionConstraints(opts.dealer, opts.calls);
+  const constraints =
+    opts.useAuction === false ? [[], [], [], []] : hoistAuctionConstraints(opts.dealer, opts.calls);
   const rng = seededRng(opts.seed);
   const layouts = sampleLayouts(know, constraints, Math.max(1, Math.floor(opts.k)), rng);
 

@@ -11,6 +11,7 @@ import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { playerStats } from './stats.js';
 import {
+  boardDifficulty,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
@@ -70,6 +71,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       id: t.id,
       name: t.name,
       difficulty: t.difficulty,
+      boardDifficulties: myBoards.map((b) => boardDifficulty(t, b.no)),
       createdAt: t.created_at,
       myDone: myBoards.filter((b) => b.state === 'done').length,
       myEloDelta: myEloDelta(t.id, user.id),

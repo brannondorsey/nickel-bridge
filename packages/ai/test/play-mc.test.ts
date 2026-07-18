@@ -232,6 +232,25 @@ describe('chooseCardSampled', () => {
     expect(deal.hands[3]).toContain(c);
   });
 
+  it('useAuction: false ignores auction constraints entirely (voids still bind)', async () => {
+    // The all-honors pool from the ladder test: with auction awareness, level
+    // 0 can never satisfy the pass constraint and the ladder must grind
+    // through its budgets. Blind mode never consults constraints at all — it
+    // must return a legal card deterministically, and repeat runs agree.
+    const d = microDeal(
+      [card(SPADE, 'A'), card(SPADE, 'K'), card(SPADE, 'Q')],
+      [card(HEART, 'A'), card(HEART, 'K'), card(HEART, 'Q')],
+      [card(2, 'A'), card(2, 'K'), card(2, 'Q')],
+      [card(SPADE, '2'), card(SPADE, '3'), card(SPADE, '4')],
+    );
+    // An auction whose hoisted constraints WOULD bind (opening-seat passes).
+    const blindOpts = { ...opts, useAuction: false, seed: 'blind-1' };
+    const a = await chooseCardSampled(d, contract, [], blindOpts);
+    const b = await chooseCardSampled(d, contract, [], { ...blindOpts });
+    expect(a).toBe(b);
+    expect(d.hands[3]).toContain(a); // West on lead — legal card from the true hand
+  });
+
   it('equals true-DD chooseCard when the position is fully inferable', async () => {
     // Three-card version of the void-determined endgame: after trick 1, W
     // still holds two cards (a real choice), and E's spade void pins every

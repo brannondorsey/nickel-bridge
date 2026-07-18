@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { DIFFICULTIES, type Difficulty } from '@bridge/ai';
+import { DIFFICULTIES, type SettableDifficulty } from '@bridge/ai';
 import { db, UserRow } from './db.js';
 import { validateHandle } from './handle.js';
 
@@ -181,7 +181,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const user = requireUser(req, reply);
     if (!user) return;
     const { difficulty } = (req.body ?? {}) as { difficulty?: string };
-    if (!DIFFICULTIES.includes(difficulty as Difficulty)) {
+    if (!DIFFICULTIES.includes(difficulty as SettableDifficulty)) {
       return reply.code(400).send({ error: 'bad difficulty' });
     }
     stmtSetDifficulty.run(difficulty, user.id);
