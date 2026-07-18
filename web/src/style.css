@@ -1110,6 +1110,13 @@ a.ds-btn-secondary:hover {
   max-height: 216px;
   overflow-y: auto;
 }
+/* Bidding: pin the scroll frame to a constant height so the table doesn't sink
+   as each round adds a row — the bid box beneath it must hold its place between
+   turns. Holds ~3 rounds before scrolling (autoscrolled to the newest row);
+   play omits .auction-stable and keeps the growing frame. */
+.auction-stable .auction-scroll {
+  height: 104px;
+}
 .auction table {
   width: 100%;
   border-collapse: collapse;
@@ -1284,6 +1291,17 @@ a.ds-btn-secondary:hover {
 }
 .confirm-row {
   margin-top: 12px;
+}
+
+/* ---- bid lane ---- the meaning/grade feedback, moved BELOW the bid box so its
+   height changes grow downward into empty space instead of shoving the controls
+   above it (see BiddingPhase). Children keep their own margins; the lane only
+   groups them and holds a little breathing room at the page's foot. */
+.bid-lane {
+  padding-bottom: 4px;
+}
+.bid-lane .board-hint {
+  padding-top: 2px;
 }
 
 /* ---- GradeToast ---- */

@@ -330,7 +330,7 @@ export default function Board() {
           board={board}
           lastEval={lastEval}
           selectedCall={selectedCall}
-          onSelectCall={(c) => setSelectedCall(selectedCall === c ? null : c)}
+          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}
@@ -402,17 +402,37 @@ function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
 }) {
   const meanings = board.legalCallMeanings ?? {};
+  // Everything that changes height — the selected call's meaning, the grade of
+  // your last bid — lives in a lane BELOW the bid table, so it can only grow
+  // into empty space instead of shoving the controls your thumb is on. Before
+  // you bid the lane previews the selected call (and signposts tap-again-to-bid,
+  // the same gesture card play uses); after, it shows the grade of your bid.
+  const lane = board.myTurn ? (
+    selectedCall !== null ? (
+      <>
+        <div className="board-hint">
+          <CallText call={selectedCall} /> selected — tap again to bid
+        </div>
+        <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
+      </>
+    ) : lastEval ? (
+      <GradeToast evaluation={lastEval} />
+    ) : (
+      <MeaningPanel placeholder />
+    )
+  ) : lastEval ? (
+    <GradeToast evaluation={lastEval} />
+  ) : null;
+
   return (
     <>
-      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
-      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
-      {board.myTurn ? (
-        selectedCall !== null ? (
-          <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
-        ) : (
-          <MeaningPanel placeholder />
-        )
-      ) : null}
+      <AuctionGrid
+        auction={board.auction}
+        dealer={board.dealer}
+        myTurn={Boolean(board.myTurn)}
+        onInspect={onInspect}
+        stableHeight
+      />
       <div className="board-fan">
         <HandFan cards={displaySort(board.hand)} />
       </div>
@@ -428,6 +448,7 @@ function BiddingPhase({
       ) : (
         <div className="notice">Robots are thinking…</div>
       )}
+      {lane ? <div className="bid-lane">{lane}</div> : null}
     </>
   );
 }

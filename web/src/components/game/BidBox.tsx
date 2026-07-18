@@ -6,9 +6,11 @@ import { CallText } from './CallText';
  * The 38-call bid box. Levels 1–4 (20 targets) show by default; levels 5–7
  * live behind an in-place fold so the auction stays on screen. The fold
  * auto-expands when every legal leveled bid is above level 4 — otherwise a
- * high auction would show zero enabled bids. Two-step commit: select, then
- * the confirm CTA submits. Class names .bidbox/.bid/.callrow/.confirm-row
- * are selected on by the e2e smoke test.
+ * high auction would show zero enabled bids. Every tap just calls onSelect;
+ * the parent decides select-vs-commit, so a second tap on the already-selected
+ * call bids it (tap-to-bid, mirroring card play) while the confirm CTA remains
+ * an equal path. Class names .bidbox/.bid/.callrow/.confirm-row are selected on
+ * by the e2e smoke test.
  */
 export function BidBox({
   legalCalls,

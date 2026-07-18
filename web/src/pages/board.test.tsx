@@ -72,6 +72,23 @@ describe('Board — bidding', () => {
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
   });
 
+  it('tap-to-bid: a second tap on the selected call submits it, no confirm button needed', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    // first tap selects and previews it — no submit yet
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(screen.getByText(/tap again to bid/)).toBeInTheDocument();
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // second tap on the same call commits, just like tap-again in card play
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
+  });
+
   it('credits a textbook bid and names the robot convention in the toast', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({

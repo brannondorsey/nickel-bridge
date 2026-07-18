@@ -8,17 +8,24 @@ import { CallText } from './CallText';
  * SAYC meaning get the dotted underline; every call is a button that opens
  * the inspector. Long auctions scroll inside the frame (sticky header,
  * autoscrolled to the newest row).
+ *
+ * `stableHeight` fixes the scroll frame to a constant height (bidding only, via
+ * `.auction-stable`): during the auction the table must not sink as each round
+ * adds a row, or the bid box beneath it drifts down between turns. Play leaves
+ * it off so the completed auction can use the full height it has room for.
  */
 export function AuctionGrid({
   auction,
   dealer,
   myTurn,
   onInspect,
+  stableHeight = false,
 }: {
   auction: AuctionEntry[];
   dealer: number;
   myTurn: boolean;
   onInspect: (entry: AuctionEntry) => void;
+  stableHeight?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -45,7 +52,7 @@ export function AuctionGrid({
   const lastRow = rows.length - 1;
 
   return (
-    <div className="auction">
+    <div className={`auction${stableHeight ? ' auction-stable' : ''}`}>
       <div className="auction-inner">
         <div className="auction-scroll" ref={scrollRef}>
           <table>
