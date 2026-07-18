@@ -226,10 +226,13 @@ module-level constants next to the functions that use them. Match that style.
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
 the suit triad, etc.); everything built on those via `var()` — including the semantic
 aliases and the ink-plate components (`FlipDigits`, `HcpBadge`, selected bid buttons,
-`.ds-btn.btn-primary`) — repaints automatically. Two things stay pinned regardless of
-theme: playing-card faces (`--cardface*` tokens — cards are printed paper under a lamp,
-never a dark surface) and the `BridgeMark` glyph/footer (already `var(--verdigris)`,
-lifted to its night value like any other token). Default is `prefers-color-scheme`, no
+`.ds-btn.btn-primary`) — repaints automatically. Playing-card faces are mostly pinned
+regardless of theme (`--cardface-ink`/`-line`/`-suit-*` are hardcoded literals, never
+overridden) except for the paper color itself: `--cardface` is stark daylight white by
+default and warms to a lamplit cream in the night override, the same "printed paper
+under a lamp" idea applied to the card rather than held fixed against it. The
+`BridgeMark` glyph/footer stays fully pinned (already `var(--verdigris)`, lifted to its
+night value like any other token). Default is `prefers-color-scheme`, no
 attribute set; the Stats page's Day/Night/System switch (`theme.ts`, `nb:theme` in
 localStorage) sets `data-theme` explicitly to override it, or clears it for "System". A
 blocking inline script in `web/index.html` applies the persisted choice before first
