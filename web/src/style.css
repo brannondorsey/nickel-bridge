@@ -1971,6 +1971,9 @@ a.board-row:hover {
   background: var(--panel);
   color: var(--ink);
   min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 11px;
