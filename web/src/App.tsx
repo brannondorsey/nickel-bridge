@@ -13,6 +13,7 @@ import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
 import Tournament from './pages/Tournament';
 import { splashOnReturn, stampVisit } from './splash';
+import { applyThemePref, readThemePref } from './theme';
 
 export const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
 export const useMe = () => useContext(MeContext);
@@ -38,6 +39,20 @@ export default function App() {
       .finally(() => setLoaded(true));
   };
   useEffect(refresh, []);
+
+  // The blocking inline script in index.html already set data-theme/theme-color
+  // before first paint; this only keeps <meta name="theme-color"> live for a
+  // 'system' visitor whose OS scheme flips while the tab stays open — the CSS
+  // media query already repaints on its own, no JS needed for that part.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      if (readThemePref() === 'system') applyThemePref('system');
+    };
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
   // Returning-visitor gate: decide from the previous stamp BEFORE writing
   // today's, or the splash would never show again. Demo mode (PR previews)

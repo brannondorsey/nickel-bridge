@@ -49,12 +49,15 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 on PR previews + the permanent demo app — see "Demo mode" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
-                pages/ (Board.tsx is the gameplay UI; sign-out lives on the Stats page;
-                Scenarios.tsx is the demo-mode gallery),
+                theme.ts (nb:theme night-mode preference — see "Night mode" below),
+                pages/ (Board.tsx is the gameplay UI; sign-out AND the night-mode switch
+                live on the Stats page; Scenarios.tsx is the demo-mode gallery),
                 components/ds/ (design-system pieces) + components/game/ (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown),
                 src/test/ (fixtures + apiMock pattern),
-                style.css (all styling — token blocks ported from the design prototype)
+                style.css (all styling — token blocks ported from the design prototype;
+                [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
+                the night token overrides)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
@@ -218,6 +221,22 @@ the human plays the North hand — see `humanControls` and the `flipped` handlin
 
 **better-sqlite3 is synchronous:** DB calls are not awaited; prepared statements live as
 module-level constants next to the functions that use them. Match that style.
+
+**Night mode is a token swap, not per-component dark styles.** `[data-theme="night"]` on
+`<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
+the suit triad, etc.); everything built on those via `var()` — including the semantic
+aliases and the ink-plate components (`FlipDigits`, `HcpBadge`, selected bid buttons,
+`.ds-btn.btn-primary`) — repaints automatically. Two things stay pinned regardless of
+theme: playing-card faces (`--cardface*` tokens — cards are printed paper under a lamp,
+never a dark surface) and the `BridgeMark` glyph/footer (already `var(--verdigris)`,
+lifted to its night value like any other token). Default is `prefers-color-scheme`, no
+attribute set; the Stats page's Day/Night/System switch (`theme.ts`, `nb:theme` in
+localStorage) sets `data-theme` explicitly to override it, or clears it for "System". A
+blocking inline script in `web/index.html` applies the persisted choice before first
+paint — keep it in sync with `theme.ts` by hand, since it has to run before the module
+graph loads. The `@media (prefers-color-scheme: dark)` copy of the night token block is
+scoped to `:not([data-theme])` so it never fights an explicit override — if you add a new
+base token, add it to both the `[data-theme="night"]` block and that media copy.
 
 ## Invariants — do not break
 

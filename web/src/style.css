@@ -52,8 +52,102 @@
   --border-sealed: 1px dashed var(--line-dashed);
   --btn-primary-bg: var(--ink);
   --btn-primary-fg: #ffffff;
+  /* suit glyph colors on the ink plate (bidbox selection, primary CTA) — the plate
+     inverts at night (see [data-theme="night"] below), so these can't just be --suit-*. */
+  --onprimary-suit-s: #ffffff;
+  --onprimary-suit-h: #ff9d94;
+  --onprimary-suit-d: #ffd34d;
+  --onprimary-suit-c: #8fe3a1;
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
   --ticket-shadow: 3px 3px 0 rgba(20, 20, 20, 0.12);
+  /* card-face tokens — pinned, identical in every theme: playing cards are always
+     printed paper under a lamp, never dark-mode surfaces (see PlayingCard usage below). */
+  --cardface: #f6f2e9;
+  --cardface-ink: #141414;
+  --cardface-line: #b9b4a9;
+  --cardface-suit-s: #141414;
+  --cardface-suit-h: #c22f21;
+  --cardface-suit-d: #9e6a00;
+  --cardface-suit-c: #00775a;
+}
+
+/* ---- night theme — token swap only, never per-component dark styles.
+   Everything below is a straight override of the base tokens above; the semantic
+   aliases (--text-body, --border-*, --surface-page, etc.) and the --cardface-* tokens
+   reference them via var() and update automatically. Keep the [data-theme="night"]
+   block and its @media twin below in sync — same values, two activation paths. ---- */
+[data-theme='night'] {
+  --ink: #ece7dc;
+  --paper: #171512;
+  --panel: #1f1c18;
+  --surface: #262220;
+  --surface-line: #3b362f;
+  --line: #35312a;
+  --line-quiet: #2b2823;
+  --line-dashed: #5c564c;
+  --muted: #a29a8d;
+  --verdigris: #8cab84;
+  --chart-track: #2a2621;
+  --suit-s: #ece7dc;
+  --suit-h: #df8069;
+  --suit-d: #c49b52;
+  --suit-c: #55b896;
+  --accent: #df8069;
+  --positive: #55b896;
+  --negative: #df8069;
+  /* the primary plate inverts to a lamplight plate with ink text, so the suit
+     glyphs on it invert too — back to the daytime (cardface) triad. */
+  --btn-primary-bg: #ece7dc;
+  --btn-primary-fg: #171512;
+  --onprimary-suit-s: var(--cardface-suit-s);
+  --onprimary-suit-h: var(--cardface-suit-h);
+  --onprimary-suit-d: var(--cardface-suit-d);
+  --onprimary-suit-c: var(--cardface-suit-c);
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+}
+/* 'system' preference: no data-theme attribute, so the OS setting decides. Scoped to
+   :not([data-theme]) so an explicit Day/Night override (which always sets the
+   attribute — see theme.ts) is never fought by this media query. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ink: #ece7dc;
+    --paper: #171512;
+    --panel: #1f1c18;
+    --surface: #262220;
+    --surface-line: #3b362f;
+    --line: #35312a;
+    --line-quiet: #2b2823;
+    --line-dashed: #5c564c;
+    --muted: #a29a8d;
+    --verdigris: #8cab84;
+    --chart-track: #2a2621;
+    --suit-s: #ece7dc;
+    --suit-h: #df8069;
+    --suit-d: #c49b52;
+    --suit-c: #55b896;
+    --accent: #df8069;
+    --positive: #55b896;
+    --negative: #df8069;
+    --btn-primary-bg: #ece7dc;
+    --btn-primary-fg: #171512;
+    --onprimary-suit-s: var(--cardface-suit-s);
+    --onprimary-suit-h: var(--cardface-suit-h);
+    --onprimary-suit-d: var(--cardface-suit-d);
+    --onprimary-suit-c: var(--cardface-suit-c);
+    --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
+}
+/* light-on-dark serif renders heavier; night-only smoothing, never as a compensating
+   weight drop on body text (Crimson UI text must stay >= 600). */
+[data-theme='night'] body {
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) body {
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
 :root {
@@ -336,6 +430,26 @@ input {
   height: 146px;
   object-fit: cover;
   object-position: bottom;
+}
+/* two static assets (day/night), CSS-swapped by theme — an <img>-loaded SVG can't see
+   the host page's custom properties, so the night ink/verdigris recolor has to ship
+   as its own file rather than react to --ink/--verdigris live. */
+.splash-bridge img.night-scene {
+  display: none;
+}
+[data-theme='night'] .splash-bridge img.day-scene {
+  display: none;
+}
+[data-theme='night'] .splash-bridge img.night-scene {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .splash-bridge img.day-scene {
+    display: none;
+  }
+  html:not([data-theme]) .splash-bridge img.night-scene {
+    display: block;
+  }
 }
 
 @keyframes nbWordIn {
@@ -662,8 +776,8 @@ a.ds-btn-secondary:hover {
   gap: 3px;
 }
 .flipdigit {
-  background: var(--ink);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-family: var(--font-label);
   font-weight: 800;
   display: flex;
@@ -834,8 +948,8 @@ a.ds-btn-secondary:hover {
 /* ---- HcpBadge ---- */
 .hcp-badge {
   display: inline-block;
-  background: var(--ink);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-family: var(--font-label);
   font-weight: 800;
   font-size: 12px;
@@ -865,8 +979,8 @@ a.ds-btn-secondary:hover {
 .pcard {
   width: var(--card-w);
   height: var(--card-h);
-  background: #fff;
-  border: 1px solid var(--line-dashed);
+  background: var(--cardface);
+  border: 1px solid var(--cardface-line);
   border-radius: var(--radius-card);
   box-shadow: var(--card-shadow);
   /* the 3px/5px corner inset of the 66px reference card, scaled with the
@@ -898,23 +1012,23 @@ a.ds-btn-secondary:hover {
   font-size: calc(var(--card-h) * 11 / 66);
 }
 .pcard.selected {
-  border: 2px solid var(--ink);
+  border: 2px solid var(--cardface-ink);
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 }
 .pcard.suit-s {
-  color: var(--suit-s);
+  color: var(--cardface-suit-s);
 }
 .pcard.suit-h {
-  color: var(--suit-h);
+  color: var(--cardface-suit-h);
 }
 .pcard.suit-d {
-  color: var(--suit-d);
+  color: var(--cardface-suit-d);
 }
 .pcard.suit-c {
-  color: var(--suit-c);
+  color: var(--cardface-suit-c);
 }
 /* dim only the glyphs, not the card face — opacity on .pcard itself would
-   make the (opaque, #fff) card background translucent too, letting
+   make the (opaque, --cardface) card background translucent too, letting
    overlapping neighbors show through */
 .pcard.dimmed .rank,
 .pcard.dimmed .suit {
@@ -1112,31 +1226,31 @@ a.ds-btn-secondary:hover {
   opacity: 0.25;
 }
 .bidbox button.bid.selected {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-weight: 800;
 }
-/* suit glyph colors on dark ink backgrounds (bid box selection, primary CTA) —
-   --suit-s is near-black, so it needs an explicit override wherever the
-   background itself goes dark; the other suits are lightened for contrast. */
+/* suit glyph colors on the ink plate (bid box selection, primary CTA) — the plate's
+   background/text tokens invert at night, so these follow --onprimary-suit-* rather
+   than the panel-tuned --suit-* triad (see the token block up top). */
 .bidbox button.bid.selected .suit-s,
 .bidbox button.bid.selected .suit-nt,
 .ds-btn.btn-primary .suit-s,
 .ds-btn.btn-primary .suit-nt {
-  color: #fff;
+  color: var(--onprimary-suit-s);
 }
 .bidbox button.bid.selected .suit-h,
 .ds-btn.btn-primary .suit-h {
-  color: #ff9d94;
+  color: var(--onprimary-suit-h);
 }
 .bidbox button.bid.selected .suit-d,
 .ds-btn.btn-primary .suit-d {
-  color: #ffd34d;
+  color: var(--onprimary-suit-d);
 }
 .bidbox button.bid.selected .suit-c,
 .ds-btn.btn-primary .suit-c {
-  color: #8fe3a1;
+  color: var(--onprimary-suit-c);
 }
 .bidbox-fold {
   display: block;
@@ -1780,6 +1894,9 @@ a.board-row:hover {
 .stats-page .stats-bidding {
   margin: 12px 16px 0;
 }
+.stats-page .stats-appearance {
+  margin: 12px 16px 0;
+}
 .stats-grades {
   display: flex;
   flex-direction: column;
@@ -1841,6 +1958,32 @@ a.board-row:hover {
 
 .stats-footer {
   margin: 20px 16px 0;
+}
+
+/* ---- ThemeSwitch (Stats page) ---- */
+.theme-switch {
+  display: flex;
+  gap: 6px;
+}
+.theme-switch button {
+  flex: 1;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  color: var(--ink);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  border-radius: var(--radius-btn);
+}
+.theme-switch button.active {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
 }
 
 /* ---- Tournament sheet + result ---- */
