@@ -27,13 +27,22 @@
  * floored at PARTNER_FLOOR, so the partner defends at expert-opponent
  * strength on every tier without being semi-omniscient.
  *
- * Calibration (tools/calibrate_k.mjs, tricks conceded per board vs an
- * all-true-DD reference — see the tool for the current sweep):
- *   K=1 ≈ 0.9 defense / 0.8 declarer, K=8 ≈ 0.6 / 0.35, saturating ≈ 0.4 by
- *   K=32 while trick-1 latency grows linearly. Changing these constants
- *   changes robot behavior for future boards of in-flight non-perfect
- *   tournaments (an invariant-1 comparability break scoped to those
- *   tournaments).
+ * Calibration (tools/calibrate_k.mjs, 100 boards seed cal-1, mean tricks
+ * conceded per board vs an all-true-DD reference; blind = --blind):
+ *
+ *   tier          config      defense  declarer  |ΔNS score|  ms/decision (trick 1)
+ *   expert        K=8 aware     0.53     0.38        82           237
+ *   intermediate  K=1 aware     0.89     0.87       116            53
+ *   beginner      K=1 blind     0.97     1.07       128            48
+ *
+ * The ladder is monotone: blindness costs beginner opponents most as
+ * declarer (they can't place honors from the auction) and produces the
+ * occasional big blowup (worst defensive board: 5 tricks). Partner at the
+ * K=8 floor concedes ~0.5-0.6 everywhere. The dial saturates ≈ 0.4 tricks
+ * by K=32 while trick-1 latency grows linearly, so higher K buys nothing.
+ * Changing these constants changes robot behavior for future boards of
+ * in-flight non-perfect tournaments (an invariant-1 comparability break
+ * scoped to those tournaments).
  */
 export type Difficulty = 'beginner' | 'intermediate' | 'expert' | 'perfect';
 
