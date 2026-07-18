@@ -15,7 +15,7 @@ import { PolicyModel } from './model.js';
 export type Grade = 'excellent' | 'good' | 'fair' | 'poor';
 
 export interface BidEvaluation {
-  /** the model's preferred call */
+  /** the SAYC-admissible call the robot would actually make (see `Bidder.chooseCall`) */
   bestCall: Call;
   /** probability the model assigns to the user's call */
   userProb: number;
@@ -78,33 +78,51 @@ export class Bidder {
     return best;
   }
 
+  /** The model's raw argmax over legal calls, constraint or no — its unfiltered judgment. */
+  private static rawBest(probs: Float32Array, mask: boolean[]): Call {
+    let best = 0;
+    for (let a = 1; a < 38; a++) if (mask[a] && probs[a] > probs[best]) best = a;
+    return best;
+  }
+
   /** Deterministic robot call: the model's argmax over SAYC-admissible legal actions. */
   chooseCall(deal: Deal, calls: Call[]): Call {
     const { probs, state, mask } = this.policyFor(deal, calls);
     return this.constrainedBest(deal, calls, probs, state, mask);
   }
 
-  /** Grade a (not yet applied) user call in the current auction. */
+  /**
+   * Grade a (not yet applied) user call in the current auction.
+   *
+   * `bestCall` — what we tell the user "the robot bid" — is the constrained,
+   * SAYC-admissible choice, so the teaching toast can never point at a
+   * violating bid. The grade itself, though, is scored against the model's
+   * raw, unconstrained judgment: a call the network rates highly is a
+   * probabilistically sound bridge decision even when it oversells the hand
+   * by the letter of SAYC, and grading shouldn't punish that just because
+   * our guardrail wouldn't let a robot make the same call. The guardrail
+   * keeps the robots' and the toast's *display* honest; it doesn't reshape
+   * what counts as a good bid.
+   */
   evaluate(deal: Deal, calls: Call[], userCall: Call): BidEvaluation {
     const { probs, state, mask } = this.policyFor(deal, calls);
-    // Grade against the call the robot would actually make, so the "robot
-    // preferred X" teaching toast can never name a SAYC-violating bid.
-    const best = this.constrainedBest(deal, calls, probs, state, mask);
-    let { grade, score } = gradeFromProbs(probs[userCall], probs[best], userCall === best);
+    const bestCall = this.constrainedBest(deal, calls, probs, state, mask);
+    const rawBest = Bidder.rawBest(probs, mask);
+    let { grade, score } = gradeFromProbs(probs[userCall], probs[rawBest], userCall === rawBest);
     // The model backs exactly one call per position, so a textbook-sound
     // alternative can land at ~0% (e.g. a limit raise where the model
     // splinters). If the user's call matches a defined SAYC convention that
     // their hand satisfies, floor the grade at 'good' — 'excellent' stays
-    // reserved for agreeing with the robot's own (SAYC-admissible) choice.
+    // reserved for matching the model's own top choice.
     const consistent = saycConsistent(deal.hands[state.turn], deal.dealer, calls, userCall);
     if (consistent && score < 0.75) {
       grade = 'good';
       score = 0.75;
     }
     return {
-      bestCall: best,
+      bestCall,
       userProb: probs[userCall],
-      bestProb: probs[best],
+      bestProb: probs[bestCall],
       grade,
       score,
       saycConsistent: consistent,

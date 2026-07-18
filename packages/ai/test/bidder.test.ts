@@ -128,11 +128,29 @@ describe('SAYC-constrained robot bidding', () => {
     expect(bidder.chooseCall(deal, calls)).toBe(constrained); // …and chooseCall refuses it
   });
 
-  it('grades against the constrained choice: agreeing with the robot is excellent', () => {
+  it('agreeing with the displayed (constrained) robot choice is excellent', () => {
     const deal = dealBoard('sayc-sweep-0', 5); // the 5-card weak-two hand
     const ev = bidder.evaluate(deal, [], PASS);
     expect(ev.bestCall).toBe(PASS);
     expect(ev.grade).toBe('excellent');
+  });
+
+  it('grades the excluded raw favorite by the model’s own confidence, unpunished by the guardrail', () => {
+    const deal = dealBoard('sayc-sweep-0', 5); // the 5-card weak-two hand
+    const ev = bidder.evaluate(deal, [], b(2, 3)); // 2♠ — the model's true favorite, though the guardrail refuses it
+    expect(ev.bestCall).toBe(PASS); // displayed "robot bid" stays SAYC-honest
+    expect(ev.grade).toBe('excellent'); // but the score reflects real model confidence, not the guardrail
+    expect(ev.score).toBe(1);
+  });
+
+  it('bestProb pairs with the displayed bestCall, independent of the grading denominator', () => {
+    const deal = dealBoard('sayc-sweep-0', 10);
+    const calls = [b(1, 3), PASS, b(2, 0), PASS];
+    const ev = bidder.evaluate(deal, calls, b(4, 1)); // 4♦ jump shift — the raw favorite, a violation
+    expect(ev.bestCall).toBe(b(3, 0)); // the honest raise is what's shown as "the robot's choice"
+    expect(ev.bestProb).toBeLessThan(ev.userProb); // bestProb describes bestCall, not the (higher) grading denominator
+    expect(ev.grade).toBe('excellent'); // yet the score matches the model's real confidence in 4♦
+    expect(ev.score).toBe(1);
   });
 
   it('never bids a call that violates its own SAYC meaning, across whole auctions', () => {
