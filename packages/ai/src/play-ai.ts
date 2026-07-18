@@ -14,6 +14,7 @@ import {
 // Vendored WASM build of Bo Haglund & Soren Hein's DDS (Apache-2.0),
 // from github.com/bookchris/bridge-dds-js with its ESM import path fixed.
 import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
+import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
 
 let ddsInstance: Dds | null = null;
 
@@ -46,16 +47,12 @@ export interface DdSolve {
 }
 
 /**
- * Runs the double-dummy solver once for the current position and scores
- * every legal card. `bestScore` answers the laydown question for *both*
- * sides at once: if it equals the tricks remaining, the side to move can
- * force every remaining trick (a laydown for them); if it's 0, the side to
- * move can force nothing, which — by the same DD guarantee — means the
- * *other* side can force everything (a laydown for the defense).
+ * The DDS SolveBoardPBN input for a position — pure construction, no WASM.
+ * Split out from solveFutureTricks so the same request can be solved on the
+ * main thread or shipped to a worker (plain strings/numbers both ways).
  */
-export async function solveFutureTricks(deal: Deal, contract: Contract, plays: Card[]): Promise<DdSolve> {
+export function buildSolveRequest(deal: Deal, contract: Contract, plays: Card[]): DealPbn {
   const state = playState(deal, contract, plays);
-  const dds = await getDds();
   const leader = state.currentTrick.length > 0 ? state.currentTrick[0].seat : state.handToPlay;
 
   // remainCards: cards still held by all four hands (current-trick cards excluded)
@@ -69,21 +66,21 @@ export async function solveFutureTricks(deal: Deal, contract: Contract, plays: C
     currentTrickRank[i] = ddsRank(p.card);
   });
 
-  const res = dds.SolveBoardPBN(
-    {
-      trump: ddsTrump(contract.strain),
-      first: leader,
-      currentTrickSuit,
-      currentTrickRank,
-      remainCards: pbn,
-    },
-    -1, // target: find the maximum
-    3, // solutions: score all legal cards
-    0,
-  );
+  return {
+    trump: ddsTrump(contract.strain),
+    first: leader,
+    currentTrickSuit,
+    currentTrickRank,
+    remainCards: pbn,
+  };
+}
 
-  // FutureTricks.score[i] = tricks the side to move can take if card i is led/played.
-  // `equals` is a bitmask of lower equivalent cards subsumed by entry i.
+/**
+ * FutureTricks → DdSolve. FutureTricks.score[i] = tricks the side to move can
+ * take if card i is led/played; `equals` is a bitmask of lower equivalent
+ * cards subsumed by entry i. Pure, so worker replies can be parsed anywhere.
+ */
+export function futureTricksToDdSolve(res: FutureTricks): DdSolve {
   let bestScore = -1;
   const cardScores = new Map<Card, number>();
   for (let i = 0; i < res.cards; i++) {
@@ -93,6 +90,29 @@ export async function solveFutureTricks(deal: Deal, contract: Contract, plays: C
     if (res.score[i] > bestScore) bestScore = res.score[i];
   }
   return { cardScores, bestScore };
+}
+
+/** Solve an arbitrary prebuilt request on the shared main-thread DDS instance. */
+export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
+  const dds = await getDds();
+  return dds.SolveBoardPBN(
+    req,
+    -1, // target: find the maximum
+    3, // solutions: score all legal cards
+    0,
+  );
+}
+
+/**
+ * Runs the double-dummy solver once for the current position and scores
+ * every legal card. `bestScore` answers the laydown question for *both*
+ * sides at once: if it equals the tricks remaining, the side to move can
+ * force every remaining trick (a laydown for them); if it's 0, the side to
+ * move can force nothing, which — by the same DD guarantee — means the
+ * *other* side can force everything (a laydown for the defense).
+ */
+export async function solveFutureTricks(deal: Deal, contract: Contract, plays: Card[]): Promise<DdSolve> {
+  return futureTricksToDdSolve(await solveRequest(buildSolveRequest(deal, contract, plays)));
 }
 
 /**
