@@ -18,11 +18,14 @@ interface SolveMessage {
 if (!parentPort) throw new Error('dd-worker must run inside a worker thread');
 const port = parentPort;
 
-let dds: Dds | null = null;
+// Lazy, race-free init: a burst of messages can arrive before the WASM is up,
+// and each handler invocation must await the SAME instantiation.
+let ddsPromise: Promise<Dds> | null = null;
+const getDds = (): Promise<Dds> => (ddsPromise ??= loadDds().then((m) => new Dds(m)));
 
 port.on('message', async (msg: SolveMessage) => {
   try {
-    if (!dds) dds = new Dds(await loadDds());
+    const dds = await getDds();
     const res = dds.SolveBoardPBN(msg.req, -1, 3, 0);
     port.postMessage({ id: msg.id, res });
   } catch (err) {

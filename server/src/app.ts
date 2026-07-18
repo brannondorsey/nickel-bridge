@@ -1,3 +1,4 @@
+import { destroySharedDdPool } from '@bridge/ai';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { FastifyInstance } from 'fastify';
@@ -24,6 +25,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
   await app.register(fastifyCookie);
+
+  // Tear down the sampled-play DDS worker pool (if one ever spawned) so the
+  // process exits promptly on close; a no-op on expert-only instances.
+  app.addHook('onClose', () => destroySharedDdPool());
 
   registerAuthRoutes(app);
   registerDemoRoutes(app); // no-op unless DEMO=1 (preview deployments only)

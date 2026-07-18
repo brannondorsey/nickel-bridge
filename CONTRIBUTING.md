@@ -40,7 +40,12 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
-                play via vendor/bridge-dds WASM)
+                play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
+                for non-expert difficulty tiers: K seeded hidden-hand layouts
+                constrained by the auction's SAYC `req`s + shown-out voids, solved
+                per layout, best aggregate card), difficulty.ts (tier type + K
+                constants), dd-pool.ts/dd-worker.ts (lazy worker_threads DDS pool
+                for parallel sampled solves — latency only, never outcomes)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
@@ -60,7 +65,9 @@ tools           offline Python weight conversion + golden-fixture generation;
                 policy_probe.mjs prints the model's policy for any hand + auction
                 (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`);
                 find_scenarios.mjs records/mines demo-scenario replay recipes (offline —
-                results are hand-curated into server/src/scenarios.ts)
+                results are hand-curated into server/src/scenarios.ts);
+                calibrate_k.mjs sweeps sampled-DD K values against true-DD reference
+                play to pick the difficulty-tier constants in packages/ai/difficulty.ts
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
@@ -157,6 +164,23 @@ each newly-completed trick by its actual winner rather than assuming the whole b
 the claiming side. See invariant 1 below — claims change what `advanceRobots` records for a
 human's untaken decisions, so they interact directly with the robot-trace fixture.
 
+**Robot difficulty (sampled-DD play):** every tournament carries a `difficulty` column
+(`'beginner' | 'intermediate' | 'expert'`, default `'expert'`) stamped at creation from the
+creating user's preference (`users.difficulty`, set via `POST /api/me/difficulty` — backend
+only, no web UI yet) and immutable after. Placement only matches users into tournaments of
+their preferred tier (resume of an already-started tournament is deliberately
+difficulty-blind). At `'expert'`, robot card play is the historical true-deal DD-optimal
+path, byte for byte. Below expert, `robotCard` in `game.ts` routes non-forced robot decisions
+through `chooseCardSampled` (`packages/ai/src/play-mc.ts`): K seeded layouts of the cards the
+acting player can't see — constrained by the auction's machine-checkable SAYC `req`s and by
+shown-out voids, with a deterministic relaxation ladder — each solved double-dummy, best
+aggregate card played. K per tier lives in `MC_SAMPLES` (`difficulty.ts`); robot North (only
+ever the human's defensive partner) uses a floored `kPartner ≥ kOpp`. Claim detection and
+`resolveClaim` stay true-DD at every tier. Sampled solves run through a lazy `worker_threads`
+DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential fallback when unavailable);
+DDS is deterministic, so the pool affects latency only. Nothing here consults env vars —
+difficulty flows from the tournament row.
+
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
 **exactly one machine** — no horizontal scaling. On Fly.io this means every environment
@@ -222,13 +246,20 @@ module-level constants next to the functions that use them. Match that style.
 ## Invariants — do not break
 
 1. **Robot determinism is the fairness invariant of the whole product.** Bidding is model
-   argmax; card play is DD-optimal with a deterministic tie-break; deals derive from the
-   tournament seed. Every player must face identical robots on identical deals or duplicate
-   scoring is meaningless. The trace fixture `server/test/fixtures/robot-trace.json` guards
-   this. If you *deliberately* change robot behavior (model, encoding, tie-breaks, dealing),
+   argmax; card play at `difficulty = 'expert'` is DD-optimal with a deterministic tie-break,
+   and below expert it is sampled-DD (`play-mc.ts`) — fallible by design but still a pure
+   function of (tournament seed, board, public game state, tier K constants); deals derive
+   from the tournament seed. Every player must face identical robots on identical deals or
+   duplicate scoring is meaningless. The trace fixture `server/test/fixtures/robot-trace.json`
+   guards the expert path (every fixture/demo/scenario tournament is expert by default). If
+   you *deliberately* change robot behavior (model, encoding, tie-breaks, dealing),
    regenerate it: `npm run build && node tools/gen_trace_fixture.mjs`. If that diff surprises
    you, you were about to silently break comparability of live tournaments — stop and figure
-   out why. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   out why. Changing the non-expert K constants (`MC_SAMPLES`/`PARTNER_FLOOR` in
+   `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
+   non-expert tournaments: it breaks comparability for in-flight ones, so calibrate
+   (`tools/calibrate_k.mjs`) before real non-expert play exists, or accept the break
+   knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

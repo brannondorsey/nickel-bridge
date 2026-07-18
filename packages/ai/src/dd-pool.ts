@@ -110,3 +110,18 @@ export function getSharedDdPool(): DdPool | null {
   }
   return shared;
 }
+
+/**
+ * Tear down the shared pool if one was ever created (a no-op otherwise —
+ * this never spawns). unref() keeps an idle pool from holding a process
+ * open in most paths, but explicit teardown is the reliable way to let
+ * long-lived processes (the server on shutdown, offline tools at the end
+ * of a run) exit promptly.
+ */
+export async function destroySharedDdPool(): Promise<void> {
+  if (shared) {
+    const pool = shared;
+    shared = undefined;
+    await pool.destroy();
+  }
+}
