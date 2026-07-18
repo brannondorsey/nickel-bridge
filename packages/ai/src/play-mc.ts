@@ -16,6 +16,7 @@ import {
   satisfiesConstraint,
   seededRng,
 } from '@bridge/core';
+import { getSharedDdPool } from './dd-pool.js';
 import { DdSolve, buildSolveRequest, futureTricksToDdSolve, pickFromSolve, solveRequest } from './play-ai.js';
 
 /**
@@ -407,9 +408,24 @@ export async function chooseCardSampled(
   // layouts concurrently (worker pool) cannot change the result. Every legal
   // card belongs to the actor-visible hand on play, which every layout fixes
   // to its true cards, so DDS scores the full legal set in each solve.
+  // Solves go through the worker pool when available (parallel across
+  // threads, each with its own WASM instance); otherwise — or if the pool
+  // degrades mid-flight — through the main-thread instance. DDS is
+  // deterministic, so where a solve runs can never change the chosen card.
   const totals = new Map<Card, number>();
   const solves = await Promise.all(
-    layouts.map(async (layout) => futureTricksToDdSolve(await solveRequest(buildSolveRequest(layout.deal, contract, plays)))),
+    layouts.map(async (layout) => {
+      const req = buildSolveRequest(layout.deal, contract, plays);
+      const pool = getSharedDdPool();
+      if (pool) {
+        try {
+          return futureTricksToDdSolve(await pool.solve(req));
+        } catch {
+          // degraded pool — fall through to the main-thread solve
+        }
+      }
+      return futureTricksToDdSolve(await solveRequest(req));
+    }),
   );
   layouts.forEach((layout, i) => {
     const solve: DdSolve = solves[i];
