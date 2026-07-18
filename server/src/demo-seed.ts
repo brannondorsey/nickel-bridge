@@ -75,8 +75,13 @@ const DEFAULT_PROFILE: SeedProfile = {
 const USER_AGE_S = 40 * 86400;
 
 const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = ?`);
+// Ambient tournaments participate in placement, so they must match the tier
+// new visitors actually have — the 'intermediate' default preference — or the
+// demo Inspector would never be placed into the seeded field. (NULL schedule
+// = uniform intermediate on every board. Exhibits are separate and keep the
+// 'perfect' default, which is what their replay recipes were mined against.)
 const stmtInsertBackdated = db.prepare(
-  `INSERT INTO tournaments (name, seed, created_at) VALUES ('Tournament', ?, ?) RETURNING *`,
+  `INSERT INTO tournaments (name, seed, difficulty, created_at) VALUES ('Tournament', ?, 'intermediate', ?) RETURNING *`,
 );
 const stmtRename = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtBoardExists = db.prepare(

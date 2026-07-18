@@ -1,6 +1,25 @@
 import { randomBytes } from 'node:crypto';
+import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
+
+/**
+ * The effective robot difficulty of one board — difficulty is a PER-BOARD
+ * property (the duplicate-fairness unit is the board, so every player on
+ * (tournament, boardNo) gets this same value). `board_difficulties` is a JSON
+ * Difficulty[BOARDS_PER_TOURNAMENT]; NULL means uniform at the tournament's
+ * tier label, which is also how legacy rows resolve to 'perfect' everywhere.
+ * Today placeUser stamps uniform schedules; ramps/mixed schedules are a data
+ * change, not a code change.
+ */
+export function boardDifficulty(t: TournamentRow, boardNo: number): Difficulty {
+  if (t.board_difficulties) {
+    const schedule = JSON.parse(t.board_difficulties) as Difficulty[];
+    const d = schedule[boardNo - 1];
+    if (d) return d;
+  }
+  return t.difficulty;
+}
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
 const stmtDoneBoards = db.prepare(
@@ -28,6 +47,11 @@ const stmtMyUnfinished = db.prepare(
 // Tournaments older than the window are "archived": never candidates, but the
 // resume tier below is window-free and boards create lazily on GET, so they
 // stay resumable and completable via direct URL.
+// New placement additionally matches the user's robot-difficulty preference —
+// a tournament's difficulty is fixed at creation (invariant 1: identical
+// robots for every player on a board), so joining means accepting its tier.
+// The resume tier above stays difficulty-blind on purpose: switching your
+// preference never orphans a tournament you already started.
 const stmtCandidates = db.prepare(
   `SELECT t.*,
           COUNT(DISTINCT CASE WHEN b.state = 'done' THEN b.user_id END) AS done_players,
@@ -37,9 +61,12 @@ const stmtCandidates = db.prepare(
    WHERE t.created_at > ?
      AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
      AND t.kind = 'standard'
+     AND t.difficulty = ?
    GROUP BY t.id`,
 );
-const stmtCreateTournament = db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, ?) RETURNING *`);
+const stmtCreateTournament = db.prepare(
+  `INSERT INTO tournaments (name, seed, difficulty, board_difficulties) VALUES (?, ?, ?, ?) RETURNING *`,
+);
 const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtMyBoardCount = db.prepare(
   `SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
@@ -244,17 +271,28 @@ export function chooseTournament(
  */
 export function placeUser(
   userId: number,
+  difficulty: Difficulty,
   opts: { nowSec?: number; rng?: () => number } = {},
 ): { tournament: TournamentRow; nextBoard: number } {
   const nowSec = opts.nowSec ?? Math.floor(Date.now() / 1000);
   const rng = opts.rng ?? Math.random;
   let t = stmtMyUnfinished.get(userId, userId, BOARDS_PER_TOURNAMENT) as TournamentRow | undefined;
   if (!t) {
-    const candidates = stmtCandidates.all(nowSec - PLACEMENT.BACKLOG_WINDOW_S, userId) as PlacementCandidate[];
+    const candidates = stmtCandidates.all(
+      nowSec - PLACEMENT.BACKLOG_WINDOW_S,
+      userId,
+      difficulty,
+    ) as PlacementCandidate[];
     t = chooseTournament(candidates, nowSec, rng) ?? undefined;
   }
   if (!t) {
-    t = stmtCreateTournament.get('Tournament', randomBytes(16).toString('hex')) as TournamentRow;
+    const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill(difficulty));
+    t = stmtCreateTournament.get(
+      'Tournament',
+      randomBytes(16).toString('hex'),
+      difficulty,
+      schedule,
+    ) as TournamentRow;
     stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
     t.name = `Tournament #${t.id}`;
   }

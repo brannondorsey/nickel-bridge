@@ -1,8 +1,12 @@
 import {
   BidEvaluation,
   Bidder,
+  DdSolve,
+  MC_SAMPLES,
   chooseCard,
+  chooseCardSampled,
   loadPolicyModel,
+  mcDecisionSeed,
   pickFromSolve,
   solveFutureTricks,
 } from '@bridge/ai';
@@ -25,11 +29,12 @@ import {
   legalCards,
   matchpoints,
   partnerOf,
+  PlayState,
   playState,
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
-import { recomputeElo } from './tournaments.js';
+import { boardDifficulty, recomputeElo } from './tournaments.js';
 
 const HUMAN_SEAT: Seat = 2; // South
 export { BOARDS_PER_TOURNAMENT };
@@ -56,6 +61,8 @@ const stmtBoardResults = db.prepare(
 
 interface GameBoard {
   row: BoardRow;
+  /** the owning tournament — carries the seed and robot difficulty for this board */
+  tournament: TournamentRow;
   deal: Deal;
   calls: Call[];
   plays: Card[];
@@ -77,6 +84,7 @@ export function loadBoard(t: TournamentRow, userId: number, boardNo: number, cre
   }
   return {
     row,
+    tournament: t,
     deal: dealBoard(t.seed, boardNo),
     calls: JSON.parse(row.calls),
     plays: JSON.parse(row.plays),
@@ -174,11 +182,13 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
           continue;
         }
         if (!humanControls(ps.handToPlay, b.contract!)) {
-          b.plays.push(pickFromSolve(legal, solve));
+          b.plays.push(await robotCard(b, ps, legal, solve));
           continue;
         }
         return;
       }
+      // Forced node: chooseCard returns the single legal card without a
+      // solve — identical at every difficulty.
       if (humanControls(ps.handToPlay, b.contract!)) return;
       b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
       continue;
@@ -187,7 +197,44 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
   }
 }
 
-/** Play out every remaining card DD-optimally for both sides once a claim fires. */
+/**
+ * The robot's card at a non-forced, non-claim node. Difficulty is resolved
+ * PER BOARD (boardDifficulty): 'perfect' — the legacy value every
+ * pre-difficulty tournament resolves to — is byte-for-byte the historical
+ * path, pickFromSolve on the true-deal solve advanceRobots already ran for
+ * the claim gate. The player-facing tiers use sampled double-dummy play
+ * (packages/ai/play-mc.ts) — a pure function of public state + tournament
+ * seed, so every player on this board still faces the identical robot
+ * (invariant 1); the tier sets K and whether OPPONENTS may infer from the
+ * auction (beginner is auction-blind). Robot North exists only as the
+ * human's defensive partner (humanControls gives the human every N-S hand
+ * when N-S declares), so actor seat 0 gets kPartner and is always
+ * auction-aware; robot E-W — declaring, controlling their dummy, or
+ * defending — get the tier's kOpp/auctionAware.
+ */
+async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSolve): Promise<Card> {
+  const difficulty = boardDifficulty(b.tournament, b.row.board_no);
+  if (difficulty === 'perfect') return pickFromSolve(legal, solve);
+  const dummy = partnerOf(b.contract!.declarer);
+  const actor = ps.handToPlay === dummy ? b.contract!.declarer : ps.handToPlay;
+  const isPartner = actor === 0;
+  const tier = MC_SAMPLES[difficulty];
+  return chooseCardSampled(b.deal, b.contract!, b.plays, {
+    k: isPartner ? tier.kPartner : tier.kOpp,
+    useAuction: isPartner ? true : tier.auctionAware,
+    seed: mcDecisionSeed(b.tournament.seed, b.row.board_no, b.plays.length),
+    dealer: b.deal.dealer,
+    calls: b.calls,
+  });
+}
+
+/**
+ * Play out every remaining card DD-optimally for both sides once a claim
+ * fires. Deliberately true-DD at every difficulty: a claim only fires on a
+ * position whose outcome is 100% determined double-dummy, and resolving it
+ * with perfect play is what keeps the fast-forwarded score identical to what
+ * continued play would have produced.
+ */
 async function resolveClaim(b: GameBoard): Promise<void> {
   while (!playState(b.deal, b.contract!, b.plays).isOver) {
     b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
@@ -262,6 +309,7 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
   const view: Record<string, unknown> = {
     tournamentId: t.id,
     tournamentName: t.name,
+    difficulty: boardDifficulty(t, b.row.board_no),
     boardNo: b.row.board_no,
     totalBoards: BOARDS_PER_TOURNAMENT,
     state: b.row.state,

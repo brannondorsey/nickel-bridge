@@ -1,3 +1,4 @@
+import { destroySharedDdPool } from '@bridge/ai';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { FastifyInstance } from 'fastify';
@@ -10,6 +11,7 @@ import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { playerStats } from './stats.js';
 import {
+  boardDifficulty,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
@@ -25,6 +27,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(fastifyCookie);
 
+  // Tear down the sampled-play DDS worker pool (if one ever spawned) so the
+  // process exits promptly on close; a no-op on expert-only instances.
+  app.addHook('onClose', () => destroySharedDdPool());
+
   registerAuthRoutes(app);
   registerDemoRoutes(app); // no-op unless DEMO=1 (preview deployments only)
 
@@ -36,7 +42,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.post('/api/play', (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    const { tournament, nextBoard } = placeUser(user.id);
+    const { tournament, nextBoard } = placeUser(user.id, user.difficulty);
     return reply.send({ tournamentId: tournament.id, boardNo: nextBoard });
   });
 
@@ -46,6 +52,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const mine = myTournaments(user.id).map((t) => ({
       id: t.id,
       name: t.name,
+      difficulty: t.difficulty,
       myDone: t.myDone,
       createdAt: t.created_at,
       myLastPlayedAt: t.myLastPlayedAt,
@@ -63,6 +70,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({
       id: t.id,
       name: t.name,
+      difficulty: t.difficulty,
+      boardDifficulties: myBoards.map((b) => boardDifficulty(t, b.no)),
       createdAt: t.created_at,
       myDone: myBoards.filter((b) => b.state === 'done').length,
       myEloDelta: myEloDelta(t.id, user.id),
