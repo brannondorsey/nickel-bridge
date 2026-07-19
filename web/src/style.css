@@ -1317,9 +1317,12 @@ a.ds-btn-secondary:hover {
 }
 /* auction stays at the top; the decision cluster (feedback, hand, seat line) is
    pushed to the bottom of the scroll region so it hugs the dock, with the slack
-   opening up between the auction and the feedback rather than as an empty box. */
+   opening up between the auction and the feedback rather than as an empty box.
+   A little bottom padding keeps the seat line off the dock's edge — so it never
+   looks cramped when the region is scrolled all the way down. */
 .bid-decision {
   margin-top: auto;
+  padding-bottom: var(--space-3);
 }
 .bid-dock {
   flex-shrink: 0;
