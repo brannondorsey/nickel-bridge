@@ -62,3 +62,40 @@ export const MC_SAMPLES: Record<
   intermediate: { kOpp: 1, kPartner: Math.max(1, PARTNER_FLOOR), auctionAware: true },
   expert: { kOpp: 8, kPartner: Math.max(8, PARTNER_FLOOR), auctionAware: true },
 };
+
+/**
+ * Bidding difficulty: unlike card play, robot bidding (bidder.ts) was
+ * historically difficulty-BLIND — every tier bid the model's argmax over
+ * SAYC-admissible calls, so even beginner opponents/partner bid at full
+ * strength. `topN` softens that: instead of always taking the single
+ * highest-probability admissible call, the bidder draws (seeded, so still
+ * duplicate-fair) from the top `topN` admissible calls weighted by the
+ * model's own probabilities. `topN: 1` is mathematically identical to pure
+ * argmax, which is why 'expert' is set to 1 — expert bidding is unchanged
+ * from before this table existed.
+ *
+ * Calibration (tools/calibrate_k.mjs --bid-topn, 60 boards seed cal-2: each
+ * board's auction bid once pure and once noisy at the given topN, both played
+ * out true-DD both sides to isolate bidding noise's own scoring impact from
+ * card-play sampling):
+ *
+ *   topN  contract-changed %  deviations/auction  |ΔNS score| mean
+ *   1            0.0                0.00                0
+ *   2           28.3                0.50               79
+ *   3           33.3                0.58               86
+ *   4           33.3                0.62               87
+ *   5           31.7                0.62               79
+ *
+ * topN=1 is a verified no-op (0% changed — confirms the degenerate-to-argmax
+ * claim above). Like the K dial, this one saturates fast: topN=2 already
+ * captures most of the effect, and topN=3+ barely moves |ΔNS score| beyond
+ * noise. topN: 3/2/1 for beginner/intermediate/expert stacks a meaningful,
+ * independent ~80-90 point swing on top of card-play sampling's own
+ * concession (see the K table above) without over-investing in a saturated
+ * dial.
+ */
+export const BID_NOISE: Record<SettableDifficulty, { topN: number }> = {
+  beginner: { topN: 3 },
+  intermediate: { topN: 2 },
+  expert: { topN: 1 },
+};

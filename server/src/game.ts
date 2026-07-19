@@ -3,6 +3,7 @@ import {
   Bidder,
   DdSolve,
   MC_SAMPLES,
+  bidDecisionSeed,
   chooseCard,
   chooseCardSampled,
   loadPolicyModel,
@@ -154,7 +155,12 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
         continue;
       }
       if (auction.turn === HUMAN_SEAT) return;
-      b.calls.push(bidder.chooseCall(b.deal, b.calls));
+      b.calls.push(
+        bidder.chooseCall(b.deal, b.calls, {
+          difficulty: boardDifficulty(b.tournament, b.row.board_no),
+          seed: bidDecisionSeed(b.tournament.seed, b.row.board_no, b.calls.length),
+        }),
+      );
       continue;
     }
     if (b.row.state === 'playing') {
