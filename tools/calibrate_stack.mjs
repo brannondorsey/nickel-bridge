@@ -11,7 +11,25 @@
  * docs/difficulty-calibration-research.md for the resulting analysis.
  *
  * Usage (from repo root, after npm run build):
- *   node tools/calibrate_stack.mjs [--seed s] [--boards n]
+ *   node tools/calibrate_stack.mjs [--seed s] [--boards n] [--ew-only]
+ *
+ * Default mode weakens ALL FOUR seats to the tier's config and reports
+ * unsigned |ΔNS| — a "how far from a perfect board does this tier typically
+ * land" measurement, useful as a sanity check that degraded tables don't
+ * produce wildly incoherent boards, but NOT a direct measurement of what the
+ * app's difficulty tiers do to a human's experience: production never
+ * weakens North (PARTNER_FLOOR always pins the human's partner at
+ * expert-opponent strength — see difficulty.ts), so a metric that also
+ * randomly degrades N (and S, standing in for the human) mixes in noise from
+ * a seat the real game never touches, and unsigned deltas can't distinguish
+ * "the tier helped NS" from "the tier hurt NS" — both inflate the mean.
+ *
+ * --ew-only instead weakens ONLY East/West (the opponents) — mirroring
+ * PARTNER_FLOOR's asymmetry exactly — and reports SIGNED IMP swing (positive
+ * = NS, i.e. the human's side, gained IMPs because the opponents got
+ * weaker). This is the more direct instrument for "how much easier does this
+ * tier make the game," and is what surfaced the beginner/intermediate gap
+ * discussed in docs/difficulty-calibration-research.md's addendum.
  */
 const core = await import('../packages/core/dist/index.js');
 const ai = await import('../packages/ai/dist/index.js');
@@ -23,7 +41,9 @@ const opt = (name, fallback) => {
 };
 const SEED = opt('seed', 'stack-1');
 const BOARDS = Number(opt('boards', '200'));
+const EW_ONLY = args.includes('--ew-only');
 const bidder = new ai.Bidder(ai.loadPolicyModel('sl'));
+const isEW = (seat) => seat === 1 || seat === 3;
 
 const TIERS = {
   beginner: { topN: 3, k: 1, aware: false },
@@ -37,11 +57,15 @@ function bidPure(deal) {
   return { calls, contract: core.finalContract(deal.dealer, calls) };
 }
 
+/** EW_ONLY: North/South always bid pure; only East/West get the tier's noise. */
 function bidTier(deal, no, tier) {
   const calls = [];
-  while (!core.auctionState(deal.dealer, calls).isOver) {
-    const seed = ai.bidDecisionSeed(`${SEED}#stack`, no, calls.length);
-    calls.push(bidder.chooseCall(deal, calls, { difficulty: tier, seed }));
+  for (;;) {
+    const state = core.auctionState(deal.dealer, calls);
+    if (state.isOver) break;
+    const opts =
+      !EW_ONLY || isEW(state.turn) ? { difficulty: tier, seed: ai.bidDecisionSeed(`${SEED}#stack`, no, calls.length) } : undefined;
+    calls.push(bidder.chooseCall(deal, calls, opts));
   }
   return { calls, contract: core.finalContract(deal.dealer, calls) };
 }
@@ -55,11 +79,20 @@ async function playPure(deal, contract, calls) {
   }
 }
 
+/** EW_ONLY: North/South always play true-DD; only East/West get the tier's sampled play. */
 async function playTier(deal, contract, calls, tierCfg) {
   const plays = [];
   for (;;) {
     const state = core.playState(deal, contract, plays);
     if (state.isOver) return state.declarerTricks;
+    if (EW_ONLY) {
+      const dummy = core.partnerOf(contract.declarer);
+      const actor = state.handToPlay === dummy ? contract.declarer : state.handToPlay;
+      if (!isEW(actor)) {
+        plays.push(await ai.chooseCard(deal, contract, plays));
+        continue;
+      }
+    }
     plays.push(
       await ai.chooseCardSampled(deal, contract, plays, {
         k: tierCfg.k,
@@ -91,6 +124,11 @@ function toImps(diff) {
   for (const [cap, imp] of IMP_TABLE) if (d <= cap) return imp;
   return 24;
 }
+/** Signed IMP-equivalent: positive = NS gained relative to the reference. */
+function toImpsSigned(diff) {
+  const imp = toImps(diff);
+  return diff < 0 ? -imp : imp;
+}
 
 console.error(`preparing ${BOARDS} boards...`);
 const deals = [];
@@ -104,8 +142,16 @@ for (let no = 1; deals.length < BOARDS; no++) {
 }
 console.error(`ready: ${deals.length} contract boards.\n`);
 
-console.log(`\n=== Combined stack: full board (bid+play) at each shipped tier vs. pure/true-DD reference, ${deals.length} boards ===`);
-console.log(`tier         | contract-changed% | ΔNS mean±SE        | ΔNS median | mean IMP-equiv | %boards >=1 IMP`);
+console.log(
+  `\n=== Combined stack: full board (bid+play) at each shipped tier vs. pure/true-DD reference, ${deals.length} boards${
+    EW_ONLY ? ' [EW-ONLY: N/S pinned true-DD, signed IMPs — matches PARTNER_FLOOR]' : ' [all four seats weakened, unsigned]'
+  } ===`,
+);
+if (EW_ONLY) {
+  console.log(`tier         | contract-changed% | signed IMP mean±SE  | IMP median | %boards |imp|>=1`);
+} else {
+  console.log(`tier         | contract-changed% | ΔNS mean±SE        | ΔNS median | mean IMP-equiv | %boards >=1 IMP`);
+}
 for (const [name, cfg] of Object.entries(TIERS)) {
   const deltas = [];
   let changed = 0;
@@ -119,16 +165,28 @@ for (const [name, cfg] of Object.entries(TIERS)) {
     }
     if (JSON.stringify(tContract) !== JSON.stringify(b.contract)) changed++;
     const refScore = core.boardScoreNS(b.contract, b.deal.vul, b.refTricks);
-    deltas.push(Math.abs(score - refScore));
+    deltas.push(EW_ONLY ? score - refScore : Math.abs(score - refScore));
   }
-  const sorted = [...deltas].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const imps = deltas.map(toImps);
-  const pctAtLeast1Imp = (100 * imps.filter((i) => i >= 1).length) / imps.length;
-  console.log(
-    `${name.padEnd(12)} |${fmt((100 * changed) / deals.length, 18, 1)} |${fmt(mean(deltas), 8)}±${fmt(
-      stderr(deltas), 6, 2,
-    )}    |${fmt(median, 11)} |${fmt(mean(imps), 14, 2)} |${fmt(pctAtLeast1Imp, 15, 1)}`,
-  );
+  if (EW_ONLY) {
+    const imps = deltas.map(toImpsSigned);
+    const sorted = [...imps].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const pctAtLeast1Imp = (100 * imps.filter((i) => Math.abs(i) >= 1).length) / imps.length;
+    console.log(
+      `${name.padEnd(12)} |${fmt((100 * changed) / deals.length, 18, 1)} |${fmt(mean(imps), 12, 2)}±${fmt(
+        stderr(imps), 6, 2,
+      )} |${fmt(median, 11)} |${fmt(pctAtLeast1Imp, 15, 1)}`,
+    );
+  } else {
+    const sorted = [...deltas].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const imps = deltas.map(toImps);
+    const pctAtLeast1Imp = (100 * imps.filter((i) => i >= 1).length) / imps.length;
+    console.log(
+      `${name.padEnd(12)} |${fmt((100 * changed) / deals.length, 18, 1)} |${fmt(mean(deltas), 8)}±${fmt(
+        stderr(deltas), 6, 2,
+      )}    |${fmt(median, 11)} |${fmt(mean(imps), 14, 2)} |${fmt(pctAtLeast1Imp, 15, 1)}`,
+    );
+  }
 }
 await ai.destroySharedDdPool();

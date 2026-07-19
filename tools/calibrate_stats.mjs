@@ -12,10 +12,25 @@
  *   node tools/calibrate_stats.mjs kgrid [--seed s] [--boards n] [--k 1,2,4,8] [--blind]
  *   node tools/calibrate_stats.mjs bidtopn [--seed s] [--boards n] [--topn 1,2,3,4,5,6]
  *   node tools/calibrate_stats.mjs forget [--seed s] [--boards n] [--forget-k 1] [--windows 0,1,2,4,8,99]
+ *   node tools/calibrate_stats.mjs playtopn [--seed s] [--boards n] [--play-k 1] [--topn 1,2,3,4,5,6,8]
+ *
+ * `playtopn` is the sweep for play-mc-selectnoise.ts's card-SELECTION-noise
+ * prototype (see that file's doc comment): at a SINGLE decision, raising
+ * topN costs nothing extra (it only re-weights the selection over scores the
+ * K-sample solve already computed) — but this sweep still runs a full,
+ * separate playout per topN value, because once topN changes which card gets
+ * picked at one decision, every downstream decision in that playout faces a
+ * different game state and needs its own fresh solve regardless. The
+ * zero-extra-cost property is real at the mechanism level (and matters for
+ * production latency, where only ONE topN is ever active at a time); it
+ * doesn't make this sweep itself free. `defense`-side only
+ * (sampledSide='defense'), matching the other isolate-one-mechanism sweeps
+ * in this file.
  */
 const core = await import('../packages/core/dist/index.js');
 const ai = await import('../packages/ai/dist/index.js');
 const forget = await import('../packages/ai/dist/play-mc-forget.js');
+const selectnoise = await import('../packages/ai/dist/play-mc-selectnoise.js');
 
 const args = process.argv.slice(2);
 const mode = args[0];
@@ -80,6 +95,32 @@ async function playOutForgetful(deal, contract, calls, sampledSide, k, memoryWin
         dealer: deal.dealer,
         calls,
         memoryWindow,
+      }),
+    );
+  }
+}
+
+async function playOutSelectNoisy(deal, contract, calls, sampledSide, k, playTopN) {
+  const plays = [];
+  for (;;) {
+    const state = core.playState(deal, contract, plays);
+    if (state.isOver) return state.declarerTricks;
+    const dummy = core.partnerOf(contract.declarer);
+    const actor = state.handToPlay === dummy ? contract.declarer : state.handToPlay;
+    const actorDeclares = actor % 2 === contract.declarer % 2;
+    const sampled = sampledSide !== null && (sampledSide === 'declarer' ? actorDeclares : !actorDeclares);
+    if (!sampled) {
+      plays.push(await ai.chooseCard(deal, contract, plays));
+      continue;
+    }
+    plays.push(
+      await selectnoise.chooseCardSampledNoisy(deal, contract, plays, {
+        k,
+        useAuction: true,
+        seed: ai.mcDecisionSeed(`${SEED}#stat-selectnoise`, 0, plays.length),
+        dealer: deal.dealer,
+        calls,
+        playTopN,
       }),
     );
   }
@@ -206,6 +247,37 @@ if (mode === 'forget') {
     }
     console.log(
       `${String(w).padStart(7)} |${fmt(mean(conceded), 6)}±${fmt(stderr(conceded), 5, 3)} ${fmt(pctNonzero(conceded), 6, 1)} |${fmt(
+        mean(scoreD), 6,
+      )}±${fmt(stderr(scoreD), 5, 2)}     |${fmt(mean(paired), 6, 3)} ± ${fmt(stderr(paired), 5, 3)}`,
+    );
+  }
+}
+
+if (mode === 'playtopn') {
+  const TOPN_GRID = opt('topn', '1,2,3,4,5,6,8').split(',').map(Number);
+  const PLAY_K = Number(opt('play-k', '1'));
+  const baseline = [];
+  for (const b of boards) {
+    const t = await playOut(b.deal, b.contract, b.calls, 'defense', PLAY_K, false);
+    baseline.push(t - b.refTricks);
+  }
+  console.log(`\n=== Card-SELECTION-noise sweep: ${boards.length} boards, K=${PLAY_K}, seed '${SEED}' ===`);
+  console.log(`baseline (topN=1, byte-identical to chooseCardSampled): mean±SE ${fmt(mean(baseline), 6)}±${fmt(stderr(baseline), 5, 3)}  %>0 ${fmt(pctNonzero(baseline), 5, 1)}`);
+  console.log(`   topN | mean±SE        %>0   | ΔNS mean±SE     | Δ vs baseline (paired mean diff ± SE)`);
+  for (const topN of TOPN_GRID) {
+    const conceded = [], scoreD = [], paired = [];
+    for (let i = 0; i < boards.length; i++) {
+      const b = boards[i];
+      const t = await playOutSelectNoisy(b.deal, b.contract, b.calls, 'defense', PLAY_K, topN);
+      const delta = t - b.refTricks;
+      conceded.push(delta);
+      paired.push(delta - baseline[i]);
+      scoreD.push(
+        Math.abs(core.boardScoreNS(b.contract, b.deal.vul, t) - core.boardScoreNS(b.contract, b.deal.vul, b.refTricks)),
+      );
+    }
+    console.log(
+      `${String(topN).padStart(7)} |${fmt(mean(conceded), 6)}±${fmt(stderr(conceded), 5, 3)} ${fmt(pctNonzero(conceded), 6, 1)} |${fmt(
         mean(scoreD), 6,
       )}±${fmt(stderr(scoreD), 5, 2)}     |${fmt(mean(paired), 6, 3)} ± ${fmt(stderr(paired), 5, 3)}`,
     );
