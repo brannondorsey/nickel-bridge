@@ -399,9 +399,16 @@ implementing `play-mc-selectnoise.ts` as a real `PLAY_NOISE` dial — analogous 
 structure to `BID_NOISE` — looks like the most promising next step for making beginner/
 intermediate meaningfully different from each other and from expert, more so than further
 tuning of the existing dials (which §3a/§3b already show are saturated). A defensible
-starting point, pending sign-off and the same kind of `calibrate_k.mjs`-style before/after
-validation the other dials got: `PLAY_NOISE = { beginner: 3, intermediate: 2, expert: 1 }`
-— same numeric shape as `BID_NOISE`, past the topN=1→2 knee in both measurements above
-without being deep into the flattest part of either saturation curve. This has **not**
-been wired into any shipped tier — it's an experimental module plus calibration tooling
-only, exactly like `play-mc-forget.ts`'s status, pending a decision on whether to ship it.
+starting point, past the topN=1→2 knee in both measurements above without being deep into
+the flattest part of either saturation curve: `PLAY_NOISE = { beginner: 3, intermediate: 2,
+expert: 1 }` — same numeric shape as `BID_NOISE`.
+
+**Update: implemented.** `PLAY_NOISE` at the values above now ships in
+`packages/ai/src/difficulty.ts`, wired through `chooseCardSampled`'s new `playTopN` option
+(`packages/ai/src/play-mc.ts`) and `server/src/game.ts`'s `robotCard()` — E-W only, never
+robot North's partner seat. `play-mc-selectnoise.ts` (the standalone experimental prototype)
+was deleted; its logic is now the shipped code path directly, following the same
+`topN<=1` ⇒ byte-identical-to-prior-behavior pattern `BID_NOISE` established.
+`tools/calibrate_stats.mjs playtopn` and `tools/calibrate_stack.mjs --ew-only` (see their own
+doc comments) now exercise the real `chooseCardSampled`/`PLAY_NOISE` rather than the
+deleted prototype module. `play-mc-forget.ts` remains unshipped, per 3c's recommendation.

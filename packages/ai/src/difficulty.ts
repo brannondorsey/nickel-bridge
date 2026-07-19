@@ -99,3 +99,51 @@ export const BID_NOISE: Record<SettableDifficulty, { topN: number }> = {
   intermediate: { topN: 2 },
   expert: { topN: 1 },
 };
+
+/**
+ * Card-play SELECTION noise: every other mechanism above (K, auctionAware,
+ * BID_NOISE) only ever corrupts the acting player's BELIEF about the hidden
+ * cards — chooseCardSampled still always plays the single highest-scoring
+ * legal card against whatever it sampled (a pure argmax, see pickFromSolve).
+ * `playTopN` softens that final DECISION instead: draws (same seeded stream
+ * as the rest of the decision, still duplicate-fair) from the top `playTopN`
+ * legal cards weighted by the K-sample's own score, instead of always the
+ * best one — the same idea BID_NOISE already applies to bidding, applied
+ * here to card play. `playTopN: 1` is mathematically identical to the prior
+ * argmax-only behavior, which is why 'expert' is set to 1.
+ *
+ * Research finding (docs/difficulty-calibration-research.md §7c/7d): K is
+ * already floored at 1 for beginner/intermediate and BID_NOISE saturates by
+ * topN≈3-4, but this dial keeps adding real, well-powered effect through at
+ * least topN≈6 — the largest lever found for these tiers — AND, unlike
+ * raising K, costs nothing extra at inference time (it re-weights the same
+ * per-card totals the K-sample solve already computed).
+ *
+ * Calibration (tools/calibrate_stats.mjs playtopn, defense-side only, K=1
+ * auction-aware, 250 boards seed final-pn; tricks conceded vs a true-DD
+ * reference, paired per board against the topN=1 baseline):
+ *
+ *   topN   tricks conceded   paired Δ vs topN=1
+ *   1           0.98               0.012  (confirmed no-op)
+ *   2           1.29               0.328
+ *   3           1.35               0.384
+ *   4           1.42               0.460
+ *   6           1.52               0.556
+ *   8           1.53               0.568
+ *
+ * A second, broader measurement (any East/West seat, declaring or
+ * defending, signed IMP swing vs a pure/true-DD reference — see the doc's
+ * §7c) found continued meaningful gains through topN=3-4 rather than
+ * flattening as early as the table above; the two didn't fully agree on the
+ * exact saturation shape (likely because the second measurement also
+ * captures declarer-seat weakening, the larger of the two roles per the K
+ * table above), so treat the precise optimal topN as uncertain by ±1-2, not
+ * the existence of the effect. topN: 3/2/1 for beginner/intermediate/expert
+ * is past the topN=1→2 knee in both measurements without being deep into
+ * either's flattest region.
+ */
+export const PLAY_NOISE: Record<SettableDifficulty, { topN: number }> = {
+  beginner: { topN: 3 },
+  intermediate: { topN: 2 },
+  expert: { topN: 1 },
+};

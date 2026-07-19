@@ -46,9 +46,14 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
                 for non-expert difficulty tiers: K seeded hidden-hand layouts
                 constrained by the auction's SAYC `req`s + shown-out voids, solved
-                per layout, best aggregate card), difficulty.ts (tier type + K
-                constants), dd-pool.ts/dd-worker.ts (lazy worker_threads DDS pool
-                for parallel sampled solves — latency only, never outcomes)
+                per layout, aggregate scores summed per legal card — then, per
+                PLAY_NOISE, either the flat argmax or a seeded weighted pick among
+                the top playTopN cards by that same score), difficulty.ts (tier
+                type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
+                (lazy worker_threads DDS pool for parallel sampled solves —
+                latency only, never outcomes), play-mc-forget.ts (EXPERIMENTAL,
+                unshipped card-"forgetting" prototype — see its doc comment and
+                docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
@@ -182,10 +187,13 @@ of an already-started tournament is deliberately preference-blind). The player-f
 (`MC_SAMPLES` in `difficulty.ts`) all use `chooseCardSampled` (`packages/ai/src/play-mc.ts`)
 — K seeded layouts of the cards the acting player can't see, constrained by shown-out voids
 and (unless the tier is auction-blind) the auction's machine-checkable SAYC `req`s with a
-deterministic relaxation ladder, each solved double-dummy, best aggregate card played:
+deterministic relaxation ladder, each solved double-dummy, aggregate scores summed per legal
+card, then (per `PLAY_NOISE`, see "Robot difficulty (card-selection noise)" below) either the
+flat best card played or a seeded weighted pick among the top few:
 `expert` kOpp=8, `intermediate` kOpp=1, `beginner` kOpp=1 **auction-blind** (opponents
 ignore the bidding entirely). Robot North — only ever the human's defensive partner — is
-always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)`. The fourth value,
+always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)` and never subject to
+`PLAY_NOISE` (always the flat best card). The fourth value,
 `'perfect'`, is the **hidden legacy tier**: true-deal DD-optimal play, byte for byte the
 pre-difficulty behavior; it's the schema default (so legacy tournaments, the robot-trace
 fixture, and demo exhibits all resolve to it) and is not settable through the API. Demo
@@ -209,6 +217,25 @@ passes `opts`, resolving `difficulty` the same way `robotCard()` does
 (`boardDifficulty(b.tournament, b.row.board_no)`). Calibrated the same way as `MC_SAMPLES`
 (`tools/calibrate_k.mjs --bid-topn`, see `difficulty.ts`'s doc comment for the table) — the dial
 saturates by topN≈3, same shape as the K dial.
+
+**Robot difficulty (card-selection noise):** K and `BID_NOISE` above only ever corrupt the
+acting player's *belief* about the hidden cards — `chooseCardSampled` still always played the
+single highest-scoring legal card against whatever it sampled (a pure argmax via
+`pickFromSolve`). `PLAY_NOISE` in `difficulty.ts` softens the *decision* itself instead: an
+optional `playTopN` on `chooseCardSampled`'s opts (default 1, byte-identical to every
+pre-existing call site) draws, continuing the same seeded rng stream used for hidden-hand
+sampling, from the top `playTopN` legal cards weighted by the K-sampled layouts' own score,
+instead of always the best one — the same idea `BID_NOISE` applies to bidding, applied to card
+play. `server/src/game.ts`'s `robotCard()` passes `PLAY_NOISE[difficulty].topN` for E-W and `1`
+for robot North (never noisy, matching its `kPartner`/always-auction-aware treatment). Per
+research (`docs/difficulty-calibration-research.md` §7c/7d), this is the largest lever found
+for the beginner/intermediate tiers — `K` is floored at 1 and `BID_NOISE` saturates by
+topN≈3-4, but `playTopN` keeps adding real effect further out, and unlike raising `K` it costs
+no extra DDS solves (it re-weights totals the K-sample solve already computed). Calibrated via
+`tools/calibrate_stats.mjs playtopn`; `tools/calibrate_stack.mjs --ew-only` measures the
+combined bid+play effect against a pure/true-DD reference with only East/West weakened
+(matching `PARTNER_FLOOR`'s asymmetry), instead of that tool's default of weakening all four
+seats and reporting an unsigned delta.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
@@ -304,10 +331,11 @@ base token, add it to both the `[data-theme="night"]` block and that media copy.
    encoding, tie-breaks, dealing), regenerate it: `npm run build && node
    tools/gen_trace_fixture.mjs`. If that diff surprises you, you were about to silently break
    comparability of live tournaments — stop and figure out why. Changing the sampled-tier
-   constants (`MC_SAMPLES`/`PARTNER_FLOOR` in `packages/ai/src/difficulty.ts`) is the same
-   kind of deliberate robot change scoped to non-perfect tournaments: it breaks comparability
-   for in-flight ones, so calibrate (`tools/calibrate_k.mjs`) first, or accept the break
-   knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   constants (`MC_SAMPLES`/`PARTNER_FLOOR`/`BID_NOISE`/`PLAY_NOISE` in
+   `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
+   non-perfect tournaments: it breaks comparability for in-flight ones, so calibrate
+   (`tools/calibrate_k.mjs`, `tools/calibrate_stats.mjs`, `tools/calibrate_stack.mjs`) first,
+   or accept the break knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

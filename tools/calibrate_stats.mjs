@@ -14,23 +14,22 @@
  *   node tools/calibrate_stats.mjs forget [--seed s] [--boards n] [--forget-k 1] [--windows 0,1,2,4,8,99]
  *   node tools/calibrate_stats.mjs playtopn [--seed s] [--boards n] [--play-k 1] [--topn 1,2,3,4,5,6,8]
  *
- * `playtopn` is the sweep for play-mc-selectnoise.ts's card-SELECTION-noise
- * prototype (see that file's doc comment): at a SINGLE decision, raising
- * topN costs nothing extra (it only re-weights the selection over scores the
- * K-sample solve already computed) — but this sweep still runs a full,
- * separate playout per topN value, because once topN changes which card gets
- * picked at one decision, every downstream decision in that playout faces a
- * different game state and needs its own fresh solve regardless. The
- * zero-extra-cost property is real at the mechanism level (and matters for
- * production latency, where only ONE topN is ever active at a time); it
- * doesn't make this sweep itself free. `defense`-side only
+ * `playtopn` is the sweep for chooseCardSampled's playTopN option (shipped as
+ * PLAY_NOISE in difficulty.ts — see its doc comment): at a SINGLE decision,
+ * raising topN costs nothing extra (it only re-weights the selection over
+ * scores the K-sample solve already computed) — but this sweep still runs a
+ * full, separate playout per topN value, because once topN changes which
+ * card gets picked at one decision, every downstream decision in that
+ * playout faces a different game state and needs its own fresh solve
+ * regardless. The zero-extra-cost property is real at the mechanism level
+ * (and matters for production latency, where only ONE topN is ever active at
+ * a time); it doesn't make this sweep itself free. `defense`-side only
  * (sampledSide='defense'), matching the other isolate-one-mechanism sweeps
  * in this file.
  */
 const core = await import('../packages/core/dist/index.js');
 const ai = await import('../packages/ai/dist/index.js');
 const forget = await import('../packages/ai/dist/play-mc-forget.js');
-const selectnoise = await import('../packages/ai/dist/play-mc-selectnoise.js');
 
 const args = process.argv.slice(2);
 const mode = args[0];
@@ -114,7 +113,7 @@ async function playOutSelectNoisy(deal, contract, calls, sampledSide, k, playTop
       continue;
     }
     plays.push(
-      await selectnoise.chooseCardSampledNoisy(deal, contract, plays, {
+      await ai.chooseCardSampled(deal, contract, plays, {
         k,
         useAuction: true,
         seed: ai.mcDecisionSeed(`${SEED}#stat-selectnoise`, 0, plays.length),

@@ -387,6 +387,14 @@ export interface SampledChooseOpts {
    * "doesn't count HCP from the bidding" blindness. Default true.
    */
   useAuction?: boolean;
+  /**
+   * The difficulty dial for the final card CHOICE, as opposed to k's dial on
+   * the hidden-hand BELIEF (see PLAY_NOISE in difficulty.ts). >1 draws from
+   * the top playTopN legal cards by the sampled layouts' own score, weighted
+   * by that score, instead of always the single best. Default 1 (pure
+   * argmax, byte-identical to every caller that predates this option).
+   */
+  playTopN?: number;
 }
 
 /**
@@ -441,7 +449,26 @@ export async function chooseCardSampled(
     }
   });
 
-  let bestScore = -1;
-  for (const c of legal) bestScore = Math.max(bestScore, totals.get(c) ?? 0);
-  return pickFromSolve(legal, { cardScores: totals, bestScore });
+  const playTopN = opts.playTopN ?? 1;
+  if (playTopN <= 1) {
+    let bestScore = -1;
+    for (const c of legal) bestScore = Math.max(bestScore, totals.get(c) ?? 0);
+    return pickFromSolve(legal, { cardScores: totals, bestScore });
+  }
+
+  // Card-selection noise (PLAY_NOISE): draw from the top playTopN legal
+  // cards by score, weighted by score, continuing the SAME rng stream used
+  // above for hidden-hand sampling — one seeded stream per decision covers
+  // every draw, matching mcDecisionSeed's doc comment.
+  const ranked = [...legal].sort((a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0));
+  const pool = ranked.slice(0, playTopN);
+  const weights = pool.map((c) => (totals.get(c) ?? 0) + 1); // +1 keeps an all-zero pool uniform rather than undefined
+  const total = weights.reduce((a, b) => a + b, 0);
+  const r = rng() * total;
+  let acc = 0;
+  for (let i = 0; i < pool.length; i++) {
+    acc += weights[i];
+    if (r < acc) return pool[i];
+  }
+  return pool[pool.length - 1];
 }

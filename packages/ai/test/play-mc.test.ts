@@ -267,4 +267,51 @@ describe('chooseCardSampled', () => {
     const perfect = await chooseCard(d, contract, plays);
     expect(sampled).toBe(perfect);
   });
+
+  describe('playTopN (card-selection noise)', () => {
+    it('omitted, or 1, is byte-identical to the pre-existing argmax behavior', async () => {
+      for (const playTopN of [undefined, 1]) {
+        const withOpt = await chooseCardSampled(deal, contract, [], { ...opts, playTopN });
+        const without = await chooseCardSampled(deal, contract, [], opts);
+        expect(withOpt).toBe(without);
+      }
+    });
+
+    it('is deterministic: identical inputs give the identical card', async () => {
+      const noisy = { ...opts, playTopN: 3 };
+      const a = await chooseCardSampled(deal, contract, [], noisy);
+      const b = await chooseCardSampled(deal, contract, [], { ...noisy });
+      expect(a).toBe(b);
+    });
+
+    it('always returns a legal card at any playTopN', async () => {
+      for (const playTopN of [2, 3, 8]) {
+        const c = await chooseCardSampled(deal, contract, [], { ...opts, playTopN, seed: mcDecisionSeed('legal-check', 1, 0) });
+        expect(deal.hands[3]).toContain(c);
+      }
+    });
+
+    it('a forced (single-legal-card) node ignores playTopN and consumes no rng', async () => {
+      // West down to one card: forced regardless of noise settings.
+      const forced = microDeal(
+        [card(SPADE, '3'), card(HEART, '3')],
+        [card(SPADE, 'K'), card(HEART, '4')],
+        [card(SPADE, '5'), card(HEART, '5')],
+        [card(SPADE, 'A')],
+      );
+      const c = await chooseCardSampled(forced, contract, [], { ...opts, playTopN: 8 });
+      expect(c).toBe(card(SPADE, 'A'));
+    });
+
+    it('sometimes deviates from the playTopN=1 argmax, across many decisions', async () => {
+      let deviations = 0;
+      for (let i = 0; i < 30; i++) {
+        const seed = mcDecisionSeed('noise-sweep', 1, i);
+        const argmax = await chooseCardSampled(deal, contract, [], { ...opts, seed });
+        const noisy = await chooseCardSampled(deal, contract, [], { ...opts, seed, playTopN: 4 });
+        if (noisy !== argmax) deviations++;
+      }
+      expect(deviations).toBeGreaterThan(0);
+    });
+  });
 });

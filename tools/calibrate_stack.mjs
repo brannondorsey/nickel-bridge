@@ -45,11 +45,15 @@ const EW_ONLY = args.includes('--ew-only');
 const bidder = new ai.Bidder(ai.loadPolicyModel('sl'));
 const isEW = (seat) => seat === 1 || seat === 3;
 
-const TIERS = {
-  beginner: { topN: 3, k: 1, aware: false },
-  intermediate: { topN: 2, k: 1, aware: true },
-  expert: { topN: 1, k: 8, aware: true },
-};
+// Pulled from the shipped constants (not hand-copied) so this tool can never drift from
+// what production actually plays: EW gets kOpp/auctionAware/playTopN — never the
+// kPartner floor, which only applies to the human's own partner (never EW).
+const TIERS = Object.fromEntries(
+  Object.keys(ai.MC_SAMPLES).map((tier) => [
+    tier,
+    { k: ai.MC_SAMPLES[tier].kOpp, aware: ai.MC_SAMPLES[tier].auctionAware, playTopN: ai.PLAY_NOISE[tier].topN },
+  ]),
+);
 
 function bidPure(deal) {
   const calls = [];
@@ -97,6 +101,7 @@ async function playTier(deal, contract, calls, tierCfg) {
       await ai.chooseCardSampled(deal, contract, plays, {
         k: tierCfg.k,
         useAuction: tierCfg.aware,
+        playTopN: tierCfg.playTopN,
         seed: ai.mcDecisionSeed(`${SEED}#stack`, 0, plays.length),
         dealer: deal.dealer,
         calls,
