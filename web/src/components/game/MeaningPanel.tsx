@@ -28,7 +28,7 @@ export function MeaningPanel({
   if (placeholder) {
     return (
       <div className="meaning-panel meaning-panel-placeholder">
-        Tap a bid to see what it means <em>before</em> you make it.
+        Tap a bid to see what it means, then tap again to make the call.
       </div>
     );
   }

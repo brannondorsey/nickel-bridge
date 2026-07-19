@@ -299,7 +299,7 @@ export default function Board() {
   }
 
   return (
-    <div className="board-page">
+    <div className={`board-page${board.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <BoardHead board={board} />
       {board.state === 'done' ? (
         showReceipt ? (
@@ -330,7 +330,7 @@ export default function Board() {
           board={board}
           lastEval={lastEval}
           selectedCall={selectedCall}
-          onSelectCall={(c) => setSelectedCall(selectedCall === c ? null : c)}
+          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}
@@ -402,33 +402,51 @@ function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
 }) {
   const meanings = board.legalCallMeanings ?? {};
+  // The height-changing feedback — the selected call's meaning, the grade of your
+  // last bid, or the placeholder — sizes to its own content (no reserved slot).
+  // It stays stable-feeling because the bid box is DOCKED: the auction + feedback
+  // + hand live in a scroll region and the bid box sits in a fixed dock at the
+  // foot, so the controls never move no matter how tall the feedback grows. The
+  // decision cluster (feedback, hand, seat line) is pinned to the bottom of the
+  // scroll region (margin-top:auto), hugging the dock; the auction stays up top.
+  const feedback = board.myTurn ? (
+    selectedCall !== null ? (
+      <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
+    ) : lastEval ? (
+      <GradeToast evaluation={lastEval} />
+    ) : (
+      <MeaningPanel placeholder />
+    )
+  ) : lastEval ? (
+    <GradeToast evaluation={lastEval} />
+  ) : null;
+
   return (
-    <>
-      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
-      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
-      {board.myTurn ? (
-        selectedCall !== null ? (
-          <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
-        ) : (
-          <MeaningPanel placeholder />
-        )
-      ) : null}
-      <div className="board-fan">
-        <HandFan cards={displaySort(board.hand)} />
+    <div className="bid-phase">
+      <div className="bid-scroll">
+        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+        <div className="bid-decision">
+          {feedback}
+          <div className="board-fan">
+            <HandFan cards={displaySort(board.hand)} />
+          </div>
+          <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
+        </div>
       </div>
-      <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
-      {board.myTurn ? (
-        <BidBox
-          legalCalls={board.legalCalls ?? []}
-          selected={selectedCall}
-          onSelect={onSelectCall}
-          onConfirm={onConfirm}
-          busy={busy}
-        />
-      ) : (
-        <div className="notice">Robots are thinking…</div>
-      )}
-    </>
+      <div className="bid-dock">
+        {board.myTurn ? (
+          <BidBox
+            legalCalls={board.legalCalls ?? []}
+            selected={selectedCall}
+            onSelect={onSelectCall}
+            onConfirm={onConfirm}
+            busy={busy}
+          />
+        ) : (
+          <div className="notice">Robots are thinking…</div>
+        )}
+      </div>
+    </div>
   );
 }
 

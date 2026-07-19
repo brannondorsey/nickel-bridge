@@ -72,6 +72,24 @@ describe('Board — bidding', () => {
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
   });
 
+  it('tap-to-bid: the placeholder teaches it, and a second tap on the selected call submits — no confirm needed', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderBoard();
+    // the placeholder signposts the gesture up front
+    expect(await screen.findByText(/tap again to make the call/i)).toBeInTheDocument();
+    // first tap selects and previews it — no submit yet
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(screen.getByText(/Rebid, invitational/)).toBeInTheDocument();
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // second tap on the same call commits, just like tap-again in card play
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
+  });
+
   it('credits a textbook bid and names the robot convention in the toast', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
@@ -110,6 +128,17 @@ describe('Board — bidding', () => {
     await screen.findByText('Excellent');
     expect(document.querySelector('.grade-toast')).toBeInTheDocument();
     expect(document.querySelector('.trick')).toBeInTheDocument();
+  });
+
+  it('docks the bid box at the foot, with the auction + feedback scrolling above it', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    renderBoard();
+    await screen.findByText('SOUTH · YOU');
+    // the page runs at a fixed height so the dock can pin; the bid box lives in
+    // that dock while the meaning/feedback + hand sit in the scroll region above
+    expect(document.querySelector('.board-page.bidding-dock')).toBeInTheDocument();
+    expect(document.querySelector('.bid-dock .bidbox')).toBeInTheDocument();
+    expect(document.querySelector('.bid-scroll .bid-decision .meaning-panel')).toBeInTheDocument();
   });
 
   it('opens the call inspector dialog from a past auction call', async () => {

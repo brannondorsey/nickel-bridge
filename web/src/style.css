@@ -1286,6 +1286,53 @@ a.ds-btn-secondary:hover {
   margin-top: 12px;
 }
 
+/* ---- docked bidding layout ---- the bid box is pinned to the foot of the
+   screen so it never moves, while the auction + feedback + hand scroll above it.
+   That lets the feedback size to its own content (no reserved slot, no empty
+   box) without the controls ever jumping. Scoped to bidding via .bidding-dock
+   so play/result keep their normal top-to-bottom flow. Needs a definite height
+   for the inner scroll to bound against; the board page is the only child of the
+   shell on this route (no TabBar), so 100dvh is safe here. */
+.board-page.bidding-dock {
+  /* flex:none so the base .board-page { flex: 1 } (flex-basis: 0%) doesn't
+     override this height — we need a real definite height, not a flex share,
+     for the dock to pin and the inner region to bound its scroll. */
+  flex: none;
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.bid-phase {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.bid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* auction stays at the top; the decision cluster (feedback, hand, seat line) is
+   pushed to the bottom of the scroll region so it hugs the dock, with the slack
+   opening up between the auction and the feedback rather than as an empty box.
+   A little bottom padding keeps the seat line off the dock's edge — so it never
+   looks cramped when the region is scrolled all the way down. */
+.bid-decision {
+  margin-top: auto;
+  padding-bottom: var(--space-3);
+}
+.bid-dock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--ink);
+  background: var(--surface);
+}
+.bid-dock .notice {
+  margin: 0;
+}
+
 /* ---- GradeToast ---- */
 .grade-toast {
   margin: 10px 12px 0;
