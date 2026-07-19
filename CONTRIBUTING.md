@@ -36,7 +36,10 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall = model argmax constrained to SAYC-admissible
                 bids — any bid violating its own exact SAYC meaning's `req` is
-                excluded, pass always allowed; grading by model probability ratio,
+                excluded, pass always allowed; at non-'perfect' difficulty, seeded
+                noisy sampling over the top BID_NOISE[tier].topN admissible calls by
+                probability softens the tier-blind argmax, see difficulty.ts;
+                grading by model probability ratio,
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
@@ -191,6 +194,21 @@ Claim detection and `resolveClaim` stay true-DD at every tier. Sampled solves ru
 lazy `worker_threads` DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential
 fallback when unavailable); DDS is deterministic, so the pool affects latency only. Nothing
 here consults env vars — difficulty flows from the tournament row.
+
+**Robot difficulty (bidding noise):** card play softening above only ever touched hidden-hand
+uncertainty — bidding (`bidder.ts`) was difficulty-blind, every tier bidding the model's pure
+argmax over SAYC-admissible calls. `BID_NOISE` in `difficulty.ts` gives bidding its own,
+independent dial: at any non-`'perfect'` difficulty, `Bidder.chooseCall` draws (seeded via
+`bidDecisionSeed`, the same duplicate-fairness argument as `mcDecisionSeed`) from the top
+`BID_NOISE[tier].topN` SAYC-admissible calls weighted by the model's own probabilities, instead
+of always taking the single highest-probability one. `topN: 1` (expert) is mathematically
+identical to pure argmax — expert bidding, and every `'perfect'`-tier or no-`opts` call site
+(the robot-trace fixture, `tools/calibrate_k.mjs`'s baseline bidding, `tools/gen_trace_fixture.mjs`),
+is untouched. `server/src/game.ts`'s `advanceRobots` is the only production call site that
+passes `opts`, resolving `difficulty` the same way `robotCard()` does
+(`boardDifficulty(b.tournament, b.row.board_no)`). Calibrated the same way as `MC_SAMPLES`
+(`tools/calibrate_k.mjs --bid-topn`, see `difficulty.ts`'s doc comment for the table) — the dial
+saturates by topN≈3, same shape as the K dial.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means

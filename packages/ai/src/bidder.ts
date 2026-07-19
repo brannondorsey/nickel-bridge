@@ -8,7 +8,9 @@ import {
   legalCalls,
   saycConsistent,
   saycViolation,
+  seededRng,
 } from '@bridge/core';
+import { BID_NOISE, Difficulty } from './difficulty.js';
 import { encodeObservation } from './encode.js';
 import { PolicyModel } from './model.js';
 
@@ -35,6 +37,25 @@ export function gradeFromProbs(userProb: number, bestProb: number, isBest: boole
   if (ratio >= 0.2) return { grade: 'good', score: 0.75 };
   if (ratio >= 0.05) return { grade: 'fair', score: 0.4 };
   return { grade: 'poor', score: 0 };
+}
+
+/**
+ * The seed string for one robot bidding decision, mirroring play-mc.ts's
+ * mcDecisionSeed. A distinct `#bid` namespace keeps the two RNG streams from
+ * ever colliding, even though a single decision is never both a bid and a
+ * card play. Two players facing the same (tournament, board) at the same
+ * point in the auction necessarily share (seed, boardNo, callsLen), so they
+ * draw the same stream and get the same call — duplicate fairness.
+ */
+export function bidDecisionSeed(tournamentSeed: string, boardNo: number, callsLen: number): string {
+  return `${tournamentSeed}#board${boardNo}#bid${callsLen}`;
+}
+
+export interface ChooseCallOpts {
+  /** 'perfect' or omitted: pure argmax, byte-identical to calling chooseCall with no opts. */
+  difficulty?: Difficulty;
+  /** from bidDecisionSeed(); required whenever difficulty enables noise. */
+  seed?: string;
 }
 
 export class Bidder {
@@ -85,10 +106,61 @@ export class Bidder {
     return best;
   }
 
-  /** Deterministic robot call: the model's argmax over SAYC-admissible legal actions. */
-  chooseCall(deal: Deal, calls: Call[]): Call {
+  /**
+   * Bidding's difficulty dial (see BID_NOISE in difficulty.ts): instead of
+   * always taking the single highest-probability SAYC-admissible call, draw
+   * from the top `topN` admissible calls weighted by the model's own
+   * probabilities, seeded so every player facing the same decision draws the
+   * same call (duplicate fairness — the same argument as sampleLayouts in
+   * play-mc.ts). `topN <= 1` degenerates to `constrainedBest`'s pure argmax
+   * with zero RNG draws.
+   */
+  private noisyBest(
+    deal: Deal,
+    calls: Call[],
+    probs: Float32Array,
+    state: AuctionState,
+    mask: boolean[],
+    topN: number,
+    seed: string,
+  ): Call {
+    if (topN <= 1) return this.constrainedBest(deal, calls, probs, state, mask);
+    const hand = deal.hands[state.turn];
+    // PASS (call 0) is always admissible, mirroring constrainedBest — see its
+    // docstring: forbidding pass could force an absurd bid when every call the
+    // hand qualifies for is also excluded.
+    const admissible: Call[] = [0];
+    for (let a = 1; a < 38; a++) {
+      if (mask[a] && !saycViolation(hand, deal.dealer, calls, a)) admissible.push(a);
+    }
+    admissible.sort((a, b) => probs[b] - probs[a]);
+    const pool = admissible.slice(0, topN);
+    const total = pool.reduce((sum, a) => sum + probs[a], 0);
+    if (total <= 0) return pool[0] ?? 0; // degenerate (all-zero probs): fall back to top of pool
+    const r = seededRng(seed)() * total;
+    let acc = 0;
+    for (const a of pool) {
+      acc += probs[a];
+      if (r < acc) return a;
+    }
+    return pool[pool.length - 1];
+  }
+
+  /**
+   * Robot call: at 'perfect' difficulty or when opts is omitted, the model's
+   * pure argmax over SAYC-admissible legal actions (byte-identical to the
+   * historical, difficulty-blind behavior — required for the robot-trace
+   * fixture and every legacy caller). Otherwise, noisy sampling per
+   * BID_NOISE[difficulty] (see noisyBest).
+   */
+  chooseCall(deal: Deal, calls: Call[], opts?: ChooseCallOpts): Call {
     const { probs, state, mask } = this.policyFor(deal, calls);
-    return this.constrainedBest(deal, calls, probs, state, mask);
+    if (!opts || !opts.difficulty || opts.difficulty === 'perfect') {
+      return this.constrainedBest(deal, calls, probs, state, mask);
+    }
+    const { topN } = BID_NOISE[opts.difficulty];
+    if (!opts.seed) throw new Error('chooseCall: seed required when difficulty enables bidding noise');
+    return this.noisyBest(deal, calls, probs, state, mask, topN, opts.seed);
   }
 
   /**
