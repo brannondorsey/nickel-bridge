@@ -9,7 +9,9 @@ at higher statistical power**? Short answers: no reliable external benchmark exi
 is a genuine, confirmed gap in the whole hobby, not a research failure), and yes, the
 constants hold up — with one clear recommendation to *not* ship the card-forgetting
 prototype, and one caveat about what a "difficulty tier" actually differentiates in
-aggregate.
+aggregate. **§7 is a follow-up addendum** (independent research pass, same day) that
+reconciles a second informal benchmark against §1's finding, refines §4's combined-stack
+methodology, and identifies a genuinely new, previously-untested mechanism.
 
 ## 1. Is there a real-world skill-tier benchmark to calibrate against?
 
@@ -265,3 +267,141 @@ do when they stratify games by masterpoint bracket instead of measured performan
   partner strength) and could in principle be mined for a real skill-to-performance
   curve if ACBL/WBF-official data never materializes — not pursued here since it's
   unofficial and wasn't part of the verified findings.
+
+## 7. Addendum: reconciling an independent research pass, plus a new mechanism
+
+A second, independent research pass (same day, different session — no shared context
+with §1–§6) ran in parallel: web research plus its own statistical simulation, asking the
+same underlying question this doc asks. Reconciling the two:
+
+### 7a. Agreement, and one retraction
+
+The two passes independently converged on every load-bearing conclusion in §1–§6:
+`BID_NOISE`/`MC_SAMPLES` hold up as shipped, `auctionAware` genuinely differentiates
+beginner from intermediate, and the card-forgetting prototype should not ship as
+currently designed. That's strong cross-validation from two research efforts that
+couldn't have anchored on each other.
+
+The other pass's web research was more adversarially thorough than this doc's §1 and
+turned up one thing worth recording plainly: an "expert-vs-club double-dummy
+opening-lead-accuracy split (~81% vs ~80%)" statistic — which this doc's author had
+separately found via a secondary citation (a site that returned HTTP 503 on direct
+verification) and had flagged as unverified rather than citable — **was independently
+checked and refuted on primary-source inspection** by the other pass. Treat that number,
+and anything resembling it, as unreliable; it should not be cited in future work here.
+Beyond that specific number, this doc's author had also been using an informal,
+forum-sourced IMPs-per-board skill ladder (`bboskill.com`, via BBO Discussion Forums,
+self-described by its own posters as "approximate based on experience") as a rough
+external target for tuning purposes. §1's harder line — **no reliable published
+skill-tier performance benchmark exists anywhere in the hobby** — is the better-supported
+conclusion; the informal ladder should be read as color/context at most, never as a
+calibration target. No committed code or doc in this repo depended on either retracted
+number, so nothing needs correcting beyond this paragraph.
+
+### 7b. A methodological refinement to the combined-stack test (§4)
+
+§4's `calibrate_stack.mjs` measures the combined bid+play effect by weakening **all four
+seats** to one tier's config and reporting **unsigned** `|ΔNS|`. That's a reasonable "how
+far from a perfect board does this tier typically land" sanity check, but it isn't a
+direct measurement of what the app's difficulty tiers do to a *human's* experience:
+production never weakens North — `PARTNER_FLOOR` in `packages/ai/src/difficulty.ts`
+always pins the human's partner at expert-opponent strength, regardless of tier. A metric
+that also randomly degrades N (and S, standing in for the human) mixes in variance from a
+seat the real game never touches, and taking `|diff|` can't distinguish "the tier helped
+NS" from "the tier hurt NS" — both inflate the mean identically.
+
+`calibrate_stack.mjs` now has an `--ew-only` flag: North/South stay pinned at pure
+bidding/true-DD play throughout (mirroring `PARTNER_FLOOR` exactly), only East/West get
+the tier's noise, and the report is **signed** IMP swing (positive = NS gained because the
+opponents got weaker) instead of unsigned score distance. Rerunning §4's exact question
+this way, at higher N (250 boards, seed `final-ew`):
+
+| tier | contract-changed% | signed IMP mean±SE | IMP median | % boards \|imp\|≥1 |
+|---|---|---|---|---|
+| beginner | 25.6% | +3.37±0.34 | 1.00 | 70.4% |
+| intermediate | 22.8% | +3.30±0.34 | 1.00 | 71.6% |
+| expert | 0.0% | +1.70±0.20 | 0.00 | 37.6% |
+
+This replicates §4's central finding — **beginner and intermediate are still
+statistically indistinguishable in the combined metric** (+3.37±0.34 vs +3.30±0.34, well
+under 1 combined SE apart) — even with the seat-isolation fix and a tail-compressing
+signed-IMP yardstick that should, if §4's "heavy-tailed contract-changed boards are
+swamping a real underlying gap" explanation were the whole story, have made the gap
+easier to see. It didn't. That's evidence worth taking seriously: **within the currently
+shipped mechanisms (`BID_NOISE` + `MC_SAMPLES`/`auctionAware`), beginner and
+intermediate may not actually be separable by very much, methodological refinements
+aside** — not because the individual dials don't move monotonically (§3a/§3b already
+confirm they do), but because neither dial, even pushed hard, produces a large enough
+combined effect to separate the tiers by a human-noticeable margin. Confirmed
+independently across three separate implementations run this session (this tool, plus two
+ad hoc scripts from the parallel session that reached the same ~3.1–4.4 IMP/board range
+with the same <0.3 IMP gap).
+
+### 7c. A previously-untested mechanism: card-selection noise
+
+Every mechanism examined by both research passes — `K` sample count, `auctionAware`,
+`BID_NOISE`, the forgetting prototype — only ever corrupts the acting player's **belief**
+about the hidden cards. Given that belief (however corrupted), `chooseCardSampled` still
+always deterministically plays the single highest-scoring legal card
+(`pickFromSolve` is a pure argmax). Nothing examined so far touches the **decision** side:
+does the AI always take the objectively-best card given what it (rightly or wrongly)
+believes?
+
+`packages/ai/src/play-mc-selectnoise.ts` (new, experimental, same
+kept-out-of-the-barrel pattern as `play-mc-forget.ts`) tests this: instead of always
+taking the argmax over the K-sampled layouts' scores, weighted-sample among the top
+`playTopN` legal cards by that same score — the identical idea `BID_NOISE` already
+applies to bidding, applied here to card play instead. Two independent measurements,
+both via `tools/calibrate_stats.mjs playtopn` (the committed, production-code-path
+version) and an ad hoc pooled sweep (~400 boards) from the parallel session:
+
+**`calibrate_stats.mjs playtopn`, defense-side only, K=1 aware, 250 boards (seed `final-pn`):**
+
+| topN | tricks conceded mean±SE | paired Δ vs. topN=1 baseline |
+|---|---|---|
+| 1 (= `chooseCardSampled`, no-op) | 0.98±0.052 | 0.012±0.051 |
+| 2 | 1.29±0.064 | 0.328±0.058 |
+| 3 | 1.35±0.069 | 0.384±0.061 |
+| 4 | 1.42±0.070 | 0.460±0.066 |
+| 6 | 1.52±0.069 | 0.556±0.062 |
+| 8 | 1.53±0.070 | 0.568±0.063 |
+
+**Ad hoc pooled sweep, any-EW-seat (declarer or defender), K1/auctionAware per tier,
+signed IMP, ~400 boards:**
+
+| topN | beginner IMP | intermediate IMP |
+|---|---|---|
+| 1 (baseline) | 3.45 | 3.48 |
+| 2 | 4.49 | 4.31 |
+| 3 | 5.20 | 5.32 |
+| 4 | 5.45 | 5.52 |
+
+**Both confirm the headline result — this is a large, real, well-powered effect (the
+biggest lever either research pass has found), and topN=1 is a confirmed exact no-op —
+but the two don't agree on the exact shape of the saturation curve**: the defense-only
+trick-count measurement shows most of the gain already captured by topN=2 and mostly flat
+after; the any-seat signed-IMP measurement keeps gaining meaningfully through topN=3–4.
+The likely explanation is scope, not contradiction — the first isolates defensive card
+play only, the second also captures declarer-seat weakening (which §3a already showed is
+the larger of the two effects for auction-blindness, and plausibly is here too) — but this
+wasn't independently confirmed by a scope-matched rerun, so treat the *exact* optimal
+`topN` as uncertain by ±1–2, not the *existence* or *size* of the effect. **Notably, this
+dial costs nothing extra at inference time**: raising `playTopN` re-weights the same
+per-card totals the K-sample solve already computed, unlike raising `K` (which multiplies
+solve count) — so unlike every other dial in this doc, the choice of `topN` here is a pure
+design/feel decision, not a latency trade-off.
+
+### 7d. Updated recommendation
+
+Given 7b (the existing combined effect is small and hard to separate between beginner/
+intermediate) and 7c (a large, currently-unused, zero-marginal-cost lever exists),
+implementing `play-mc-selectnoise.ts` as a real `PLAY_NOISE` dial — analogous in
+structure to `BID_NOISE` — looks like the most promising next step for making beginner/
+intermediate meaningfully different from each other and from expert, more so than further
+tuning of the existing dials (which §3a/§3b already show are saturated). A defensible
+starting point, pending sign-off and the same kind of `calibrate_k.mjs`-style before/after
+validation the other dials got: `PLAY_NOISE = { beginner: 3, intermediate: 2, expert: 1 }`
+— same numeric shape as `BID_NOISE`, past the topN=1→2 knee in both measurements above
+without being deep into the flattest part of either saturation curve. This has **not**
+been wired into any shipped tier — it's an experimental module plus calibration tooling
+only, exactly like `play-mc-forget.ts`'s status, pending a decision on whether to ship it.
