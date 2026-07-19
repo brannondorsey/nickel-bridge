@@ -1286,24 +1286,48 @@ a.ds-btn-secondary:hover {
   margin-top: 12px;
 }
 
-/* ---- bid feedback slot ---- one reserved region above the fan that holds the
-   selected call's meaning, the grade of your last bid, or the placeholder — one
-   at a time. The min-height is sized to the tallest meaning the SAYC explainer
-   can produce (measured ~192px at the 390px design width, incl. a wrapping
-   title, chips and the beyond-SAYC caveat), so switching between calls — or the
-   grade landing — never resizes it and the fan + bid box below stay put. It's a
-   floor, not a cap: a longer description on a narrower phone grows the panel
-   rather than clipping. Update this if a longer convention description ships. */
-:root {
-  --bid-feedback-min: 196px;
+/* ---- docked bidding layout ---- the bid box is pinned to the foot of the
+   screen so it never moves, while the auction + feedback + hand scroll above it.
+   That lets the feedback size to its own content (no reserved slot, no empty
+   box) without the controls ever jumping. Scoped to bidding via .bidding-dock
+   so play/result keep their normal top-to-bottom flow. Needs a definite height
+   for the inner scroll to bound against; the board page is the only child of the
+   shell on this route (no TabBar), so 100dvh is safe here. */
+.board-page.bidding-dock {
+  /* flex:none so the base .board-page { flex: 1 } (flex-basis: 0%) doesn't
+     override this height — we need a real definite height, not a flex share,
+     for the dock to pin and the inner region to bound its scroll. */
+  flex: none;
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 0;
 }
-.bid-feedback > * {
-  min-height: var(--bid-feedback-min);
+.bid-phase {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
-/* the grade toast is a centered flex row by default; top-align it here so it
-   reads like the meaning panel it shares the slot with, content at the top. */
-.bid-feedback > .grade-toast {
-  align-items: flex-start;
+.bid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* auction stays at the top; the decision cluster (feedback, hand, seat line) is
+   pushed to the bottom of the scroll region so it hugs the dock, with the slack
+   opening up between the auction and the feedback rather than as an empty box. */
+.bid-decision {
+  margin-top: auto;
+}
+.bid-dock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--ink);
+  background: var(--surface);
+}
+.bid-dock .notice {
+  margin: 0;
 }
 
 /* ---- GradeToast ---- */

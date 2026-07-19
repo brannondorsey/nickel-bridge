@@ -130,6 +130,17 @@ describe('Board — bidding', () => {
     expect(document.querySelector('.trick')).toBeInTheDocument();
   });
 
+  it('docks the bid box at the foot, with the auction + feedback scrolling above it', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    renderBoard();
+    await screen.findByText('SOUTH · YOU');
+    // the page runs at a fixed height so the dock can pin; the bid box lives in
+    // that dock while the meaning/feedback + hand sit in the scroll region above
+    expect(document.querySelector('.board-page.bidding-dock')).toBeInTheDocument();
+    expect(document.querySelector('.bid-dock .bidbox')).toBeInTheDocument();
+    expect(document.querySelector('.bid-scroll .bid-decision .meaning-panel')).toBeInTheDocument();
+  });
+
   it('opens the call inspector dialog from a past auction call', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();

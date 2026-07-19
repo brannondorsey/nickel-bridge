@@ -299,7 +299,7 @@ export default function Board() {
   }
 
   return (
-    <div className="board-page">
+    <div className={`board-page${board.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <BoardHead board={board} />
       {board.state === 'done' ? (
         showReceipt ? (
@@ -402,13 +402,13 @@ function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
 }) {
   const meanings = board.legalCallMeanings ?? {};
-  // The feedback that changes height — the selected call's meaning, the grade of
-  // your last bid, the placeholder — shares one slot with a reserved min-height
-  // (.bid-feedback) sized to the tallest meaning the app can produce. Holding
-  // that height constant is what stops the fan and bid box beneath it from
-  // jumping every time you select a different call or land one. The three states
-  // are mutually exclusive: preview the selected call, else your last grade,
-  // else the placeholder (which also teaches tap-again-to-bid).
+  // The height-changing feedback — the selected call's meaning, the grade of your
+  // last bid, or the placeholder — sizes to its own content (no reserved slot).
+  // It stays stable-feeling because the bid box is DOCKED: the auction + feedback
+  // + hand live in a scroll region and the bid box sits in a fixed dock at the
+  // foot, so the controls never move no matter how tall the feedback grows. The
+  // decision cluster (feedback, hand, seat line) is pinned to the bottom of the
+  // scroll region (margin-top:auto), hugging the dock; the auction stays up top.
   const feedback = board.myTurn ? (
     selectedCall !== null ? (
       <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
@@ -422,25 +422,31 @@ function BiddingPhase({
   ) : null;
 
   return (
-    <>
-      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
-      {feedback ? <div className="bid-feedback">{feedback}</div> : null}
-      <div className="board-fan">
-        <HandFan cards={displaySort(board.hand)} />
+    <div className="bid-phase">
+      <div className="bid-scroll">
+        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+        <div className="bid-decision">
+          {feedback}
+          <div className="board-fan">
+            <HandFan cards={displaySort(board.hand)} />
+          </div>
+          <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
+        </div>
       </div>
-      <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
-      {board.myTurn ? (
-        <BidBox
-          legalCalls={board.legalCalls ?? []}
-          selected={selectedCall}
-          onSelect={onSelectCall}
-          onConfirm={onConfirm}
-          busy={busy}
-        />
-      ) : (
-        <div className="notice">Robots are thinking…</div>
-      )}
-    </>
+      <div className="bid-dock">
+        {board.myTurn ? (
+          <BidBox
+            legalCalls={board.legalCalls ?? []}
+            selected={selectedCall}
+            onSelect={onSelectCall}
+            onConfirm={onConfirm}
+            busy={busy}
+          />
+        ) : (
+          <div className="notice">Robots are thinking…</div>
+        )}
+      </div>
+    </div>
   );
 }
 
