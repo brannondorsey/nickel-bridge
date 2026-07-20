@@ -333,6 +333,15 @@ export const tournamentComplete: TournamentInfo = {
   ],
 };
 
+/** an ai_field tournament: same 3 humans as tournamentComplete plus a house shadow row */
+export const tournamentCompleteWithHouse: TournamentInfo = {
+  ...tournamentComplete,
+  standings: [
+    ...tournamentComplete.standings,
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
+  ],
+};
+
 // ---- player stats ----
 
 const statPoint = (i: number) => ({

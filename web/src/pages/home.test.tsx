@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { meFixture, tournamentComplete, tournamentInProgress } from '../test/fixtures';
+import { meFixture, tournamentComplete, tournamentCompleteWithHouse, tournamentInProgress } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Lobby from './Lobby';
 
@@ -40,6 +40,14 @@ describe('Home', () => {
     expect(row).toHaveAttribute('href', '/t/11');
     expect(within(row).getByText(/· 3 pairs/)).toBeInTheDocument();
     expect(within(row).getByText('2ND')).toHaveClass('quiet');
+  });
+
+  it('excludes house (benchmark AI) shadow rows from the pair count', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentCompleteWithHouse] });
+    renderWithMe(<Lobby />, { me: meFixture });
+    // 3 humans + 1 house row → "3 pairs", matching Tournament.tsx's human-only count
+    const row = (await screen.findByText('61%')).closest('a')!;
+    expect(within(row).getByText(/· 3 pairs/)).toBeInTheDocument();
   });
 
   it('marks a win in the positive color', async () => {
