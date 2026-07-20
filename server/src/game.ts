@@ -41,7 +41,9 @@ import { boardDifficulty, recomputeElo } from './tournaments.js';
 const HUMAN_SEAT: Seat = 2; // South
 export { BOARDS_PER_TOURNAMENT };
 
-const bidder = new Bidder(loadPolicyModel((process.env.AI_MODEL as 'sl' | 'rl-fsp') ?? 'sl'));
+// Exported for the benchmark AI personas (ai-players.ts), which bid their own
+// seat through the same model instance the robots use.
+export const bidder = new Bidder(loadPolicyModel((process.env.AI_MODEL as 'sl' | 'rl-fsp') ?? 'sl'));
 
 const stmtBoard = db.prepare(`SELECT * FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
 const stmtCreateBoard = db.prepare(
@@ -57,11 +59,19 @@ const stmtSaveBoard = db.prepare(
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
-  `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.board_no = ? AND b.state = 'done' ORDER BY b.updated_at`,
 );
+// Whether a board's owner is a benchmark AI persona — those completions never
+// trigger the Elo replay (personas are unrated by construction; see also the
+// kind filter inside recomputeElo, which keeps correctness independent of
+// this skip).
+const stmtUserKind = db.prepare(`SELECT kind FROM users WHERE id = ?`);
+function isAiUser(userId: number): boolean {
+  return (stmtUserKind.get(userId) as { kind: 'human' | 'ai' } | undefined)?.kind === 'ai';
+}
 
-interface GameBoard {
+export interface GameBoard {
   row: BoardRow;
   /** the owning tournament — carries the seed and robot difficulty for this board */
   tournament: TournamentRow;
@@ -267,7 +277,7 @@ export async function submitCall(
   b.bidEvals.push(evaluation);
   await advanceRobots(b);
   save(b);
-  if (boardDone(b.row)) recomputeElo();
+  if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
   return evaluation;
 }
 
@@ -279,7 +289,7 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
   b.plays.push(card);
   await advanceRobots(b);
   save(b);
-  if (boardDone(b.row)) recomputeElo();
+  if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
 }
 
 /** Ensure a fresh board has robots advanced up to the human (dealer may be W/N/E). */
@@ -288,7 +298,7 @@ export async function ensureAdvanced(b: GameBoard): Promise<void> {
   await advanceRobots(b);
   if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
     save(b);
-    if (boardDone(b.row)) recomputeElo();
+    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
   }
 }
 
@@ -397,19 +407,42 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
   return deal.hands[seat].filter((c) => !played.has(c));
 }
 
-/** Result + field comparison for a completed board. */
+/**
+ * Result + field comparison for a completed board. Same partition as
+ * standings() in tournaments.ts: humans are matchpointed among humans only
+ * (byte-identical whether or not benchmark AI rows exist), each AI persona
+ * gets a phantom-insertion pct against the human field. The score-sorted
+ * field table interleaves both kinds — a persona tying a human's raw score
+ * shows a lower pct (standard phantom asymmetry; see standings()).
+ */
 function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
-  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & { user_handle: string })[];
-  const scores = rows.map((r) => r.score_ns ?? 0);
-  const mps = matchpoints(scores);
-  const field = rows.map((r, i) => ({
-    userId: r.user_id,
-    handle: r.user_handle,
-    contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
-    scoreNS: r.score_ns ?? 0,
-    pct: Math.round(mps[i].pct * 10) / 10,
-    isMe: r.user_id === b.row.user_id,
-  }));
+  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & {
+    user_handle: string;
+    user_kind: 'human' | 'ai';
+  })[];
+  const humanScores = rows.filter((r) => r.user_kind === 'human').map((r) => r.score_ns ?? 0);
+  const humanMps = matchpoints(humanScores);
+  let humanIdx = 0;
+  const field = rows.map((r) => {
+    const pct =
+      r.user_kind === 'human'
+        ? humanMps[humanIdx++].pct
+        : humanScores.length
+          ? (() => {
+              const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
+              return phantom[phantom.length - 1].pct;
+            })()
+          : 50;
+    return {
+      userId: r.user_id,
+      handle: r.user_handle,
+      kind: r.user_kind,
+      contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
+      scoreNS: r.score_ns ?? 0,
+      pct: Math.round(pct * 10) / 10,
+      isMe: r.user_id === b.row.user_id,
+    };
+  });
   const mine = field.find((f) => f.isMe);
   return {
     contractLabel: b.contract ? contractLabel(b.contract, b.row.tricks_declarer ?? undefined) : 'Passed out',

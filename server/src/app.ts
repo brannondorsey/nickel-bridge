@@ -5,6 +5,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { enqueueAiField } from './ai-players.js';
 import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
@@ -43,6 +44,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { tournament, nextBoard } = placeUser(user.id, user.difficulty);
+    // Fire-and-forget: get the benchmark AI personas playing this tournament
+    // in the background. Idempotent (the queued task re-checks coverage), so
+    // calling on every placement — creation, join, or resume — doubles as
+    // self-healing for any sweep the boot pass missed.
+    if (tournament.ai_field) enqueueAiField(tournament.id, req.log);
     return reply.send({ tournamentId: tournament.id, boardNo: nextBoard });
   });
 
@@ -131,7 +137,7 @@ export async function buildApp(): Promise<FastifyInstance> {
                 (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
                   JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
                   WHERE b.user_id = u.id) AS played_tournaments
-         FROM users u WHERE u.handle IS NOT NULL ORDER BY u.elo DESC, u.handle`,
+         FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human' ORDER BY u.elo DESC, u.handle`,
       )
       .all() as { id: number }[];
     const movement = leaderboardMovement();

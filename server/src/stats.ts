@@ -25,9 +25,13 @@ const stmtDoneBoards = db.prepare(
 const stmtRatedElos = db.prepare(
   `SELECT elo FROM users WHERE EXISTS (SELECT 1 FROM elo_history h WHERE h.user_id = users.id)`,
 );
+// users.kind filter: the benchmark AI personas (ai-players.ts) are not part
+// of anyone's comparison field — their bid evals must not enter the accuracy
+// pool or the activePlayers count.
 const stmtAllDoneEvals = db.prepare(
   `SELECT b.user_id, b.bid_evals FROM boards b
    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   JOIN users u ON u.id = b.user_id AND u.kind = 'human'
    WHERE b.state = 'done'`,
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
@@ -168,7 +172,8 @@ export function playerStats(userId: number): PlayerStats | null {
         finishedAt: t.finishedAt,
         pct: mine.totalPct,
         boards: mine.boardsDone,
-        fieldSize: field.length,
+        // human rows only: AI shadow rows aren't field members
+        fieldSize: field.filter((s) => s.kind === 'human').length,
       },
     ];
   });
@@ -247,7 +252,8 @@ function fieldPercentiles(
   const pctsByUser = new Map<number, number[]>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
     for (const s of standings(id)) {
-      if (s.totalPct === null) continue;
+      // AI shadow rows never enter anyone's percentile pool
+      if (s.kind !== 'human' || s.totalPct === null) continue;
       pctsByUser.set(s.userId, [...(pctsByUser.get(s.userId) ?? []), s.totalPct]);
     }
   }

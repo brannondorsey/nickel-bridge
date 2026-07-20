@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { aiPlayersEnabled, ensureAiPlayers } from './ai-players.js';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
-import { playThrough, tick } from './bot-play.js';
+import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
 import { TournamentRow, UserRow, db } from './db.js';
 import { ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
@@ -107,7 +108,7 @@ async function runScenarioNow(userId: number, s: Scenario): Promise<{ tournament
     // other boards are actually complete — bot-play the acting user through
     // them with the same deterministic strategy the ambient seeder uses for
     // real players (see bot-play.ts).
-    await playThrough(t, userId, s.boardNo - 1, (no) => `exhibit-prior:${s.seed}:${no}`);
+    await playThrough(t, userId, s.boardNo - 1, (no) => seededErraticStrategy(`exhibit-prior:${s.seed}:${no}`));
   }
   stmtDeleteBoard.run(t.id, userId, s.boardNo);
   const b = loadBoard(t, userId, s.boardNo, true)!;
@@ -182,6 +183,11 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     const seeder = await import('./demo-seed.js');
     await seeder.wipeDemoData();
     const user = ensureDemoUser();
+    // The wipe deleted the benchmark AI personas along with everyone else —
+    // re-create them now so tournaments played after the reset get their
+    // house rows (queued play tasks re-ensure too, but placement can race
+    // ahead of the reseed).
+    if (aiPlayersEnabled()) ensureAiPlayers();
     startSession(reply, user.id);
     if (reseed) seeder.seedDemo(req.log).catch((err) => req.log.error(err, 'demo reseed failed'));
     return reply.send({ ok: true });

@@ -58,7 +58,10 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
-                demo.ts + scenarios.ts + demo-seed.ts + bot-play.ts (DEMO=1 demo mode,
+                ai-players.ts (benchmark AI personas — the "house" shadow rows in
+                The Field, see "Benchmark AI players" below), bot-play.ts (the shared
+                strategy-injected bot board-play loop used by the demo seeder AND the
+                AI personas), demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 demo mode,
                 on PR previews + the permanent demo app — see "Demo mode" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
@@ -142,6 +145,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
+| `AI_PLAYERS` | on | `0` disables the benchmark AI personas' background play + boot sweep (`ai-players.ts`) — set by the server test harness (`server/test/helpers.ts`) so suites exercising `placeUser` don't play 12 bot boards per placement |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
 | `WEB_DIST` | `../../web/dist` | override static SPA path (`app.ts`) |
 
@@ -251,6 +255,33 @@ beginner further (`tools/calibrate_whatif.mjs`'s comparison, and the full reason
 general mental model (belief dials vs. decision dials, why they saturate differently, which
 tool answers which question) before tuning any of these constants further.
 
+**Benchmark AI players ("the house"):** three permanent `users.kind = 'ai'` personas —
+"A Beginner", "An Intermediate Player", "An Expert" (`server/src/ai-players.ts`) —
+automatically play every tournament stamped `tournaments.ai_field = 1` (set at creation by
+`placeUser` and demo-seed's ambient tournaments; never backfilled, so legacy/fixture/exhibit
+tournaments never acquire AI rows). Each persona plays the human seat through the real engine
+(`bot-play.ts`'s strategy-injected loop → `submitCall`/`submitPlay`), so it faces the board's
+robots exactly as a human would; its own decisions carry every dial of its tier —
+`BID_NOISE` bidding, `MC_SAMPLES` belief (`kOpp`/`auctionAware`), `PLAY_NOISE` card
+selection — under a persona-namespaced seed (`${seed}:ai:${tier}`), making its boards a pure
+replayable function of (tournament seed, board, tier, board difficulty). Defending, its robot
+partner North keeps the human `PARTNER_FLOOR` treatment on purpose: the benchmark means "a
+player of tier X in your chair," expert-partner boon included. Scores surface in The Field as
+**shadow rows**: `standings()`/`boardResult()`/`myBoardSummaries()` matchpoint humans among
+humans only (byte-identical with or without AI rows — a tested regression), each persona
+displays a phantom-insertion pct (matchpointed into the human field alone; boards no human
+finished contribute nothing), rows interleave by pct but never rank, and the web renders them
+muted-italic with a HOUSE tag (never the "you" surface fill). Personas are excluded
+everywhere else: the Elo replay (`recomputeElo` filters them and their completions skip it),
+placement's grace/popularity counts (`stmtCandidates` counts human board rows only — without
+this, three instant AI finishers would close every grace window), the leaderboard, and stats
+pools; their `/players/:id` profiles stay open as calibration content. Play runs on one
+serialized queue, enqueued fire-and-forget from `POST /api/play` and resumed after a crash by
+`index.ts`'s boot sweep; `bot-play.ts`'s wipe-unfinished-then-replay keeps interrupted boards
+byte-identical. Demo mode: ambient tournaments get house rows (the seeder enqueues them
+itself — the boot sweep would race its fire-and-forget creation), and `/api/demo/reset`
+re-creates the personas after the wipe.
+
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
 **exactly one machine** — no horizontal scaling. On Fly.io this means every environment
@@ -357,6 +388,12 @@ base token, add it to both the `[data-theme="night"]` block and that media copy.
    scenario recipes in `server/src/scenarios.ts` are replay-sensitive the same way: a
    deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive
    the action lists with `node tools/find_scenarios.mjs` and re-curate the copy by hand.
+   The benchmark AI personas (`ai-players.ts`) sit on both sides of this invariant: their
+   boards are deterministic replays of the same machinery (a deliberate robot/tier change
+   also changes house scores in affected tournaments — expected, same scope), while the
+   shadow-row partition guarantees they can never move a *human* number — `server/test/
+   ai-players.test.ts` deletes every AI row and asserts standings/board pcts/`elo_history`
+   are byte-identical.
 2. **`packages/ai/src/encode.ts` is a bit-for-bit port** of the pgx `bridge_bidding`
    observation encoding, verified by golden tests against the original JAX output. Do not
    refactor it for style. Regenerating `packages/ai/test/fixtures.json` is only needed if the

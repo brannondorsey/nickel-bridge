@@ -15,6 +15,10 @@ export function freshDbEnv(prefix: string): string {
   process.env.DB_PATH = path;
   process.env.DEV_AUTH = '1';
   process.env.LOG_LEVEL = 'silent';
+  // Suites exercise placeUser constantly; without this gate every placement
+  // would enqueue the benchmark AI personas' 12 background boards
+  // (ai-players.ts). Tests that want them call enqueueAiField directly.
+  process.env.AI_PLAYERS = '0';
   return path;
 }
 

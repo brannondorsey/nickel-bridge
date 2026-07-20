@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { enqueueAiField, whenAiPlayersIdle } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
-import { playThrough } from './bot-play.js';
+import { playThrough, seededErraticStrategy } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
 import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament, ensureNewCrosser } from './demo.js';
 import { ensureAdvanced, loadBoard } from './game.js';
@@ -80,8 +81,11 @@ const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = 
 // demo Inspector would never be placed into the seeded field. (NULL schedule
 // = uniform intermediate on every board. Exhibits are separate and keep the
 // 'perfect' default, which is what their replay recipes were mined against.)
+// ai_field = 1: ambient tournaments are real, placement-participating play,
+// so the benchmark AI personas play them too — the demo app should showcase
+// the house rows. (Exhibits are created elsewhere and keep ai_field 0.)
 const stmtInsertBackdated = db.prepare(
-  `INSERT INTO tournaments (name, seed, difficulty, created_at) VALUES ('Tournament', ?, 'intermediate', ?) RETURNING *`,
+  `INSERT INTO tournaments (name, seed, difficulty, created_at, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
 );
 const stmtRename = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtBoardExists = db.prepare(
@@ -98,7 +102,11 @@ const stmtBackdateUser = db.prepare(`UPDATE users SET created_at = ? WHERE id = 
  * in the same response.
  */
 export function wipeDemoData(): Promise<void> {
-  return enqueue(() => {
+  return enqueue(async () => {
+    // Let any queued benchmark-AI play settle first, so the wipe never
+    // deletes rows out from under a mid-board persona. Tasks enqueued after
+    // this point re-check tournament existence at run time and no-op.
+    await whenAiPlayersIdle();
     db.exec(
       `DELETE FROM elo_history;
        DELETE FROM boards;
@@ -146,7 +154,7 @@ async function seedTournament(
       }
       continue;
     }
-    await playThrough(t, player.id, target, (no) => `${player.google_id}:${spec.seed}:${no}`);
+    await playThrough(t, player.id, target, (no) => seededErraticStrategy(`${player.google_id}:${spec.seed}:${no}`));
     // Timestamp realism: finished boards look played shortly after the
     // tournament opened, staggered per player (drives monthlyEloDelta,
     // stats series ordering, and the lobby's "last played"). Runs even when
@@ -187,6 +195,10 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
 
   for (const spec of profile.tournaments) {
     const t = await seedTournament(spec, bots, inspector, now);
+    // Explicit per-tournament enqueue: index.ts's boot sweep snapshots the
+    // tournaments table before this fire-and-forget seeder creates these
+    // rows, so relying on the sweep would race and miss them.
+    enqueueAiField(t.id, log);
     log.info(`demo seed: ${t.name} (${spec.seed}) ready`);
   }
 
@@ -202,7 +214,7 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
       const t = ensureExhibitTournament(s.seed);
       const lastBoard = s.completesTournament ? BOARDS_PER_TOURNAMENT : s.boardNo;
       for (const bot of bots.slice(0, s.fieldBots)) {
-        await playThrough(t, bot.id, lastBoard, (no) => `${bot.google_id}:exhibit:${s.seed}:${no}`);
+        await playThrough(t, bot.id, lastBoard, (no) => seededErraticStrategy(`${bot.google_id}:exhibit:${s.seed}:${no}`));
       }
       log.info(`demo seed: exhibit field for '${s.id}' ready`);
     }

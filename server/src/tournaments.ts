@@ -23,7 +23,7 @@ export function boardDifficulty(t: TournamentRow, boardNo: number): Difficulty {
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
 const stmtDoneBoards = db.prepare(
-  `SELECT b.*, u.handle AS user_handle FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.state = 'done'`,
 );
 // Placement, the lobby list, and the Elo replay all exclude demo-mode
@@ -52,20 +52,34 @@ const stmtMyUnfinished = db.prepare(
 // robots for every player on a board), so joining means accepting its tier.
 // The resume tier above stays difficulty-blind on purpose: switching your
 // preference never orphans a tournament you already started.
+// Starter/finisher counts are over HUMAN board rows only (u.kind = 'human'):
+// the benchmark AI personas finish every marked tournament within about a
+// minute of creation, so counting them would close every grace window
+// (3 AI + creator = GRACE_CAP) and make fresh tournaments instant
+// popularity-score magnets (log(1+3) > the new-tournament threshold). The
+// LEFT-JOINed users row is NULL for tournaments with no boards, which the
+// CASE expressions treat as not-human — starters/done_players stay 0, not
+// NULL. The NOT EXISTS "never touched" check deliberately stays kind-blind:
+// it's about the requesting user's own rows.
 const stmtCandidates = db.prepare(
   `SELECT t.*,
-          COUNT(DISTINCT CASE WHEN b.state = 'done' THEN b.user_id END) AS done_players,
-          COUNT(DISTINCT b.user_id) AS starters
+          COUNT(DISTINCT CASE WHEN u.kind = 'human' AND b.state = 'done' THEN b.user_id END) AS done_players,
+          COUNT(DISTINCT CASE WHEN u.kind = 'human' THEN b.user_id END) AS starters
    FROM tournaments t
    LEFT JOIN boards b ON b.tournament_id = t.id
+   LEFT JOIN users u ON u.id = b.user_id
    WHERE t.created_at > ?
      AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
      AND t.kind = 'standard'
      AND t.difficulty = ?
    GROUP BY t.id`,
 );
+// ai_field = 1: every tournament created for real play gets the benchmark AI
+// personas (ai-players.ts); the /api/play route enqueues their boards right
+// after placement returns. Raw-inserted fixture/test tournaments and demo
+// exhibits keep the column's 0 default and never acquire AI rows.
 const stmtCreateTournament = db.prepare(
-  `INSERT INTO tournaments (name, seed, difficulty, board_difficulties) VALUES (?, ?, ?, ?) RETURNING *`,
+  `INSERT INTO tournaments (name, seed, difficulty, board_difficulties, ai_field) VALUES (?, ?, ?, ?, 1) RETURNING *`,
 );
 const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtMyBoardCount = db.prepare(
@@ -98,46 +112,92 @@ const stmtMyBoards = db.prepare(
   `SELECT * FROM boards WHERE tournament_id = ? AND user_id = ? ORDER BY board_no`,
 );
 
-interface Standing {
+export interface Standing {
   userId: number;
   handle: string;
+  /** 'ai' rows are the benchmark personas' shadow entries (see ai-players.ts) */
+  kind: 'human' | 'ai';
   boardsDone: number;
   totalPct: number | null;
   complete: boolean;
   rank?: number;
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+
 /**
  * Live standings from completed boards: each board is matchpointed across the
- * users who finished it; a user's total is the average over their finished
- * boards. Standings are never "final" — they keep evolving as more friends
- * play the same deals.
+ * HUMANS who finished it; a human's total is the average over their finished
+ * boards — byte-identical whether or not benchmark AI rows exist (that
+ * isolation is the shadow-row contract, and a tested property). Each AI
+ * persona is scored by PHANTOM INSERTION instead: per board, matchpoint
+ * {the human field + that one persona} and take the persona's pct — every
+ * row is measured against the same human field, and no persona ever affects
+ * a human number or another persona. A board no human has finished
+ * contributes nothing to a persona's average (its pct there is unknowable,
+ * not 50), so a persona with zero overlap shows totalPct null. Note the
+ * standard phantom asymmetry: a persona TYING a human's raw score displays
+ * a lower pct than that human (in the persona's pool the tie costs half a
+ * matchpoint against n rather than n−1 opponents).
+ * Standings are never "final" — they keep evolving as more friends play the
+ * same deals.
  */
 export function standings(tournamentId: number): Standing[] {
-  const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string })[];
-  const users = new Map<number, { handle: string; pcts: number[] }>();
+  const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & {
+    user_handle: string;
+    user_kind: 'human' | 'ai';
+  })[];
+  const humans = new Map<number, { handle: string; pcts: number[] }>();
+  const ais = new Map<number, { handle: string; pcts: number[]; done: number }>();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
-    if (!boardRows.length) continue;
-    const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
-    boardRows.forEach((r, i) => {
-      const u = users.get(r.user_id) ?? { handle: r.user_handle, pcts: [] };
+    const humanRows = boardRows.filter((r) => r.user_kind === 'human');
+    const humanScores = humanRows.map((r) => r.score_ns ?? 0);
+    const mps = matchpoints(humanScores);
+    humanRows.forEach((r, i) => {
+      const u = humans.get(r.user_id) ?? { handle: r.user_handle, pcts: [] };
       u.pcts.push(mps[i].pct);
-      users.set(r.user_id, u);
+      humans.set(r.user_id, u);
     });
+    for (const r of boardRows) {
+      if (r.user_kind !== 'ai') continue;
+      const u = ais.get(r.user_id) ?? { handle: r.user_handle, pcts: [], done: 0 };
+      u.done++;
+      if (humanRows.length) {
+        const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
+        u.pcts.push(phantom[phantom.length - 1].pct);
+      }
+      ais.set(r.user_id, u);
+    }
   }
-  const list: Standing[] = [...users.entries()].map(([userId, u]) => ({
-    userId,
-    handle: u.handle,
-    boardsDone: u.pcts.length,
-    totalPct: u.pcts.length ? Math.round((u.pcts.reduce((a, b) => a + b, 0) / u.pcts.length) * 10) / 10 : null,
-    complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
-  }));
+  // Humans constructed before AI rows on purpose: the pct sort below is
+  // stable, so a human outranks a persona they tie with.
+  const list: Standing[] = [
+    ...[...humans.entries()].map(([userId, u]): Standing => ({
+      userId,
+      handle: u.handle,
+      kind: 'human',
+      boardsDone: u.pcts.length,
+      totalPct: avg(u.pcts),
+      complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
+    })),
+    ...[...ais.entries()].map(([userId, u]): Standing => ({
+      userId,
+      handle: u.handle,
+      kind: 'ai',
+      boardsDone: u.done,
+      totalPct: avg(u.pcts),
+      complete: u.done >= BOARDS_PER_TOURNAMENT,
+    })),
+  ];
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
   for (const s of list) {
-    if (s.complete) {
-      // standard competition ranking among complete players (ties share a rank)
-      s.rank = list.filter((o) => o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
+    if (s.kind === 'human' && s.complete) {
+      // standard competition ranking among complete humans (ties share a
+      // rank); AI shadow rows never rank — they interleave by pct only
+      s.rank =
+        list.filter((o) => o.kind === 'human' && o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
     }
   }
   return list;
@@ -157,7 +217,11 @@ export const recomputeElo = db.transaction(() => {
   stmtResetElo.run(ELO_INITIAL);
   const ratings = new Map<number, number>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
-    const complete = standings(id).filter((s) => s.complete);
+    // kind filter: benchmark AI personas never rate. Their standings pcts are
+    // shadow numbers (phantom insertion), and their board completions don't
+    // even trigger this replay (game.ts skips it) — this filter keeps the
+    // exclusion correct regardless of who triggered the recompute.
+    const complete = standings(id).filter((s) => s.kind === 'human' && s.complete);
     if (complete.length < 2) continue;
     const participants = complete.map((s) => ({
       userId: s.userId,
@@ -367,10 +431,12 @@ interface MyBoardSummary {
 export function myBoardSummaries(tournamentId: number, userId: number): MyBoardSummary[] {
   const mine = stmtMyBoards.all(tournamentId, userId) as BoardRow[];
   if (!mine.length) return [];
-  const done = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string })[];
+  const done = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string; user_kind: string })[];
   return mine.map((b) => {
     if (b.state !== 'done') return { no: b.board_no, state: b.state, contractLabel: null, scoreNS: null, pct: null };
-    const field = done.filter((r) => r.board_no === b.board_no);
+    // Human rows only, exactly like standings()/boardResult(): the viewer's
+    // pct must never include benchmark AI scores (the shadow-row contract).
+    const field = done.filter((r) => r.board_no === b.board_no && r.user_kind === 'human');
     const mps = matchpoints(field.map((r) => r.score_ns ?? 0));
     const i = field.findIndex((r) => r.user_id === userId);
     return {
