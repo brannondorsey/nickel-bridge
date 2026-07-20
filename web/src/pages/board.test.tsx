@@ -408,6 +408,11 @@ describe('Board — result', () => {
     expect(
       within(table as HTMLElement).getByText((_, el) => el?.textContent === '4♠+1 by S · +650'),
     ).toBeInTheDocument();
+    // house (benchmark AI) row: tagged, styled as a reference entry, and
+    // excluded from the "VS N OTHER PLAYERS" count asserted above
+    const houseRow = within(table as HTMLElement).getByText('The Shark').closest('tr')!;
+    expect(houseRow.className).toContain('house');
+    expect(within(houseRow as HTMLElement).getByText('HOUSE')).toBeInTheDocument();
 
     // deal diagram from allHands, my seat emphasized
     expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();

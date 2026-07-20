@@ -20,7 +20,7 @@
 
 // Extending this union is all a new gallery section needs — the frontend
 // derives section order from catalog order, so no web change is required.
-type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring' | 'results';
+type ScenarioCategory = 'bidding' | 'card play' | 'claims' | 'scoring' | 'results' | 'the field';
 
 interface ScenarioAction {
   kind: 'call' | 'card';
@@ -54,6 +54,19 @@ export interface Scenario {
    * finishes both the board and the tournament in the same live response.
    */
   completesTournament?: boolean;
+  /**
+   * Not a replay recipe: each click creates a brand-new STANDARD tournament
+   * (kind 'standard', ai_field = 1 — exhibit-kind tournaments deliberately
+   * never get AI rows) with a random per-click seed, and lands the tester at
+   * board 1. This is the live path for click-testing the benchmark AI
+   * personas exactly as production behaves: the house sets off behind the
+   * tester on demand (ai-players.ts scheduling). `seed` is only the random
+   * seed's prefix here, `actions` must be empty, and `expect` is 'bidding'
+   * (South always gets a call before an auction can end, so the state after
+   * ensureAdvanced is seed-independent — which is what keeps the drift guard
+   * meaningful for this entry).
+   */
+  freshAiField?: boolean;
 }
 
 const call = (value: number): ScenarioAction => ({ kind: 'call', value });
@@ -222,6 +235,20 @@ export const SCENARIOS: Scenario[] = [
     expect: 'playing',
     fieldBots: 3,
     completesTournament: true,
+  },
+
+  // ---- the field ----
+  {
+    id: 'fresh-house-crossing',
+    label: 'A fresh crossing with the house',
+    description:
+      'Opens a brand-new tournament with the three house players — The Novice, The Regular, The Shark — setting off right behind you. Score board 1 and the receipt ranks you among them; The Field fills in as they cross. Every visit opens a fresh one.',
+    category: 'the field',
+    seed: 'fresh-house',
+    boardNo: 1,
+    actions: [],
+    expect: 'bidding',
+    freshAiField: true,
   },
 ];
 

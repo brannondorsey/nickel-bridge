@@ -15,6 +15,7 @@ import {
 // from github.com/bookchris/bridge-dds-js with its ESM import path fixed.
 import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
 import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
+import { getSharedDdPool } from './dd-pool.js';
 
 let ddsInstance: Dds | null = null;
 
@@ -110,9 +111,26 @@ export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
  * force every remaining trick (a laydown for them); if it's 0, the side to
  * move can force nothing, which — by the same DD guarantee — means the
  * *other* side can force everything (a laydown for the defense).
+ *
+ * Prefers the worker pool when one is up (same pattern as chooseCardSampled):
+ * this is the claim-gate solve advanceRobots runs at every real decision
+ * point, and the main-thread path has no timeout — DDS's documented heavy
+ * tail (a real deal once cost ~37s, see claim-soundness.test.ts) would stall
+ * every concurrent request for the duration. DDS is deterministic, so where
+ * the solve runs can never change its result — latency only, invariant 1
+ * untouched.
  */
 export async function solveFutureTricks(deal: Deal, contract: Contract, plays: Card[]): Promise<DdSolve> {
-  return futureTricksToDdSolve(await solveRequest(buildSolveRequest(deal, contract, plays)));
+  const req = buildSolveRequest(deal, contract, plays);
+  const pool = getSharedDdPool();
+  if (pool) {
+    try {
+      return futureTricksToDdSolve(await pool.solve(req));
+    } catch {
+      // degraded pool — fall through to the main-thread solve
+    }
+  }
+  return futureTricksToDdSolve(await solveRequest(req));
 }
 
 /**

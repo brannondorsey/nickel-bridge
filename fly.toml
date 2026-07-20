@@ -1,4 +1,11 @@
-# Fly.io deployment (~$2–3/month for a shared-cpu-1x + a few GB volume, per app).
+# Fly.io deployment. performance-1x reads expensive (~$31/mo sticker) but with
+# auto_stop_machines = 'suspend' billing is per-second-while-running, and these apps sleep
+# most of the day — real cost at friends scale is a few dollars/month per app plus the volume.
+# Why not shared-cpu-1x (~$2–3/mo flat): shared vCPUs get a 6.25% baseline with a small burst
+# budget (5s on a fresh machine — and every deploy makes a fresh machine), while this app's
+# workload is bursty DDS solving exactly when someone is playing: robot card play plus the
+# benchmark AI personas (server/src/ai-players.ts). Measured on a throttled preview, taps took
+# seconds and health checks failed; a dedicated core keeps play latency in the tens of ms.
 #
 # This one file is shared by every environment: production, the permanent demo app, and every
 # per-PR preview app (see .github/workflows/ci.yml and pr-preview-teardown.yml).
@@ -47,5 +54,5 @@ primary_region = 'ewr'
     timeout = '5s'
 
 [[vm]]
-  size = 'shared-cpu-1x'
-  memory = '512mb'
+  size = 'performance-1x'
+  memory = '2gb'

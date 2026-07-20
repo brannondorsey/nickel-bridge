@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { withAiPlayersSuspended } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
-import { playThrough } from './bot-play.js';
+import { playThrough, seededErraticStrategy } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
 import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament, ensureNewCrosser } from './demo.js';
 import { ensureAdvanced, loadBoard } from './game.js';
@@ -80,8 +81,11 @@ const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = 
 // demo Inspector would never be placed into the seeded field. (NULL schedule
 // = uniform intermediate on every board. Exhibits are separate and keep the
 // 'perfect' default, which is what their replay recipes were mined against.)
+// ai_field = 1: ambient tournaments are real, placement-participating play,
+// so the benchmark AI personas play them too — the demo app should showcase
+// the house rows. (Exhibits are created elsewhere and keep ai_field 0.)
 const stmtInsertBackdated = db.prepare(
-  `INSERT INTO tournaments (name, seed, difficulty, created_at) VALUES ('Tournament', ?, 'intermediate', ?) RETURNING *`,
+  `INSERT INTO tournaments (name, seed, difficulty, created_at, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
 );
 const stmtRename = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtBoardExists = db.prepare(
@@ -98,15 +102,21 @@ const stmtBackdateUser = db.prepare(`UPDATE users SET created_at = ? WHERE id = 
  * in the same response.
  */
 export function wipeDemoData(): Promise<void> {
-  return enqueue(() => {
-    db.exec(
-      `DELETE FROM elo_history;
-       DELETE FROM boards;
-       DELETE FROM sessions;
-       DELETE FROM tournaments;
-       DELETE FROM users;`,
-    );
-  });
+  return enqueue(() =>
+    // Suspend persona play across the wipe: the scheduler finishes its
+    // current unit (at most one board) and parks, so the wipe never deletes
+    // rows out from under a mid-board persona; the suspension also clears
+    // the scheduler's queue, since the queued tournaments are deleted here.
+    withAiPlayersSuspended(() => {
+      db.exec(
+        `DELETE FROM elo_history;
+         DELETE FROM boards;
+         DELETE FROM sessions;
+         DELETE FROM tournaments;
+         DELETE FROM users;`,
+      );
+    }),
+  );
 }
 
 export function ensureBot(name: string): UserRow {
@@ -146,7 +156,7 @@ async function seedTournament(
       }
       continue;
     }
-    await playThrough(t, player.id, target, (no) => `${player.google_id}:${spec.seed}:${no}`);
+    await playThrough(t, player.id, target, (no) => seededErraticStrategy(`${player.google_id}:${spec.seed}:${no}`));
     // Timestamp realism: finished boards look played shortly after the
     // tournament opened, staggered per player (drives monthlyEloDelta,
     // stats series ordering, and the lobby's "last played"). Runs even when
@@ -185,6 +195,11 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
   // "Learning since" on stats pages must predate the backdated results
   for (const u of [inspector, newCrosser, ...bots]) stmtBackdateUser.run(now - USER_AGE_S, u.id, now - USER_AGE_S);
 
+  // Ambient tournaments are stamped ai_field = 1 but deliberately NOT
+  // enqueued here: persona play starts on demand when a tester actually
+  // lands in one (the /api/play and board GET routes enqueue). Playing all
+  // of them at boot cost ~25 minutes of full-core DDS compute per
+  // boot/reset — enough to exhaust a shared-CPU machine's burst quota.
   for (const spec of profile.tournaments) {
     const t = await seedTournament(spec, bots, inspector, now);
     log.info(`demo seed: ${t.name} (${spec.seed}) ready`);
@@ -202,7 +217,7 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
       const t = ensureExhibitTournament(s.seed);
       const lastBoard = s.completesTournament ? BOARDS_PER_TOURNAMENT : s.boardNo;
       for (const bot of bots.slice(0, s.fieldBots)) {
-        await playThrough(t, bot.id, lastBoard, (no) => `${bot.google_id}:exhibit:${s.seed}:${no}`);
+        await playThrough(t, bot.id, lastBoard, (no) => seededErraticStrategy(`${bot.google_id}:exhibit:${s.seed}:${no}`));
       }
       log.info(`demo seed: exhibit field for '${s.id}' ready`);
     }

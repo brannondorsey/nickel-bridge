@@ -267,10 +267,11 @@ export const boardDone: BoardView = {
       total: 620,
     },
     field: [
-      { userId: 7, handle: 'Alice', contract: '4♠+1 by S', scoreNS: 650, pct: 83, isMe: false },
-      { userId: 1, handle: 'Margaret', contract: '4♠ by S', scoreNS: 620, pct: 58, isMe: true },
-      { userId: 8, handle: 'Bob', contract: '3♠+1 by S', scoreNS: 170, pct: 33, isMe: false },
-      { userId: 9, handle: 'Cara', contract: '4♠-1 by S', scoreNS: -100, pct: 8, isMe: false },
+      { userId: 7, handle: 'Alice', kind: 'human', contract: '4♠+1 by S', scoreNS: 650, pct: 83, isMe: false },
+      { userId: 1, handle: 'Margaret', kind: 'human', contract: '4♠ by S', scoreNS: 620, pct: 58, isMe: true },
+      { userId: 8, handle: 'Bob', kind: 'human', contract: '3♠+1 by S', scoreNS: 170, pct: 33, isMe: false },
+      { userId: 9, handle: 'Cara', kind: 'human', contract: '4♠-1 by S', scoreNS: -100, pct: 8, isMe: false },
+      { userId: 90, handle: 'The Shark', kind: 'ai', contract: '4♠-2 by S', scoreNS: -200, pct: 6, isMe: false },
     ],
   },
 };
@@ -305,9 +306,10 @@ export const tournamentInProgress: TournamentInfo = {
     { no: 2, state: 'bidding', contractLabel: null, scoreNS: null, pct: null },
   ],
   standings: [
-    { userId: 7, handle: 'Alice', boardsDone: 4, totalPct: 83, complete: true, rank: 1 },
-    { userId: 1, handle: 'Margaret', boardsDone: 1, totalPct: 58, complete: false },
-    { userId: 8, handle: 'Bob', boardsDone: 2, totalPct: 33, complete: false },
+    { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 83, complete: true, rank: 1 },
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
+    { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 1, totalPct: 58, complete: false },
+    { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 2, totalPct: 33, complete: false },
   ],
 };
 
@@ -325,9 +327,9 @@ export const tournamentComplete: TournamentInfo = {
     { no: 4, state: 'done', contractLabel: '4♥ by W', scoreNS: -420, pct: 71 },
   ],
   standings: [
-    { userId: 7, handle: 'Alice', boardsDone: 4, totalPct: 71, complete: true, rank: 1 },
-    { userId: 1, handle: 'Margaret', boardsDone: 4, totalPct: 61, complete: true, rank: 2 },
-    { userId: 8, handle: 'Bob', boardsDone: 4, totalPct: 18, complete: true, rank: 3 },
+    { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 71, complete: true, rank: 1 },
+    { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 4, totalPct: 61, complete: true, rank: 2 },
+    { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 4, totalPct: 18, complete: true, rank: 3 },
   ],
 };
 
@@ -340,7 +342,7 @@ const statPoint = (i: number) => ({
 });
 
 export const playerStatsFull: PlayerStats = {
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, createdAt: 1_770_000_000 },
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, createdAt: 1_770_000_000, kind: 'human' },
   totals: {
     boardsCompleted: 214,
     tournamentsPlayed: 12,
@@ -363,7 +365,7 @@ export const playerStatsFull: PlayerStats = {
 };
 
 export const playerStatsEmpty: PlayerStats = {
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1200, createdAt: 1_770_000_000 },
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1200, createdAt: 1_770_000_000, kind: 'human' },
   totals: {
     boardsCompleted: 0,
     tournamentsPlayed: 0,

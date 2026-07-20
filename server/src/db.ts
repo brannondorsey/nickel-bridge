@@ -79,6 +79,15 @@ if (!userColumns.has('handle_key')) db.exec(`ALTER TABLE users ADD COLUMN handle
 if (!userColumns.has('difficulty')) {
   db.exec(`ALTER TABLE users ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'intermediate'`);
 }
+// Migration: `kind` discriminates the three benchmark AI personas ('ai',
+// created only by ensureAiPlayers in ai-players.ts) from real accounts.
+// A first-class column, not a google_id prefix convention, for the same
+// reason as tournaments.kind below: standings, Elo, placement, leaderboard,
+// and stats all must partition on it, and hanging that on an id string
+// would break the moment the id scheme changes.
+if (!userColumns.has('kind')) {
+  db.exec(`ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'human'`);
+}
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
@@ -106,6 +115,15 @@ if (!tournamentColumns.has('difficulty')) {
 if (!tournamentColumns.has('board_difficulties')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN board_difficulties TEXT`);
 }
+// Migration: `ai_field` marks tournaments whose Field includes the three
+// benchmark AI personas (ai-players.ts). Stamped 1 only where tournaments
+// are created for real play (placeUser's creation path and demo-seed's
+// ambient tournaments) — never backfilled, so legacy tournaments, exhibit
+// holders, and raw-inserted fixture/test tournaments keep 0 and can never
+// acquire AI board rows.
+if (!tournamentColumns.has('ai_field')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN ai_field INTEGER NOT NULL DEFAULT 0`);
+}
 
 export interface UserRow {
   id: number;
@@ -117,6 +135,8 @@ export interface UserRow {
   handle_key: string | null;
   /** robot difficulty preference — drives placement (see tournaments.difficulty); never 'perfect' */
   difficulty: SettableDifficulty;
+  /** 'human' = real account; 'ai' = benchmark persona (ai-players.ts), excluded from Elo/placement/leaderboard/stats and shown as a shadow row in standings */
+  kind: 'human' | 'ai';
   elo: number;
   created_at: number;
 }
@@ -132,10 +152,32 @@ export interface TournamentRow {
   difficulty: Difficulty;
   /** JSON Difficulty[4], one entry per board; NULL = uniform at `difficulty` */
   board_difficulties: string | null;
+  /** 1 = the benchmark AI personas play this tournament (stamped at creation, never backfilled) */
+  ai_field: number;
   created_at: number;
 }
 
 export const BOARDS_PER_TOURNAMENT = 4;
+
+/**
+ * Display order for the benchmark AI personas when scores tie: strongest
+ * first (The Shark above The Regular above The Novice). Keyed on google_id —
+ * the personas' stable identity (ai-players.ts); handles are display copy
+ * and can be renamed. Humans (or unknown ids) rank 0, ahead of every
+ * persona, preserving the "a human outranks a persona they tie with" rule.
+ */
+export function aiTieRank(googleId: string | null | undefined): number {
+  switch (googleId) {
+    case 'ai:expert':
+      return 1;
+    case 'ai:intermediate':
+      return 2;
+    case 'ai:beginner':
+      return 3;
+    default:
+      return 0;
+  }
+}
 
 export interface BoardRow {
   id: number;

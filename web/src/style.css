@@ -2090,6 +2090,31 @@ a.board-row:hover {
   color: var(--muted);
   font-size: 12.5px;
 }
+/* House (benchmark AI) rows: italic Crimson name in muted ink plus a small
+   tracked-caps HOUSE tag — a reference row, not a competitor. Deliberately
+   no background fill: the surface fill is the reserved "you" signal. */
+.tourney-field-house .tourney-field-name a {
+  font-style: italic;
+  color: var(--muted);
+}
+.tourney-field-house .tourney-field-rank,
+.fieldtable tr.house td {
+  color: var(--muted);
+}
+.house-tag {
+  font-family: var(--font-label);
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px 1px;
+  margin-left: 6px;
+  vertical-align: 1.5px;
+  white-space: nowrap;
+}
 .tourney-actions {
   padding: 14px 16px 0;
   margin-top: auto;
@@ -2361,6 +2386,10 @@ a.board-row:hover {
 }
 .fieldtable tr.me td:first-child {
   padding-left: 6px;
+}
+.fieldtable tr.house .fieldtable-name {
+  font-style: italic;
+  color: var(--muted);
 }
 .fieldtable-contract {
   color: var(--muted);

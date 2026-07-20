@@ -566,7 +566,9 @@ function PlayPhase({
 function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => void; onReceipt: () => void }) {
   const r = board.result!;
   const low = r.pct < 40;
-  const others = Math.max(0, r.field.length - 1);
+  // House (benchmark AI) rows are shadow entries — the matchpoint comparison
+  // the hero pct describes is against the human field only.
+  const others = Math.max(0, r.field.filter((f) => f.kind === 'human').length - 1);
   return (
     <div className="result">
       <div className="result-hero">
@@ -592,8 +594,11 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
         <table className="fieldtable num">
           <tbody>
             {r.field.map((f) => (
-              <tr key={f.userId} className={f.isMe ? 'me' : ''}>
-                <td className="fieldtable-name">{f.isMe ? 'You' : f.handle}</td>
+              <tr key={f.userId} className={f.isMe ? 'me' : f.kind === 'ai' ? 'house' : ''}>
+                <td className="fieldtable-name">
+                  {f.isMe ? 'You' : f.handle}
+                  {f.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
+                </td>
                 <td className="fieldtable-contract">
                   <ContractLabel label={f.contract} /> · {signedScore(f.scoreNS)}
                 </td>

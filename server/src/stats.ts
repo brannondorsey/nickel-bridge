@@ -2,7 +2,9 @@ import { Contract, ELO_INITIAL } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
-const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ? AND handle IS NOT NULL`);
+const stmtUser = db.prepare(
+  `SELECT id, handle, picture, elo, created_at, kind FROM users WHERE id = ? AND handle IS NOT NULL`,
+);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
 // so its rows carry no timestamp — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.
@@ -25,9 +27,13 @@ const stmtDoneBoards = db.prepare(
 const stmtRatedElos = db.prepare(
   `SELECT elo FROM users WHERE EXISTS (SELECT 1 FROM elo_history h WHERE h.user_id = users.id)`,
 );
+// users.kind filter: the benchmark AI personas (ai-players.ts) are not part
+// of anyone's comparison field — their bid evals must not enter the accuracy
+// pool or the activePlayers count.
 const stmtAllDoneEvals = db.prepare(
   `SELECT b.user_id, b.bid_evals FROM boards b
    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   JOIN users u ON u.id = b.user_id AND u.kind = 'human'
    WHERE b.state = 'done'`,
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
@@ -39,7 +45,8 @@ interface StatPoint {
 }
 
 interface PlayerStats {
-  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
+  /** kind = 'ai' identifies one of the benchmark house personas (ai-players.ts) */
+  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
   totals: {
     boardsCompleted: number;
     tournamentsPlayed: number;
@@ -95,7 +102,7 @@ function betterThan(value: number, field: number[]): number | null {
 
 export function playerStats(userId: number): PlayerStats | null {
   const u = stmtUser.get(userId) as
-    | { id: number; handle: string; picture: string | null; elo: number; created_at: number }
+    | { id: number; handle: string; picture: string | null; elo: number; created_at: number; kind: 'human' | 'ai' }
     | undefined;
   if (!u) return null;
 
@@ -168,7 +175,8 @@ export function playerStats(userId: number): PlayerStats | null {
         finishedAt: t.finishedAt,
         pct: mine.totalPct,
         boards: mine.boardsDone,
-        fieldSize: field.length,
+        // human rows only: AI shadow rows aren't field members
+        fieldSize: field.filter((s) => s.kind === 'human').length,
       },
     ];
   });
@@ -177,7 +185,7 @@ export function playerStats(userId: number): PlayerStats | null {
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
   return {
-    user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at },
+    user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
       boardsCompleted: boards.length,
       tournamentsPlayed: byTournament.size,
@@ -247,7 +255,8 @@ function fieldPercentiles(
   const pctsByUser = new Map<number, number[]>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
     for (const s of standings(id)) {
-      if (s.totalPct === null) continue;
+      // AI shadow rows never enter anyone's percentile pool
+      if (s.kind !== 'human' || s.totalPct === null) continue;
       pctsByUser.set(s.userId, [...(pctsByUser.get(s.userId) ?? []), s.totalPct]);
     }
   }

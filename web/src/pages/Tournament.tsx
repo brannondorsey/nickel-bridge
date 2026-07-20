@@ -53,7 +53,10 @@ export default function Tournament() {
   }
 
   const myDone = t.myDone ?? 0;
-  const pairs = t.standings.length;
+  // House (benchmark AI) rows are shadow entries: they show in The Field but
+  // are not pairs in the competitive sense — counts and ranks are human-only.
+  const humanRows = t.standings.filter((s) => s.kind === 'human');
+  const pairs = humanRows.length;
   const pairsWord = pairs === 1 ? 'pair' : 'pairs';
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
   const complete = myDone === TOTAL_BOARDS;
@@ -170,13 +173,22 @@ export default function Tournament() {
         {t.standings.length === 0 ? (
           <div className="empty-note">No one has played a board yet.</div>
         ) : (
-          t.standings.map((s, i) => {
+          t.standings.map((s) => {
             const you = s.userId === me?.user?.id;
+            const house = s.kind === 'ai';
+            // Humans keep their pre-house fallback numbering (position among
+            // humans); house rows never show a rank — they interleave by pct
+            // only, a yardstick laid alongside the field.
+            const rankLabel = house ? '—' : (s.rank ?? humanRows.indexOf(s) + 1);
             return (
-              <div key={s.userId} className={`tourney-field-row ${you ? 'tourney-field-you' : ''}`}>
-                <b className="tourney-field-rank">{s.rank ?? i + 1}</b>
+              <div
+                key={s.userId}
+                className={`tourney-field-row ${you ? 'tourney-field-you' : ''}${house ? ' tourney-field-house' : ''}`}
+              >
+                <b className="tourney-field-rank">{rankLabel}</b>
                 <span className="tourney-field-name">
                   <Link to={`/players/${s.userId}`}>{you ? 'You' : s.handle}</Link>
+                  {house ? <span className="house-tag">HOUSE</span> : null}
                   {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
                 </span>
                 <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>

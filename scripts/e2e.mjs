@@ -100,18 +100,29 @@ for (let i = 0; i < 4; i++) {
   );
 }
 
-// field comparison on board 1 shows both
+// field comparison on board 1 shows both humans; benchmark AI (house) rows
+// may also be present depending on how far the background personas have
+// played — they are shadow entries and must never affect the human numbers
 const b1 = await bob.req(`/api/tournaments/${b.tournamentId}/boards/1`);
-assert(b1.result.field.length === 2, 'board 1 field has two results');
-const pcts = b1.result.field.map((f) => f.pct);
+const humanField = b1.result.field.filter((f) => f.kind === 'human');
+assert(humanField.length === 2, 'board 1 field has two human results');
+const pcts = humanField.map((f) => f.pct);
 assert(
   pcts.every((p) => p === 50) || Math.abs(pcts[0] + pcts[1] - 100) < 0.01,
   `matchpoint pcts complementary (${pcts.join(', ')})`,
 );
 
 const standings = await alice.req(`/api/tournaments/${a.tournamentId}`);
-assert(standings.standings.length === 2, 'standings list both players');
-assert(standings.standings.every((s) => s.complete), 'both players complete');
+const humanStandings = standings.standings.filter((s) => s.kind === 'human');
+assert(humanStandings.length === 2, 'standings list both players');
+assert(
+  humanStandings.every((s) => s.complete),
+  'both players complete',
+);
+assert(
+  standings.standings.filter((s) => s.kind === 'ai').every((s) => s.rank === undefined),
+  'house rows carry no rank',
+);
 
 // continuous Elo: the completed tournament is rated immediately, no expiry
 let lb = (await alice.req('/api/leaderboard')).leaderboard;
@@ -134,7 +145,10 @@ for (let no = 1; no <= 4; no++) {
 lb = (await carol.req('/api/leaderboard')).leaderboard;
 assert(lb.filter((r) => r.rated_tournaments === 1).length === 3, 'Elo re-ranked to include the late finisher');
 const b1c = await carol.req(`/api/tournaments/${c.tournamentId}/boards/1`);
-assert(b1c.result.field.length === 3, 'board 1 field now has three results');
+assert(
+  b1c.result.field.filter((f) => f.kind === 'human').length === 3,
+  'board 1 field now has three human results',
+);
 
 // grades came through
 assert(lastGrades.length > 0, `bid grading produced ${lastGrades.length} grades`);

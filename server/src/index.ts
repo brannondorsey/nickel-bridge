@@ -13,6 +13,23 @@ if (process.env.DEMO === '1') {
     .catch((err) => app.log.error(err, 'demo seed failed'));
 }
 
+// Benchmark AI personas: ensure the three accounts exist, then re-enqueue
+// tournaments whose persona play STARTED but didn't finish — crash/redeploy
+// recovery for play interrupted mid-board. After listen and fire-and-forget
+// for the same reason as the seeder. Tournaments nobody has opened are
+// deliberately not swept: persona play starts on demand from the placement
+// and board routes (see ai-players.ts scheduling). Disabled by AI_PLAYERS=0
+// inside these calls (the test harness sets it; buildApp() never runs this
+// file, so app.inject() suites are exempt regardless).
+if (process.env.AI_PLAYERS !== '0') {
+  import('./ai-players.js')
+    .then((m) => {
+      m.ensureAiPlayers();
+      m.sweepAiFields(app.log);
+    })
+    .catch((err) => app.log.error(err, 'ai-players boot sweep failed'));
+}
+
 // Fly sends SIGTERM before stopping a machine (redeploys, idle scale-to-zero) — drain
 // in-flight requests instead of letting Node kill the process immediately.
 process.on('SIGTERM', async () => {
