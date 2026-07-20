@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { Bidder, MC_SAMPLES, chooseCardSampled, loadPolicyModel, mcDecisionSeed, solveFutureTricks } from '@bridge/ai';
+import { Contract, Seat, legalCards, partnerOf, playState } from '@bridge/core';
 import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 freshDbEnv('difficulty');
@@ -123,4 +125,118 @@ describe('sampled robots are deterministic across players', () => {
     expect(last1.contract).toEqual(last2.contract);
     expect(last1.declarerTricks).toEqual(last2.declarerTricks);
   }, 120_000);
+});
+
+/**
+ * Mirrors game.ts's private humanControls: South always, plus North (the
+ * dummy/declarer seat) when N-S is the declaring side. Duplicated here
+ * rather than exported from game.ts since it's only needed to walk a
+ * completed board's decision sequence from outside advanceRobots.
+ */
+const HUMAN_SEAT: Seat = 2;
+function humanControls(hand: Seat, contract: Contract): boolean {
+  if (hand === HUMAN_SEAT) return true;
+  return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
+}
+
+/**
+ * The BID_NOISE/PLAY_NOISE dials (difficulty.ts) only matter if game.ts
+ * actually threads (difficulty, seed) into every robot decision — the
+ * pre-existing determinism test above can't catch that wiring going missing,
+ * since two players seeing identically-ABSENT noise would still agree with
+ * each other. This drives a run of beginner boards directly through the game
+ * module (bypassing the HTTP layer for easy access to the raw calls/plays
+ * arrays), and for every decision the robots actually made, recomputes the
+ * noise-OFF counterfactual (pure argmax bidding / playTopN=1 card play) with
+ * the exact same seed. Finding at least one real deviation of each kind
+ * confirms the noise is live end to end, not silently dead.
+ */
+describe('bidding and card-play noise are actually wired through advanceRobots', () => {
+  it('a run of beginner boards diverges from pure-argmax bidding and pure-best card play at least once each', async () => {
+    const { db } = await import('../src/db.js');
+    const game = await import('../src/game.js');
+    const pureBidder = new Bidder(loadPolicyModel('sl'));
+    const userId = (
+      db.prepare(`INSERT INTO users (google_id, name) VALUES ('dev:noisecheck', 'NoiseCheck') RETURNING id`).get() as {
+        id: number;
+      }
+    ).id;
+
+    async function driveToEnd(t: any, b: any): Promise<void> {
+      await game.ensureAdvanced(b);
+      let view = game.boardView(t, b, 1200);
+      let safety = 300;
+      while (view.state !== 'done' && safety-- > 0) {
+        if (view.state === 'bidding' && view.myTurn) await game.submitCall(b, 0);
+        else if (view.state === 'playing' && view.myTurn) await game.submitPlay(b, (view.legalCards as number[])[0]);
+        else throw new Error(`board stuck: state=${view.state} myTurn=${view.myTurn}`);
+        view = game.boardView(t, b, 1200);
+      }
+      if (view.state !== 'done') throw new Error('board did not finish');
+    }
+
+    let bidDeviated = false;
+    let cardDeviated = false;
+    const BOARDS = 20;
+
+    for (let n = 0; n < BOARDS && (!bidDeviated || !cardDeviated); n++) {
+      const t = db
+        .prepare(`INSERT INTO tournaments (name, seed, difficulty) VALUES ('noise-check', ?, 'beginner') RETURNING *`)
+        .get(`noise-${n}`) as any;
+      const b = game.loadBoard(t, userId, 1, true)!;
+      await driveToEnd(t, b);
+
+      if (!bidDeviated) {
+        for (let i = 0; i < b.calls.length; i++) {
+          const seat = ((b.deal.dealer + i) % 4) as Seat;
+          if (seat === HUMAN_SEAT) continue; // this drive always passes as South
+          const pure = pureBidder.chooseCall(b.deal, b.calls.slice(0, i)); // no opts: noise-off argmax
+          if (pure !== b.calls[i]) {
+            bidDeviated = true;
+            break;
+          }
+        }
+      }
+
+      if (!cardDeviated && b.contract) {
+        const contract = b.contract;
+        const dummy = partnerOf(contract.declarer);
+        for (let i = 0; i < b.plays.length; i++) {
+          const prefix = b.plays.slice(0, i);
+          const ps = playState(b.deal, contract, prefix);
+          if (ps.isOver) break;
+          const legal = legalCards(b.deal, ps);
+          if (legal.length <= 1) continue; // forced node: no noise possible
+          if (humanControls(ps.handToPlay, contract)) continue; // this drive plays the human's own cards
+          const actor = ps.handToPlay === dummy ? contract.declarer : ps.handToPlay;
+          if (actor === 0) continue; // partner (North) is never subject to PLAY_NOISE
+
+          // Replicate advanceRobots' claim gate: once the position is a 100%
+          // laydown for either side, the rest of the hand is played true-DD
+          // (chooseCard/resolveClaim), not through the sampled/noisy path —
+          // recomputing a "pure" sampled counterfactual past this point would
+          // compare against the wrong algorithm entirely, a false signal.
+          const solve = await solveFutureTricks(b.deal, contract, prefix);
+          const remainingTricks = 13 - ps.completedTricks.length;
+          if (solve.bestScore === remainingTricks || solve.bestScore === 0) break;
+
+          const pure = await chooseCardSampled(b.deal, contract, prefix, {
+            k: MC_SAMPLES.beginner.kOpp,
+            useAuction: MC_SAMPLES.beginner.auctionAware,
+            playTopN: 1, // noise-off counterfactual
+            seed: mcDecisionSeed(t.seed, b.row.board_no, prefix.length),
+            dealer: b.deal.dealer,
+            calls: b.calls,
+          });
+          if (pure !== b.plays[i]) {
+            cardDeviated = true;
+            break;
+          }
+        }
+      }
+    }
+
+    expect(bidDeviated).toBe(true);
+    expect(cardDeviated).toBe(true);
+  }, 90_000);
 });
