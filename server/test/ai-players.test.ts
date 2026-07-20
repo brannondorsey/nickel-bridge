@@ -219,6 +219,15 @@ describe('benchmark AI players', () => {
     const stats = await alice.get(`/api/users/${aliceId}/stats`);
     expect(stats.percentiles.activePlayers).toBe(2); // Alice + Bob, no personas
     expect(stats.pctSeries[0].fieldSize).toBe(2);
+    expect(stats.user.kind).toBe('human');
+
+    // a persona's own /players/:id profile stays open as calibration content
+    // (CONTRIBUTING.md), but must be labeled — the web HOUSE tag on Player.tsx
+    // keys off this field to tell it apart from a real player's profile.
+    const expert = ensureAiPlayers().expert;
+    const personaStats = await alice.get(`/api/users/${expert.id}/stats`);
+    expect(personaStats.user.kind).toBe('ai');
+    expect(personaStats.user.handle).toBe(expert.handle);
   });
 
   it('breaks display ties human-first, then strongest persona first', async () => {

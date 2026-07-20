@@ -434,7 +434,13 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
               const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
               return phantom[phantom.length - 1].pct;
             })()
-          : 50;
+          // Unknowable, not 50 — same rule as standings() (tournaments.ts):
+          // no human has finished this board yet, so there's no field to
+          // phantom-insert this persona's score against. Only reachable when
+          // this is computed for a persona's OWN board (bot-play.ts calls
+          // boardView after every action) before any human has reached this
+          // board number — never in a response served to a real client.
+          : null;
     return {
       userId: r.user_id,
       handle: r.user_handle,
@@ -442,7 +448,7 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
       tieRank: aiTieRank(r.user_google),
       contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
       scoreNS: r.score_ns ?? 0,
-      pct: Math.round(pct * 10) / 10,
+      pct: pct === null ? null : Math.round(pct * 10) / 10,
       isMe: r.user_id === b.row.user_id,
     };
   });
@@ -451,7 +457,7 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
     contractLabel: b.contract ? contractLabel(b.contract, b.row.tricks_declarer ?? undefined) : 'Passed out',
     tricksDeclarer: b.row.tricks_declarer,
     scoreNS: b.row.score_ns,
-    pct: mine?.pct ?? 50,
+    pct: mine?.pct ?? null,
     // score desc; ties break human-first then strongest persona first
     // (aiTieRank), same rule as standings() — tieRank is server-side only
     field: field

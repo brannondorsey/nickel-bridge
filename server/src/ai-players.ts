@@ -104,9 +104,11 @@ const stmtAiFieldStartedIncomplete = db.prepare(
           WHERE b.tournament_id = t.id AND u.kind = 'ai' AND b.state = 'done') < ?
    ORDER BY t.id`,
 );
+// Placeholder count follows DIFFICULTIES.length so this stays correct if a
+// tier is ever added or removed, instead of hardcoding today's count of 3.
 const stmtPersonaBoardStates = db.prepare(
   `SELECT b.user_id, b.board_no FROM boards b
-   WHERE b.tournament_id = ? AND b.user_id IN (?, ?, ?) AND b.state = 'done'`,
+   WHERE b.tournament_id = ? AND b.user_id IN (${DIFFICULTIES.map(() => '?').join(', ')}) AND b.state = 'done'`,
 );
 // The furthest any human has progressed: their next board is MAX(done)+1.
 const stmtMaxHumanDone = db.prepare(
@@ -311,27 +313,41 @@ function nextUnit(personas: Record<SettableDifficulty, UserRow>): Unit | null {
 async function runner(): Promise<void> {
   try {
     for (;;) {
-      if (suspendCount > 0) {
-        await parkUntilPoked(1_000);
-        continue;
-      }
-      if (pending.size === 0) break;
-      const personas = ensureAiPlayers();
-      const unit = nextUnit(personas);
-      if (!unit) continue; // pending shrank inside nextUnit — re-check loop conditions
-      if (!unit.urgent && interactiveRecently()) {
-        // A human is around and nothing is urgent: park. A poke (new
-        // enqueue / activity note) re-evaluates immediately.
-        await parkUntilPoked(Math.max(1_000, pauseMs() / 3));
-        continue;
-      }
-      const t = getTournament(unit.tournamentId)!;
+      // The whole iteration — not just playSingleBoard — is guarded: runner()
+      // is always invoked fire-and-forget (`void runner()`), so an exception
+      // escaping this loop (e.g. a transient synchronous-SQLite error inside
+      // ensureAiPlayers/nextUnit, ahead of or outside the inner try below)
+      // would become an unhandled promise rejection and, under Node's default
+      // --unhandled-rejections=throw, crash the whole server — not just the
+      // background feature. Drop everything queued and stop; the next
+      // placement or boot sweep re-enqueues from a clean slate.
       try {
-        await playSingleBoard(t, personas[unit.tier].id, unit.boardNo, tierStrategy(unit.tier, t.seed));
+        if (suspendCount > 0) {
+          await parkUntilPoked(1_000);
+          continue;
+        }
+        if (pending.size === 0) break;
+        const personas = ensureAiPlayers();
+        const unit = nextUnit(personas);
+        if (!unit) continue; // pending shrank inside nextUnit — re-check loop conditions
+        if (!unit.urgent && interactiveRecently()) {
+          // A human is around and nothing is urgent: park. A poke (new
+          // enqueue / activity note) re-evaluates immediately.
+          await parkUntilPoked(Math.max(1_000, pauseMs() / 3));
+          continue;
+        }
+        const t = getTournament(unit.tournamentId)!;
+        try {
+          await playSingleBoard(t, personas[unit.tier].id, unit.boardNo, tierStrategy(unit.tier, t.seed));
+        } catch (err) {
+          log.error({ err, tournamentId: unit.tournamentId, boardNo: unit.boardNo, tier: unit.tier },
+            'ai-players: unit failed; dropping tournament from queue');
+          pending.delete(unit.tournamentId);
+        }
       } catch (err) {
-        log.error({ err, tournamentId: unit.tournamentId, boardNo: unit.boardNo, tier: unit.tier },
-          'ai-players: unit failed; dropping tournament from queue');
-        pending.delete(unit.tournamentId);
+        log.error({ err }, 'ai-players: scheduler loop failed; suspending the queue');
+        pending.clear();
+        break;
       }
     }
   } finally {
@@ -362,10 +378,14 @@ export function whenAiPlayersDrained(): Promise<void> {
 
 /**
  * Run `fn` with persona play suspended — the runner finishes its current
- * unit (at most one board, seconds) and parks. Demo's wipe/reseed uses this
- * so the wipe never deletes rows out from under a mid-board persona; it also
- * clears the queue, since the wipe deletes the queued tournaments themselves
- * (post-reseed enqueues repopulate it on demand).
+ * unit and parks before `fn` runs. Demo's wipe/reseed uses this so the wipe
+ * never deletes rows out from under a mid-board persona; it also clears the
+ * queue, since the wipe deletes the queued tournaments themselves
+ * (post-reseed enqueues repopulate it on demand). Bounded by at most one
+ * board's worth of decisions, but NOT necessarily seconds: courtesyGap caps
+ * each decision at COURTESY_CAP_MS (6s), and a board is ~15-20 decisions, so
+ * under sustained interactive traffic from other concurrent testers the wait
+ * can run to a couple of minutes worst case, not just seconds.
  */
 export async function withAiPlayersSuspended<T>(fn: () => T | Promise<T>): Promise<T> {
   suspendCount++;

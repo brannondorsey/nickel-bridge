@@ -169,7 +169,8 @@ interface StatPoint {
 }
 
 export interface PlayerStats {
-  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
+  /** 'ai' = one of the benchmark house players (ai-players.ts) */
+  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
   totals: {
     boardsCompleted: number;
     tournamentsPlayed: number;

@@ -342,7 +342,7 @@ const statPoint = (i: number) => ({
 });
 
 export const playerStatsFull: PlayerStats = {
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, createdAt: 1_770_000_000 },
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, createdAt: 1_770_000_000, kind: 'human' },
   totals: {
     boardsCompleted: 214,
     tournamentsPlayed: 12,
@@ -365,7 +365,7 @@ export const playerStatsFull: PlayerStats = {
 };
 
 export const playerStatsEmpty: PlayerStats = {
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1200, createdAt: 1_770_000_000 },
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1200, createdAt: 1_770_000_000, kind: 'human' },
   totals: {
     boardsCompleted: 0,
     tournamentsPlayed: 0,

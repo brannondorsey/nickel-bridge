@@ -2,7 +2,9 @@ import { Contract, ELO_INITIAL } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
-const stmtUser = db.prepare(`SELECT id, handle, picture, elo, created_at FROM users WHERE id = ? AND handle IS NOT NULL`);
+const stmtUser = db.prepare(
+  `SELECT id, handle, picture, elo, created_at, kind FROM users WHERE id = ? AND handle IS NOT NULL`,
+);
 // elo_history is wiped and replayed in tournament-id order on every recompute,
 // so its rows carry no timestamp — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.
@@ -43,7 +45,8 @@ interface StatPoint {
 }
 
 interface PlayerStats {
-  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number };
+  /** kind = 'ai' identifies one of the benchmark house personas (ai-players.ts) */
+  user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
   totals: {
     boardsCompleted: number;
     tournamentsPlayed: number;
@@ -99,7 +102,7 @@ function betterThan(value: number, field: number[]): number | null {
 
 export function playerStats(userId: number): PlayerStats | null {
   const u = stmtUser.get(userId) as
-    | { id: number; handle: string; picture: string | null; elo: number; created_at: number }
+    | { id: number; handle: string; picture: string | null; elo: number; created_at: number; kind: 'human' | 'ai' }
     | undefined;
   if (!u) return null;
 
@@ -182,7 +185,7 @@ export function playerStats(userId: number): PlayerStats | null {
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
   return {
-    user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at },
+    user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
       boardsCompleted: boards.length,
       tournamentsPlayed: byTournament.size,

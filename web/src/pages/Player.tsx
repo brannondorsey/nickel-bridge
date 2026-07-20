@@ -162,8 +162,13 @@ export default function Player() {
               </div>
             )}
             <div>
-              <div className="stats-handle">{stats.user.handle}</div>
-              <div className="stats-since">Learning since {since}</div>
+              <div className="stats-handle">
+                {stats.user.handle}
+                {stats.user.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
+              </div>
+              <div className="stats-since">
+                {stats.user.kind === 'ai' ? 'Benchmark player — a fixed reference point, not a competitor' : `Learning since ${since}`}
+              </div>
             </div>
           </div>
         ) : null}
