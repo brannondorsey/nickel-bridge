@@ -36,16 +36,24 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall = model argmax constrained to SAYC-admissible
                 bids — any bid violating its own exact SAYC meaning's `req` is
-                excluded, pass always allowed; grading by model probability ratio,
+                excluded, pass always allowed; at non-'perfect' difficulty, seeded
+                noisy sampling over the top BID_NOISE[tier].topN admissible calls by
+                probability softens the tier-blind argmax, see difficulty.ts;
+                grading by model probability ratio,
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
                 play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
                 for non-expert difficulty tiers: K seeded hidden-hand layouts
                 constrained by the auction's SAYC `req`s + shown-out voids, solved
-                per layout, best aggregate card), difficulty.ts (tier type + K
-                constants), dd-pool.ts/dd-worker.ts (lazy worker_threads DDS pool
-                for parallel sampled solves — latency only, never outcomes)
+                per layout, aggregate scores summed per legal card — then, per
+                PLAY_NOISE, either the flat argmax or a seeded weighted pick among
+                the top playTopN cards by that same score), difficulty.ts (tier
+                type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
+                (lazy worker_threads DDS pool for parallel sampled solves —
+                latency only, never outcomes), play-mc-forget.ts (EXPERIMENTAL,
+                unshipped card-"forgetting" prototype — see its doc comment and
+                docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
@@ -69,13 +77,20 @@ tools           offline Python weight conversion + golden-fixture generation;
                 (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`);
                 find_scenarios.mjs records/mines demo-scenario replay recipes (offline —
                 results are hand-curated into server/src/scenarios.ts);
-                calibrate_k.mjs sweeps sampled-DD K values against true-DD reference
-                play to pick the difficulty-tier constants in packages/ai/difficulty.ts
+                calibrate_k.mjs sweeps sampled-DD K values (plus --bid-topn/--forget-window)
+                against true-DD reference play; calibrate_stats.mjs is the same sweeps with
+                standard error; calibrate_stack.mjs measures the combined bid+play effect for
+                the shipped tiers (--ew-only: signed IMP, matches PARTNER_FLOOR's asymmetry);
+                calibrate_whatif.mjs compares named CANDIDATE configs (not just shipped tiers)
+                for "should we change tier X or Y" questions — see
+                docs/difficulty-tuning-guide.md for how these fit together
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
-                shelved full rule-engine design
+                shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
+                about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
+                difficulty-calibration-research.md — the research log behind today's values
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
                 design-system skill — see "Design system" below
 ```
@@ -179,10 +194,13 @@ of an already-started tournament is deliberately preference-blind). The player-f
 (`MC_SAMPLES` in `difficulty.ts`) all use `chooseCardSampled` (`packages/ai/src/play-mc.ts`)
 — K seeded layouts of the cards the acting player can't see, constrained by shown-out voids
 and (unless the tier is auction-blind) the auction's machine-checkable SAYC `req`s with a
-deterministic relaxation ladder, each solved double-dummy, best aggregate card played:
+deterministic relaxation ladder, each solved double-dummy, aggregate scores summed per legal
+card, then (per `PLAY_NOISE`, see "Robot difficulty (card-selection noise)" below) either the
+flat best card played or a seeded weighted pick among the top few:
 `expert` kOpp=8, `intermediate` kOpp=1, `beginner` kOpp=1 **auction-blind** (opponents
 ignore the bidding entirely). Robot North — only ever the human's defensive partner — is
-always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)`. The fourth value,
+always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)` and never subject to
+`PLAY_NOISE` (always the flat best card). The fourth value,
 `'perfect'`, is the **hidden legacy tier**: true-deal DD-optimal play, byte for byte the
 pre-difficulty behavior; it's the schema default (so legacy tournaments, the robot-trace
 fixture, and demo exhibits all resolve to it) and is not settable through the API. Demo
@@ -191,6 +209,47 @@ Claim detection and `resolveClaim` stay true-DD at every tier. Sampled solves ru
 lazy `worker_threads` DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential
 fallback when unavailable); DDS is deterministic, so the pool affects latency only. Nothing
 here consults env vars — difficulty flows from the tournament row.
+
+**Robot difficulty (bidding noise):** card play softening above only ever touched hidden-hand
+uncertainty — bidding (`bidder.ts`) was difficulty-blind, every tier bidding the model's pure
+argmax over SAYC-admissible calls. `BID_NOISE` in `difficulty.ts` gives bidding its own,
+independent dial: at any non-`'perfect'` difficulty, `Bidder.chooseCall` draws (seeded via
+`bidDecisionSeed`, the same duplicate-fairness argument as `mcDecisionSeed`) from the top
+`BID_NOISE[tier].topN` SAYC-admissible calls weighted by the model's own probabilities, instead
+of always taking the single highest-probability one. `topN: 1` (expert) is mathematically
+identical to pure argmax — expert bidding, and every `'perfect'`-tier or no-`opts` call site
+(the robot-trace fixture, `tools/calibrate_k.mjs`'s baseline bidding, `tools/gen_trace_fixture.mjs`),
+is untouched. `server/src/game.ts`'s `advanceRobots` is the only production call site that
+passes `opts`, resolving `difficulty` the same way `robotCard()` does
+(`boardDifficulty(b.tournament, b.row.board_no)`). Calibrated the same way as `MC_SAMPLES`
+(`tools/calibrate_k.mjs --bid-topn`, see `difficulty.ts`'s doc comment for the table) — the dial
+saturates by topN≈3, same shape as the K dial.
+
+**Robot difficulty (card-selection noise):** K and `BID_NOISE` above only ever corrupt the
+acting player's *belief* about the hidden cards — `chooseCardSampled` still always played the
+single highest-scoring legal card against whatever it sampled (a pure argmax via
+`pickFromSolve`). `PLAY_NOISE` in `difficulty.ts` softens the *decision* itself instead: an
+optional `playTopN` on `chooseCardSampled`'s opts (default 1, byte-identical to every
+pre-existing call site) draws, continuing the same seeded rng stream used for hidden-hand
+sampling, from the top `playTopN` legal cards weighted by the K-sampled layouts' own score,
+instead of always the best one — the same idea `BID_NOISE` applies to bidding, applied to card
+play. `server/src/game.ts`'s `robotCard()` passes `PLAY_NOISE[difficulty].topN` for E-W and `1`
+for robot North (never noisy, matching its `kPartner`/always-auction-aware treatment). Per
+research (`docs/difficulty-calibration-research.md` §7c/7d), this is the largest lever found
+for the beginner/intermediate tiers — `K` is floored at 1 and `BID_NOISE` saturates by
+topN≈3-4, but `playTopN` keeps adding real effect further out, and unlike raising `K` it costs
+no extra DDS solves (it re-weights totals the K-sample solve already computed). Calibrated via
+`tools/calibrate_stats.mjs playtopn`; `tools/calibrate_stack.mjs --ew-only` measures the
+combined bid+play effect against a pure/true-DD reference with only East/West weakened
+(matching `PARTNER_FLOOR`'s asymmetry), instead of that tool's default of weakening all four
+seats and reporting an unsigned delta. `intermediate` ships with `PLAY_NOISE` fully OFF
+(`topN: 1`, same as expert) — measurement showed beginner and intermediate landing within
+noise of each other in that combined metric even though each dial moved monotonically in
+isolation, and hardening intermediate closed that gap far more efficiently than pushing
+beginner further (`tools/calibrate_whatif.mjs`'s comparison, and the full reasoning, are in
+`PLAY_NOISE`'s doc comment and `docs/difficulty-tuning-guide.md`). See that guide for the
+general mental model (belief dials vs. decision dials, why they saturate differently, which
+tool answers which question) before tuning any of these constants further.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means
@@ -286,10 +345,11 @@ base token, add it to both the `[data-theme="night"]` block and that media copy.
    encoding, tie-breaks, dealing), regenerate it: `npm run build && node
    tools/gen_trace_fixture.mjs`. If that diff surprises you, you were about to silently break
    comparability of live tournaments — stop and figure out why. Changing the sampled-tier
-   constants (`MC_SAMPLES`/`PARTNER_FLOOR` in `packages/ai/src/difficulty.ts`) is the same
-   kind of deliberate robot change scoped to non-perfect tournaments: it breaks comparability
-   for in-flight ones, so calibrate (`tools/calibrate_k.mjs`) first, or accept the break
-   knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   constants (`MC_SAMPLES`/`PARTNER_FLOOR`/`BID_NOISE`/`PLAY_NOISE` in
+   `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
+   non-perfect tournaments: it breaks comparability for in-flight ones, so calibrate
+   (`tools/calibrate_k.mjs`, `tools/calibrate_stats.mjs`, `tools/calibrate_stack.mjs`) first,
+   or accept the break knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

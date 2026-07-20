@@ -3,6 +3,8 @@ import {
   Bidder,
   DdSolve,
   MC_SAMPLES,
+  PLAY_NOISE,
+  bidDecisionSeed,
   chooseCard,
   chooseCardSampled,
   loadPolicyModel,
@@ -154,7 +156,12 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
         continue;
       }
       if (auction.turn === HUMAN_SEAT) return;
-      b.calls.push(bidder.chooseCall(b.deal, b.calls));
+      b.calls.push(
+        bidder.chooseCall(b.deal, b.calls, {
+          difficulty: boardDifficulty(b.tournament, b.row.board_no),
+          seed: bidDecisionSeed(b.tournament.seed, b.row.board_no, b.calls.length),
+        }),
+      );
       continue;
     }
     if (b.row.state === 'playing') {
@@ -205,12 +212,15 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
  * the claim gate. The player-facing tiers use sampled double-dummy play
  * (packages/ai/play-mc.ts) — a pure function of public state + tournament
  * seed, so every player on this board still faces the identical robot
- * (invariant 1); the tier sets K and whether OPPONENTS may infer from the
- * auction (beginner is auction-blind). Robot North exists only as the
- * human's defensive partner (humanControls gives the human every N-S hand
- * when N-S declares), so actor seat 0 gets kPartner and is always
- * auction-aware; robot E-W — declaring, controlling their dummy, or
- * defending — get the tier's kOpp/auctionAware.
+ * (invariant 1); the tier sets K, whether OPPONENTS may infer from the
+ * auction (beginner is auction-blind), and — PLAY_NOISE, layered on top of
+ * K, orthogonal to belief formation — how often opponents settle for a
+ * near-best card instead of the single best one. Robot North exists only as
+ * the human's defensive partner (humanControls gives the human every N-S
+ * hand when N-S declares), so actor seat 0 gets kPartner, is always
+ * auction-aware, and is never subject to PLAY_NOISE (playTopN stays 1);
+ * robot E-W — declaring, controlling their dummy, or defending — get the
+ * tier's kOpp/auctionAware/playTopN.
  */
 async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSolve): Promise<Card> {
   const difficulty = boardDifficulty(b.tournament, b.row.board_no);
@@ -222,6 +232,7 @@ async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSo
   return chooseCardSampled(b.deal, b.contract!, b.plays, {
     k: isPartner ? tier.kPartner : tier.kOpp,
     useAuction: isPartner ? true : tier.auctionAware,
+    playTopN: isPartner ? 1 : PLAY_NOISE[difficulty].topN,
     seed: mcDecisionSeed(b.tournament.seed, b.row.board_no, b.plays.length),
     dealer: b.deal.dealer,
     calls: b.calls,

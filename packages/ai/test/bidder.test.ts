@@ -12,7 +12,7 @@ import {
   makeCard,
   saycViolation,
 } from '@bridge/core';
-import { Bidder, gradeFromProbs } from '../src/bidder.js';
+import { Bidder, bidDecisionSeed, gradeFromProbs } from '../src/bidder.js';
 import { loadPolicyModel } from '../src/model.js';
 
 const b = makeBid;
@@ -188,5 +188,89 @@ describe('SAYC-constrained robot bidding', () => {
     const deal = dealWithSouth(hand(pbn));
     deal.dealer = dealer as 0 | 1 | 2 | 3;
     expect(bidder.chooseCall(deal, calls)).toBe(expected);
+  });
+});
+
+describe('difficulty-aware bidding noise', () => {
+  const bidder = new Bidder(loadPolicyModel('sl'));
+
+  it('omitted opts and difficulty "perfect" are byte-identical to the plain call', () => {
+    for (let boardNo = 1; boardNo <= 6; boardNo++) {
+      const deal = dealBoard('bid-noise-perfect-0', boardNo);
+      const calls: Call[] = [];
+      let state = auctionState(deal.dealer, calls);
+      while (!state.isOver) {
+        const plain = bidder.chooseCall(deal, calls);
+        const perfect = bidder.chooseCall(deal, calls, { difficulty: 'perfect', seed: 'unused' });
+        expect(perfect).toBe(plain);
+        calls.push(plain);
+        state = auctionState(deal.dealer, calls);
+      }
+    }
+  });
+
+  it('is deterministic: identical (deal, calls, difficulty, seed) always returns the same call', () => {
+    const deal = dealBoard('bid-noise-det-0', 3);
+    const seed = bidDecisionSeed('bid-noise-det-0', 3, 0);
+    const first = bidder.chooseCall(deal, [], { difficulty: 'beginner', seed });
+    for (let i = 0; i < 10; i++) {
+      expect(bidder.chooseCall(deal, [], { difficulty: 'beginner', seed })).toBe(first);
+    }
+  });
+
+  it('two independent Bidder instances at the same seed pick the same call (duplicate fairness)', () => {
+    const bidderA = new Bidder(loadPolicyModel('sl'));
+    const bidderB = new Bidder(loadPolicyModel('sl'));
+    for (let boardNo = 1; boardNo <= 4; boardNo++) {
+      const deal = dealBoard('bid-noise-fair-0', boardNo);
+      const seed = bidDecisionSeed('bid-noise-fair-0', boardNo, 0);
+      expect(bidderA.chooseCall(deal, [], { difficulty: 'intermediate', seed })).toBe(
+        bidderB.chooseCall(deal, [], { difficulty: 'intermediate', seed }),
+      );
+    }
+  });
+
+  it('throws if a non-perfect difficulty is given without a seed', () => {
+    const deal = dealBoard('bid-noise-noseed-0', 1);
+    expect(() => bidder.chooseCall(deal, [], { difficulty: 'beginner' })).toThrow();
+  });
+
+  it('expert (topN=1) always matches the pure constrained argmax, never just usually', () => {
+    for (let boardNo = 1; boardNo <= 8; boardNo++) {
+      const deal = dealBoard('bid-noise-expert-0', boardNo);
+      const calls: Call[] = [];
+      let state = auctionState(deal.dealer, calls);
+      while (!state.isOver) {
+        const plain = bidder.chooseCall(deal, calls);
+        const seed = bidDecisionSeed('bid-noise-expert-0', boardNo, calls.length);
+        const expert = bidder.chooseCall(deal, calls, { difficulty: 'expert', seed });
+        expect(expert).toBe(plain);
+        calls.push(plain);
+        state = auctionState(deal.dealer, calls);
+      }
+    }
+  });
+
+  it('beginner noise never violates the SAYC guardrail, and sometimes deviates from pure argmax', () => {
+    let deviations = 0;
+    for (let boardNo = 1; boardNo <= 30; boardNo++) {
+      const deal = dealBoard('bid-noise-sweep-0', boardNo);
+      const calls: Call[] = [];
+      let state = auctionState(deal.dealer, calls);
+      while (!state.isOver) {
+        const plain = bidder.chooseCall(deal, calls);
+        const seed = bidDecisionSeed('bid-noise-sweep-0', boardNo, calls.length);
+        const noisy = bidder.chooseCall(deal, calls, { difficulty: 'beginner', seed });
+        if (isBid(noisy)) {
+          expect(saycViolation(deal.hands[state.turn], deal.dealer, calls, noisy)).toBe(false);
+        }
+        if (noisy !== plain) deviations++;
+        // advance the auction with the plain (unconstrained-by-noise) sequence so every
+        // board's decision points are the same regardless of what noise picked upstream
+        calls.push(plain);
+        state = auctionState(deal.dealer, calls);
+      }
+    }
+    expect(deviations).toBeGreaterThan(0);
   });
 });
