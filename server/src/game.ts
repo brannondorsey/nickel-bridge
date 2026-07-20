@@ -106,20 +106,26 @@ export function loadBoard(t: TournamentRow, userId: number, boardNo: number, cre
   };
 }
 
-const stmtBoardById = db.prepare(`SELECT * FROM boards WHERE id = ?`);
+// Scoped to full row identity, matching stmtSaveBoard: a bare `id` lookup
+// could otherwise silently load a DIFFERENT board (SQLite reuses rowids
+// after deletes — see stmtSaveBoard's comment above) into a GameBoard whose
+// tournament/user identity no longer matches, if e.g. demo mode's reset wipes
+// and reseeds the database while this request is parked on an await.
+const stmtBoardById = db.prepare(`SELECT * FROM boards WHERE id = ? AND tournament_id = ? AND user_id = ?`);
 
 /**
- * Per-board in-process serialization for submitCall/submitPlay. Both load a
- * board, run real async work (advanceRobots — DDS solves / model inference,
- * potentially routed through the dd-pool.ts worker_threads pool), then
- * save() the mutated copy back — a read-modify-write race if two requests
- * for the SAME board (double-tap, a duplicated tab, a client retry) overlap
- * across that await. This is a single-machine SQLite deployment (see
- * CLAUDE.md "Deployment shape" — no horizontal scaling), so an in-process
- * queue is sufficient: chain each board's requests onto a promise so a
- * second request's critical section only starts once the first's save() has
- * landed, instead of racing it. Keyed by full row identity, matching
- * stmtSaveBoard's WHERE clause above.
+ * Per-board in-process serialization for submitCall/submitPlay/ensureAdvanced
+ * — every entry point that can mutate a board. Each loads a board, runs real
+ * async work (advanceRobots — DDS solves / model inference, potentially
+ * routed through the dd-pool.ts worker_threads pool), then save()s the
+ * mutated copy back — a read-modify-write race if two requests for the SAME
+ * board (double-tap, a duplicated tab's plain GET racing another tab's
+ * submit, a client retry) overlap across that await. This is a
+ * single-machine SQLite deployment (see CLAUDE.md "Deployment shape" — no
+ * horizontal scaling), so an in-process queue is sufficient: chain each
+ * board's requests onto a promise so a second request's critical section
+ * only starts once the first's save() has landed, instead of racing it.
+ * Keyed by full row identity, matching stmtSaveBoard's WHERE clause above.
  */
 const boardLocks = new Map<string, Promise<unknown>>();
 
@@ -147,15 +153,19 @@ function withBoardLock<T>(row: BoardRow, fn: () => Promise<T>): Promise<T> {
 
 /**
  * Re-read this board's row from SQLite into `b`, in place. Called at the top
- * of submitCall/submitPlay inside withBoardLock so a request that queued
- * behind another sees that request's committed write instead of the stale
- * snapshot it read (via loadBoard) before the race even began — the second
- * of two racing requests then naturally re-hits the ordinary "not your
- * turn" / "not in bidding phase" checks below, the same as a genuinely late
- * duplicate would, instead of clobbering the first request's save().
+ * of submitCall/submitPlay/ensureAdvanced inside withBoardLock so a request
+ * that queued behind another sees that request's committed write instead of
+ * the stale snapshot it read (via loadBoard) before the race even began —
+ * the second of two racing requests then naturally re-hits the ordinary
+ * "not your turn" / "not in bidding phase" checks below, the same as a
+ * genuinely late duplicate would, instead of clobbering the first request's
+ * save(). Scoped by full identity (see stmtBoardById above): if the row is
+ * gone or its identity no longer matches — a demo-reset wipe landing mid-race
+ * — fail loudly instead of silently adopting a stale/wrong board.
  */
 function refresh(b: GameBoard): void {
-  const row = stmtBoardById.get(b.row.id) as BoardRow;
+  const row = stmtBoardById.get(b.row.id, b.row.tournament_id, b.row.user_id) as BoardRow | undefined;
+  if (!row) throw httpError(409, 'board no longer exists');
   b.row = row;
   b.calls = JSON.parse(row.calls);
   b.plays = JSON.parse(row.plays);
@@ -356,14 +366,29 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
   });
 }
 
-/** Ensure a fresh board has robots advanced up to the human (dealer may be W/N/E). */
+/**
+ * Ensure a fresh board has robots advanced up to the human (dealer may be
+ * W/N/E). Called from the plain GET board route, so — unlike submitCall/
+ * submitPlay — there's no human decision to validate; but it runs the exact
+ * same real async work (advanceRobots) and unconditionally save()s if
+ * anything changed, so it's just as vulnerable to the read-modify-write race
+ * those two guard against (a duplicated tab's slow GET clobbering a faster
+ * tab's committed submitCall/submitPlay with its own stale result). Goes
+ * through the same withBoardLock + refresh as submitCall/submitPlay so a
+ * queued-behind call re-reads the winner's committed state first — at which
+ * point advanceRobots is a no-op (nothing left to advance) instead of
+ * overwriting it.
+ */
 export async function ensureAdvanced(b: GameBoard): Promise<void> {
-  const before = JSON.stringify([b.calls, b.plays, b.row.state]);
-  await advanceRobots(b);
-  if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
-    save(b);
-    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
-  }
+  return withBoardLock(b.row, async () => {
+    refresh(b);
+    const before = JSON.stringify([b.calls, b.plays, b.row.state]);
+    await advanceRobots(b);
+    if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
+      save(b);
+      if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    }
+  });
 }
 
 function meaningFor(dealer: Seat, callsBefore: Call[], call: Call): BidMeaning | null {
