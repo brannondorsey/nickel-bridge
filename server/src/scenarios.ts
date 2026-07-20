@@ -242,7 +242,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'fresh-house-crossing',
     label: 'A fresh crossing with the house',
     description:
-      'Opens a brand-new tournament with the three house players — A Beginner, An Intermediate Player, An Expert — setting off right behind you. Score board 1 and the receipt ranks you among them; The Field fills in as they cross. Every visit opens a fresh one.',
+      'Opens a brand-new tournament with the three house players — The Novice, The Regular, The Shark — setting off right behind you. Score board 1 and the receipt ranks you among them; The Field fills in as they cross. Every visit opens a fresh one.',
     category: 'the field',
     seed: 'fresh-house',
     boardNo: 1,

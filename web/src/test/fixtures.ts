@@ -271,7 +271,7 @@ export const boardDone: BoardView = {
       { userId: 1, handle: 'Margaret', kind: 'human', contract: '4♠ by S', scoreNS: 620, pct: 58, isMe: true },
       { userId: 8, handle: 'Bob', kind: 'human', contract: '3♠+1 by S', scoreNS: 170, pct: 33, isMe: false },
       { userId: 9, handle: 'Cara', kind: 'human', contract: '4♠-1 by S', scoreNS: -100, pct: 8, isMe: false },
-      { userId: 90, handle: 'An Expert', kind: 'ai', contract: '4♠-2 by S', scoreNS: -200, pct: 6, isMe: false },
+      { userId: 90, handle: 'The Shark', kind: 'ai', contract: '4♠-2 by S', scoreNS: -200, pct: 6, isMe: false },
     ],
   },
 };
@@ -307,7 +307,7 @@ export const tournamentInProgress: TournamentInfo = {
   ],
   standings: [
     { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 83, complete: true, rank: 1 },
-    { userId: 90, handle: 'An Expert', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
     { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 1, totalPct: 58, complete: false },
     { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 2, totalPct: 33, complete: false },
   ],

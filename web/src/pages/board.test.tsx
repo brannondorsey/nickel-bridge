@@ -410,7 +410,7 @@ describe('Board — result', () => {
     ).toBeInTheDocument();
     // house (benchmark AI) row: tagged, styled as a reference entry, and
     // excluded from the "VS N OTHER PLAYERS" count asserted above
-    const houseRow = within(table as HTMLElement).getByText('An Expert').closest('tr')!;
+    const houseRow = within(table as HTMLElement).getByText('The Shark').closest('tr')!;
     expect(houseRow.className).toContain('house');
     expect(within(houseRow as HTMLElement).getByText('HOUSE')).toBeInTheDocument();
 

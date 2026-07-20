@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
-import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
 
 /**
  * The effective robot difficulty of one board — difficulty is a PER-BOARD
@@ -23,7 +23,8 @@ export function boardDifficulty(t: TournamentRow, boardNo: number): Difficulty {
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);
 const stmtDoneBoards = db.prepare(
-  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind, u.google_id AS user_google
+   FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.state = 'done'`,
 );
 // Placement, the lobby list, and the Elo replay all exclude demo-mode
@@ -147,9 +148,10 @@ export function standings(tournamentId: number): Standing[] {
   const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & {
     user_handle: string;
     user_kind: 'human' | 'ai';
+    user_google: string;
   })[];
   const humans = new Map<number, { handle: string; pcts: number[] }>();
-  const ais = new Map<number, { handle: string; pcts: number[]; done: number }>();
+  const ais = new Map<number, { handle: string; google: string; pcts: number[]; done: number }>();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
     const humanRows = boardRows.filter((r) => r.user_kind === 'human');
@@ -162,7 +164,7 @@ export function standings(tournamentId: number): Standing[] {
     });
     for (const r of boardRows) {
       if (r.user_kind !== 'ai') continue;
-      const u = ais.get(r.user_id) ?? { handle: r.user_handle, pcts: [], done: 0 };
+      const u = ais.get(r.user_id) ?? { handle: r.user_handle, google: r.user_google, pcts: [], done: 0 };
       u.done++;
       if (humanRows.length) {
         const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
@@ -171,8 +173,9 @@ export function standings(tournamentId: number): Standing[] {
       ais.set(r.user_id, u);
     }
   }
-  // Humans constructed before AI rows on purpose: the pct sort below is
-  // stable, so a human outranks a persona they tie with.
+  // Construction order IS the tie order (the pct sort below is stable):
+  // humans first — a human outranks a persona they tie with — then personas
+  // strongest-first (aiTieRank), so a tied trio reads Shark, Regular, Novice.
   const list: Standing[] = [
     ...[...humans.entries()].map(([userId, u]): Standing => ({
       userId,
@@ -182,14 +185,16 @@ export function standings(tournamentId: number): Standing[] {
       totalPct: avg(u.pcts),
       complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
     })),
-    ...[...ais.entries()].map(([userId, u]): Standing => ({
-      userId,
-      handle: u.handle,
-      kind: 'ai',
-      boardsDone: u.done,
-      totalPct: avg(u.pcts),
-      complete: u.done >= BOARDS_PER_TOURNAMENT,
-    })),
+    ...[...ais.entries()]
+      .sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google))
+      .map(([userId, u]): Standing => ({
+        userId,
+        handle: u.handle,
+        kind: 'ai',
+        boardsDone: u.done,
+        totalPct: avg(u.pcts),
+        complete: u.done >= BOARDS_PER_TOURNAMENT,
+      })),
   ];
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
   for (const s of list) {

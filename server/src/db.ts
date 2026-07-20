@@ -159,6 +159,26 @@ export interface TournamentRow {
 
 export const BOARDS_PER_TOURNAMENT = 4;
 
+/**
+ * Display order for the benchmark AI personas when scores tie: strongest
+ * first (The Shark above The Regular above The Novice). Keyed on google_id —
+ * the personas' stable identity (ai-players.ts); handles are display copy
+ * and can be renamed. Humans (or unknown ids) rank 0, ahead of every
+ * persona, preserving the "a human outranks a persona they tie with" rule.
+ */
+export function aiTieRank(googleId: string | null | undefined): number {
+  switch (googleId) {
+    case 'ai:expert':
+      return 1;
+    case 'ai:intermediate':
+      return 2;
+    case 'ai:beginner':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
 export interface BoardRow {
   id: number;
   tournament_id: number;

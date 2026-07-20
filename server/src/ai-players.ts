@@ -15,8 +15,8 @@ import { GameBoard, bidder } from './game.js';
 import { getTournament } from './tournaments.js';
 
 /**
- * Benchmark AI players — "the house": three permanent personas ("A Beginner",
- * "An Intermediate Player", "An Expert") that automatically play every
+ * Benchmark AI players — "the house": three permanent personas ("The Novice",
+ * "The Regular", "The Shark") that automatically play every
  * tournament stamped `ai_field = 1` (placeUser's creation path and
  * demo-seed's ambient tournaments). Their scores surface in The Field as
  * SHADOW rows — reference points that let a human see where they sit against
@@ -75,9 +75,9 @@ import { getTournament } from './tournaments.js';
  */
 
 export const AI_PLAYER_HANDLES: Record<SettableDifficulty, string> = {
-  beginner: 'A Beginner',
-  intermediate: 'An Intermediate Player',
-  expert: 'An Expert',
+  beginner: 'The Novice',
+  intermediate: 'The Regular',
+  expert: 'The Shark',
 };
 
 /** Personas stay this many boards ahead of the furthest human in an active tournament. */
@@ -117,10 +117,13 @@ const stmtMaxHumanDone = db.prepare(
 
 /**
  * Idempotently create (or fetch) the three personas. Handles are claimed
- * with a numeric suffix on collision (a human may already hold "A Beginner"
- * — their handle is never touched). Re-run wherever the personas might be
- * missing: at boot, per scheduler unit (demo reset wipes the users table),
- * and from the demo reseed path.
+ * with a numeric suffix on collision (a human may already hold "The Novice"
+ * — their handle is never touched). The claim also re-runs when a persona's
+ * stored handle no longer starts with its configured name, so renaming a
+ * persona in AI_PLAYER_HANDLES migrates existing databases on the next
+ * ensure. Re-run wherever the personas might be missing: at boot, per
+ * scheduler unit (demo reset wipes the users table), and from the demo
+ * reseed path.
  */
 export function ensureAiPlayers(): Record<SettableDifficulty, UserRow> {
   const out = {} as Record<SettableDifficulty, UserRow>;
@@ -128,7 +131,7 @@ export function ensureAiPlayers(): Record<SettableDifficulty, UserRow> {
     const base = AI_PLAYER_HANDLES[tier];
     let user = upsertGoogleUser(`ai:${tier}`, null, base, null);
     stmtSetKindAi.run(user.id);
-    for (let i = 0; i < 50 && !user.handle; i++) {
+    for (let i = 0; i < 50 && !user.handle?.startsWith(base); i++) {
       user = claimHandle(user.id, i === 0 ? base : `${base} ${i + 1}`) ?? user;
     }
     out[tier] = { ...user, kind: 'ai' };

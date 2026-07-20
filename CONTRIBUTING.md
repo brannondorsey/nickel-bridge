@@ -257,7 +257,7 @@ general mental model (belief dials vs. decision dials, why they saturate differe
 tool answers which question) before tuning any of these constants further.
 
 **Benchmark AI players ("the house"):** three permanent `users.kind = 'ai'` personas —
-"A Beginner", "An Intermediate Player", "An Expert" (`server/src/ai-players.ts`) —
+"The Novice", "The Regular", "The Shark" (`server/src/ai-players.ts`) —
 automatically play every tournament stamped `tournaments.ai_field = 1` (set at creation by
 `placeUser` and demo-seed's ambient tournaments; never backfilled, so legacy/fixture/exhibit
 tournaments never acquire AI rows). Each persona plays the human seat through the real engine

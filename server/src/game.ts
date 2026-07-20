@@ -35,7 +35,7 @@ import {
   playState,
   scoreBreakdown,
 } from '@bridge/core';
-import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
 import { boardDifficulty, recomputeElo } from './tournaments.js';
 
 const HUMAN_SEAT: Seat = 2; // South
@@ -59,7 +59,8 @@ const stmtSaveBoard = db.prepare(
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
-  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind FROM boards b JOIN users u ON u.id = b.user_id
+  `SELECT b.*, u.handle AS user_handle, u.kind AS user_kind, u.google_id AS user_google
+   FROM boards b JOIN users u ON u.id = b.user_id
    WHERE b.tournament_id = ? AND b.board_no = ? AND b.state = 'done' ORDER BY b.updated_at`,
 );
 // Whether a board's owner is a benchmark AI persona — those completions never
@@ -419,6 +420,7 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
   const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & {
     user_handle: string;
     user_kind: 'human' | 'ai';
+    user_google: string;
   })[];
   const humanScores = rows.filter((r) => r.user_kind === 'human').map((r) => r.score_ns ?? 0);
   const humanMps = matchpoints(humanScores);
@@ -437,6 +439,7 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
       userId: r.user_id,
       handle: r.user_handle,
       kind: r.user_kind,
+      tieRank: aiTieRank(r.user_google),
       contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
       scoreNS: r.score_ns ?? 0,
       pct: Math.round(pct * 10) / 10,
@@ -449,7 +452,11 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
     tricksDeclarer: b.row.tricks_declarer,
     scoreNS: b.row.score_ns,
     pct: mine?.pct ?? 50,
-    field: field.sort((a, b2) => b2.scoreNS - a.scoreNS),
+    // score desc; ties break human-first then strongest persona first
+    // (aiTieRank), same rule as standings() — tieRank is server-side only
+    field: field
+      .sort((a, b2) => b2.scoreNS - a.scoreNS || a.tieRank - b2.tieRank)
+      .map(({ tieRank: _tieRank, ...f }) => f),
     bidAccuracy: bidAccuracy(b.bidEvals),
     // itemized duplicate scoring for the toll-receipt screen; null on a pass-out
     breakdown:

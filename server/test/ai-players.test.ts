@@ -73,8 +73,8 @@ describe('benchmark AI players', () => {
   let tid = 0;
 
   it('ensureAiPlayers is idempotent and survives handle collisions', () => {
-    // a human already owns "A Beginner" — the persona must suffix, not steal
-    db.prepare(`INSERT INTO users (google_id, name, handle, handle_key) VALUES ('dev:squatter', 'S', 'A Beginner', 'a beginner')`).run();
+    // a human already owns "The Novice" — the persona must suffix, not steal
+    db.prepare(`INSERT INTO users (google_id, name, handle, handle_key) VALUES ('dev:squatter', 'S', 'The Novice', 'the novice')`).run();
     const first = ensureAiPlayers();
     const again = ensureAiPlayers();
     for (const tier of ['beginner', 'intermediate', 'expert'] as const) {
@@ -219,6 +219,36 @@ describe('benchmark AI players', () => {
     const stats = await alice.get(`/api/users/${aliceId}/stats`);
     expect(stats.percentiles.activePlayers).toBe(2); // Alice + Bob, no personas
     expect(stats.pctSeries[0].fieldSize).toBe(2);
+  });
+
+  it('breaks display ties human-first, then strongest persona first', async () => {
+    const personas = ensureAiPlayers();
+    const t = db
+      .prepare(
+        `INSERT INTO tournaments (name, seed, difficulty, ai_field) VALUES ('Tie', 'tie-seed', 'intermediate', 1) RETURNING *`,
+      )
+      .get() as { id: number };
+    const human = db
+      .prepare(`INSERT INTO users (google_id, name, handle, handle_key) VALUES ('dev:tie-h', 'Tess', 'Tess', 'tess') RETURNING id`)
+      .get() as { id: number };
+    // identical scores for everyone on board 1 → every displayed pct ties at
+    // 50; personas inserted WEAKEST-first to prove ordering isn't insertion
+    for (const uid of [human.id, personas.beginner.id, personas.intermediate.id, personas.expert.id]) {
+      db.prepare(
+        `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns) VALUES (?, ?, 1, 'done', 100)`,
+      ).run(t.id, uid);
+    }
+    // actual handles, not AI_PLAYER_HANDLES: the collision test above left
+    // the beginner suffixed ("The Novice 2") in this database
+    const expected = ['Tess', personas.expert.handle, personas.intermediate.handle, personas.beginner.handle];
+    expect(standings(t.id).map((s) => s.handle)).toEqual(expected);
+
+    // same rule in the board-result field table (score-sorted)
+    const game = await import('../src/game.js');
+    const row = db.prepare(`SELECT * FROM tournaments WHERE id = ?`).get(t.id) as never;
+    const b = game.loadBoard(row, human.id, 1, false)!;
+    const view = game.boardView(row, b, 1200) as { result: { field: { handle: string }[] } };
+    expect(view.result.field.map((f) => f.handle)).toEqual(expected);
   });
 
   it('keeps placement grace and popularity human-only despite AI rows', () => {

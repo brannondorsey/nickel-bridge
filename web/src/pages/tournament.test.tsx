@@ -54,12 +54,12 @@ describe('Tournament sheet', () => {
     apiMock.tournament.mockResolvedValue(tournamentInProgress);
     renderWithMe(<Tournament />, { me: meFixture });
 
-    const house = (await screen.findByText('An Expert')).closest('.tourney-field-row')! as HTMLElement;
+    const house = (await screen.findByText('The Shark')).closest('.tourney-field-row')! as HTMLElement;
     expect(house.className).toContain('tourney-field-house');
     expect(within(house).getByText('HOUSE')).toBeInTheDocument();
     // no rank — house rows interleave by pct only
     expect(within(house).getByText('—')).toBeInTheDocument();
-    expect(within(house).getByText('An Expert').closest('a')).toHaveAttribute('href', '/players/90');
+    expect(within(house).getByText('The Shark').closest('a')).toHaveAttribute('href', '/players/90');
     // human-only pair count: 3 humans + 1 house row → "3 pairs"
     expect(screen.getByText('3 pairs · matchpoints')).toBeInTheDocument();
     // humans keep their human-only fallback numbering around the interleaved house row
