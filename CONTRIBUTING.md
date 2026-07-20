@@ -77,13 +77,20 @@ tools           offline Python weight conversion + golden-fixture generation;
                 (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`);
                 find_scenarios.mjs records/mines demo-scenario replay recipes (offline —
                 results are hand-curated into server/src/scenarios.ts);
-                calibrate_k.mjs sweeps sampled-DD K values against true-DD reference
-                play to pick the difficulty-tier constants in packages/ai/difficulty.ts
+                calibrate_k.mjs sweeps sampled-DD K values (plus --bid-topn/--forget-window)
+                against true-DD reference play; calibrate_stats.mjs is the same sweeps with
+                standard error; calibrate_stack.mjs measures the combined bid+play effect for
+                the shipped tiers (--ew-only: signed IMP, matches PARTNER_FLOOR's asymmetry);
+                calibrate_whatif.mjs compares named CANDIDATE configs (not just shipped tiers)
+                for "should we change tier X or Y" questions — see
+                docs/difficulty-tuning-guide.md for how these fit together
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
-                shelved full rule-engine design
+                shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
+                about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
+                difficulty-calibration-research.md — the research log behind today's values
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
                 design-system skill — see "Design system" below
 ```
@@ -235,7 +242,14 @@ no extra DDS solves (it re-weights totals the K-sample solve already computed). 
 `tools/calibrate_stats.mjs playtopn`; `tools/calibrate_stack.mjs --ew-only` measures the
 combined bid+play effect against a pure/true-DD reference with only East/West weakened
 (matching `PARTNER_FLOOR`'s asymmetry), instead of that tool's default of weakening all four
-seats and reporting an unsigned delta.
+seats and reporting an unsigned delta. `intermediate` ships with `PLAY_NOISE` fully OFF
+(`topN: 1`, same as expert) — measurement showed beginner and intermediate landing within
+noise of each other in that combined metric even though each dial moved monotonically in
+isolation, and hardening intermediate closed that gap far more efficiently than pushing
+beginner further (`tools/calibrate_whatif.mjs`'s comparison, and the full reasoning, are in
+`PLAY_NOISE`'s doc comment and `docs/difficulty-tuning-guide.md`). See that guide for the
+general mental model (belief dials vs. decision dials, why they saturate differently, which
+tool answers which question) before tuning any of these constants further.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means

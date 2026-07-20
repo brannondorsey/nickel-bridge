@@ -412,3 +412,19 @@ was deleted; its logic is now the shipped code path directly, following the same
 `tools/calibrate_stats.mjs playtopn` and `tools/calibrate_stack.mjs --ew-only` (see their own
 doc comments) now exercise the real `chooseCardSampled`/`PLAY_NOISE` rather than the
 deleted prototype module. `play-mc-forget.ts` remains unshipped, per 3c's recommendation.
+
+**Second update: intermediate hardened.** Shipping `PLAY_NOISE` closed the "beginner and
+intermediate are statistically indistinguishable" gap from 7b's own measurement (see the
+constant's doc comment for the numbers), but not by as much as hoped — the two tiers still
+landed within noise of each other on the combined signed-IMP metric (~5 IMP/hand each), a
+near-guaranteed blowout when translated to this app's 4-board tournaments (~20 IMP/tournament)
+for what's also the *default* tier every new user starts on. `tools/calibrate_whatif.mjs`
+(new — compares named candidate configs, not just shipped tiers, against the same board set)
+tested both directions: pushing beginner further (diminishing returns past its own documented
+knee, best case ~1.2 IMP/hand gap) versus hardening intermediate back toward expert (turning
+`PLAY_NOISE` off entirely bought ~2.0 IMP/hand, using an already-calibrated dial position, not
+new extrapolation). Hardening intermediate won clearly on efficiency and shipped:
+`PLAY_NOISE.intermediate: 2 → 1` (`BID_NOISE.intermediate` untouched, still 2). See
+`PLAY_NOISE`'s doc comment for the full before/after table and
+[`difficulty-tuning-guide.md`](difficulty-tuning-guide.md) for the general methodology this
+investigation is now the worked example for.

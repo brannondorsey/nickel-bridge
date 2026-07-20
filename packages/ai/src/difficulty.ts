@@ -1,6 +1,12 @@
 /**
  * Robot card-play difficulty tiers.
  *
+ * New to this file? Start with docs/difficulty-tuning-guide.md — it explains
+ * the mental model behind MC_SAMPLES/BID_NOISE/PLAY_NOISE as a set, how to
+ * measure a change, which tools to use, and the safety checklist for editing
+ * any constant here. The doc comments below are the reference/rationale for
+ * each specific constant; the guide is the how-to.
+ *
  * 'perfect' is the historical behavior and a LEGACY value, not a player-facing
  * tier: true-deal double-dummy play (the robot effectively sees all four
  * hands). Every tournament created before difficulty existed resolves to it
@@ -138,12 +144,47 @@ export const BID_NOISE: Record<SettableDifficulty, { topN: number }> = {
  * exact saturation shape (likely because the second measurement also
  * captures declarer-seat weakening, the larger of the two roles per the K
  * table above), so treat the precise optimal topN as uncertain by ±1-2, not
- * the existence of the effect. topN: 3/2/1 for beginner/intermediate/expert
- * is past the topN=1→2 knee in both measurements without being deep into
- * either's flattest region.
+ * the existence of the effect.
+ *
+ * `intermediate` shipped at topN=2 initially, alongside `beginner`'s topN=3,
+ * mirroring BID_NOISE's shape. Measurement (§7 continued — see
+ * docs/difficulty-calibration-research.md and
+ * docs/difficulty-tuning-guide.md) then showed beginner and intermediate
+ * landing within noise of each other in the combined (bidding + card play)
+ * signed-IMP metric — the tiers' *individual* dials moved monotonically as
+ * designed, but not by enough to separate the tiers by a human-noticeable
+ * margin. Widening that gap by pushing beginner's topN further (5, 6, 8...)
+ * only bought diminishing, increasingly noisy returns (the same saturation
+ * this comment already documents). Pulling intermediate back toward expert
+ * instead was far more effective per unit of change — comparing named
+ * candidate configs on the same 250-board set (EW-only signed IMP vs a
+ * pure/true-DD reference, matching PARTNER_FLOOR's asymmetry):
+ *
+ *   config                          signed IMP/hand   gap to the other tier
+ *   beginner (topN=3, unchanged)         5.62                —
+ *   intermediate (topN=2, prior)         5.04              0.58
+ *   beginner pushed to topN=6            6.20              1.16 (from intermediate)
+ *   intermediate pulled to topN=1        3.57              2.05 (from beginner)
+ *
+ * `intermediate: { topN: 1 }` — i.e. this dial OFF for intermediate, same as
+ * expert — is the shipped choice: turning intermediate's card-selection
+ * noise off entirely nearly quadruples the beginner/intermediate gap versus
+ * the best achievable by pushing beginner further, using an already-
+ * understood dial setting (not new extrapolation), and gives each tier a
+ * legible identity: beginner is weak at both reading the table (K=1 blind)
+ * and executing (BID_NOISE 3, PLAY_NOISE 3); intermediate reads the table
+ * imperfectly (K=1, but auction-aware) yet never fumbles a known-best play;
+ * expert is strong at both. `BID_NOISE.intermediate` is untouched (stays 2)
+ * — only card-selection noise was judged to need hardening; see the tuning
+ * guide for the full reasoning and how to revisit this call.
+ *
+ * A natural follow-up neither shipped constant can express: something
+ * *between* topN=1 (never) and topN=2 (every noisy decision uses a top-2
+ * draw) — e.g. a per-decision probability of applying topN=2 instead of a
+ * hard on/off switch. Not built here; see the tuning guide's "open threads."
  */
 export const PLAY_NOISE: Record<SettableDifficulty, { topN: number }> = {
   beginner: { topN: 3 },
-  intermediate: { topN: 2 },
+  intermediate: { topN: 1 },
   expert: { topN: 1 },
 };
