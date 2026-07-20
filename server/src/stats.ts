@@ -201,7 +201,7 @@ export function playerStats(userId: number): PlayerStats | null {
       passedOut,
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
-    percentiles: fieldPercentiles(userId, u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
+    percentiles: fieldPercentiles(u.kind, u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
     eloSeries,
     pctSeries,
     accuracySeries,
@@ -232,7 +232,7 @@ function monthlyEloDelta(currentElo: number, eloSeries: (StatPoint & { elo: numb
  * compare against everyone who has completed at least one board.
  */
 function fieldPercentiles(
-  userId: number,
+  kind: 'human' | 'ai',
   elo: number,
   isRated: boolean,
   avgPct: number | null,
@@ -261,6 +261,19 @@ function fieldPercentiles(
     }
   }
   const avgPcts = [...pctsByUser.values()].map((p) => round1(mean(p)));
+
+  // The pools above are human-only by design (ai-players.ts's shadow-row
+  // partition — see stmtAllDoneEvals/the standings() filter). That's correct
+  // when ranking a human, who is naturally already a member of their own
+  // pool. But an AI persona is never in that pool, so betterThan's
+  // denominator (field.length - 1, i.e. "everyone but me") undercounts by
+  // one when a persona looks at its OWN percentile — a persona beating every
+  // human scored >100%. Add the persona's own value back into the pool it's
+  // being ranked within, exactly once, only for this self-lookup.
+  if (kind === 'ai') {
+    if (avgPct !== null) avgPcts.push(avgPct);
+    if (avgBidAccuracy !== null) accuracies.push(avgBidAccuracy);
+  }
 
   return {
     elo: isRated ? betterThan(elo, ratedElos) : null,
