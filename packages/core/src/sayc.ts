@@ -122,6 +122,9 @@ function buildCtx(dealer: Seat, calls: Call[], seat: Seat): Ctx {
 
 const S = STRAIN_SYMBOLS;
 
+// Ordinal words for bid levels 1–7, used in titles like "Two-level overcall".
+const LEVEL_WORDS = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
+
 function meaning(
   title: string,
   description: string,
@@ -1003,7 +1006,7 @@ function explainOvercall(ctx: Ctx, call: Call, level: number, strain: Strain): B
       shapePromise: `5+ ${S[strain]}`,
       req: { minHcp: 7, maxHcp: 16, suits: [{ strain, min: 5 }] },
     });
-  return meaning('Two-level overcall', `Natural: a good 5+ card ${S[strain]} suit and opening-ish values, about 10–16 points.`, {
+  return meaning(`${LEVEL_WORDS[level]}-level overcall`, `Natural: a good 5+ card ${S[strain]} suit and opening-ish values, about 10–16 points.`, {
     points: '10–16 pts',
     shapePromise: `5+ ${S[strain]}`,
     req: { minHcp: 9, maxHcp: 16, suits: [{ strain, min: 5 }] },
