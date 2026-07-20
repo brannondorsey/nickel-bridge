@@ -93,6 +93,7 @@ const SPEC: Row[] = [
   { name: 'penalty double high level', calls: [b(4, 3)], candidate: DOUBLE, title: 'Penalty double' },
   { name: 'one-level overcall', calls: [b(1, 0)], candidate: b(1, 3), title: 'One-level overcall', points: '8–16 pts' },
   { name: 'two-level overcall', calls: [b(1, 3)], candidate: b(2, 2), title: 'Two-level overcall', points: '10–16 pts' },
+  { name: 'three-level overcall', calls: [b(3, 2)], candidate: b(3, 3), title: 'Three-level overcall', points: '10–16 pts' },
   { name: '1NT overcall', calls: [b(1, 2)], candidate: b(1, 4), title: '1NT overcall', points: '15–18 HCP' },
   { name: 'weak jump overcall', calls: [b(1, 0)], candidate: b(2, 3), title: 'Weak jump overcall', points: '5–11 HCP' },
   { name: 'Michaels cue-bid', calls: [b(1, 2)], candidate: b(2, 2), title: 'Michaels', artificial: true },
