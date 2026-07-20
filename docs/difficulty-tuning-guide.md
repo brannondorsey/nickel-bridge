@@ -155,11 +155,54 @@ data instead of intuition.
 
 ## Open threads (known limitations, not urgent)
 
-- **No fractional `topN`.** `BID_NOISE`/`PLAY_NOISE` are integer counts — there's no way to
-  land "between" `topN=1` (off) and `topN=2` (every noisy decision draws from the top 2). A
-  natural extension: a per-decision *probability* of applying the `topN=2` draw instead of a
-  hard switch, continuing the same seeded rng stream (still duplicate-fair). Not built —
-  flagged here for whoever wants a continuously-tunable version of either dial.
+- **No fractional `topN`** — yet. `BID_NOISE`/`PLAY_NOISE` are integer counts today, so
+  there's no way to land "between" `topN=1` (off) and `topN=2` (every noisy decision draws
+  from the top 2). Here's how to actually build it, not just the idea:
+
+  **The mechanism**: a seeded coin flip that rounds a fractional `topN` up or down, weighted
+  by its fractional part — `topN=1.5` resolves to 2 half the time and 1 the other half
+  (in the rng stream, so still duplicate-fair); `topN=2.25` resolves to 3 a quarter of the
+  time and 2 the rest. This generalizes to *any* positive value, not just "1 point 5" — it's
+  a genuinely continuous dial across the whole range, not a special case.
+
+  ```ts
+  // packages/ai/src/difficulty.ts — colocated with BID_NOISE/PLAY_NOISE since both
+  // consumers already import from here.
+  /**
+   * Resolves a possibly-fractional topN to a whole candidate count via a seeded
+   * coin flip on the fractional part. topN=1 or topN=2 exactly (frac=0) never
+   * draws — the existing "topN<=1 is a byte-identical no-op, zero rng draws"
+   * invariant holds unchanged for every config that stays integer-valued.
+   */
+  export function resolveTopN(topN: number, rng: () => number): number {
+    const floor = Math.floor(topN);
+    const frac = topN - floor;
+    return frac === 0 ? floor : rng() < frac ? floor + 1 : floor;
+  }
+  ```
+
+  **Where it plugs in** — both call sites already do (or, for play-mc.ts, already can) hold a
+  single seeded rng instance across a whole decision, which matters here: `resolveTopN`'s coin
+  flip and the final weighted pick must draw from the *same* stream, not two independently-
+  constructed `seededRng(seed)()` calls (those would silently replay the same first random
+  number for both draws — a correctness bug, not just a style nit).
+
+  - `packages/ai/src/play-mc.ts`'s `chooseCardSampled` already builds one `const rng =
+    seededRng(opts.seed)` up top and reuses it for `sampleLayouts` and the final pick — just
+    insert `const resolvedTopN = resolveTopN(opts.playTopN ?? 1, rng);` before the existing
+    `if (playTopN <= 1)` check and use `resolvedTopN` from there on.
+  - `packages/ai/src/bidder.ts`'s `noisyBest` currently instantiates `seededRng(seed)()`
+    inline, once, right at its one draw — that needs to become `const rng = seededRng(seed);`
+    at the top of the function instead, so `resolveTopN(topN, rng)` and the later `rng()` call
+    for the weighted pick share a stream.
+
+  **No type or config-shape change needed** — `BID_NOISE`/`PLAY_NOISE` are already typed
+  `{ topN: number }`, so `{ topN: 1.5 }` is already legal TypeScript; only the two call sites
+  above need the `resolveTopN` insertion to make it *behave* as a blend instead of (as it does
+  today, silently) truncating and wasting an unnecessary rng draw. No calibration-tool changes
+  either — every sweep already parses `--topn`/`CONFIGS` values with `Number(...)`, which
+  accepts decimals natively; e.g. `node tools/calibrate_stats.mjs playtopn --topn
+  1,1.25,1.5,1.75,2` would work immediately once `resolveTopN` is wired in.
 - **`play-mc-forget.ts` (card-"forgetting") remains unshipped.** Confirmed near-zero effect at
   `K=1` (see the calibration doc §3c) — the belief a `K=1` sample already holds is loose enough
   that windowing its memory further doesn't change much. Worth a second look only at higher
