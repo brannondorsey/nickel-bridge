@@ -1109,6 +1109,11 @@ a.ds-btn-secondary:hover {
 .auction-scroll {
   max-height: 216px;
   overflow-y: auto;
+  /* the pending "?" cell's outline paints outside its box (outline-offset);
+     with a short auction (e.g. the dealer's opening call) the table's own
+     height leaves no slack before this scroll container's bottom edge,
+     clipping the outline's bottom side — reserve a little always. */
+  padding-bottom: 6px;
 }
 .auction table {
   width: 100%;
@@ -2364,6 +2369,11 @@ a.board-row:hover {
 .fieldtable-pct {
   text-align: right;
   white-space: nowrap;
+}
+.fieldtable-pctnum {
+  display: inline-block;
+  min-width: 24px;
+  text-align: right;
 }
 .result-bidding {
   margin: 12px 12px 0;

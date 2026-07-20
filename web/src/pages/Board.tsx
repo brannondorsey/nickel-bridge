@@ -598,7 +598,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
                   <ContractLabel label={f.contract} /> · {signedScore(f.scoreNS)}
                 </td>
                 <td className="fieldtable-pct">
-                  <PctBar pct={f.pct} width={56} /> <b>{f.pct}</b>
+                  <PctBar pct={f.pct} width={56} /> <b className="fieldtable-pctnum">{f.pct}</b>
                 </td>
               </tr>
             ))}
