@@ -1,8 +1,9 @@
-import type { FastifyInstance } from 'fastify';
-import { aiPlayersEnabled, ensureAiPlayers } from './ai-players.js';
+import { randomBytes } from 'node:crypto';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
+import { aiPlayersEnabled, ensureAiPlayers, enqueueAiField, noteTournamentActivity } from './ai-players.js';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
-import { TournamentRow, UserRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
 import { ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 
@@ -21,6 +22,14 @@ import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 const stmtExhibitBySeed = db.prepare(`SELECT * FROM tournaments WHERE kind = 'exhibit' AND seed = ?`);
 const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES (?, ?, 'exhibit') RETURNING *`);
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
+// The freshAiField exhibit's tournament is a REAL standard tournament —
+// same columns placeUser stamps (intermediate = the Inspector's default
+// preference, so it also behaves normally in placement afterwards) — because
+// the point of that exhibit is production behavior, not a canned replay.
+const stmtCreateFreshAiTournament = db.prepare(
+  `INSERT INTO tournaments (name, seed, difficulty, board_difficulties, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
+);
+const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 
 const DEMO_HANDLE = 'Inspector';
 const NEW_CROSSER_HANDLE = 'New Crosser';
@@ -85,9 +94,13 @@ export function ensureExhibitTournament(seed: string): TournamentRow {
  */
 const scenarioRuns = new Map<number, Promise<unknown>>();
 
-export function runScenario(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
+export function runScenario(
+  userId: number,
+  s: Scenario,
+  log?: FastifyBaseLogger,
+): Promise<{ tournamentId: number; boardNo: number }> {
   const prev = scenarioRuns.get(userId) ?? Promise.resolve();
-  const run = prev.catch(() => {}).then(() => runScenarioNow(userId, s));
+  const run = prev.catch(() => {}).then(() => runScenarioNow(userId, s, log));
   scenarioRuns.set(userId, run);
   return run;
 }
@@ -101,7 +114,32 @@ export function runScenario(userId: number, s: Scenario): Promise<{ tournamentId
  * actions produce, fail loudly rather than dropping the tester mid-nowhere
  * (server/test/scenarios.test.ts catches this before it ever deploys).
  */
-async function runScenarioNow(userId: number, s: Scenario): Promise<{ tournamentId: number; boardNo: number }> {
+async function runScenarioNow(
+  userId: number,
+  s: Scenario,
+  log?: FastifyBaseLogger,
+): Promise<{ tournamentId: number; boardNo: number }> {
+  if (s.freshAiField) {
+    // Not a replay: mint a brand-new standard ai_field tournament (random
+    // seed — every click gets a fresh one) and land the tester on board 1.
+    // The house sets off behind them through the normal on-demand path, so
+    // this exhibits production behavior end to end: urgent lookahead play,
+    // shadow rows filling The Field, phantom pcts on the receipt.
+    const seed = `${s.seed}:${randomBytes(8).toString('hex')}`;
+    const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill('intermediate'));
+    const t = stmtCreateFreshAiTournament.get(seed, schedule) as TournamentRow;
+    stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
+    if (aiPlayersEnabled()) {
+      noteTournamentActivity(t.id);
+      enqueueAiField(t.id, log ?? (console as unknown as FastifyBaseLogger));
+    }
+    const fresh = loadBoard({ ...t, name: `Tournament #${t.id}` }, userId, s.boardNo, true)!;
+    await ensureAdvanced(fresh);
+    if (fresh.row.state !== s.expect) {
+      throw httpError(500, `scenario ${s.id} drifted: expected ${s.expect}, got ${fresh.row.state}`);
+    }
+    return { tournamentId: t.id, boardNo: s.boardNo };
+  }
   const t = ensureExhibitTournament(s.seed);
   if (s.completesTournament) {
     // The "TOURNAMENT SUMMARY →" reveal only shows a real result if the
@@ -163,7 +201,7 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     if (!user) return;
     const s = scenarioById.get((req.params as { id: string }).id);
     if (!s) return reply.code(404).send({ error: 'unknown scenario' });
-    return reply.send(await runScenario(user.id, s));
+    return reply.send(await runScenario(user.id, s, req.log));
   });
 
   // Full wipe + reseed, for starting a click-testing round from a pristine

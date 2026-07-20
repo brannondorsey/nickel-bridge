@@ -338,6 +338,10 @@ live reveals a genuine tournament-summary screen instead of just one board's rec
 `richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
 (the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
 error is guaranteed to fire on the first submit.
+One gallery entry is not a replay recipe: `fresh-house-crossing` (`freshAiField`) mints a
+brand-new STANDARD `ai_field = 1` tournament per click and lands the tester on board 1, so
+the benchmark AI personas can be click-tested exactly as production behaves (exhibit-kind
+tournaments deliberately never get AI rows, so a canned exhibit couldn't show this).
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash (`App.tsx`). **Shipping a new
 hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenarios.ts`** (mine
