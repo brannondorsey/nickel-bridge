@@ -150,6 +150,81 @@ describe('automatic laydown claims', () => {
   });
 });
 
+describe('concurrent submitCall/submitPlay race (server/src/game.ts)', () => {
+  // Simulates a double-tap / duplicated tab: two requests each do their own
+  // (synchronous, pre-race) loadBoard read of the SAME board, then race their
+  // submitCall through advanceRobots's real async work concurrently. Without
+  // the per-board lock + refresh in game.ts, both would validate against the
+  // same stale snapshot and each independently save() — the second silently
+  // clobbering the first's write (a lost update). With it, the loser must
+  // queue behind the winner, re-read the winner's committed state, and hit
+  // the ordinary "not your turn" rejection instead of overwriting anything.
+  it('exactly one concurrent submitCall is accepted; the other gets a clean 409, never a lost update', async () => {
+    const t = makeTournament('race-call');
+    // Advance to the human's first bidding decision — always reachable
+    // without the auction ending first (the human is one of the four seats,
+    // so at most 3 robot passes can precede their first turn).
+    const seed = game.loadBoard(t, userId, 1, true)!;
+    await game.ensureAdvanced(seed);
+    expect(seed.row.state).toBe('bidding');
+
+    // Two independent GameBoard snapshots of the identical committed state —
+    // exactly what two concurrent HTTP requests would each produce via their
+    // own loadBoard() call before either one's submitCall starts racing.
+    const b1 = game.loadBoard(t, userId, 1, true)!;
+    const b2 = game.loadBoard(t, userId, 1, true)!;
+    const callsBefore = b1.calls.length;
+
+    const results = await Promise.allSettled([game.submitCall(b1, 0), game.submitCall(b2, 0)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.statusCode).toBe(409);
+
+    // The winner is whichever of b1/b2 actually got mutated+saved.
+    const winner = results[0].status === 'fulfilled' ? b1 : b2;
+    const fresh = game.loadBoard(t, userId, 1, true)!;
+    // Exactly one new call landed — a lost update would show either 0 (the
+    // winner's write silently overwritten by a loser starting from a stale
+    // snapshot) or a mismatch between the DB and the winner's in-memory calls.
+    expect(fresh.calls.length).toBeGreaterThan(callsBefore);
+    expect(fresh.calls).toEqual(winner.calls);
+  });
+
+  it('exactly one concurrent submitPlay is accepted; the other gets a clean 409, never a lost update', async () => {
+    // Pinned seed/board reused from the "declarer scenarios" suite above:
+    // known to reach 'playing' via robot bidding alone even if the human
+    // always passes, so it deterministically produces a human play decision.
+    const { t, b: warm } = await loadBoardFor('hunt-0', 1);
+    while (warm.row.state === 'bidding') await game.submitCall(warm, 0);
+    expect(warm.row.state).toBe('playing');
+    const view = game.boardView(t, warm, 1200) as any;
+    expect(view.myTurn).toBe(true);
+    const card = (view.legalCards as number[])[0];
+    const playsBefore = warm.plays.length;
+
+    const b1 = game.loadBoard(t, userId, 1, true)!;
+    const b2 = game.loadBoard(t, userId, 1, true)!;
+    const results = await Promise.allSettled([game.submitPlay(b1, card), game.submitPlay(b2, card)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    // 409 ("not your turn") is the common case, but if the loser's stale
+    // card also happens to be illegal for whatever fresh decision it landed
+    // on (e.g. it was already played, or doesn't follow suit for the new
+    // hand to play), submitPlay's legality check rejects it with 400
+    // instead — still a clean rejection, never a silent second save.
+    expect([400, 409]).toContain((rejected[0] as PromiseRejectedResult).reason.statusCode);
+
+    const winner = results[0].status === 'fulfilled' ? b1 : b2;
+    const fresh = game.loadBoard(t, userId, 1, true)!;
+    expect(fresh.plays.length).toBeGreaterThan(playsBefore);
+    expect(fresh.plays).toEqual(winner.plays);
+  });
+});
+
 describe('board completion side effects', () => {
   it('completing all boards for two users rates them without any close step', async () => {
     const t = makeTournament('elo-side-effect');

@@ -106,6 +106,63 @@ export function loadBoard(t: TournamentRow, userId: number, boardNo: number, cre
   };
 }
 
+const stmtBoardById = db.prepare(`SELECT * FROM boards WHERE id = ?`);
+
+/**
+ * Per-board in-process serialization for submitCall/submitPlay. Both load a
+ * board, run real async work (advanceRobots — DDS solves / model inference,
+ * potentially routed through the dd-pool.ts worker_threads pool), then
+ * save() the mutated copy back — a read-modify-write race if two requests
+ * for the SAME board (double-tap, a duplicated tab, a client retry) overlap
+ * across that await. This is a single-machine SQLite deployment (see
+ * CLAUDE.md "Deployment shape" — no horizontal scaling), so an in-process
+ * queue is sufficient: chain each board's requests onto a promise so a
+ * second request's critical section only starts once the first's save() has
+ * landed, instead of racing it. Keyed by full row identity, matching
+ * stmtSaveBoard's WHERE clause above.
+ */
+const boardLocks = new Map<string, Promise<unknown>>();
+
+function boardKey(row: BoardRow): string {
+  return `${row.tournament_id}:${row.user_id}:${row.board_no}`;
+}
+
+function withBoardLock<T>(row: BoardRow, fn: () => Promise<T>): Promise<T> {
+  const key = boardKey(row);
+  const prior = boardLocks.get(key) ?? Promise.resolve();
+  const run = prior.then(fn, fn); // run regardless of whether the prior request threw
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  boardLocks.set(key, settled);
+  // Bound the map to boards with in-flight or queued work: drop this
+  // board's entry once it settles, unless a later request already chained
+  // onto it (in which case that request owns the key now).
+  void settled.then(() => {
+    if (boardLocks.get(key) === settled) boardLocks.delete(key);
+  });
+  return run;
+}
+
+/**
+ * Re-read this board's row from SQLite into `b`, in place. Called at the top
+ * of submitCall/submitPlay inside withBoardLock so a request that queued
+ * behind another sees that request's committed write instead of the stale
+ * snapshot it read (via loadBoard) before the race even began — the second
+ * of two racing requests then naturally re-hits the ordinary "not your
+ * turn" / "not in bidding phase" checks below, the same as a genuinely late
+ * duplicate would, instead of clobbering the first request's save().
+ */
+function refresh(b: GameBoard): void {
+  const row = stmtBoardById.get(b.row.id) as BoardRow;
+  b.row = row;
+  b.calls = JSON.parse(row.calls);
+  b.plays = JSON.parse(row.plays);
+  b.bidEvals = JSON.parse(row.bid_evals);
+  b.contract = row.contract ? JSON.parse(row.contract) : null;
+}
+
 function save(b: GameBoard): void {
   stmtSaveBoard.run(
     b.row.state,
@@ -267,30 +324,36 @@ export async function submitCall(
   b: GameBoard,
   call: Call,
 ): Promise<BidEvaluation & { call: Call; bestMeaning: BidMeaning | null }> {
-  if (b.row.state !== 'bidding') throw httpError(409, 'not in bidding phase');
-  const auction = auctionState(b.deal.dealer, b.calls);
-  if (auction.isOver || auction.turn !== HUMAN_SEAT) throw httpError(409, 'not your turn');
-  if (!legalCalls(auction)[call]) throw httpError(400, 'illegal call');
-  const bare = bidder.evaluate(b.deal, b.calls, call);
-  // Name the robot's preferred call so the UI can teach, not just score.
-  const evaluation = { ...bare, call, bestMeaning: meaningFor(b.deal.dealer, b.calls, bare.bestCall) };
-  b.calls.push(call);
-  b.bidEvals.push(evaluation);
-  await advanceRobots(b);
-  save(b);
-  if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
-  return evaluation;
+  return withBoardLock(b.row, async () => {
+    refresh(b);
+    if (b.row.state !== 'bidding') throw httpError(409, 'not in bidding phase');
+    const auction = auctionState(b.deal.dealer, b.calls);
+    if (auction.isOver || auction.turn !== HUMAN_SEAT) throw httpError(409, 'not your turn');
+    if (!legalCalls(auction)[call]) throw httpError(400, 'illegal call');
+    const bare = bidder.evaluate(b.deal, b.calls, call);
+    // Name the robot's preferred call so the UI can teach, not just score.
+    const evaluation = { ...bare, call, bestMeaning: meaningFor(b.deal.dealer, b.calls, bare.bestCall) };
+    b.calls.push(call);
+    b.bidEvals.push(evaluation);
+    await advanceRobots(b);
+    save(b);
+    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    return evaluation;
+  });
 }
 
 export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
-  if (b.row.state !== 'playing') throw httpError(409, 'not in play phase');
-  const ps = playState(b.deal, b.contract!, b.plays);
-  if (ps.isOver || !humanControls(ps.handToPlay, b.contract!)) throw httpError(409, 'not your turn');
-  if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
-  b.plays.push(card);
-  await advanceRobots(b);
-  save(b);
-  if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+  return withBoardLock(b.row, async () => {
+    refresh(b);
+    if (b.row.state !== 'playing') throw httpError(409, 'not in play phase');
+    const ps = playState(b.deal, b.contract!, b.plays);
+    if (ps.isOver || !humanControls(ps.handToPlay, b.contract!)) throw httpError(409, 'not your turn');
+    if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
+    b.plays.push(card);
+    await advanceRobots(b);
+    save(b);
+    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+  });
 }
 
 /** Ensure a fresh board has robots advanced up to the human (dealer may be W/N/E). */
