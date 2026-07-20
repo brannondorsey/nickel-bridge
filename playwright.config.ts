@@ -19,7 +19,15 @@ export default defineConfig({
   // Room for the rare heavy-tail double-dummy solve on slow CI hardware (the
   // in-test waits allow up to 60s for the first play burst alone).
   timeout: 120_000,
-  retries: 0,
+  // CI hardware occasionally lands on the documented DD-solve heavy tail (see
+  // dd-pool.ts's SOLVE_TIMEOUT_MS doc comment — a real deal once cost ~37s),
+  // which can eat enough of a run's 60s/120s budgets to fail an assertion or
+  // strand an in-flight click when the whole test times out mid-action. A
+  // retry re-runs against a fresh server + browser context, so it only masks
+  // that kind of transient hardware slowness — a genuine regression fails
+  // the same way on every attempt. Local runs stay fail-fast (retries: 0) so
+  // a real bug surfaces immediately instead of quietly passing on attempt 2.
+  retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 390, height: 844 }, // phone-first, like real usage
