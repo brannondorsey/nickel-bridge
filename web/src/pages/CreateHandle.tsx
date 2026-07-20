@@ -4,7 +4,12 @@ import { api } from '../api';
 import { Button } from '../components/ds/Button';
 import { Input } from '../components/ds/Input';
 
-/** One-time interstitial after first sign-in: pick the name everyone else sees. */
+/**
+ * One-time interstitial after first sign-in: pick the name everyone else sees. Also carries
+ * the app's only newcomer-orientation copy (what SAYC and duplicate scoring mean) — it's the
+ * one screen every new player sees exactly once before landing in a live auction. A future
+ * Learning feature should replace this paragraph outright rather than build alongside it.
+ */
 export default function CreateHandle({ initialHandle = '' }: { initialHandle?: string }) {
   const { refresh } = useMe();
   const [handle, setHandleValue] = useState(initialHandle);
@@ -34,6 +39,11 @@ export default function CreateHandle({ initialHandle = '' }: { initialHandle?: s
       <p className="auth-copy">
         This is the name your friends will see everywhere — leaderboard, standings, and stats. Pick anything, up to
         24 characters.
+      </p>
+      <p className="auth-copy">
+        Your robot partner and opponents bid SAYC — a standard bidding language, so every call always means the same
+        thing. Scoring is duplicate: everyone in your field plays the identical deals, so the ranking rewards skill,
+        not the luck of the cards.
       </p>
       <div className="auth-actions">
         <Input
