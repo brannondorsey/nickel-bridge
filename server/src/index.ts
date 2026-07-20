@@ -13,14 +13,14 @@ if (process.env.DEMO === '1') {
     .catch((err) => app.log.error(err, 'demo seed failed'));
 }
 
-// Benchmark AI personas: ensure the three accounts exist, then re-enqueue any
-// marked tournament whose persona boards are incomplete — crash/redeploy
+// Benchmark AI personas: ensure the three accounts exist, then re-enqueue
+// tournaments whose persona play STARTED but didn't finish — crash/redeploy
 // recovery for play interrupted mid-board. After listen and fire-and-forget
-// for the same reason as the seeder. Note the sweep only sees tournaments
-// that exist NOW; demo-seed creates its ambient tournaments later and
-// enqueues them itself (seedTournament), so nothing is missed. Disabled by
-// AI_PLAYERS=0 inside these calls (the test harness sets it; buildApp()
-// never runs this file, so app.inject() suites are exempt regardless).
+// for the same reason as the seeder. Tournaments nobody has opened are
+// deliberately not swept: persona play starts on demand from the placement
+// and board routes (see ai-players.ts scheduling). Disabled by AI_PLAYERS=0
+// inside these calls (the test harness sets it; buildApp() never runs this
+// file, so app.inject() suites are exempt regardless).
 if (process.env.AI_PLAYERS !== '0') {
   import('./ai-players.js')
     .then((m) => {

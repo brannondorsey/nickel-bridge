@@ -10,20 +10,20 @@ import {
 import type { FastifyBaseLogger } from 'fastify';
 import { claimHandle, upsertGoogleUser } from './auth.js';
 import { BOARDS_PER_TOURNAMENT, UserRow, db } from './db.js';
-import { BoardStrategy, playThrough } from './bot-play.js';
+import { BoardStrategy, playSingleBoard } from './bot-play.js';
 import { GameBoard, bidder } from './game.js';
 import { getTournament } from './tournaments.js';
 
 /**
  * Benchmark AI players — "the house": three permanent personas ("A Beginner",
  * "An Intermediate Player", "An Expert") that automatically play every
- * tournament stamped `ai_field = 1` at creation (placeUser and demo-seed's
- * ambient tournaments; never backfilled). Their scores surface in The Field
- * as SHADOW rows — reference points that let a human see where they sit
- * against known skill levels — and are guaranteed never to move a human
- * number: standings/boardResult/myBoardSummaries matchpoint humans among
- * humans only, recomputeElo filters them out (and their completions skip the
- * replay entirely), and placement/leaderboard/stats exclude kind='ai'.
+ * tournament stamped `ai_field = 1` (placeUser's creation path and
+ * demo-seed's ambient tournaments). Their scores surface in The Field as
+ * SHADOW rows — reference points that let a human see where they sit against
+ * known skill levels — and are guaranteed never to move a human number:
+ * standings/boardResult/myBoardSummaries matchpoint humans among humans
+ * only, recomputeElo filters them out (and their completions skip the replay
+ * entirely), and placement/leaderboard/stats exclude kind='ai'.
  *
  * A persona plays the human seat through the real engine (bot-play.ts →
  * submitCall/submitPlay/advanceRobots), so its robot opponents are the
@@ -41,14 +41,37 @@ import { getTournament } from './tournaments.js';
  * (`${t.seed}:ai:${tier}`) that can never alias the robots' own
  * bidDecisionSeed/mcDecisionSeed streams, so every human sees identical
  * benchmark scores and an interrupted board replays byte-identically
- * (playThrough wipes unfinished attempts — which is also what prevents
+ * (playSingleBoard wipes an unfinished attempt — which is also what prevents
  * duplicated bid_evals on resume).
  *
- * All play runs on one serialized promise queue (the demo-seed pattern),
- * fire-and-forget behind the placement response, yielding the event loop per
- * action. AI_PLAYERS=0 disables enqueueing and the boot sweep — set by the
- * server test harness so suites that exercise placeUser don't spend minutes
- * playing benchmark boards.
+ * SCHEDULING — deferrable background work, except where a human is waiting.
+ * Persona play is CPU-heavy (DDS solves), and on small machines an eager
+ * backlog visibly lags live players (measured: 1.3-1.9s card taps on a
+ * single unthrottled core, and on Fly's shared CPUs it burns the burst-quota
+ * budget outright — see docs in the PR). So work is split into UNITS (one
+ * persona × one board, board-major order) drained by a single runner:
+ *
+ *   - URGENT units run immediately: boards a recently-active human in that
+ *     tournament will need within LOOKAHEAD_BOARDS of their own progress.
+ *     One board-number across all three personas costs ~15-60s of compute
+ *     vs the minutes a human spends on a board, so the house scores for
+ *     board N are always in place before a human finishes board N — the
+ *     "how did I rank against the house?" moment never waits.
+ *   - Everything else (other tournaments, boards beyond the lookahead)
+ *     PAUSES while any interactive API request was seen within PAUSE_MS,
+ *     and resumes full-speed when the app goes quiet. Urgent units are
+ *     re-evaluated every iteration, so a human landing in a new tournament
+ *     jumps its units ahead of a parked backlog instantly.
+ *
+ * Nothing here races the engine: units for the same tournament run strictly
+ * sequentially (one runner), and a unit is the atomic grain — suspension
+ * (demo wipe) waits out at most one board, not a whole tournament. Play for
+ * a tournament starts on demand — placement or a board GET with ai_field=1
+ * enqueues it — and the boot sweep re-enqueues only tournaments whose
+ * persona play already STARTED but didn't finish (crash recovery), so demo
+ * boot never grinds through ambient tournaments nobody has opened.
+ * AI_PLAYERS=0 disables enqueueing and the sweep (the server test harness
+ * sets it); AI_PAUSE_MS tunes the interactive-quiet window (tests set 0).
  */
 
 export const AI_PLAYER_HANDLES: Record<SettableDifficulty, string> = {
@@ -57,29 +80,47 @@ export const AI_PLAYER_HANDLES: Record<SettableDifficulty, string> = {
   expert: 'An Expert',
 };
 
+/** Personas stay this many boards ahead of the furthest human in an active tournament. */
+export const LOOKAHEAD_BOARDS = 2;
+/** A tournament counts as "a human is playing" for this long after their last board request. */
+const TOURNAMENT_ACTIVE_MS = 10 * 60_000;
+
+const pauseMs = (): number => Number(process.env.AI_PAUSE_MS ?? 15_000);
+
 export function aiPlayersEnabled(): boolean {
   return process.env.AI_PLAYERS !== '0';
 }
 
 const stmtSetKindAi = db.prepare(`UPDATE users SET kind = 'ai' WHERE id = ?`);
-// AI board-row coverage of one tournament, for the boot sweep's "incomplete"
-// check. Counting done boards across all three personas against the 3×4
-// target is exact because playThrough is the only writer of persona boards
-// and never plays past BOARDS_PER_TOURNAMENT.
-const stmtAiFieldIncomplete = db.prepare(
+// Boot-sweep scope: persona play STARTED (any AI board row, finished or not)
+// but incomplete. Tournaments no human ever opened have no AI rows and are
+// deliberately never swept — their play starts on demand.
+const stmtAiFieldStartedIncomplete = db.prepare(
   `SELECT t.id FROM tournaments t
    WHERE t.ai_field = 1
+     AND EXISTS (SELECT 1 FROM boards b JOIN users u ON u.id = b.user_id
+                 WHERE b.tournament_id = t.id AND u.kind = 'ai')
      AND (SELECT COUNT(*) FROM boards b JOIN users u ON u.id = b.user_id
           WHERE b.tournament_id = t.id AND u.kind = 'ai' AND b.state = 'done') < ?
    ORDER BY t.id`,
+);
+const stmtPersonaBoardStates = db.prepare(
+  `SELECT b.user_id, b.board_no FROM boards b
+   WHERE b.tournament_id = ? AND b.user_id IN (?, ?, ?) AND b.state = 'done'`,
+);
+// The furthest any human has progressed: their next board is MAX(done)+1.
+const stmtMaxHumanDone = db.prepare(
+  `SELECT COALESCE(MAX(done), 0) AS n FROM (
+     SELECT COUNT(*) AS done FROM boards b JOIN users u ON u.id = b.user_id AND u.kind = 'human'
+     WHERE b.tournament_id = ? AND b.state = 'done' GROUP BY b.user_id)`,
 );
 
 /**
  * Idempotently create (or fetch) the three personas. Handles are claimed
  * with a numeric suffix on collision (a human may already hold "A Beginner"
  * — their handle is never touched). Re-run wherever the personas might be
- * missing: at boot, at the head of every queued play task (demo reset wipes
- * the users table), and from the demo reseed path.
+ * missing: at boot, per scheduler unit (demo reset wipes the users table),
+ * and from the demo reseed path.
  */
 export function ensureAiPlayers(): Record<SettableDifficulty, UserRow> {
   const out = {} as Record<SettableDifficulty, UserRow>;
@@ -103,77 +144,260 @@ export function ensureAiPlayers(): Record<SettableDifficulty, UserRow> {
 function tierStrategy(tier: SettableDifficulty, tournamentSeed: string): BoardStrategy {
   const seedBase = `${tournamentSeed}:ai:${tier}`;
   return {
-    call: (b: GameBoard) =>
-      bidder.chooseCall(b.deal, b.calls, {
+    call: async (b: GameBoard) => {
+      await courtesyGap();
+      return bidder.chooseCall(b.deal, b.calls, {
         difficulty: tier,
         seed: bidDecisionSeed(seedBase, b.row.board_no, b.calls.length),
-      }),
-    card: (b: GameBoard) =>
-      chooseCardSampled(b.deal, b.contract!, b.plays, {
+      });
+    },
+    card: async (b: GameBoard) => {
+      await courtesyGap();
+      return chooseCardSampled(b.deal, b.contract!, b.plays, {
         k: MC_SAMPLES[tier].kOpp,
         useAuction: MC_SAMPLES[tier].auctionAware,
         playTopN: PLAY_NOISE[tier].topN,
         seed: mcDecisionSeed(seedBase, b.row.board_no, b.plays.length),
         dealer: b.deal.dealer,
         calls: b.calls,
-      }),
+      });
+    },
   };
 }
 
-let queue: Promise<void> = Promise.resolve();
+// ---- interactive-activity signals (fed by app.ts) ----
 
-/** One queue for every persona play task: runs never interleave with each other. */
-function enqueue<T>(fn: () => T | Promise<T>): Promise<T> {
-  const run = queue.then(fn);
-  queue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
+let lastInteractiveAt = 0;
+const tournamentActiveAt = new Map<number, number>();
+
+/** Any interactive API request — parks non-urgent persona work for PAUSE_MS. */
+export function noteInteractiveRequest(): void {
+  lastInteractiveAt = Date.now();
 }
 
-/**
- * Resolves once every task enqueued so far has settled. Demo reset awaits
- * this before wiping, so a wipe never deletes rows out from under a
- * mid-board persona (tasks enqueued after the snapshot are covered by the
- * run-time existence re-check below instead).
- */
-export function whenAiPlayersIdle(): Promise<void> {
-  return queue;
+/** A human touched this tournament (placement or a board request) — its lookahead window is live. */
+export function noteTournamentActivity(tournamentId: number): void {
+  lastInteractiveAt = Date.now();
+  tournamentActiveAt.set(tournamentId, Date.now());
 }
 
+const interactiveRecently = (): boolean => Date.now() - lastInteractiveAt < pauseMs();
+const tournamentActive = (id: number): boolean =>
+  Date.now() - (tournamentActiveAt.get(id) ?? 0) < TOURNAMENT_ACTIVE_MS;
+
 /**
- * Queue the three personas through tournament `tournamentId`. Fire-and-forget
- * and idempotent: the task re-fetches the tournament at run time (it may
- * have been deleted by a demo reset, or already fully played — playThrough
- * resumes from the done count, so re-enqueueing costs one SELECT per
- * persona). Callers pass their request/boot logger for error reporting.
+ * Decision-level courtesy: even URGENT units step out of the way of a human
+ * who is actively tapping. Before each persona decision, wait for a short
+ * interactive-quiet gap — a human's taps arrive seconds apart (thinking
+ * time), so personas do their solving inside those gaps instead of racing
+ * the taps for the DDS pool (measured: ~750ms p95 taps on one core without
+ * this). The cap bounds starvation from a constant request stream: worst
+ * case a persona board slows to ~cap × decisions, still minutes ahead of a
+ * human's pace through four boards. Disabled with the pause gate
+ * (AI_PAUSE_MS=0 — tests hammer requests with no think time at all).
  */
-export function enqueueAiField(tournamentId: number, log: FastifyBaseLogger): void {
-  if (!aiPlayersEnabled()) return;
-  enqueue(async () => {
-    const t = getTournament(tournamentId);
-    if (!t || !t.ai_field || t.kind !== 'standard') return;
-    const personas = ensureAiPlayers();
-    for (const tier of DIFFICULTIES) {
-      const strategy = tierStrategy(tier, t.seed);
-      await playThrough(t, personas[tier].id, BOARDS_PER_TOURNAMENT, () => strategy);
+const COURTESY_QUIET_MS = 1_500;
+const COURTESY_CAP_MS = 6_000;
+async function courtesyGap(): Promise<void> {
+  if (pauseMs() <= 0) return;
+  const start = Date.now();
+  while (Date.now() - lastInteractiveAt < COURTESY_QUIET_MS && Date.now() - start < COURTESY_CAP_MS) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+// ---- the unit scheduler ----
+
+interface Unit {
+  tournamentId: number;
+  boardNo: number;
+  tier: SettableDifficulty;
+  urgent: boolean;
+}
+
+/** Tournaments with (possibly) unplayed persona boards, in enqueue order. */
+const pending = new Set<number>();
+let runnerActive = false;
+let suspendCount = 0;
+let log: FastifyBaseLogger = console as unknown as FastifyBaseLogger;
+let wakeRunner: (() => void) | null = null;
+const drainWaiters: (() => void)[] = [];
+
+function poke(): void {
+  wakeRunner?.();
+}
+
+/** Sleep that a poke() can cut short — keeps urgent work from waiting out a park. */
+function parkUntilPoked(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms);
+    timer.unref?.();
+    wakeRunner = finish;
+    function finish(): void {
+      clearTimeout(timer);
+      if (wakeRunner === finish) wakeRunner = null;
+      resolve();
     }
-  }).then(
-    () => undefined,
-    (err) => log.error({ err, tournamentId }, 'ai-players: tournament play failed'),
-  );
+  });
 }
 
 /**
- * Boot-time crash recovery (index.ts, after listen): re-enqueue every marked
- * tournament whose persona coverage is incomplete — a redeploy mid-board
- * resumes here. Legacy tournaments are unmarked and never swept.
+ * Queue the personas for tournament `tournamentId` and make sure the runner
+ * is going. Fire-and-forget and idempotent — the runner re-derives what is
+ * left to play from the database on every iteration, so double enqueues and
+ * already-finished tournaments cost one SELECT.
  */
-export function sweepAiFields(log: FastifyBaseLogger): void {
+export function enqueueAiField(tournamentId: number, reqLog: FastifyBaseLogger): void {
+  if (!aiPlayersEnabled()) return;
+  log = reqLog;
+  pending.add(tournamentId);
+  poke();
+  if (!runnerActive) {
+    runnerActive = true;
+    void runner();
+  }
+}
+
+/**
+ * The next unit of work, or null when nothing is playable. Board-major
+ * within a tournament (board 1 for all three personas, then board 2, …) so
+ * partial progress is always "the boards humans reach first". Urgent units
+ * (an interactively-active tournament, within LOOKAHEAD_BOARDS of the
+ * furthest human's next board) are preferred across tournaments; otherwise
+ * enqueue order (Set iteration preserves insertion).
+ */
+function nextUnit(personas: Record<SettableDifficulty, UserRow>): Unit | null {
+  let fallback: Unit | null = null;
+  for (const tournamentId of pending) {
+    const t = getTournament(tournamentId);
+    if (!t || !t.ai_field || t.kind !== 'standard') {
+      pending.delete(tournamentId); // deleted by a demo wipe, or never eligible
+      continue;
+    }
+    const ids = DIFFICULTIES.map((tier) => personas[tier].id);
+    const doneRows = stmtPersonaBoardStates.all(tournamentId, ...ids) as { user_id: number; board_no: number }[];
+    const done = new Set(doneRows.map((r) => `${r.user_id}:${r.board_no}`));
+    let unit: Unit | null = null;
+    for (let boardNo = 1; boardNo <= BOARDS_PER_TOURNAMENT && !unit; boardNo++) {
+      for (const tier of DIFFICULTIES) {
+        if (!done.has(`${personas[tier].id}:${boardNo}`)) {
+          const maxHumanDone = (stmtMaxHumanDone.get(tournamentId) as { n: number }).n;
+          const humanNext = Math.min(maxHumanDone + 1, BOARDS_PER_TOURNAMENT);
+          const urgent = tournamentActive(tournamentId) && boardNo < humanNext + LOOKAHEAD_BOARDS;
+          unit = { tournamentId, boardNo, tier, urgent };
+          break;
+        }
+      }
+    }
+    if (!unit) {
+      pending.delete(tournamentId); // fully played
+      continue;
+    }
+    if (unit.urgent) return unit;
+    fallback = fallback ?? unit;
+  }
+  return fallback;
+}
+
+/**
+ * The single runner: pick a unit, play it, repeat. Non-urgent units wait for
+ * interactive quiet; suspension (demo wipe) parks the loop between units.
+ * Unit failures drop the tournament from the queue (logged) — the next
+ * placement or boot sweep re-adds it — so a poison board can't hot-loop.
+ */
+async function runner(): Promise<void> {
+  try {
+    for (;;) {
+      if (suspendCount > 0) {
+        await parkUntilPoked(1_000);
+        continue;
+      }
+      if (pending.size === 0) break;
+      const personas = ensureAiPlayers();
+      const unit = nextUnit(personas);
+      if (!unit) continue; // pending shrank inside nextUnit — re-check loop conditions
+      if (!unit.urgent && interactiveRecently()) {
+        // A human is around and nothing is urgent: park. A poke (new
+        // enqueue / activity note) re-evaluates immediately.
+        await parkUntilPoked(Math.max(1_000, pauseMs() / 3));
+        continue;
+      }
+      const t = getTournament(unit.tournamentId)!;
+      try {
+        await playSingleBoard(t, personas[unit.tier].id, unit.boardNo, tierStrategy(unit.tier, t.seed));
+      } catch (err) {
+        log.error({ err, tournamentId: unit.tournamentId, boardNo: unit.boardNo, tier: unit.tier },
+          'ai-players: unit failed; dropping tournament from queue');
+        pending.delete(unit.tournamentId);
+      }
+    }
+  } finally {
+    runnerActive = false;
+    for (const w of drainWaiters.splice(0)) w();
+    // work may have been enqueued while we were unwinding
+    if (pending.size > 0 && suspendCount === 0 && aiPlayersEnabled()) {
+      runnerActive = true;
+      void runner();
+    }
+  }
+}
+
+/**
+ * Resolves once the queue is fully drained (no pending tournaments, runner
+ * parked). Test-harness API — production code never waits on the house.
+ */
+export function whenAiPlayersDrained(): Promise<void> {
+  if (!runnerActive && pending.size === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    drainWaiters.push(() => {
+      // drained only if nothing new arrived; otherwise re-arm
+      if (!runnerActive && pending.size === 0) resolve();
+      else void whenAiPlayersDrained().then(resolve);
+    });
+  });
+}
+
+/**
+ * Run `fn` with persona play suspended — the runner finishes its current
+ * unit (at most one board, seconds) and parks. Demo's wipe/reseed uses this
+ * so the wipe never deletes rows out from under a mid-board persona; it also
+ * clears the queue, since the wipe deletes the queued tournaments themselves
+ * (post-reseed enqueues repopulate it on demand).
+ */
+export async function withAiPlayersSuspended<T>(fn: () => T | Promise<T>): Promise<T> {
+  suspendCount++;
+  try {
+    await unitBoundary();
+    pending.clear();
+    return await fn();
+  } finally {
+    suspendCount--;
+    poke();
+  }
+}
+
+/** Resolves when the runner is not inside a unit (parked, waiting, or stopped). */
+function unitBoundary(): Promise<void> {
+  return new Promise((resolve) => {
+    const check = (): void => {
+      // Parked runners sit in parkUntilPoked with wakeRunner set; a stopped
+      // runner has runnerActive false. Either way no unit is mid-flight.
+      if (!runnerActive || wakeRunner !== null) resolve();
+      else setTimeout(check, 200);
+    };
+    check();
+  });
+}
+
+/**
+ * Boot-time crash recovery (index.ts, after listen): re-enqueue tournaments
+ * whose persona play started but didn't finish — a redeploy mid-board
+ * resumes here. Tournaments nobody opened are untouched (on-demand start).
+ */
+export function sweepAiFields(bootLog: FastifyBaseLogger): void {
   if (!aiPlayersEnabled()) return;
   const target = DIFFICULTIES.length * BOARDS_PER_TOURNAMENT;
-  for (const { id } of stmtAiFieldIncomplete.all(target) as { id: number }[]) {
-    enqueueAiField(id, log);
+  for (const { id } of stmtAiFieldStartedIncomplete.all(target) as { id: number }[]) {
+    enqueueAiField(id, bootLog);
   }
 }

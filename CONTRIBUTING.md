@@ -146,6 +146,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `AI_PLAYERS` | on | `0` disables the benchmark AI personas' background play + boot sweep (`ai-players.ts`) — set by the server test harness (`server/test/helpers.ts`) so suites exercising `placeUser` don't play 12 bot boards per placement |
+| `AI_PAUSE_MS` | `15000` | how long after an interactive API request the personas' non-urgent play stays parked (`ai-players.ts`); tests set `0` |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
 | `WEB_DIST` | `../../web/dist` | override static SPA path (`app.ts`) |
 
@@ -275,12 +276,23 @@ muted-italic with a HOUSE tag (never the "you" surface fill). Personas are exclu
 everywhere else: the Elo replay (`recomputeElo` filters them and their completions skip it),
 placement's grace/popularity counts (`stmtCandidates` counts human board rows only — without
 this, three instant AI finishers would close every grace window), the leaderboard, and stats
-pools; their `/players/:id` profiles stay open as calibration content. Play runs on one
-serialized queue, enqueued fire-and-forget from `POST /api/play` and resumed after a crash by
-`index.ts`'s boot sweep; `bot-play.ts`'s wipe-unfinished-then-replay keeps interrupted boards
-byte-identical. Demo mode: ambient tournaments get house rows (the seeder enqueues them
-itself — the boot sweep would race its fire-and-forget creation), and `/api/demo/reset`
-re-creates the personas after the wipe.
+pools; their `/players/:id` profiles stay open as calibration content. **Scheduling is
+demand-driven and human-first** (persona play is CPU-heavy DDS solving): work is unit-granular
+(one persona × one board, board-major) on a single runner; units a recently-active human will
+need soon — within `LOOKAHEAD_BOARDS` of the furthest human's next board in a tournament
+that saw a board request in the last ~10 min — run immediately (which is why house scores
+always exist by the time a human finishes a board), while everything else parks whenever any
+interactive API request landed within `AI_PAUSE_MS`; even urgent units yield
+decision-by-decision to in-flight human taps (`courtesyGap` — personas solve inside the
+human's think-time gaps, capped so they always make progress, disabled when `AI_PAUSE_MS=0`).
+Play starts when a human is placed into
+or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
+sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and
+`bot-play.ts`'s per-board wipe-unfinished-then-replay keeps interrupted boards
+byte-identical. Demo mode: ambient tournaments are stamped `ai_field = 1` but get house rows
+on demand when a tester lands in one (playing all of them at every boot/reset cost ~25 min of
+full-core compute); `/api/demo/reset` suspends the runner across the wipe
+(`withAiPlayersSuspended`) and re-creates the personas afterward.
 
 **Deployment shape:** one container. The built server statically serves `web/dist` and
 falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single volume means

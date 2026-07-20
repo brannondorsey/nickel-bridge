@@ -5,7 +5,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { enqueueAiField } from './ai-players.js';
+import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
@@ -38,17 +38,29 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Liveness check for Fly's http_service health checks — no auth, no DB touch.
   app.get('/health', (req, reply) => reply.send({ ok: true }));
 
+  // Every interactive API request parks the AI personas' non-urgent
+  // background play for a quiet window (see ai-players.ts scheduling).
+  // /api/demo is excluded so a demo reset isn't gated on its own request.
+  app.addHook('onRequest', (req, _reply, done) => {
+    if (req.url.startsWith('/api/') && !req.url.startsWith('/api/demo')) noteInteractiveRequest();
+    done();
+  });
+
   // ---- game & tournament API ----
 
   app.post('/api/play', (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { tournament, nextBoard } = placeUser(user.id, user.difficulty);
-    // Fire-and-forget: get the benchmark AI personas playing this tournament
-    // in the background. Idempotent (the queued task re-checks coverage), so
-    // calling on every placement — creation, join, or resume — doubles as
-    // self-healing for any sweep the boot pass missed.
-    if (tournament.ai_field) enqueueAiField(tournament.id, req.log);
+    // Fire-and-forget: a human is headed into this tournament, so mark it
+    // interactively active (its lookahead boards become urgent) and make
+    // sure the personas' play is queued. Idempotent — the scheduler
+    // re-derives remaining work from the DB — so calling on every placement
+    // (creation, join, resume) doubles as self-healing.
+    if (tournament.ai_field) {
+      noteTournamentActivity(tournament.id);
+      enqueueAiField(tournament.id, req.log);
+    }
     return reply.send({ tournamentId: tournament.id, boardNo: nextBoard });
   });
 
@@ -95,6 +107,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!t || boardNo < 1 || boardNo > 4) return reply.code(404).send({ error: 'not found' });
     const b = loadBoard(t, user.id, boardNo, true);
     if (!b) return reply.code(404).send({ error: 'not found' });
+    // A human is playing here: keep this tournament's lookahead window live,
+    // and start persona play on demand (covers direct-URL resumes and demo
+    // ambient tournaments, which are never played at boot).
+    if (t.ai_field) {
+      noteTournamentActivity(t.id);
+      enqueueAiField(t.id, req.log);
+    }
     await ensureAdvanced(b);
     return reply.send(boardView(t, b, user.elo));
   });
@@ -109,6 +128,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const b = loadBoard(t, user.id, Number(no), false);
     if (!b) return reply.code(404).send({ error: 'board not started' });
     if (typeof call !== 'number' || call < 0 || call > 37) return reply.code(400).send({ error: 'bad call' });
+    if (t.ai_field) noteTournamentActivity(t.id);
     const evaluation = await submitCall(b, call);
     return reply.send({ evaluation, board: boardView(t, b, user.elo) });
   });
@@ -123,6 +143,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const b = loadBoard(t, user.id, Number(no), false);
     if (!b) return reply.code(404).send({ error: 'board not started' });
     if (typeof card !== 'number' || card < 0 || card > 51) return reply.code(400).send({ error: 'bad card' });
+    if (t.ai_field) noteTournamentActivity(t.id);
     await submitPlay(b, card);
     return reply.send({ board: boardView(t, b, user.elo) });
   });

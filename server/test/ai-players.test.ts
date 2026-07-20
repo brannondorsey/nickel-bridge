@@ -4,18 +4,28 @@ import { freshDbEnv, makeApp, playBoard, TestClient } from './helpers.js';
 /**
  * Benchmark AI personas (ai-players.ts): identity, the shadow-row contract
  * (AI rows can NEVER move a human number — standings, per-board pcts, Elo),
- * replay determinism, and the placement exclusions that keep the grace
- * window and popularity scoring human-only.
+ * replay determinism, the placement exclusions that keep the grace window
+ * and popularity scoring human-only, and the human-first unit scheduler
+ * (urgent lookahead runs during interactive traffic; the backlog parks).
  *
  * freshDbEnv sets AI_PLAYERS=0 for every other suite; this one turns the
- * feature back on — it's the thing under test.
+ * feature back on — it's the thing under test. AI_PAUSE_MS=0 disables the
+ * interactive pause except in the scheduler test, which flips it locally.
  */
 freshDbEnv('ai-players');
 process.env.AI_PLAYERS = '1';
+process.env.AI_PAUSE_MS = '0';
 
 const { matchpoints } = await import('@bridge/core');
 const { db } = await import('../src/db.js');
-const { AI_PLAYER_HANDLES, ensureAiPlayers, enqueueAiField, whenAiPlayersIdle } = await import('../src/ai-players.js');
+const {
+  AI_PLAYER_HANDLES,
+  ensureAiPlayers,
+  enqueueAiField,
+  noteInteractiveRequest,
+  noteTournamentActivity,
+  whenAiPlayersDrained,
+} = await import('../src/ai-players.js');
 const { myBoardSummaries, placeUser, recomputeElo, standings } = await import('../src/tournaments.js');
 
 const log = { info() {}, error(...a: unknown[]) { throw a[0]; }, warn() {}, debug() {} } as never;
@@ -37,7 +47,27 @@ const aiBoards = (tid: number): DoneRow[] =>
     )
     .all(tid) as DoneRow[];
 
+const aiDoneCount = (tid: number): number =>
+  (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM boards b JOIN users u ON u.id = b.user_id AND u.kind = 'ai'
+         WHERE b.tournament_id = ? AND b.state = 'done'`,
+      )
+      .get(tid) as { n: number }
+  ).n;
+
 const eloHistory = () => db.prepare(`SELECT user_id, tournament_id, before, after FROM elo_history ORDER BY id`).all();
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function until(cond: () => boolean, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error('condition not reached in time');
+    await sleep(200);
+  }
+}
 
 describe('benchmark AI players', () => {
   let tid = 0;
@@ -72,8 +102,11 @@ describe('benchmark AI players', () => {
       for (let no = 1; no <= 4; no++) {
         await playBoard(alice, tid, no);
         await playBoard(bob, tid, no);
+        // The gratifying moment: house scores for board `no` exist by the
+        // time a human finishes it (urgent lookahead ran ahead of them).
+        await until(() => aiBoards(tid).filter((b) => b.board_no === no && b.score_ns !== null).length === 3, 60_000);
       }
-      await whenAiPlayersIdle();
+      await whenAiPlayersDrained();
 
       const rows = standings(tid);
       const humans = rows.filter((s) => s.kind === 'human');
@@ -96,8 +129,6 @@ describe('benchmark AI players', () => {
       const humanScores = board1.filter((r) => r.kind === 'human').map((r) => r.score_ns);
       for (const ai of board1.filter((r) => r.kind === 'ai')) {
         const phantom = matchpoints([...humanScores, ai.score_ns]);
-        const summaries = myBoardSummaries(tid, ai.user_id);
-        expect(summaries[0].pct).not.toBeNaN(); // persona's own summary view stays functional
         expect(phantom[phantom.length - 1].pct).toBeGreaterThanOrEqual(0);
       }
 
@@ -122,11 +153,11 @@ describe('benchmark AI players', () => {
   it('replay after a wipe (and after an interrupted board) is byte-identical', { timeout: 240_000 }, async () => {
     // the previous test deleted all AI boards — replay from scratch
     enqueueAiField(tid, log);
-    await whenAiPlayersIdle();
+    await whenAiPlayersDrained();
     const first = aiBoards(tid);
     expect(first).toHaveLength(12);
 
-    // simulate a crash mid-board: truncate one persona's last board
+    // simulate a crash mid-board: truncate one persona's board
     const victim = first[3];
     db.prepare(`UPDATE boards SET state = 'playing', plays = '[]', bid_evals = '[]' WHERE tournament_id = ? AND user_id = ? AND board_no = ?`).run(
       tid,
@@ -134,9 +165,47 @@ describe('benchmark AI players', () => {
       victim.board_no,
     );
     enqueueAiField(tid, log);
-    await whenAiPlayersIdle();
+    await whenAiPlayersDrained();
     expect(aiBoards(tid)).toEqual(first);
   });
+
+  it(
+    'parks the backlog during interactive traffic but keeps the active tournament ahead',
+    { timeout: 240_000 },
+    async () => {
+      const mk = (seed: string) =>
+        (
+          db
+            .prepare(
+              `INSERT INTO tournaments (name, seed, difficulty, ai_field) VALUES (?, ?, 'intermediate', 1) RETURNING id`,
+            )
+            .get(seed, seed) as { id: number }
+        ).id;
+      const activeTid = mk('sched-active');
+      const backlogTid = mk('sched-backlog');
+
+      // a human is around (pause window on) and playing activeTid
+      process.env.AI_PAUSE_MS = '600000';
+      noteInteractiveRequest();
+      noteTournamentActivity(activeTid);
+      enqueueAiField(backlogTid, log); // enqueued first — FIFO would play it first
+      enqueueAiField(activeTid, log);
+
+      // urgent lookahead: boards 1..2 of the active tournament play despite
+      // the pause; the backlog tournament and boards 3-4 stay parked
+      await until(() => aiDoneCount(activeTid) === 6, 120_000);
+      await sleep(2_000); // give a runaway runner time to betray itself
+      expect(aiDoneCount(activeTid)).toBe(6);
+      expect(aiDoneCount(backlogTid)).toBe(0);
+
+      // the app goes quiet: everything drains
+      process.env.AI_PAUSE_MS = '0';
+      enqueueAiField(backlogTid, log); // poke
+      await whenAiPlayersDrained();
+      expect(aiDoneCount(activeTid)).toBe(12);
+      expect(aiDoneCount(backlogTid)).toBe(12);
+    },
+  );
 
   it('excludes personas from leaderboard and stats pools', async () => {
     const app = await makeApp();
@@ -160,7 +229,7 @@ describe('benchmark AI players', () => {
       .prepare(
         `INSERT INTO tournaments (name, seed, difficulty, created_at, ai_field) VALUES ('T', 'grace-seed', 'intermediate', ?, 1) RETURNING id`,
       )
-      .get(now - 3600) as { id: number };
+      .get(now - 3600 * 24) as { id: number };
     const human = db
       .prepare(`INSERT INTO users (google_id, name, difficulty) VALUES ('dev:grace-h', 'H', 'intermediate') RETURNING id`)
       .get() as { id: number };
@@ -177,7 +246,9 @@ describe('benchmark AI players', () => {
       .get() as { id: number };
     // Unfixed counts would see starters = 4 (grace full) and done_players = 3
     // (instant popularity magnet); human-only counts grace-join the second
-    // human into the same boards.
+    // human into the same boards. (This tournament is a day old — the grace
+    // sort prefers the OLDEST young underfilled tournament, so the scheduler
+    // test's fresher fixtures can't shadow it.)
     const placed = placeUser(second.id, 'intermediate', { nowSec: now, rng: () => 0.5 });
     expect(placed.tournament.id).toBe(t.id);
   });

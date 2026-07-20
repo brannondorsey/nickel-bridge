@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { enqueueAiField, whenAiPlayersIdle } from './ai-players.js';
+import { withAiPlayersSuspended } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
@@ -102,19 +102,21 @@ const stmtBackdateUser = db.prepare(`UPDATE users SET created_at = ? WHERE id = 
  * in the same response.
  */
 export function wipeDemoData(): Promise<void> {
-  return enqueue(async () => {
-    // Let any queued benchmark-AI play settle first, so the wipe never
-    // deletes rows out from under a mid-board persona. Tasks enqueued after
-    // this point re-check tournament existence at run time and no-op.
-    await whenAiPlayersIdle();
-    db.exec(
-      `DELETE FROM elo_history;
-       DELETE FROM boards;
-       DELETE FROM sessions;
-       DELETE FROM tournaments;
-       DELETE FROM users;`,
-    );
-  });
+  return enqueue(() =>
+    // Suspend persona play across the wipe: the scheduler finishes its
+    // current unit (at most one board) and parks, so the wipe never deletes
+    // rows out from under a mid-board persona; the suspension also clears
+    // the scheduler's queue, since the queued tournaments are deleted here.
+    withAiPlayersSuspended(() => {
+      db.exec(
+        `DELETE FROM elo_history;
+         DELETE FROM boards;
+         DELETE FROM sessions;
+         DELETE FROM tournaments;
+         DELETE FROM users;`,
+      );
+    }),
+  );
 }
 
 export function ensureBot(name: string): UserRow {
@@ -193,12 +195,13 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
   // "Learning since" on stats pages must predate the backdated results
   for (const u of [inspector, newCrosser, ...bots]) stmtBackdateUser.run(now - USER_AGE_S, u.id, now - USER_AGE_S);
 
+  // Ambient tournaments are stamped ai_field = 1 but deliberately NOT
+  // enqueued here: persona play starts on demand when a tester actually
+  // lands in one (the /api/play and board GET routes enqueue). Playing all
+  // of them at boot cost ~25 minutes of full-core DDS compute per
+  // boot/reset — enough to exhaust a shared-CPU machine's burst quota.
   for (const spec of profile.tournaments) {
     const t = await seedTournament(spec, bots, inspector, now);
-    // Explicit per-tournament enqueue: index.ts's boot sweep snapshots the
-    // tournaments table before this fire-and-forget seeder creates these
-    // rows, so relying on the sweep would race and miss them.
-    enqueueAiField(t.id, log);
     log.info(`demo seed: ${t.name} (${spec.seed}) ready`);
   }
 

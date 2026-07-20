@@ -63,6 +63,32 @@ const stmtDoneCount = db.prepare(
 const stmtDeleteUnfinished = db.prepare(
   `DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND state != 'done'`,
 );
+const stmtDeleteUnfinishedBoard = db.prepare(
+  `DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ? AND state != 'done'`,
+);
+const stmtBoardDone = db.prepare(
+  `SELECT 1 FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ? AND state = 'done'`,
+);
+
+/**
+ * Play exactly one board as `userId`, wiping any unfinished prior attempt at
+ * THAT board first (same restart-determinism argument as stmtDeleteUnfinished,
+ * scoped to one board — sound because a board's deal and decision streams
+ * derive from (tournament seed, boardNo) alone, never from other boards).
+ * No-op if the board is already done. This is the AI scheduler's unit of
+ * work (ai-players.ts), which plays boards in board-major order rather than
+ * playThrough's player-major sweep.
+ */
+export async function playSingleBoard(
+  t: TournamentRow,
+  userId: number,
+  boardNo: number,
+  strategy: BoardStrategy,
+): Promise<void> {
+  if (stmtBoardDone.get(t.id, userId, boardNo)) return;
+  stmtDeleteUnfinishedBoard.run(t.id, userId, boardNo);
+  await playBoard(t, userId, boardNo, strategy);
+}
 
 /**
  * Play one board to completion as `userId` using `strategy` for the acting
