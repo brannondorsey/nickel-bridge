@@ -239,6 +239,7 @@ input {
 /* ---- app frame: phone-first centered column ---- */
 
 .shell {
+  position: relative;
   max-width: 430px;
   margin: 0 auto;
   min-height: 100dvh;
