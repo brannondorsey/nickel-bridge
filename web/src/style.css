@@ -2229,7 +2229,10 @@ a.board-row:hover {
    ink blooms and fades around the chip while an underline draws in and out,
    then everything settles back to the plain resting chip. Skipped entirely
    under reduced motion; the chip's own red border/label already carries the
-   information at rest, so there's no reduced-motion equivalent to show. */
+   information at rest, so there's no reduced-motion equivalent to show.
+   Colored via --chip-color (set inline by Chip only when NS is vulnerable,
+   see BoardHead) so the pulse matches the resting chip: red for NS/both vul,
+   ink for EW-only vul — never a red flourish over a chip that isn't red. */
 .board-vul-pulse::before,
 .board-vul-pulse::after {
   content: '';
@@ -2240,14 +2243,14 @@ a.board-row:hover {
 .board-vul-pulse::before {
   inset: -3px;
   border-radius: calc(var(--radius-chip) + 2px);
-  border: 1.5px solid var(--suit-h);
+  border: 1.5px solid var(--chip-color, var(--ink));
 }
 .board-vul-pulse::after {
   left: 5px;
   right: 5px;
   bottom: 1px;
   height: 1.5px;
-  background: var(--suit-h);
+  background: var(--chip-color, var(--ink));
   transform: scaleX(0);
   transform-origin: left;
 }

@@ -68,6 +68,30 @@ describe('Board — bidding', () => {
     expect(await screen.findByText('NONE VUL')).not.toHaveClass('board-vul-pulse');
   });
 
+  it('pulses in the chip\'s own resting color, not hardcoded red, on an EW-only-vulnerable board', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    renderBoard();
+    const nsVulChip = await screen.findByText('NS VUL');
+    // NS-vulnerable: Chip sets --chip-color so the pulse (which reads that
+    // var) renders red, matching the resting chip's own red border.
+    expect(nsVulChip.style.getPropertyValue('--chip-color')).toBe('var(--suit-h)');
+
+    apiMock.board.mockResolvedValue({ ...boardBidding, vul: { ns: false, ew: true } });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: meFixture, route: '/t/12/b/4' },
+    );
+    const ewVulChip = await screen.findByText('EW VUL');
+    expect(ewVulChip).toHaveClass('board-vul-pulse');
+    // EW-only vulnerable: the resting chip is plain ink, not red (unchanged,
+    // pre-existing behavior) — --chip-color must stay unset so the pulse's
+    // CSS fallback (var(--ink)) kicks in instead of a red flourish over a
+    // chip that was never red.
+    expect(ewVulChip.style.getPropertyValue('--chip-color')).toBe('');
+  });
+
   it('walks the two-step commit: select shows the meaning, confirm submits', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
