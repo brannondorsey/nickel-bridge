@@ -88,6 +88,24 @@ describe('Stats', () => {
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
   });
 
+  it('hides every Elo surface on a house (benchmark AI) profile', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      user: { ...playerStatsFull.user, id: 90, handle: 'The Shark', kind: 'ai' },
+      percentiles: { ...playerStatsFull.percentiles, elo: null },
+    });
+    renderStats();
+    expect(await screen.findByText('The Shark')).toBeInTheDocument();
+    expect(screen.getByText('HOUSE')).toBeInTheDocument();
+    expect(screen.getByText(/House player/)).toBeInTheDocument();
+    // personas never rate: no rating hero, no rating chart, no RATED tile
+    expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
+    expect(screen.queryByText('RATING BY TOURNAMENT')).not.toBeInTheDocument();
+    expect(screen.queryByText('RATED')).not.toBeInTheDocument();
+    // matchpoint surfaces stay — the house competes on the scoresheet
+    expect(screen.getByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
+  });
+
   it('invites the owner to play their first board when empty', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsEmpty);
     renderStats();

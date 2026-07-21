@@ -124,7 +124,7 @@ async function runScenarioNow(
     // seed — every click gets a fresh one) and land the tester on board 1.
     // The house sets off behind them through the normal on-demand path, so
     // this exhibits production behavior end to end: urgent lookahead play,
-    // shadow rows filling The Field, phantom pcts on the receipt.
+    // house rows ranking in The Field, house scores in the receipt's field.
     const seed = `${s.seed}:${randomBytes(8).toString('hex')}`;
     const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill('intermediate'));
     const t = stmtCreateFreshAiTournament.get(seed, schedule) as TournamentRow;

@@ -102,14 +102,16 @@ for (let i = 0; i < 4; i++) {
 
 // field comparison on board 1 shows both humans; benchmark AI (house) rows
 // may also be present depending on how far the background personas have
-// played — they are shadow entries and must never affect the human numbers
+// played — they are full field members, so everyone is matchpointed in one
+// field. Whatever the mix, a matchpoint field's pcts always average 50.
 const b1 = await bob.req(`/api/tournaments/${b.tournamentId}/boards/1`);
 const humanField = b1.result.field.filter((f) => f.kind === 'human');
 assert(humanField.length === 2, 'board 1 field has two human results');
-const pcts = humanField.map((f) => f.pct);
+const fieldPcts = b1.result.field.map((f) => f.pct);
+const pctSum = fieldPcts.reduce((s, p) => s + p, 0);
 assert(
-  pcts.every((p) => p === 50) || Math.abs(pcts[0] + pcts[1] - 100) < 0.01,
-  `matchpoint pcts complementary (${pcts.join(', ')})`,
+  Math.abs(pctSum - 50 * fieldPcts.length) < 0.1 * fieldPcts.length,
+  `matchpoint pcts average 50 across the ${fieldPcts.length}-row field (${fieldPcts.join(', ')})`,
 );
 
 const standings = await alice.req(`/api/tournaments/${a.tournamentId}`);
@@ -120,8 +122,10 @@ assert(
   'both players complete',
 );
 assert(
-  standings.standings.filter((s) => s.kind === 'ai').every((s) => s.rank === undefined),
-  'house rows carry no rank',
+  standings.standings
+    .filter((s) => s.kind === 'ai')
+    .every((s) => (s.complete ? typeof s.rank === 'number' : s.rank === undefined)),
+  'house rows rank once complete, like any other pair',
 );
 
 // continuous Elo: the completed tournament is rated immediately, no expiry

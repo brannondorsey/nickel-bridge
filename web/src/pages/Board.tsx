@@ -587,9 +587,9 @@ function PlayPhase({
 function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => void; onReceipt: () => void }) {
   const r = board.result!;
   const low = r.pct < 40;
-  // House (benchmark AI) rows are shadow entries — the matchpoint comparison
-  // the hero pct describes is against the human field only.
-  const others = Math.max(0, r.field.filter((f) => f.kind === 'human').length - 1);
+  // House (benchmark AI) rows are full field members — the hero pct is
+  // matchpointed against everyone on the board, house included.
+  const others = Math.max(0, r.field.length - 1);
   return (
     <div className="result">
       <div className="result-hero">

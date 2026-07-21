@@ -48,7 +48,7 @@ export interface TrickCard {
 interface FieldEntry {
   userId: number;
   handle: string;
-  /** 'ai' = benchmark house player: shadow pct (phantom insertion), styled as a reference row */
+  /** 'ai' = benchmark house player: a full field member, visually tagged HOUSE */
   kind: 'human' | 'ai';
   contract: string;
   scoreNS: number;
@@ -132,7 +132,7 @@ export interface BoardView {
 interface Standing {
   userId: number;
   handle: string;
-  /** 'ai' rows are the benchmark house players — shadow entries that never affect human pcts or ranks */
+  /** 'ai' rows are the benchmark house players — they rank and count as pairs, but never rate */
   kind: 'human' | 'ai';
   boardsDone: number;
   totalPct: number | null;

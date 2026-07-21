@@ -112,6 +112,10 @@ export default function Player() {
   }
 
   const isMe = stats.user.id === me?.user?.id;
+  // Benchmark house personas are never Elo-rated (their scores count in
+  // matchpoints but not in ratings), so every Elo surface — the rating hero,
+  // the rating chart, the RATED tile — is hidden on their profiles.
+  const house = stats.user.kind === 'ai';
   const t = stats.totals;
   const gradedCalls = GRADE_ROWS.reduce((s, g) => s + t.gradeCounts[g.key], 0);
   const gradePct = (n: number) => (gradedCalls ? Math.round((n / gradedCalls) * 100) : 0);
@@ -164,24 +168,28 @@ export default function Player() {
             <div>
               <div className="stats-handle">
                 {stats.user.handle}
-                {stats.user.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
+                {house ? <span className="house-tag">HOUSE</span> : null}
               </div>
               <div className="stats-since">
-                {stats.user.kind === 'ai' ? 'Benchmark player — a fixed reference point, not a competitor' : `Learning since ${since}`}
+                {house ? 'House player — a fixed skill level, in the field of every crossing' : `Learning since ${since}`}
               </div>
             </div>
           </div>
         ) : null}
-        <FlipDigits value={t.currentElo} size={46} />
-        <div className="stats-rating-line">
-          <span className="label-caps stats-rating-label">NICKEL RATING</span>
-          {t.monthlyEloDelta !== null ? (
-            <span className={`stats-delta num ${t.monthlyEloDelta >= 0 ? 'positive' : 'negative'}`}>
-              {t.monthlyEloDelta >= 0 ? '+' : '−'}
-              {Math.abs(t.monthlyEloDelta)} THIS MONTH
-            </span>
-          ) : null}
-        </div>
+        {!house ? (
+          <>
+            <FlipDigits value={t.currentElo} size={46} />
+            <div className="stats-rating-line">
+              <span className="label-caps stats-rating-label">NICKEL RATING</span>
+              {t.monthlyEloDelta !== null ? (
+                <span className={`stats-delta num ${t.monthlyEloDelta >= 0 ? 'positive' : 'negative'}`}>
+                  {t.monthlyEloDelta >= 0 ? '+' : '−'}
+                  {Math.abs(t.monthlyEloDelta)} THIS MONTH
+                </span>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </div>
 
       {t.boardsCompleted === 0 ? (
@@ -212,9 +220,11 @@ export default function Player() {
             />
           </ChartPanel>
 
-          <ChartPanel heading="RATING BY TOURNAMENT" figure={`PEAK ${t.peakElo}`}>
-            <Sparkline points={eloPoints} refValue={1200} refLabel="start 1200" leftCaption={ago(eloPoints.length)} />
-          </ChartPanel>
+          {!house ? (
+            <ChartPanel heading="RATING BY TOURNAMENT" figure={`PEAK ${t.peakElo}`}>
+              <Sparkline points={eloPoints} refValue={1200} refLabel="start 1200" leftCaption={ago(eloPoints.length)} />
+            </ChartPanel>
+          ) : null}
 
           <ChartPanel
             heading="BID ACCURACY"
@@ -255,7 +265,7 @@ export default function Player() {
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
             <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
-            <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" />
+            {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
           </div>
 
           {percentileRows.length > 0 ? (

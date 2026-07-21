@@ -64,9 +64,9 @@ const stmtBoardResults = db.prepare(
    WHERE b.tournament_id = ? AND b.board_no = ? AND b.state = 'done' ORDER BY b.updated_at`,
 );
 // Whether a board's owner is a benchmark AI persona — those completions never
-// trigger the Elo replay (personas are unrated by construction; see also the
-// kind filter inside recomputeElo, which keeps correctness independent of
-// this skip).
+// trigger the Elo replay: personas are unrated, and the replay's inputs are
+// matchpointed among humans only (eloParticipants in tournaments.ts), so a
+// persona's rows can't change them.
 const stmtUserKind = db.prepare(`SELECT kind FROM users WHERE id = ?`);
 function isAiUser(userId: number): boolean {
   return (stmtUserKind.get(userId) as { kind: 'human' | 'ai' } | undefined)?.kind === 'ai';
@@ -508,12 +508,11 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
 }
 
 /**
- * Result + field comparison for a completed board. Same partition as
- * standings() in tournaments.ts: humans are matchpointed among humans only
- * (byte-identical whether or not benchmark AI rows exist), each AI persona
- * gets a phantom-insertion pct against the human field. The score-sorted
- * field table interleaves both kinds — a persona tying a human's raw score
- * shows a lower pct (standard phantom asymmetry; see standings()).
+ * Result + field comparison for a completed board. Same field as standings()
+ * in tournaments.ts: everyone who finished the board — humans and benchmark
+ * AI personas — matchpointed together in one pass. House rows are real pairs
+ * in this comparison (see standings()'s doc comment); the persona/human
+ * split survives only in Elo and placement.
  */
 function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
   const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & {
@@ -521,36 +520,17 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
     user_kind: 'human' | 'ai';
     user_google: string;
   })[];
-  const humanScores = rows.filter((r) => r.user_kind === 'human').map((r) => r.score_ns ?? 0);
-  const humanMps = matchpoints(humanScores);
-  let humanIdx = 0;
-  const field = rows.map((r) => {
-    const pct =
-      r.user_kind === 'human'
-        ? humanMps[humanIdx++].pct
-        : humanScores.length
-          ? (() => {
-              const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
-              return phantom[phantom.length - 1].pct;
-            })()
-          // Unknowable, not 50 — same rule as standings() (tournaments.ts):
-          // no human has finished this board yet, so there's no field to
-          // phantom-insert this persona's score against. Only reachable when
-          // this is computed for a persona's OWN board (bot-play.ts calls
-          // boardView after every action) before any human has reached this
-          // board number — never in a response served to a real client.
-          : null;
-    return {
-      userId: r.user_id,
-      handle: r.user_handle,
-      kind: r.user_kind,
-      tieRank: aiTieRank(r.user_google),
-      contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
-      scoreNS: r.score_ns ?? 0,
-      pct: pct === null ? null : Math.round(pct * 10) / 10,
-      isMe: r.user_id === b.row.user_id,
-    };
-  });
+  const mps = matchpoints(rows.map((r) => r.score_ns ?? 0));
+  const field = rows.map((r, i) => ({
+    userId: r.user_id,
+    handle: r.user_handle,
+    kind: r.user_kind,
+    tieRank: aiTieRank(r.user_google),
+    contract: r.contract ? contractLabel(JSON.parse(r.contract), tricksOf(r)) : 'Passed out',
+    scoreNS: r.score_ns ?? 0,
+    pct: Math.round(mps[i].pct * 10) / 10,
+    isMe: r.user_id === b.row.user_id,
+  }));
   const mine = field.find((f) => f.isMe);
   return {
     contractLabel: b.contract ? contractLabel(b.contract, b.row.tricks_declarer ?? undefined) : 'Passed out',
