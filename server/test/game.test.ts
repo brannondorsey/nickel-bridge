@@ -150,6 +150,204 @@ describe('automatic laydown claims', () => {
   });
 });
 
+describe('concurrent submitCall/submitPlay race (server/src/game.ts)', () => {
+  // Simulates a double-tap / duplicated tab: two requests each do their own
+  // (synchronous, pre-race) loadBoard read of the SAME board, then race their
+  // submitCall through advanceRobots's real async work concurrently. Without
+  // the per-board lock + refresh in game.ts, both would validate against the
+  // same stale snapshot and each independently save() — the second silently
+  // clobbering the first's write (a lost update). With it, the loser must
+  // queue behind the winner, re-read the winner's committed state, and hit
+  // the ordinary "not your turn" rejection instead of overwriting anything.
+  it('exactly one concurrent submitCall is accepted; the other gets a clean 409, never a lost update', async () => {
+    const t = makeTournament('race-call');
+    // Advance to the human's first bidding decision — always reachable
+    // without the auction ending first (the human is one of the four seats,
+    // so at most 3 robot passes can precede their first turn).
+    const seed = game.loadBoard(t, userId, 1, true)!;
+    await game.ensureAdvanced(seed);
+    expect(seed.row.state).toBe('bidding');
+
+    // Two independent GameBoard snapshots of the identical committed state —
+    // exactly what two concurrent HTTP requests would each produce via their
+    // own loadBoard() call before either one's submitCall starts racing.
+    const b1 = game.loadBoard(t, userId, 1, true)!;
+    const b2 = game.loadBoard(t, userId, 1, true)!;
+    const callsBefore = b1.calls.length;
+
+    const results = await Promise.allSettled([game.submitCall(b1, 0), game.submitCall(b2, 0)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.statusCode).toBe(409);
+
+    // The winner is whichever of b1/b2 actually got mutated+saved.
+    const winner = results[0].status === 'fulfilled' ? b1 : b2;
+    const fresh = game.loadBoard(t, userId, 1, true)!;
+    // Exactly one new call landed — a lost update would show either 0 (the
+    // winner's write silently overwritten by a loser starting from a stale
+    // snapshot) or a mismatch between the DB and the winner's in-memory calls.
+    expect(fresh.calls.length).toBeGreaterThan(callsBefore);
+    expect(fresh.calls).toEqual(winner.calls);
+  });
+
+  it('exactly one concurrent submitPlay is accepted; the other gets a clean 409, never a lost update', async () => {
+    // Pinned seed/board reused from the "declarer scenarios" suite above:
+    // known to reach 'playing' via robot bidding alone even if the human
+    // always passes, so it deterministically produces a human play decision.
+    const { t, b: warm } = await loadBoardFor('hunt-0', 1);
+    while (warm.row.state === 'bidding') await game.submitCall(warm, 0);
+    expect(warm.row.state).toBe('playing');
+    const view = game.boardView(t, warm, 1200) as any;
+    expect(view.myTurn).toBe(true);
+    const card = (view.legalCards as number[])[0];
+    const playsBefore = warm.plays.length;
+
+    const b1 = game.loadBoard(t, userId, 1, true)!;
+    const b2 = game.loadBoard(t, userId, 1, true)!;
+    const results = await Promise.allSettled([game.submitPlay(b1, card), game.submitPlay(b2, card)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    // 409 ("not your turn") is the common case, but if the loser's stale
+    // card also happens to be illegal for whatever fresh decision it landed
+    // on (e.g. it was already played, or doesn't follow suit for the new
+    // hand to play), submitPlay's legality check rejects it with 400
+    // instead — still a clean rejection, never a silent second save.
+    expect([400, 409]).toContain((rejected[0] as PromiseRejectedResult).reason.statusCode);
+
+    const winner = results[0].status === 'fulfilled' ? b1 : b2;
+    const fresh = game.loadBoard(t, userId, 1, true)!;
+    expect(fresh.plays.length).toBeGreaterThan(playsBefore);
+    expect(fresh.plays).toEqual(winner.plays);
+  });
+
+  // PR #49 review, concern 1: ensureAdvanced (the plain GET board route) ran
+  // advanceRobots and unconditionally save()d OUTSIDE withBoardLock/refresh —
+  // the exact race submitCall/submitPlay were fixed against above, just
+  // relocated. The concrete failure mode: a duplicated tab's slow GET starts
+  // advanceRobots from a stale snapshot; before it finishes, a faster tab's
+  // submitPlay commits the human's actual card (and any robot follow-up);
+  // the slow GET then finishes its stale recomputation and saves it
+  // unconditionally, reverting the committed card. loadBoard() itself can
+  // never observe a genuine "mid-advance" DB row (advanceRobots always runs
+  // to the next human stop before any save — see game.ts), so we construct
+  // that in-flight snapshot directly: a GameBoard whose `.calls`/`.contract`
+  // reflect the just-closed auction but whose `.plays`/`.row.state` are
+  // still pre-advance — exactly what an unrefreshed, still-computing
+  // ensureAdvanced call would be holding, the moment before Tab B's plays
+  // landed.
+  it('a stale ensureAdvanced snapshot never reverts a submitPlay committed after it was taken', async () => {
+    // hunt-6 board 1: with the human passing throughout, West declares —
+    // opening leader (North) and dummy (East, W-E declaring) are both
+    // robots, so reaching South's first defensive turn takes two genuine
+    // robot card-play decisions past the auction closing.
+    const { t, b: warm } = await loadBoardFor('hunt-6', 1);
+    while (warm.row.state === 'bidding') await game.submitCall(warm, 0);
+    expect(warm.row.state).toBe('playing');
+    expect(warm.contract).toMatchObject({ declarer: 3 }); // West — pinned by the seed
+    expect(warm.plays).toHaveLength(2); // North's lead + East's dummy card, already advanced
+
+    // The "stale ensureAdvanced" snapshot: same board, but rolled back to
+    // right when the auction closed — full final auction recorded, no plays
+    // yet, state still 'bidding'.
+    const bStale = game.loadBoard(t, userId, 1, true)!;
+    bStale.calls = [...warm.calls];
+    bStale.contract = null;
+    bStale.plays = [];
+    bStale.row = { ...bStale.row, state: 'bidding', contract: null };
+
+    // Meanwhile the real tab keeps playing: South's defensive card, plus
+    // whatever robots follow before the next human decision (or the board
+    // ending) — a genuinely more-advanced, already-committed state.
+    const view = game.boardView(t, warm, 1200) as any;
+    expect(view.myTurn).toBe(true);
+    await game.submitPlay(warm, (view.legalCards as number[])[0]);
+    const committed = { calls: [...warm.calls], plays: [...warm.plays], state: warm.row.state };
+    expect(committed.plays.length).toBeGreaterThan(2);
+
+    // The stale snapshot's ensureAdvanced "arrives late". With the fix,
+    // refresh() picks up the already-committed state before advanceRobots
+    // runs, so this can only converge on / extend `committed`, never revert
+    // it — before the fix, it would recompute the (identical) opening lead +
+    // dummy card from its own stale view and unconditionally save just
+    // those 2 plays, discarding South's card and everything after it.
+    await game.ensureAdvanced(bStale);
+
+    const fresh = game.loadBoard(t, userId, 1, true)!;
+    expect(fresh.calls).toEqual(committed.calls);
+    expect(fresh.plays).toEqual(committed.plays);
+  });
+});
+
+describe("refresh() row identity scoping (server/src/game.ts, PR #49 review concern 2)", () => {
+  // stmtSaveBoard's WHERE clause is scoped to id + tournament_id + user_id,
+  // not bare id, because SQLite reuses rowids after deletes (`id INTEGER
+  // PRIMARY KEY`, no AUTOINCREMENT — see db.ts). refresh()'s stmtBoardById
+  // must match that scoping, or a request holding a GameBoard across an
+  // await while demo mode's /api/demo/reset wipes + reseeds could silently
+  // load an unrelated board (recycled id) into `b`, and the eventual save()
+  // would then write with the wrong identity.
+  it('rejects cleanly instead of hanging or crashing when the row is deleted mid-race', async () => {
+    const t = makeTournament('refresh-identity-deleted');
+    const b = game.loadBoard(t, userId, 1, true)!;
+    await game.ensureAdvanced(b);
+    expect(b.row.state).toBe('bidding'); // human's first bidding turn
+
+    // Simulate a demo-reset-style wipe landing between this request's initial
+    // read and its next mutation.
+    db.prepare(`DELETE FROM boards WHERE id = ?`).run(b.row.id);
+
+    await expect(game.submitCall(b, 0)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('rejects cleanly instead of silently adopting a different board when the row id is recycled', async () => {
+    // Same seed for both tournaments so board 1's deal (dealer + hands) is
+    // identical for t1 and t2 — the point of this test is that a bare `id`
+    // lookup can sail straight past every OTHER check (state, whose turn,
+    // legality) because the recycled row looks just as valid as the real
+    // one; only the tournament_id/user_id scope catches it.
+    const seed = 'refresh-identity-recycle';
+    const t1 = makeTournament(seed);
+    const t2 = makeTournament(seed);
+    const other = (
+      db.prepare(`INSERT INTO users (google_id, name) VALUES ('dev:tester3','Tester3') RETURNING id`).get() as {
+        id: number;
+      }
+    ).id;
+    const b = game.loadBoard(t1, userId, 1, true)!;
+    await game.ensureAdvanced(b); // advances to human's first bidding turn
+    const recycledId = b.row.id;
+
+    // Delete this board, then insert an unrelated one (different tournament
+    // AND user) reusing the exact same id — exactly what a demo-mode wipe +
+    // reseed can produce, since SQLite is free to reuse a freed rowid.
+    // Mirror `b`'s own calls/state so, under the same deal, it passes every
+    // ordinary bidding check too — the only thing that can catch this is
+    // identity scoping.
+    db.prepare(`DELETE FROM boards WHERE id = ?`).run(recycledId);
+    db.prepare(`INSERT INTO boards (id, tournament_id, user_id, board_no, state, calls) VALUES (?, ?, ?, 1, ?, ?)`).run(
+      recycledId,
+      t2.id,
+      other,
+      b.row.state,
+      JSON.stringify(b.calls),
+    );
+
+    // `b` still thinks it owns `recycledId` under t1/userId, but that row
+    // now belongs to t2/other — refresh() must not adopt it, even though
+    // the recycled row would otherwise look like a perfectly valid position
+    // for b's own (identical, same-seed) deal.
+    await expect(game.submitCall(b, 0)).rejects.toMatchObject({ statusCode: 409 });
+
+    // And critically: the foreign board must be untouched.
+    const foreign = db.prepare(`SELECT calls FROM boards WHERE id = ?`).get(recycledId) as { calls: string };
+    expect(JSON.parse(foreign.calls)).toEqual(b.calls);
+  });
+});
+
 describe('board completion side effects', () => {
   it('completing all boards for two users rates them without any close step', async () => {
     const t = makeTournament('elo-side-effect');
