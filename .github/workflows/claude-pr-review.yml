@@ -2,7 +2,7 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
 
 permissions:
   contents: read
@@ -29,10 +29,6 @@ jobs:
           #   3. Go to https://github.com/brannondorsey/nickel-bridge/settings/secrets/actions
           #      and update the CLAUDE_CODE_OAUTH_TOKEN secret with the new value.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # TEMPORARY: the run authenticates and completes but posts no comment
-          # (permission_denials_count: 4 in the SDK result, output otherwise hidden).
-          # Surfacing full output to diagnose, then remove once understood.
-          show_full_output: true
           prompt: |
             Review this pull request in the brannondorsey/nickel-bridge repo.
 
@@ -61,7 +57,13 @@ jobs:
 
             Post a single top-level PR comment summarizing what you found (or a short note
             if nothing stood out). Do not approve or request changes on the PR — just comment.
+          # bypassPermissions: an allowlist of just gh pr view/diff/comment worked but was
+          # cramped -- any other command (git log, npm test, etc.) still hit the same
+          # interactive-approval wall that has no one to approve it in CI. Accepted here
+          # because every PR today is self-authored (brannondorsey); revisit before this
+          # repo takes outside contributions, since it lets a crafted PR description/diff
+          # try to steer the agent with no tool gate at all.
           claude_args: |
             --model claude-sonnet-5
-            --max-turns 30
-            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
+            --max-turns 50
+            --permission-mode bypassPermissions
