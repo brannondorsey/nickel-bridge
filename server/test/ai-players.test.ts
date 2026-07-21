@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { freshDbEnv, makeApp, playBoard, TestClient } from './helpers.js';
 
 /**
- * Benchmark AI personas (ai-players.ts): identity, the shadow-row contract
- * (AI rows can NEVER move a human number — standings, per-board pcts, Elo),
- * replay determinism, the placement exclusions that keep the grace window
- * and popularity scoring human-only, and the human-first unit scheduler
- * (urgent lookahead runs during interactive traffic; the backlog parks).
+ * Benchmark AI personas (ai-players.ts): identity, the field/rating split
+ * (personas are FULL matchpoint field members — real ranks, real pcts in
+ * everyone's numbers — but can NEVER touch Elo), replay determinism, the
+ * placement exclusions that keep the grace window and popularity scoring
+ * human-only, and the human-first unit scheduler (urgent lookahead runs
+ * during interactive traffic; the backlog parks).
  *
  * freshDbEnv sets AI_PLAYERS=0 for every other suite; this one turns the
  * feature back on — it's the thing under test. AI_PAUSE_MS=0 disables the
@@ -86,7 +87,7 @@ describe('benchmark AI players', () => {
   });
 
   it(
-    'personas play a placed tournament; human numbers are untouched by their rows',
+    'personas play a placed tournament; they rank in the field but never rate',
     { timeout: 240_000 },
     async () => {
       const app = await makeApp();
@@ -113,39 +114,43 @@ describe('benchmark AI players', () => {
       const ais = rows.filter((s) => s.kind === 'ai');
       expect(humans).toHaveLength(2);
       expect(ais).toHaveLength(3);
-      expect(ais.every((s) => s.complete && s.boardsDone === 4 && s.rank === undefined)).toBe(true);
-      expect(ais.every((s) => s.totalPct !== null)).toBe(true);
-      // interleaved list stays pct-sorted
+      // house rows are full field members: complete, pct-scored, and RANKED
+      expect(ais.every((s) => s.complete && s.boardsDone === 4 && typeof s.rank === 'number')).toBe(true);
+      expect(rows.every((s) => s.totalPct !== null)).toBe(true);
+      // one list, pct-sorted, competition-ranked across both kinds
       const pcts = rows.map((s) => s.totalPct ?? -1);
       expect([...pcts].sort((a, b) => b - a)).toEqual(pcts);
-
-      // phantom insertion, checked against raw board-1 scores
-      const board1 = db
-        .prepare(
-          `SELECT b.score_ns, u.kind, b.user_id FROM boards b JOIN users u ON u.id = b.user_id
-           WHERE b.tournament_id = ? AND b.board_no = 1 AND b.state = 'done'`,
-        )
-        .all(tid) as { score_ns: number; kind: string; user_id: number }[];
-      const humanScores = board1.filter((r) => r.kind === 'human').map((r) => r.score_ns);
-      for (const ai of board1.filter((r) => r.kind === 'ai')) {
-        const phantom = matchpoints([...humanScores, ai.score_ns]);
-        expect(phantom[phantom.length - 1].pct).toBeGreaterThanOrEqual(0);
+      for (const s of rows) {
+        expect(s.rank).toBe(rows.filter((o) => (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1);
       }
 
-      // THE shadow-row contract: delete every AI row, recompute — every
-      // human-facing number must be byte-identical.
-      const humansBefore = humans.map((s) => ({ ...s }));
-      const aliceBoardsBefore = myBoardSummaries(tid, humansBefore[0].userId);
+      // unified matchpointing: a human's per-board pct is computed over the
+      // WHOLE board-1 field, house scores included
+      const board1 = db
+        .prepare(
+          `SELECT b.score_ns, b.user_id FROM boards b
+           WHERE b.tournament_id = ? AND b.board_no = 1 AND b.state = 'done'`,
+        )
+        .all(tid) as { score_ns: number; user_id: number }[];
+      expect(board1).toHaveLength(5);
+      const aliceId = humans.find((s) => s.handle === 'Alice')!.userId;
+      const mps = matchpoints(board1.map((r) => r.score_ns));
+      const aliceIdx = board1.findIndex((r) => r.user_id === aliceId);
+      const expectPct = Math.round(mps[aliceIdx].pct * 10) / 10;
+      expect(myBoardSummaries(tid, aliceId).find((b) => b.no === 1)?.pct).toBe(expectPct);
+
+      // THE rating contract: personas shape matchpoints but NEVER Elo —
+      // delete every AI row, recompute, and the rating history is
+      // byte-identical (the replay's inputs are human-only pcts).
       const eloBefore = eloHistory();
       expect(eloBefore.length).toBeGreaterThan(0); // two complete humans → rated
+      expect(eloBefore.every((r) => !ais.some((s) => s.userId === (r as { user_id: number }).user_id))).toBe(true);
 
       const wiped = db.transaction(() => {
         db.prepare(`DELETE FROM boards WHERE user_id IN (SELECT id FROM users WHERE kind = 'ai')`).run();
         recomputeElo();
       });
       wiped();
-      expect(standings(tid).filter((s) => s.kind === 'human')).toEqual(humansBefore);
-      expect(myBoardSummaries(tid, humansBefore[0].userId)).toEqual(aliceBoardsBefore);
       expect(eloHistory()).toEqual(eloBefore);
     },
   );
@@ -207,7 +212,7 @@ describe('benchmark AI players', () => {
     },
   );
 
-  it('excludes personas from leaderboard and stats pools', async () => {
+  it('keeps the leaderboard human-only but counts personas in stats pools', async () => {
     const app = await makeApp();
     const alice = new TestClient(app, 'Alice');
     await alice.login();
@@ -217,8 +222,9 @@ describe('benchmark AI players', () => {
 
     const aliceId = (leaderboard as { id: number; handle: string }[]).find((r) => r.handle === 'Alice')!.id;
     const stats = await alice.get(`/api/users/${aliceId}/stats`);
-    expect(stats.percentiles.activePlayers).toBe(2); // Alice + Bob, no personas
-    expect(stats.pctSeries[0].fieldSize).toBe(2);
+    // full field members: Alice + Bob + the three personas
+    expect(stats.percentiles.activePlayers).toBe(5);
+    expect(stats.pctSeries[0].fieldSize).toBe(5);
     expect(stats.user.kind).toBe('human');
 
     // a persona's own /players/:id profile stays open as calibration content

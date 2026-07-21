@@ -50,21 +50,22 @@ describe('Tournament sheet', () => {
     expect(screen.getByRole('link', { name: /continue board 2/i })).toHaveAttribute('href', '/t/12/b/2');
   });
 
-  it('renders house (benchmark AI) rows as unranked, tagged shadow entries', async () => {
+  it('renders house (benchmark AI) rows as ranked, tagged field members', async () => {
     apiMock.tournament.mockResolvedValue(tournamentInProgress);
     renderWithMe(<Tournament />, { me: meFixture });
 
     const house = (await screen.findByText('The Shark')).closest('.tourney-field-row')! as HTMLElement;
     expect(house.className).toContain('tourney-field-house');
     expect(within(house).getByText('HOUSE')).toBeInTheDocument();
-    // no rank — house rows interleave by pct only
-    expect(within(house).getByText('—')).toBeInTheDocument();
+    // house rows are full field members: real rank, tagged and muted only visually
+    expect(within(house).getByText('2')).toBeInTheDocument();
     expect(within(house).getByText('The Shark').closest('a')).toHaveAttribute('href', '/players/90');
-    // human-only pair count: 3 humans + 1 house row → "3 pairs"
-    expect(screen.getByText('3 pairs · matchpoints')).toBeInTheDocument();
-    // humans keep their human-only fallback numbering around the interleaved house row
+    // full pair count: 3 humans + 1 house row → "4 pairs"
+    expect(screen.getByText('4 pairs · matchpoints')).toBeInTheDocument();
+    // incomplete rows fall back to their position in the pct-sorted field,
+    // house included — Bob sits 4th behind Alice, The Shark, and Margaret
     const bob = screen.getByText('Bob').closest('.tourney-field-row')! as HTMLElement;
-    expect(within(bob).getByText('3')).toBeInTheDocument();
+    expect(within(bob).getByText('4')).toBeInTheDocument();
   });
 
   it('marks an unstarted tournament as PLAY BOARD 1', async () => {

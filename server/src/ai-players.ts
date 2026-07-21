@@ -18,12 +18,16 @@ import { getTournament } from './tournaments.js';
  * Benchmark AI players — "the house": three permanent personas ("The Novice",
  * "The Regular", "The Shark") that automatically play every
  * tournament stamped `ai_field = 1` (placeUser's creation path and
- * demo-seed's ambient tournaments). Their scores surface in The Field as
- * SHADOW rows — reference points that let a human see where they sit against
- * known skill levels — and are guaranteed never to move a human number:
- * standings/boardResult/myBoardSummaries matchpoint humans among humans
- * only, recomputeElo filters them out (and their completions skip the replay
- * entirely), and placement/leaderboard/stats exclude kind='ai'.
+ * demo-seed's ambient tournaments). They are FULL FIELD MEMBERS in
+ * matchpointing: standings/boardResult/myBoardSummaries score everyone in
+ * one field, so house rows earn real ranks, count as pairs, and move human
+ * pcts like any other pair would — beating The Shark is worth matchpoints.
+ * The persona/human split survives in exactly three places: Elo (personas
+ * never rate, and the replay's inputs are human-only pcts — eloParticipants
+ * in tournaments.ts — so house play can't shape a human rating even
+ * indirectly; their completions skip the replay), placement (grace/popularity
+ * counts are human-only, or every fresh tournament would be closed and
+ * boosted by the house within a minute), and the Elo leaderboard.
  *
  * A persona plays the human seat through the real engine (bot-play.ts →
  * submitCall/submitPlay/advanceRobots), so its robot opponents are the

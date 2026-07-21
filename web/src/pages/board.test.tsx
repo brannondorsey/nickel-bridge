@@ -399,7 +399,7 @@ describe('Board — result', () => {
     expect(pct.textContent).toContain('5');
     expect(pct.textContent).toContain('%');
     expect(pct.className).not.toContain('low');
-    expect(screen.getByText(/MATCHPOINTS · VS 3 OTHER PLAYERS · BIDDING 89%/)).toBeInTheDocument();
+    expect(screen.getByText(/MATCHPOINTS · VS 4 OTHER PLAYERS · BIDDING 89%/)).toBeInTheDocument();
 
     // field table with self highlighted
     expect(screen.getByText('THE FIELD — BOARD 2')).toBeInTheDocument();
@@ -408,8 +408,8 @@ describe('Board — result', () => {
     expect(
       within(table as HTMLElement).getByText((_, el) => el?.textContent === '4♠+1 by S · +650'),
     ).toBeInTheDocument();
-    // house (benchmark AI) row: tagged, styled as a reference entry, and
-    // excluded from the "VS N OTHER PLAYERS" count asserted above
+    // house (benchmark AI) row: a full field member — tagged and muted, but
+    // counted in the "VS N OTHER PLAYERS" comparison asserted above
     const houseRow = within(table as HTMLElement).getByText('The Shark').closest('tr')!;
     expect(houseRow.className).toContain('house');
     expect(within(houseRow as HTMLElement).getByText('HOUSE')).toBeInTheDocument();

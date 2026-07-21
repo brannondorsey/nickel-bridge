@@ -307,7 +307,7 @@ export const tournamentInProgress: TournamentInfo = {
   ],
   standings: [
     { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 83, complete: true, rank: 1 },
-    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true, rank: 2 },
     { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 1, totalPct: 58, complete: false },
     { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 2, totalPct: 33, complete: false },
   ],
@@ -333,12 +333,18 @@ export const tournamentComplete: TournamentInfo = {
   ],
 };
 
-/** an ai_field tournament: same 3 humans as tournamentComplete plus a house shadow row */
+/**
+ * an ai_field tournament: same 3 humans as tournamentComplete plus a house
+ * row — a full field member, so it interleaves pct-sorted and takes a real
+ * rank (pushing Margaret and Bob down one place each)
+ */
 export const tournamentCompleteWithHouse: TournamentInfo = {
   ...tournamentComplete,
   standings: [
-    ...tournamentComplete.standings,
-    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true },
+    { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 71, complete: true, rank: 1 },
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true, rank: 2 },
+    { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 4, totalPct: 61, complete: true, rank: 3 },
+    { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 4, totalPct: 18, complete: true, rank: 4 },
   ],
 };
 

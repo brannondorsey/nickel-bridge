@@ -27,13 +27,12 @@ const stmtDoneBoards = db.prepare(
 const stmtRatedElos = db.prepare(
   `SELECT elo FROM users WHERE EXISTS (SELECT 1 FROM elo_history h WHERE h.user_id = users.id)`,
 );
-// users.kind filter: the benchmark AI personas (ai-players.ts) are not part
-// of anyone's comparison field — their bid evals must not enter the accuracy
-// pool or the activePlayers count.
+// No users.kind filter: the benchmark AI personas (ai-players.ts) are full
+// field members — their bid evals belong in the accuracy pool and the
+// activePlayers count, same as their scores in everyone's matchpoints.
 const stmtAllDoneEvals = db.prepare(
   `SELECT b.user_id, b.bid_evals FROM boards b
    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
-   JOIN users u ON u.id = b.user_id AND u.kind = 'human'
    WHERE b.state = 'done'`,
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
@@ -175,8 +174,8 @@ export function playerStats(userId: number): PlayerStats | null {
         finishedAt: t.finishedAt,
         pct: mine.totalPct,
         boards: mine.boardsDone,
-        // human rows only: AI shadow rows aren't field members
-        fieldSize: field.filter((s) => s.kind === 'human').length,
+        // the whole field — house rows are pairs too
+        fieldSize: field.length,
       },
     ];
   });
@@ -201,7 +200,7 @@ export function playerStats(userId: number): PlayerStats | null {
       passedOut,
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
-    percentiles: fieldPercentiles(u.kind, u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
+    percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
     eloSeries,
     pctSeries,
     accuracySeries,
@@ -228,11 +227,11 @@ function monthlyEloDelta(currentElo: number, eloSeries: (StatPoint & { elo: numb
 
 /**
  * Where the player sits in the whole field, per metric. Populations differ on
- * purpose: elo only means something for rated players, while score/accuracy
- * compare against everyone who has completed at least one board.
+ * purpose: elo only means something for rated players (which excludes the
+ * benchmark AI personas — they never rate), while score/accuracy compare
+ * against everyone who has completed at least one board, personas included.
  */
 function fieldPercentiles(
-  kind: 'human' | 'ai',
   elo: number,
   isRated: boolean,
   avgPct: number | null,
@@ -251,29 +250,18 @@ function fieldPercentiles(
     .filter((s) => s.length)
     .map((s) => Math.round(mean(s) * 100));
 
-  // tournament-weighted mean pct per user, from one standings() pass per tournament
+  // tournament-weighted mean pct per user (any kind — the personas are pool
+  // members like everyone else, so betterThan's "everyone but me"
+  // denominator is right for every profile, persona pages included), from
+  // one standings() pass per tournament
   const pctsByUser = new Map<number, number[]>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
     for (const s of standings(id)) {
-      // AI shadow rows never enter anyone's percentile pool
-      if (s.kind !== 'human' || s.totalPct === null) continue;
+      if (s.totalPct === null) continue;
       pctsByUser.set(s.userId, [...(pctsByUser.get(s.userId) ?? []), s.totalPct]);
     }
   }
   const avgPcts = [...pctsByUser.values()].map((p) => round1(mean(p)));
-
-  // The pools above are human-only by design (ai-players.ts's shadow-row
-  // partition — see stmtAllDoneEvals/the standings() filter). That's correct
-  // when ranking a human, who is naturally already a member of their own
-  // pool. But an AI persona is never in that pool, so betterThan's
-  // denominator (field.length - 1, i.e. "everyone but me") undercounts by
-  // one when a persona looks at its OWN percentile — a persona beating every
-  // human scored >100%. Add the persona's own value back into the pool it's
-  // being ranked within, exactly once, only for this self-lookup.
-  if (kind === 'ai') {
-    if (avgPct !== null) avgPcts.push(avgPct);
-    if (avgBidAccuracy !== null) accuracies.push(avgBidAccuracy);
-  }
 
   return {
     elo: isRated ? betterThan(elo, ratedElos) : null,

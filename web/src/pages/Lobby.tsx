@@ -122,9 +122,9 @@ export default function Lobby() {
                   {finished.map((t) => {
                     const mine = t.standings.find((s) => s.userId === me?.user?.id);
                     const when = t.myLastPlayedAt ?? t.createdAt;
-                    // House (benchmark AI) rows are shadow entries, not pairs in the
-                    // competitive sense — count humans only, matching Tournament.tsx.
-                    const pairs = t.standings.filter((s) => s.kind === 'human').length;
+                    // House (benchmark AI) rows count as pairs — full field
+                    // members, matching Tournament.tsx.
+                    const pairs = t.standings.length;
                     return (
                       <Link key={t.id} to={`/t/${t.id}`} className="tolls-row num">
                         <b className="tolls-no">{tourneyNo(t)}</b>

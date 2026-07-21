@@ -58,7 +58,7 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
-                ai-players.ts (benchmark AI personas — the "house" shadow rows in
+                ai-players.ts (benchmark AI personas — the "house" rows ranked in
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
                 AI personas), demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 demo mode,
@@ -267,16 +267,20 @@ robots exactly as a human would; its own decisions carry every dial of its tier 
 selection — under a persona-namespaced seed (`${seed}:ai:${tier}`), making its boards a pure
 replayable function of (tournament seed, board, tier, board difficulty). Defending, its robot
 partner North keeps the human `PARTNER_FLOOR` treatment on purpose: the benchmark means "a
-player of tier X in your chair," expert-partner boon included. Scores surface in The Field as
-**shadow rows**: `standings()`/`boardResult()`/`myBoardSummaries()` matchpoint humans among
-humans only (byte-identical with or without AI rows — a tested regression), each persona
-displays a phantom-insertion pct (matchpointed into the human field alone; boards no human
-finished contribute nothing), rows interleave by pct but never rank, and the web renders them
-muted-italic with a HOUSE tag (never the "you" surface fill). Personas are excluded
-everywhere else: the Elo replay (`recomputeElo` filters them and their completions skip it),
-placement's grace/popularity counts (`stmtCandidates` counts human board rows only — without
-this, three instant AI finishers would close every grace window), the leaderboard, and stats
-pools; their `/players/:id` profiles stay open as calibration content. **Scheduling is
+player of tier X in your chair," expert-partner boon included. Personas are **full
+matchpoint field members**: `standings()`/`boardResult()`/`myBoardSummaries()` score everyone
+— humans and house — in one field per board, so house rows earn real ranks, count in pair
+counts, and move human pcts like any other pair (beating The Shark is worth matchpoints);
+the web still renders them muted-italic with a HOUSE tag (never the "you" surface fill).
+The human/persona split survives in exactly three places: **Elo** — personas never rate, and
+the replay's inputs come from `eloParticipants()` (human-only matchpointing, deliberately
+distinct from the displayed pcts) so house scores can't shape a human rating even indirectly
+(matchpoint averages aren't order-preserving under field insertion), persona completions skip
+the recompute, and persona profiles hide every Elo surface; **placement** — grace/popularity
+counts are human-only (`stmtCandidates` counts human board rows only — without this, three
+instant AI finishers would close every grace window); and the **leaderboard** (Elo-sorted,
+so personas have nothing to rank by). Their `/players/:id` profiles stay open as calibration
+content, and their scores/bid evals count in the stats percentile pools like anyone else's. **Scheduling is
 demand-driven and human-first** (persona play is CPU-heavy DDS solving): work is unit-granular
 (one persona × one board, board-major) on a single runner; units a recently-active human will
 need soon — within `LOOKAHEAD_BOARDS` of the furthest human's next board in a tournament
@@ -405,11 +409,13 @@ base token, add it to both the `[data-theme="night"]` block and that media copy.
    deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive
    the action lists with `node tools/find_scenarios.mjs` and re-curate the copy by hand.
    The benchmark AI personas (`ai-players.ts`) sit on both sides of this invariant: their
-   boards are deterministic replays of the same machinery (a deliberate robot/tier change
-   also changes house scores in affected tournaments — expected, same scope), while the
-   shadow-row partition guarantees they can never move a *human* number — `server/test/
-   ai-players.test.ts` deletes every AI row and asserts standings/board pcts/`elo_history`
-   are byte-identical.
+   boards are deterministic replays of the same machinery, and because house scores now count
+   in everyone's matchpoints, a deliberate robot/tier change retroactively moves *human* pcts
+   and ranks in affected tournaments too — accepted, same scope, one more reason to
+   calibrate before touching the tier constants. The one guarantee that remains absolute is
+   Elo: the replay's inputs are human-only (`eloParticipants`), so house play can never move
+   a rating — `server/test/ai-players.test.ts` deletes every AI row and asserts
+   `elo_history` is byte-identical.
 2. **`packages/ai/src/encode.ts` is a bit-for-bit port** of the pgx `bridge_bidding`
    observation encoding, verified by golden tests against the original JAX output. Do not
    refactor it for style. Regenerating `packages/ai/test/fixtures.json` is only needed if the

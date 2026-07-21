@@ -116,7 +116,7 @@ const stmtMyBoards = db.prepare(
 export interface Standing {
   userId: number;
   handle: string;
-  /** 'ai' rows are the benchmark personas' shadow entries (see ai-players.ts) */
+  /** 'ai' rows are the benchmark house personas (see ai-players.ts) — full field members, unrated */
   kind: 'human' | 'ai';
   boardsDone: number;
   totalPct: number | null;
@@ -128,21 +128,16 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
 
 /**
- * Live standings from completed boards: each board is matchpointed across the
- * HUMANS who finished it; a human's total is the average over their finished
- * boards — byte-identical whether or not benchmark AI rows exist (that
- * isolation is the shadow-row contract, and a tested property). Each AI
- * persona is scored by PHANTOM INSERTION instead: per board, matchpoint
- * {the human field + that one persona} and take the persona's pct — every
- * row is measured against the same human field, and no persona ever affects
- * a human number or another persona. A board no human has finished
- * contributes nothing to a persona's average (its pct there is unknowable,
- * not 50), so a persona with zero overlap shows totalPct null. Note the
- * standard phantom asymmetry: a persona TYING a human's raw score displays
- * a lower pct than that human (in the persona's pool the tie costs half a
- * matchpoint against n rather than n−1 opponents).
- * Standings are never "final" — they keep evolving as more friends play the
- * same deals.
+ * Live standings from completed boards: each board is matchpointed across
+ * EVERYONE who finished it — humans and the benchmark AI personas in one
+ * field. House rows are real pairs here: they earn ranks, count toward the
+ * pair count, and shape human pcts exactly like another human would (a
+ * deliberate decision — the house is the yardstick, so it competes on the
+ * scoresheet; ai-players.ts). The persona/human split survives only where
+ * it must: Elo (eloParticipants below — personas never rate and never shape
+ * human ratings) and placement (stmtCandidates).
+ * A player's total is the average over their finished boards. Standings are
+ * never "final" — they keep evolving as more friends play the same deals.
  */
 export function standings(tournamentId: number): Standing[] {
   const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & {
@@ -150,62 +145,66 @@ export function standings(tournamentId: number): Standing[] {
     user_kind: 'human' | 'ai';
     user_google: string;
   })[];
-  const humans = new Map<number, { handle: string; pcts: number[] }>();
-  const ais = new Map<number, { handle: string; google: string; pcts: number[]; done: number }>();
+  const players = new Map<number, { handle: string; kind: 'human' | 'ai'; google: string; pcts: number[] }>();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
-    const humanRows = boardRows.filter((r) => r.user_kind === 'human');
-    const humanScores = humanRows.map((r) => r.score_ns ?? 0);
-    const mps = matchpoints(humanScores);
-    humanRows.forEach((r, i) => {
-      const u = humans.get(r.user_id) ?? { handle: r.user_handle, pcts: [] };
+    const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
+    boardRows.forEach((r, i) => {
+      const u =
+        players.get(r.user_id) ?? { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [] };
       u.pcts.push(mps[i].pct);
-      humans.set(r.user_id, u);
+      players.set(r.user_id, u);
     });
-    for (const r of boardRows) {
-      if (r.user_kind !== 'ai') continue;
-      const u = ais.get(r.user_id) ?? { handle: r.user_handle, google: r.user_google, pcts: [], done: 0 };
-      u.done++;
-      if (humanRows.length) {
-        const phantom = matchpoints([...humanScores, r.score_ns ?? 0]);
-        u.pcts.push(phantom[phantom.length - 1].pct);
-      }
-      ais.set(r.user_id, u);
-    }
   }
   // Construction order IS the tie order (the pct sort below is stable):
-  // humans first — a human outranks a persona they tie with — then personas
-  // strongest-first (aiTieRank), so a tied trio reads Shark, Regular, Novice.
-  const list: Standing[] = [
-    ...[...humans.entries()].map(([userId, u]): Standing => ({
+  // humans first — a human is listed above a persona they tie with (they
+  // share the same printed rank) — then personas strongest-first (aiTieRank),
+  // so a tied trio reads Shark, Regular, Novice.
+  const list: Standing[] = [...players.entries()]
+    .sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google))
+    .map(([userId, u]): Standing => ({
       userId,
       handle: u.handle,
-      kind: 'human',
+      kind: u.kind,
       boardsDone: u.pcts.length,
       totalPct: avg(u.pcts),
       complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
-    })),
-    ...[...ais.entries()]
-      .sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google))
-      .map(([userId, u]): Standing => ({
-        userId,
-        handle: u.handle,
-        kind: 'ai',
-        boardsDone: u.done,
-        totalPct: avg(u.pcts),
-        complete: u.done >= BOARDS_PER_TOURNAMENT,
-      })),
-  ];
+    }));
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
   for (const s of list) {
-    if (s.kind === 'human' && s.complete) {
-      // standard competition ranking among complete humans (ties share a
-      // rank); AI shadow rows never rank — they interleave by pct only
-      s.rank =
-        list.filter((o) => o.kind === 'human' && o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
+    if (s.complete) {
+      // standard competition ranking among complete players of either kind
+      // (ties share a rank) — losing to The Shark costs a place
+      s.rank = list.filter((o) => o.complete && (o.totalPct ?? 0) > (s.totalPct ?? 0)).length + 1;
     }
   }
   return list;
+}
+
+/**
+ * Human-only matchpoint averages — the Elo replay's input, DELIBERATELY not
+ * the displayed standings(). House personas count in the displayed field but
+ * are unrated, and they must not shape human ratings even indirectly:
+ * matchpoint averages are not order-preserving under field insertion, so
+ * letting house scores into the pcts could flip which of two humans "beat"
+ * the other in a pairwise Elo update. Ratings stay a pure human-vs-human
+ * measure — which also insulates the whole Elo history from future
+ * difficulty-tier recalibration (a retuned tier retroactively moves house
+ * scores, and with them the displayed pcts, but never anyone's rating).
+ */
+function eloParticipants(tournamentId: number): { userId: number; totalPct: number }[] {
+  const rows = (
+    stmtDoneBoards.all(tournamentId) as (BoardRow & { user_kind: 'human' | 'ai' })[]
+  ).filter((r) => r.user_kind === 'human');
+  const pcts = new Map<number, number[]>();
+  for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
+    const boardRows = rows.filter((r) => r.board_no === no);
+    const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
+    boardRows.forEach((r, i) => pcts.set(r.user_id, [...(pcts.get(r.user_id) ?? []), mps[i].pct]));
+  }
+  return [...pcts.entries()]
+    .filter(([, p]) => p.length >= BOARDS_PER_TOURNAMENT)
+    .map(([userId, p]) => ({ userId, totalPct: avg(p) ?? 0 }));
 }
 
 /**
@@ -222,16 +221,17 @@ export const recomputeElo = db.transaction(() => {
   stmtResetElo.run(ELO_INITIAL);
   const ratings = new Map<number, number>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
-    // kind filter: benchmark AI personas never rate. Their standings pcts are
-    // shadow numbers (phantom insertion), and their board completions don't
-    // even trigger this replay (game.ts skips it) — this filter keeps the
-    // exclusion correct regardless of who triggered the recompute.
-    const complete = standings(id).filter((s) => s.kind === 'human' && s.complete);
+    // eloParticipants, not standings(): benchmark AI personas never rate, and
+    // the replay's pcts are matchpointed among humans only so house scores
+    // can't shape a human's rating even indirectly (see its doc comment).
+    // Persona board completions don't trigger this replay (game.ts skips
+    // them) — correct precisely because their rows can't change these inputs.
+    const complete = eloParticipants(id);
     if (complete.length < 2) continue;
     const participants = complete.map((s) => ({
       userId: s.userId,
       rating: ratings.get(s.userId) ?? ELO_INITIAL,
-      totalPct: s.totalPct ?? 0,
+      totalPct: s.totalPct,
     }));
     for (const r of eloUpdates(participants)) {
       ratings.set(r.userId, r.after);
@@ -439,9 +439,9 @@ export function myBoardSummaries(tournamentId: number, userId: number): MyBoardS
   const done = stmtDoneBoards.all(tournamentId) as (BoardRow & { user_handle: string; user_kind: string })[];
   return mine.map((b) => {
     if (b.state !== 'done') return { no: b.board_no, state: b.state, contractLabel: null, scoreNS: null, pct: null };
-    // Human rows only, exactly like standings()/boardResult(): the viewer's
-    // pct must never include benchmark AI scores (the shadow-row contract).
-    const field = done.filter((r) => r.board_no === b.board_no && r.user_kind === 'human');
+    // The full field, exactly like standings()/boardResult(): benchmark AI
+    // scores count in the viewer's pct — the house are real pairs.
+    const field = done.filter((r) => r.board_no === b.board_no);
     const mps = matchpoints(field.map((r) => r.score_ns ?? 0));
     const i = field.findIndex((r) => r.user_id === userId);
     return {
