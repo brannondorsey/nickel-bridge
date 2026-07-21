@@ -89,6 +89,23 @@ export interface GameBoard {
   claimed?: boolean;
 }
 
+/**
+ * The row-derived fields of a GameBoard, parsed from a freshly-read row. The
+ * single source of truth for "what a board row hydrates into": loadBoard
+ * spreads it into a new GameBoard and refresh() assigns it over an existing
+ * one, so the two can never drift apart if GameBoard grows another
+ * row-derived field — add it to the Pick and both call sites get it.
+ */
+function rowFields(row: BoardRow): Pick<GameBoard, 'row' | 'calls' | 'plays' | 'bidEvals' | 'contract'> {
+  return {
+    row,
+    calls: JSON.parse(row.calls),
+    plays: JSON.parse(row.plays),
+    bidEvals: JSON.parse(row.bid_evals),
+    contract: row.contract ? JSON.parse(row.contract) : null,
+  };
+}
+
 export function loadBoard(t: TournamentRow, userId: number, boardNo: number, createIfMissing: boolean): GameBoard | null {
   let row = stmtBoard.get(t.id, userId, boardNo) as BoardRow | undefined;
   if (!row) {
@@ -96,13 +113,9 @@ export function loadBoard(t: TournamentRow, userId: number, boardNo: number, cre
     row = stmtCreateBoard.get(t.id, userId, boardNo) as BoardRow;
   }
   return {
-    row,
+    ...rowFields(row),
     tournament: t,
     deal: dealBoard(t.seed, boardNo),
-    calls: JSON.parse(row.calls),
-    plays: JSON.parse(row.plays),
-    bidEvals: JSON.parse(row.bid_evals),
-    contract: row.contract ? JSON.parse(row.contract) : null,
   };
 }
 
@@ -161,16 +174,14 @@ function withBoardLock<T>(row: BoardRow, fn: () => Promise<T>): Promise<T> {
  * genuinely late duplicate would, instead of clobbering the first request's
  * save(). Scoped by full identity (see stmtBoardById above): if the row is
  * gone or its identity no longer matches — a demo-reset wipe landing mid-race
- * — fail loudly instead of silently adopting a stale/wrong board.
+ * — fail loudly instead of silently adopting a stale/wrong board. Hydrates
+ * via the same rowFields() as loadBoard; the deterministic/static deal and
+ * tournament are deliberately left untouched.
  */
 function refresh(b: GameBoard): void {
   const row = stmtBoardById.get(b.row.id, b.row.tournament_id, b.row.user_id) as BoardRow | undefined;
   if (!row) throw httpError(409, 'board no longer exists');
-  b.row = row;
-  b.calls = JSON.parse(row.calls);
-  b.plays = JSON.parse(row.plays);
-  b.bidEvals = JSON.parse(row.bid_evals);
-  b.contract = row.contract ? JSON.parse(row.contract) : null;
+  Object.assign(b, rowFields(row));
 }
 
 function save(b: GameBoard): void {
