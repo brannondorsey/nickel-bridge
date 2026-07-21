@@ -54,6 +54,15 @@ export default function App() {
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
+  // 'adaptive' has no media query to repaint it for free — re-apply on a timer so a
+  // visitor who leaves the tab open across the 9 PM/7 AM boundary still flips live.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (readThemePref() === 'adaptive') applyThemePref('adaptive');
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Returning-visitor gate: decide from the previous stamp BEFORE writing
   // today's, or the splash would never show again. Demo mode (PR previews)
   // suppresses the splash itself — testers only see it by opening its
