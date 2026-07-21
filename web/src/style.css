@@ -2159,14 +2159,21 @@ a.board-row:hover {
 }
 .tourney-page .tourney-boards {
   margin: 16px 16px 0;
-}
-.tourney-board-line {
   display: grid;
   grid-template-columns: 18px 1fr auto auto;
   gap: 7px 12px;
   font-size: 13.5px;
   align-items: center;
-  padding: 2px 0;
+}
+.tourney-page .tourney-boards .perf-panel-heading {
+  grid-column: 1 / -1;
+}
+/* display: contents lets each line's cells join the panel's single grid
+   above instead of forming their own grid — otherwise each row sizes its
+   "auto" score/pct columns from its own content and the pct bars drift
+   out of alignment depending on how wide the neighboring score is. */
+.tourney-board-line {
+  display: contents;
 }
 .tourney-board-no {
   font-family: var(--font-label);
@@ -2174,6 +2181,7 @@ a.board-row:hover {
 }
 .tourney-board-score {
   color: var(--muted);
+  text-align: right;
 }
 .tourney-board-pct {
   display: flex;
