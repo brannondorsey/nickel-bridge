@@ -1,0 +1,44 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Billed against the connected Claude Pro/Max/Team/Enterprise subscription
+          # instead of metered API usage. Generate with `claude setup-token` and store
+          # the result as the CLAUDE_CODE_OAUTH_TOKEN repo secret.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request in the brannondorsey/nickel-bridge repo.
+
+            Read the repo's CLAUDE.md (checked in at the repo root) for context, and pay
+            particular attention to its "Invariants — do not break" section — e.g. robot
+            determinism (the packages/ai + server/src/game.ts bidding/play pipeline must
+            stay a pure function of tournament seed/board/difficulty), packages/ai/src/
+            encode.ts being a bit-for-bit port that must not be refactored for style, new
+            SAYC conventions needing a spec-table row in packages/core/test/sayc.test.ts,
+            and packages/core staying dependency-free and I/O-free.
+
+            Focus on correctness bugs, security issues, and violations of those invariants
+            introduced by this diff. Also flag anything that contradicts other guidance in
+            CLAUDE.md (env var handling, DEV_AUTH/DEMO never on production, etc).
+
+            Post a single top-level PR comment summarizing what you found (or a short note
+            if nothing stood out). Do not approve or request changes on the PR — just comment.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 30
