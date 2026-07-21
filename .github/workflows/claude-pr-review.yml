@@ -21,6 +21,12 @@ jobs:
           # Billed against the connected Claude Pro/Max/Team/Enterprise subscription
           # instead of metered API usage. Generate with `claude setup-token` and store
           # the result as the CLAUDE_CODE_OAUTH_TOKEN repo secret.
+          #
+          # To refresh (the token is valid for one year):
+          #   1. Run `claude setup-token` locally and log in when the browser opens.
+          #   2. Copy the printed token.
+          #   3. Go to https://github.com/brannondorsey/nickel-bridge/settings/secrets/actions
+          #      and update the CLAUDE_CODE_OAUTH_TOKEN secret with the new value.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Review this pull request in the brannondorsey/nickel-bridge repo.
