@@ -12,11 +12,19 @@ function mockMatchMedia(prefersDark: boolean) {
   );
 }
 
+function mockHour(hour: number) {
+  vi.useFakeTimers();
+  const now = new Date();
+  now.setHours(hour, 0, 0, 0);
+  vi.setSystemTime(now);
+}
+
 afterEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('readThemePref', () => {
@@ -24,11 +32,13 @@ describe('readThemePref', () => {
     expect(readThemePref()).toBe('system');
   });
 
-  it('reads a stored day/night/system value', () => {
+  it('reads a stored day/night/adaptive/system value', () => {
     localStorage.setItem(THEME_KEY, 'night');
     expect(readThemePref()).toBe('night');
     localStorage.setItem(THEME_KEY, 'day');
     expect(readThemePref()).toBe('day');
+    localStorage.setItem(THEME_KEY, 'adaptive');
+    expect(readThemePref()).toBe('adaptive');
   });
 
   it('falls back to system for garbage or unreadable storage', () => {
@@ -70,6 +80,22 @@ describe('resolvesToNight', () => {
     mockMatchMedia(false);
     expect(resolvesToNight('system')).toBe(false);
   });
+
+  it('follows the fixed 9 PM-7 AM local-time window under adaptive, regardless of OS', () => {
+    mockMatchMedia(false);
+    mockHour(22); // 10 PM
+    expect(resolvesToNight('adaptive')).toBe(true);
+    mockHour(3); // 3 AM
+    expect(resolvesToNight('adaptive')).toBe(true);
+    mockHour(21); // exactly 9 PM
+    expect(resolvesToNight('adaptive')).toBe(true);
+    mockHour(20); // 8 PM
+    expect(resolvesToNight('adaptive')).toBe(false);
+    mockHour(7); // exactly 7 AM
+    expect(resolvesToNight('adaptive')).toBe(false);
+    mockHour(13); // 1 PM
+    expect(resolvesToNight('adaptive')).toBe(false);
+  });
 });
 
 describe('applyThemePref', () => {
@@ -80,6 +106,15 @@ describe('applyThemePref', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     applyThemePref('system');
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+
+  it('sets an explicit data-theme for adaptive, unlike system', () => {
+    mockHour(23); // 11 PM
+    applyThemePref('adaptive');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('night');
+    mockHour(13); // 1 PM
+    applyThemePref('adaptive');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
   it('sets the theme-color meta to the night or day value', () => {

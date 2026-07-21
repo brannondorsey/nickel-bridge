@@ -16,10 +16,11 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
 const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
   { pref: 'day', label: 'DAY' },
   { pref: 'night', label: 'NIGHT' },
+  { pref: 'adaptive', label: 'ADAPT' },
   { pref: 'system', label: 'SYSTEM' },
 ];
 
-/** Day/Night/System segmented switch — the runtime override on top of the OS default. */
+/** Day/Night/Adaptive/System segmented switch — the runtime override on top of the OS default. */
 function ThemeSwitch() {
   const [pref, setPref] = useState<ThemePref>(() => readThemePref());
   return (

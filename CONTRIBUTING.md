@@ -380,8 +380,15 @@ default and warms to a lamplit cream in the night override, the same "printed pa
 under a lamp" idea applied to the card rather than held fixed against it. The
 `BridgeMark` glyph/footer stays fully pinned (already `var(--verdigris)`, lifted to its
 night value like any other token). Default is `prefers-color-scheme`, no
-attribute set; the Stats page's Day/Night/System switch (`theme.ts`, `nb:theme` in
-localStorage) sets `data-theme` explicitly to override it, or clears it for "System". A
+attribute set; the Stats page's Day/Night/Adaptive/System switch (`theme.ts`, `nb:theme`
+in localStorage) sets `data-theme` explicitly to override it, or clears it for "System".
+"Adaptive" is also an explicit override (there's no media query for time-of-day): it
+resolves to night on a fixed local-time window, `ADAPTIVE_NIGHT_START_HOUR`–
+`ADAPTIVE_NIGHT_END_HOUR` in `theme.ts` (9 PM–7 AM, the industry-standard fixed
+dark-mode schedule — e.g. Windows Night Light's default "set hours" — rather than a
+sunset/sunrise calculation, since that needs geolocation this app doesn't request); a
+60s timer in `App.tsx` re-applies it so a tab left open across the boundary still flips
+live, the same problem `system`'s `matchMedia` listener solves for OS changes. A
 blocking inline script in `web/index.html` applies the persisted choice before first
 paint — keep it in sync with `theme.ts` by hand, since it has to run before the module
 graph loads. The `@media (prefers-color-scheme: dark)` copy of the night token block is

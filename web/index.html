@@ -8,20 +8,25 @@
     <title>Nickel Bridge — learn &amp; play duplicate bridge</title>
     <!--
       Night mode: apply the persisted theme.ts preference before first paint, so
-      there's no light-mode flash for a Night/System-into-dark-OS visitor. Plain,
-      blocking (non-module) JS because this must run before the deferred module
+      there's no light-mode flash for a Night/Adaptive/System-into-dark-OS visitor.
+      Plain, blocking (non-module) JS because this must run before the deferred module
       script graph (main.tsx, theme.ts) loads — see theme.ts for the same logic
-      in the form the rest of the app uses. Keep the two in sync.
+      (including the ADAPTIVE_NIGHT_START_HOUR/_END_HOUR constants) in the form the
+      rest of the app uses. Keep the two in sync.
     -->
     <script>
       (function () {
         try {
           var pref = localStorage.getItem('nb:theme');
-          if (pref !== 'day' && pref !== 'night') pref = 'system';
+          if (pref !== 'day' && pref !== 'night' && pref !== 'adaptive') pref = 'system';
+          var hour = new Date().getHours();
+          var isNight =
+            pref === 'night' ||
+            (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ||
+            (pref === 'adaptive' && (hour >= 21 || hour < 7));
           if (pref !== 'system') {
-            document.documentElement.setAttribute('data-theme', pref === 'night' ? 'night' : 'light');
+            document.documentElement.setAttribute('data-theme', isNight ? 'night' : 'light');
           }
-          var isNight = pref === 'night' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (isNight) {
             var meta = document.querySelector('meta[name="theme-color"]');
             if (meta) meta.setAttribute('content', '#171512');
