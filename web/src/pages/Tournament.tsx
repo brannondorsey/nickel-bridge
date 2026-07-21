@@ -99,7 +99,7 @@ export default function Tournament() {
               <span className="tourney-board-pct">
                 {b.pct !== null ? (
                   <>
-                    <PctBar pct={b.pct} /> <b>{b.pct}</b>
+                    <PctBar pct={b.pct} width={68} /> <b>{b.pct}</b>
                   </>
                 ) : (
                   '—'
