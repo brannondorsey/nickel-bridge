@@ -2222,6 +2222,66 @@ a.board-row:hover {
   font-weight: 800;
   letter-spacing: 0.12em;
   white-space: nowrap;
+  position: relative;
+}
+/* one-shot entrance cue on a vulnerable board's vul chip, played by Board.tsx
+   the first time a vulnerable board is seen in the bidding phase — a ring of
+   ink blooms and fades around the chip while an underline draws in and out,
+   then everything settles back to the plain resting chip. Skipped entirely
+   under reduced motion; the chip's own red border/label already carries the
+   information at rest, so there's no reduced-motion equivalent to show. */
+.board-vul-pulse::before,
+.board-vul-pulse::after {
+  content: '';
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.board-vul-pulse::before {
+  inset: -3px;
+  border-radius: calc(var(--radius-chip) + 2px);
+  border: 1.5px solid var(--suit-h);
+}
+.board-vul-pulse::after {
+  left: 5px;
+  right: 5px;
+  bottom: 1px;
+  height: 1.5px;
+  background: var(--suit-h);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board-vul-pulse::before {
+    animation: vul-ring-pulse 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .board-vul-pulse::after {
+    animation: vul-underline-draw 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+}
+@keyframes vul-ring-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+@keyframes vul-underline-draw {
+  0% {
+    opacity: 1;
+    transform: scaleX(0);
+  }
+  55% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
 }
 
 .board-fan {

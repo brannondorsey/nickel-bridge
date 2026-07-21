@@ -53,6 +53,21 @@ describe('Board — bidding', () => {
     expect(screen.getByText('NS VUL')).toBeInTheDocument();
   });
 
+  it('plays the ink-wash pulse on a vulnerable board entering bidding, but not on a non-vulnerable one', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    renderBoard();
+    expect(await screen.findByText('NS VUL')).toHaveClass('board-vul-pulse');
+
+    apiMock.board.mockResolvedValue({ ...boardBidding, vul: { ns: false, ew: false } });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: meFixture, route: '/t/12/b/3' },
+    );
+    expect(await screen.findByText('NONE VUL')).not.toHaveClass('board-vul-pulse');
+  });
+
   it('walks the two-step commit: select shows the meaning, confirm submits', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({

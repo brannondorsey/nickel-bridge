@@ -76,6 +76,23 @@ export default function Board() {
   const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
   const claimGenRef = useRef(0);
 
+  // Vulnerability ink-wash pulse: flags a vulnerable board once, right as its
+  // bidding phase is first seen, so vulnerability (which changes the stakes of
+  // every call) can't be missed the way a static chip can. Keyed per
+  // (tournament, board) so it fires exactly once per board no matter how many
+  // times the bidding-phase view re-renders as calls come in; CSS handles
+  // reduced motion by never animating the pulse, since the chip's own red
+  // border/label already marks vulnerability at rest.
+  const vulPulseSeenRef = useRef<Set<string>>(new Set());
+  const [vulPulseKey, setVulPulseKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!board || board.state !== 'bidding' || (!board.vul.ns && !board.vul.ew)) return;
+    const key = `${tournamentId}:${board.boardNo}`;
+    if (vulPulseSeenRef.current.has(key)) return;
+    vulPulseSeenRef.current.add(key);
+    setVulPulseKey(key);
+  }, [board, tournamentId]);
+
   // The toll receipt auto-shows only when the board completes live in this
   // visit (sawLive flips as soon as we render a bidding/playing state);
   // revisiting an already-scored board goes straight to the field view, with
@@ -300,7 +317,7 @@ export default function Board() {
 
   return (
     <div className={`board-page${board.state === 'bidding' ? ' bidding-dock' : ''}`}>
-      <BoardHead board={board} />
+      <BoardHead board={board} vulPulse={vulPulseKey === `${tournamentId}:${board.boardNo}`} />
       {board.state === 'done' ? (
         showReceipt ? (
           <ScoreReceipt board={board} onContinue={() => setShowReceipt(false)} />
@@ -343,7 +360,7 @@ export default function Board() {
 }
 
 /** Compact ticket header: mini stub, tournament context, vul chip (or SCORED stamp). */
-function BoardHead({ board }: { board: BoardView }) {
+function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean }) {
   const vul = vulLabel(board.vul).toUpperCase();
   return (
     <div className="board-head">
@@ -365,7 +382,11 @@ function BoardHead({ board }: { board: BoardView }) {
       {board.state === 'done' ? (
         <InkStamp rotate={-4}>SCORED</InkStamp>
       ) : (
-        <Chip color={board.vul.ns ? 'var(--suit-h)' : undefined} quiet={!board.vul.ns && !board.vul.ew} className="board-vul">
+        <Chip
+          color={board.vul.ns ? 'var(--suit-h)' : undefined}
+          quiet={!board.vul.ns && !board.vul.ew}
+          className={`board-vul${vulPulse ? ' board-vul-pulse' : ''}`}
+        >
           {vul}
         </Chip>
       )}
