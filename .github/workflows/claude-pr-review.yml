@@ -2,7 +2,7 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
 
 permissions:
   contents: read
@@ -29,10 +29,6 @@ jobs:
           #   3. Go to https://github.com/brannondorsey/nickel-bridge/settings/secrets/actions
           #      and update the CLAUDE_CODE_OAUTH_TOKEN secret with the new value.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # TEMPORARY: the run authenticates and completes but posts no comment
-          # (permission_denials_count: 4 in the SDK result, output otherwise hidden).
-          # Surfacing full output to diagnose, then remove once understood.
-          show_full_output: true
           prompt: |
             Review this pull request in the brannondorsey/nickel-bridge repo.
 
