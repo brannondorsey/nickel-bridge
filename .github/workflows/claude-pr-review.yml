@@ -43,6 +43,17 @@ jobs:
             introduced by this diff. Also flag anything that contradicts other guidance in
             CLAUDE.md (env var handling, DEV_AUTH/DEMO never on production, etc).
 
+            Hunt for bugs specifically: edge cases the diff doesn't handle, off-by-one or
+            state-management errors, race conditions, and logic that looks correct but
+            doesn't match how the surrounding code actually behaves — cite file:line and the
+            concrete input/state that would trigger each one.
+
+            Also validate the PR against its own stated goals: read the PR title and
+            description, then check whether the diff actually accomplishes what it claims.
+            Call out any gaps — claimed behavior the code doesn't implement, edge cases the
+            description ignores, or scope that silently expanded or shrank versus what was
+            described.
+
             Post a single top-level PR comment summarizing what you found (or a short note
             if nothing stood out). Do not approve or request changes on the PR — just comment.
           claude_args: |
