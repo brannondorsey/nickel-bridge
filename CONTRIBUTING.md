@@ -113,7 +113,12 @@ CI also deploys: every open PR gets its own Fly.io preview app (destroyed on clo
 `.github/workflows/pr-preview-teardown.yml`), and every push to `main` deploys to production
 *and* redeploys the permanent demo app (`nickel-bridge-demo`, demo.bridge.brannon.online — a
 stable DEMO=1 instance for automation and click-testing) — see README.md "Deployment" for the
-one-time Fly setup and how preview auth (`DEV_AUTH`) works:
+one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
+`.github/workflows/claude-pr-review.yml` runs Claude (via `anthropics/claude-code-action`) on
+every newly opened PR and posts a non-blocking review comment — authenticated via the
+`CLAUDE_CODE_OAUTH_TOKEN` repo secret (a `claude setup-token` OAuth token billed against a
+Claude subscription, not per-token API pricing), so it's independent of the checks above and
+doesn't gate merges:
 
 ```bash
 npm run build
