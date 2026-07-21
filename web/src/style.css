@@ -2226,40 +2226,29 @@ a.board-row:hover {
 }
 /* one-shot entrance cue on a vulnerable board's vul chip, played by Board.tsx
    the first time a vulnerable board is seen in the bidding phase — a ring of
-   ink blooms and fades around the chip while an underline draws in and out,
+   ink blooms and fades around the chip while the chip itself blinks twice,
    then everything settles back to the plain resting chip. Skipped entirely
    under reduced motion; the chip's own red border/label already carries the
    information at rest, so there's no reduced-motion equivalent to show.
-   Colored via --chip-color (set inline by Chip only when NS is vulnerable,
-   see BoardHead) so the pulse matches the resting chip: red for NS/both vul,
-   ink for EW-only vul — never a red flourish over a chip that isn't red. */
-.board-vul-pulse::before,
-.board-vul-pulse::after {
+   Ring colored via --chip-color (set inline by Chip only when NS is
+   vulnerable, see BoardHead) so it matches the resting chip: red for
+   NS/both vul, ink for EW-only vul — never a red flourish over a chip that
+   isn't red. */
+.board-vul-pulse::before {
   content: '';
   position: absolute;
   opacity: 0;
   pointer-events: none;
-}
-.board-vul-pulse::before {
   inset: -3px;
   border-radius: calc(var(--radius-chip) + 2px);
   border: 1.5px solid var(--chip-color, var(--ink));
-}
-.board-vul-pulse::after {
-  left: 5px;
-  right: 5px;
-  bottom: 1px;
-  height: 1.5px;
-  background: var(--chip-color, var(--ink));
-  transform: scaleX(0);
-  transform-origin: left;
 }
 @media (prefers-reduced-motion: no-preference) {
   .board-vul-pulse::before {
     animation: vul-ring-pulse 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   }
-  .board-vul-pulse::after {
-    animation: vul-underline-draw 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  .board-vul-pulse {
+    animation: vul-blink 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) 2;
   }
 }
 @keyframes vul-ring-pulse {
@@ -2272,18 +2261,13 @@ a.board-row:hover {
     transform: scale(1.7);
   }
 }
-@keyframes vul-underline-draw {
-  0% {
-    opacity: 1;
-    transform: scaleX(0);
-  }
-  55% {
-    opacity: 1;
-    transform: scaleX(1);
-  }
+@keyframes vul-blink {
+  0%,
   100% {
-    opacity: 0;
-    transform: scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
   }
 }
 
