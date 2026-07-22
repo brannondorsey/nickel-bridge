@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
-import { meFixture, meLoggedOut, meNoHandle } from './test/fixtures';
+import { meFixture, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
 import { apiMock } from './test/utils';
 
 vi.mock('./api', async (importOriginal) => ({
@@ -91,6 +91,24 @@ describe('App — authenticated', () => {
     // the page hangs on load — the shell decision is what's under test
     await vi.waitFor(() => expect(apiMock.tournament).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
+  });
+
+  it('shows the tab bar on someone else\'s profile, but does not claim STATS is active there', async () => {
+    stampVisit();
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      user: { ...playerStatsFull.user, id: 90, handle: 'The Shark', kind: 'ai' },
+    });
+    renderApp('/players/90');
+    await screen.findByText('The Shark');
+    // the bar itself still renders here (useful chrome to jump back out)...
+    const stats = screen.getByRole('link', { name: 'STATS' });
+    expect(stats).toBeInTheDocument();
+    // ...but STATS always links to *my* profile (id 1), and tapping it from
+    // someone else's page is a real navigation, not a no-op — it must not
+    // be marked as the current page
+    expect(stats).toHaveAttribute('href', '/players/1');
+    expect(stats).not.toHaveAttribute('aria-current');
   });
 });
 
