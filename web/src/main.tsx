@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 // self-hosted fonts: Poiret One = wordmark, Crimson Pro = body,
-// Besley = labels/numerals/buttons, Josefin Sans = stamps/postmarks.
+// Besley = labels/numerals/tickets, Josefin Sans = stamps/postmarks + all
+// button/action text (Josefin caps = pressable; Besley caps = static label).
 // Besley ships as a variable font: one file per style covers every weight the
 // UI uses (600/700/800 + italics) instead of five static-instance files.
 // Note Besley's tabular figures are broken at bold weights in every published

@@ -8,7 +8,7 @@ Sources: this system was distilled from two exploration documents in this projec
 - Second person, warm, unhurried: "Good evening, Margaret", "The bridge is open.", "one crossing at a time".
 - Toll vocabulary is used consistently: PLAY THE TOLL, CONTINUE THE CROSSING, TOLLS PAID, PREVIOUS CROSSINGS, AT THE GATE, "54 players crossed this week".
 - Labels are tracked caps in Besley: `PREVIOUS CROSSINGS`, `NICKEL RATING`, `THE FIELD — BOARD 2`.
-- Buttons are loud tracked caps with a trailing arrow: `CONTINUE THE CROSSING →`, `BID 2♥ →`.
+- Buttons are Josefin Sans 600 tracked caps (.18–.22em) with a trailing arrow: `CONTINUE THE CROSSING →`, `BID 2♥ →`. Josefin caps = pressable; Besley caps = static label.
 - Bridge (game) terminology is precise and unabbreviated in body copy; scores use tabular figures: `62% · +630`.
 - Italic Crimson for asides and hints: "Sealed — deals when board 2 is scored", "Q♠ selected — tap again to play".
 - No emoji. Suit glyphs (♠♥♦♣) and typographic marks (· — → ▲ ▼ ★ №) are the only "icons" in text.
@@ -16,7 +16,7 @@ Sources: this system was distilled from two exploration documents in this projec
 
 ## VISUAL FOUNDATIONS
 - **Palette**: ink #141414 on paper #FCFBF8; white panels; warm grays (#F1EFE9 inset surface, #D8D5CE lines, #E4E1D8 hairlines, #B9B4A9 dashed "sealed" borders, #6E6A62 muted text). Only color: the suit signal triad — ♥ #C22F21, ♦ #9E6A00, ♣ #00775A (matched oklch lightness/chroma; all AA on white) — plus verdigris #6F8F68 reserved for the bridge marks. Red doubles as accent/negative, green as positive. Max ink, minimum color.
-- **Type**: Poiret One = wordmark ONLY (tracked .14em caps). Crimson Pro = body/titles (runs small: +1px sizes, weight 600 for UI text). Besley = labels (700, tracked caps, 9.5–12px), numerals (800, tabular), buttons, ticket text. Josefin Sans = ink stamps and postmark ONLY. Limelight appears in pre-lock explorations; do not use.
+- **Type**: Poiret One = wordmark ONLY (tracked .14em caps). Crimson Pro = body/titles (runs small: +1px sizes, weight 600 for UI text). Besley = labels (700, tracked caps, 9.5–12px), numerals (800, tabular), ticket text. Josefin Sans = ink stamps, postmark, and all button/action text (600, tracked caps, 11–12.5px, top-heavy padding: bottom ≈3px less than top). Limelight appears in pre-lock explorations; do not use.
 - **Surfaces**: flat, printed-paper feel. No gradients, no texture, almost no shadow. Cards/panels are white with 1px ink structural borders; the inset surface (#F1EFE9 + #D8D5CE border) holds calls-to-action. Live/active ticket gets a hard offset shadow `3px 3px 0 rgba(20,20,20,.12)`. Playing cards get the only soft shadow `0 1px 2px rgba(0,0,0,.14)`.
 - **Corners**: Deco stays square. Panels 0; buttons 2px; chips 3px; playing cards 3–4px.
 - **Rules**: 1px #D8D5CE quiet · 1px #141414 structural · double 1px+1px ink frame = "the table" · 1.5px dashed ink = perforation · dashed #B9B4A9 = sealed/unavailable.
@@ -80,6 +80,7 @@ New vocabulary must stay inside the toll metaphor (receipts, ledgers, gates, cro
 
 ## Intentional additions
 - `core/` fill-ins (Input, Select, Checkbox, Radio, Switch, Dialog, Toast) were not in the explorations; styled to match (square, ink borders, Besley labels) per user request.
+- CTA type migrated from Besley 800 caps to Josefin Sans 600 caps (approved 8d/9b, Jul 2026); secondary buttons moved from sentence case to caps.
 - Board screens 1p–1r predate the type lock; their Limelight header was normalized to the locked Poiret One app header. Everything else kept verbatim.
 
 ## Caveats

@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 /**
- * Primary = ink slab, Besley 800 tracked caps; secondary = bordered panel.
+ * Primary = ink slab, Josefin Sans 600 tracked caps; secondary = bordered
+ * panel, same face (caps too — Josefin caps = pressable).
  * Renders a real <button>, or a <Link> when `to` is given. `busy` disables
  * and swaps the label (busyLabel) — the button never spins.
  */

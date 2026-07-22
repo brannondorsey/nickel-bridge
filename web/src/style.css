@@ -6,9 +6,10 @@
  * self-hosted via @fontsource imports in main.tsx:
  *   Poiret One   — the wordmark ONLY
  *   Crimson Pro  — body text, titles, greetings
- *   Besley       — tracked-caps labels, numerals, buttons, ticket text
+ *   Besley       — tracked-caps labels, numerals, ticket text
  *                  (variable font; its tabular figures are broken — see .num)
- *   Josefin Sans — ink stamps + postmarks ONLY
+ *   Josefin Sans — ink stamps, postmarks + all button/action text
+ *                  (Josefin caps = pressable; Besley caps = static label)
  *
  * NOTE ON CLASS NAMES: .bidbox .bid .callrow .confirm-row .meaning-panel
  * .mtitle .grade-toast .handfan .interactive .cardbtn .selected .trick
@@ -161,8 +162,9 @@
 :root {
   --font-display: 'Poiret One', cursive; /* wordmark ONLY */
   --font-body: 'Crimson Pro', serif; /* body, titles, greetings */
-  --font-label: 'Besley Variable', 'Besley', serif; /* tracked-caps labels, numerals, buttons, ticket text */
-  --font-stamp: 'Josefin Sans', sans-serif; /* ink stamps + postmark ONLY */
+  --font-label: 'Besley Variable', 'Besley', serif; /* tracked-caps labels, numerals, ticket text */
+  --font-stamp: 'Josefin Sans', sans-serif; /* ink stamps, postmark, buttons/actions */
+  --font-action: 'Josefin Sans', sans-serif; /* all pressable text (approved 8d/9b, Jul 2026) */
   /* scale (Crimson runs small — bumped +1, weight 600 for UI text) */
   --text-wordmark: 17px; /* Poiret One, letter-spacing .14em */
   --text-title: 21px; /* Crimson 600 */
@@ -170,8 +172,10 @@
   --text-body-size: 16px; /* Crimson 400, lh 1.5 */
   --text-caption: 13.5px; /* Crimson 400, --muted */
   --text-label: 10px; /* Besley 700, letter-spacing .2em, caps, --muted */
+  --text-btn: 12.5px; /* Josefin 600, caps, --track-btn */
   --track-wordmark: 0.14em;
   --track-label: 0.2em;
+  --track-btn: 0.22em;
   --track-wide: 0.3em;
 }
 
@@ -580,18 +584,22 @@ input {
 /* ================= design-system components ================= */
 
 /* ---- Button ---- */
+/* Josefin Sans 600 tracked caps — the action voice (Besley caps stay the label
+ * voice). Josefin's baseline sits high, so bottom padding is deliberately ~3px
+ * less than top on every button; do not equalize. */
 .ds-btn {
   display: block;
   width: 100%;
   text-align: center;
-  font-family: var(--font-label);
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.06em;
+  font-family: var(--font-action);
+  font-weight: 600;
+  font-size: var(--text-btn);
+  letter-spacing: var(--track-btn);
+  text-transform: uppercase;
   border-radius: var(--radius-btn);
   background: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
-  padding: 13px;
+  padding: 14px 12px 11px;
   text-decoration: none;
   user-select: none;
 }
@@ -604,9 +612,9 @@ a.ds-btn:hover {
 .ds-btn-secondary {
   background: var(--panel);
   color: var(--ink);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 11px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  padding: 11px 12px 9px;
   border: 1px solid var(--ink);
 }
 a.ds-btn-secondary:hover {
@@ -711,8 +719,9 @@ a.ds-btn-secondary:hover {
   color: var(--ink);
 }
 .sheet-close {
-  font-family: var(--font-label);
-  font-weight: 700;
+  /* pressable, so it wears the action face (the ✕ glyph itself falls back) */
+  font-family: var(--font-action);
+  font-weight: 600;
   font-size: 16px;
   color: var(--muted);
   padding: 4px 8px;
@@ -2132,11 +2141,14 @@ a.board-row:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-label);
-  font-weight: 700;
+  font-family: var(--font-action);
+  font-weight: 600;
   font-size: 11px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   border-radius: var(--radius-btn);
+  /* flex-centered, so Josefin's high baseline is compensated with a nudge
+     instead of the buttons' usual top-heavy padding */
+  padding-top: 3px;
 }
 .theme-switch button.active {
   background: var(--btn-primary-bg);

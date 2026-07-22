@@ -80,7 +80,7 @@ export function BoardBiddingScreen({go}) {
           <div style={{border:'1px solid var(--line)', background:'#fff', minHeight:44, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:15, opacity:.25, borderRadius:2}}>XX</div>
         </div>
       </div>
-      <div style={{padding:'12px 12px 16px'}}><Button onClick={()=>go && go('play')} style={{fontSize:17, padding:14}}>BID 2♥ →</Button></div>
+      <div style={{padding:'12px 12px 16px'}}><Button onClick={()=>go && go('play')}>BID 2♥ →</Button></div>
     </div>
   );
 }
@@ -184,7 +184,7 @@ export function BoardResultScreen({go}) {
         </div>
       </div>
       <div style={{padding:'14px 12px 18px', display:'flex', flexDirection:'column', gap:8}}>
-        <Button onClick={()=>go && go('sheet')} style={{fontSize:16, padding:14}}>NEXT BOARD — 3 OF 4 →</Button>
+        <Button onClick={()=>go && go('sheet')}>NEXT BOARD — 3 OF 4 →</Button>
         <Button variant="secondary" onClick={()=>go && go('HOME')}>Back to lobby</Button>
       </div>
     </div>
