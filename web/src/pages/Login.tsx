@@ -32,7 +32,7 @@ export default function Login() {
 
   return (
     <Splash
-      pitch="Learn SAYC bidding and play four-deal duplicate tournaments with your friends — robot partner and opponents, real rankings."
+      pitch="A century-old bridge by another name. It wasn't a nickel then and it isn't now. This bridge is not a bridge."
       cta={
         <>
           {me?.googleAuth !== false ? <Button href="/auth/google">PLAY THE TOLL →</Button> : null}
