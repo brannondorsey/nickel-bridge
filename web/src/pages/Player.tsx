@@ -10,6 +10,7 @@ import { Loading } from '../components/ds/Loading';
 import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
+import { StemChart } from '../components/ds/StemChart';
 import { StarGrade } from '../components/ds/StarGrade';
 import { shortDate } from '../format';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
@@ -92,15 +93,15 @@ const RUFF_KIND_LABELS: Record<'plain' | 'over' | 'under', string> = {
   under: 'UNDER-RUFF',
 };
 
-/** Row labels for the signed trick-delta histogram, keyed by clamped bucket value. */
-const TRICK_DELTA_LABELS: Record<number, string> = {
-  [-3]: '3+ DOWN',
-  [-2]: '2 DOWN',
-  [-1]: '1 DOWN',
-  [0]: 'MADE EXACTLY',
-  [1]: '1 OVER',
-  [2]: '2 OVER',
-  [3]: '3+ OVER',
+/** Axis ticks for the trick-delta stem plot, keyed by clamped bucket value. */
+const TRICK_DELTA_TICKS: Record<number, string> = {
+  [-3]: '−3',
+  [-2]: '−2',
+  [-1]: '−1',
+  [0]: 'MADE',
+  [1]: '+1',
+  [2]: '+2',
+  [3]: '+3',
 };
 
 /** Toll-bridge-voice takeaway for the trick-delta histogram. */
@@ -563,26 +564,20 @@ export default function Player() {
 
           {stats.trickDelta.avgDelta !== null ? (
             <PerforatedPanel
-              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'} · Ø ${
-                stats.trickDelta.avgDelta >= 0 ? '+' : '−'
-              }${Math.abs(stats.trickDelta.avgDelta)}`}
+              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'}`}
               className="stats-trickdelta num"
             >
-              <div className="stats-trickdelta-rows">
-                {stats.trickDelta.buckets.map((b) => {
-                  const pct = Math.round((b.count / stats.trickDelta.boards) * 100);
-                  return (
-                    <div key={b.delta} className="stats-trickdelta-row">
-                      <span className="label-caps stats-trickdelta-label">{TRICK_DELTA_LABELS[b.delta]}</span>
-                      <PctBar pct={pct} />
-                      <b>{pct}%</b>
-                      <span className="stats-trickdelta-count">
-                        {b.count} board{b.count === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <StemChart
+                points={stats.trickDelta.buckets.map((b) => ({
+                  tick: TRICK_DELTA_TICKS[b.delta],
+                  pct: Math.round((b.count / stats.trickDelta.boards) * 100),
+                  count: b.count,
+                }))}
+                avgIndex={stats.trickDelta.avgDelta + 3}
+                avgLabel={`Ø ${stats.trickDelta.avgDelta >= 0 ? '+' : '−'}${Math.abs(stats.trickDelta.avgDelta)}`}
+                leftCaption="short of contract"
+                rightCaption="over contract"
+              />
               <div className="stats-trickdelta-note">{trickDeltaNote(stats.trickDelta.avgDelta)}</div>
             </PerforatedPanel>
           ) : null}

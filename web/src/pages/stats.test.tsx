@@ -213,14 +213,15 @@ describe('Stats', () => {
     expect(screen.queryByText(/^CONTRACTS —/)).not.toBeInTheDocument();
   });
 
-  it('renders the declaring trick-delta histogram, bucketed and averaged', async () => {
+  it('renders the declaring trick-delta stem plot, bucketed and averaged', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
-    expect(await screen.findByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
-    expect(screen.getByText('2 OVER')).toBeInTheDocument();
+    expect(await screen.findByText('TRICKS TAKEN — 88 CONTRACTS')).toBeInTheDocument();
+    expect(screen.getByText('+2')).toBeInTheDocument();
     // 20/88 -> 23%
     expect(screen.getByText('23%')).toBeInTheDocument();
-    expect(screen.getByText('20 boards')).toBeInTheDocument();
+    expect(screen.getByText(/\+2: 23% — 20 boards/)).toBeInTheDocument();
+    expect(screen.getByText('Ø +0.3')).toBeInTheDocument();
     expect(screen.getByText(/mark of an honest auction/)).toBeInTheDocument();
   });
 
@@ -351,8 +352,8 @@ describe('Stats', () => {
     // personal-best tiles aren't Elo-specific, so they stay for house profiles too
     expect(screen.getByText('BEST CROSSING')).toBeInTheDocument();
     expect(screen.getByText('TOUGHEST CROSSING')).toBeInTheDocument();
-    // nor is the trick-delta histogram
-    expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
+    // nor is the trick-delta stem plot
+    expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS')).toBeInTheDocument();
     // nor the contract mix panel
     expect(screen.getByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
     // nor the ruffs/hold-ups panel — none of these 10 features are Elo-specific

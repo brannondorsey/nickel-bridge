@@ -17,6 +17,7 @@ import { PerforatedPanel } from './PerforatedPanel';
 import { Postmark } from './Postmark';
 import { Sparkline } from './Sparkline';
 import { StarGrade } from './StarGrade';
+import { StemChart } from './StemChart';
 import { TabBar } from './TabBar';
 import { TicketStub } from './TicketStub';
 import { Toast } from './Toast';
@@ -265,6 +266,45 @@ describe('Sparkline', () => {
   it('renders the no-data note when empty', () => {
     render(<Sparkline points={[]} />);
     expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
+  });
+});
+
+describe('StemChart', () => {
+  const points = [
+    { tick: '−1', pct: 30, count: 3 },
+    { tick: 'MADE', pct: 40, count: 4 },
+    { tick: '+1', pct: 30, count: 3 },
+  ];
+
+  it('renders one bar per point plus a dashed average marker', () => {
+    const { container } = render(
+      <StemChart
+        points={points}
+        avgIndex={1.2}
+        avgLabel="Ø +0.2"
+        leftCaption="short of contract"
+        rightCaption="over contract"
+      />,
+    );
+    expect(container.querySelectorAll('rect')).toHaveLength(3);
+    expect(screen.getByText('MADE')).toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
+    expect(screen.getByText('Ø +0.2')).toBeInTheDocument();
+    expect(screen.getByText('short of contract')).toBeInTheDocument();
+    expect(screen.getByText('over contract')).toBeInTheDocument();
+  });
+
+  it('clamps an out-of-range average index onto the visible axis', () => {
+    const { container } = render(
+      <StemChart points={points} avgIndex={9} avgLabel="Ø +6" leftCaption="short" rightCaption="over" />,
+    );
+    const marker = container.querySelectorAll('line')[1] as SVGLineElement; // [0] is the baseline
+    expect(marker.getAttribute('x1')).toBe('310'); // clamped to the last point's x
+  });
+
+  it('carries the same data as text for screen readers', () => {
+    render(<StemChart points={points} avgIndex={1} avgLabel="Ø 0" leftCaption="short" rightCaption="over" />);
+    expect(screen.getByText('−1: 30% — 3 boards')).toBeInTheDocument();
   });
 });
 
