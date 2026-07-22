@@ -202,14 +202,26 @@ export interface PlayerStats {
     elo: number | null;
     avgPct: number | null;
     bidAccuracy: number | null;
+    /** declaring-side make-rate percentile (server/src/stats.ts) */
+    declaring: number | null;
     ratedPlayers: number;
     activePlayers: number;
+    /** size of the declaring-rate comparison pool (players with at least one declaring board) */
+    declaringPlayers: number;
   };
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
   /** graded calls by auction role, ranked best to worst by satisfactory-or-better share */
   bidTypes: { category: BidTypeKey; total: number; satisfactory: number }[];
+  /** declaring-side contract mix: partscore/game/slam + doubled/redoubled + strain family (server/src/stats.ts) */
+  contractMix: {
+    partscore: { boards: number; made: number };
+    game: { boards: number; made: number };
+    slam: { boards: number; made: number };
+    doubled: { boards: number; made: number };
+    strains: { notrump: number; major: number; minor: number };
+  };
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

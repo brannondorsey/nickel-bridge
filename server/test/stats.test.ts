@@ -59,7 +59,15 @@ describe('player stats', () => {
     expect(stats.trickDelta.buckets).toEqual([-3, -2, -1, 0, 1, 2, 3].map((delta) => ({ delta, count: 0 })));
     expect(stats.percentiles.elo).toBeNull();
     expect(stats.percentiles.avgPct).toBeNull();
+    expect(stats.percentiles.declaring).toBeNull();
     expect(stats.totals.currentElo).toBe(1200);
+    expect(stats.contractMix).toEqual({
+      partscore: { boards: 0, made: 0 },
+      game: { boards: 0, made: 0 },
+      slam: { boards: 0, made: 0 },
+      doubled: { boards: 0, made: 0 },
+      strains: { notrump: 0, major: 0, minor: 0 },
+    });
   });
 
   it('excludes in-progress boards from all stats', async () => {
@@ -136,6 +144,15 @@ describe('player stats', () => {
     // non-negative buckets are exactly the made contracts, negative buckets exactly the downs
     const madeFromBuckets = buckets.filter((b: any) => b.delta >= 0).reduce((s: number, b: any) => s + b.count, 0);
     expect(madeFromBuckets).toBe(declarer.made);
+
+    // contract mix: tiers and strains both partition the declaring boards
+    const cm = stats.contractMix;
+    expect(cm.partscore.boards + cm.game.boards + cm.slam.boards).toBe(declarer.boards);
+    for (const bucket of [cm.partscore, cm.game, cm.slam, cm.doubled]) {
+      expect(bucket.made).toBeLessThanOrEqual(bucket.boards);
+    }
+    expect(cm.doubled.boards).toBeLessThanOrEqual(declarer.boards);
+    expect(cm.strains.notrump + cm.strains.major + cm.strains.minor).toBe(declarer.boards);
   });
 
   it('is visible to other signed-in players', async () => {
@@ -172,5 +189,16 @@ describe('player stats', () => {
     expect(stats.percentiles.elo).toBeLessThanOrEqual(100);
     const bobStats = await bob.get(`/api/users/${await userId(bob)}/stats`);
     expect([stats.percentiles.elo, bobStats.percentiles.elo].sort()).not.toEqual([100, 100]);
+
+    // declaring percentile is only populated once the player has a declaring
+    // board; the pool size counts every player who has declared at least once
+    if (stats.totals.declarer.boards > 0) {
+      expect(stats.percentiles.declaring).not.toBeNull();
+      expect(stats.percentiles.declaring).toBeGreaterThanOrEqual(0);
+      expect(stats.percentiles.declaring).toBeLessThanOrEqual(100);
+    } else {
+      expect(stats.percentiles.declaring).toBeNull();
+    }
+    expect(stats.percentiles.declaringPlayers).toBeGreaterThanOrEqual(0);
   });
 });

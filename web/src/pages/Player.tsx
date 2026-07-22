@@ -61,6 +61,12 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   pass: 'PASSES',
 };
 
+const CONTRACT_TIER_ROWS = [
+  { key: 'partscore', label: 'PARTSCORE' },
+  { key: 'game', label: 'GAME' },
+  { key: 'slam', label: 'SLAM' },
+] as const;
+
 /** Row labels for the signed trick-delta histogram, keyed by clamped bucket value. */
 const TRICK_DELTA_LABELS: Record<number, string> = {
   [-3]: '3+ DOWN',
@@ -184,7 +190,14 @@ export default function Player() {
     { label: 'Elo', pct: stats.percentiles.elo, of: `${stats.percentiles.ratedPlayers} rated players` },
     { label: 'Score', pct: stats.percentiles.avgPct, of: `${stats.percentiles.activePlayers} players` },
     { label: 'Bidding', pct: stats.percentiles.bidAccuracy, of: `${stats.percentiles.activePlayers} players` },
+    { label: 'Declaring', pct: stats.percentiles.declaring, of: `${stats.percentiles.declaringPlayers} declarers` },
   ].filter((r) => r.pct !== null) as { label: string; pct: number; of: string }[];
+
+  const cm = stats.contractMix;
+  const tierPct = (b: { boards: number; made: number }) => (b.boards ? Math.round((b.made / b.boards) * 100) : null);
+  const strainTotal = cm.strains.notrump + cm.strains.major + cm.strains.minor;
+  const strainPct = (n: number) => (strainTotal ? Math.round((n / strainTotal) * 100) : 0);
+  const doubledPct = tierPct(cm.doubled);
 
   return (
     <div className="stats-page">
@@ -349,6 +362,44 @@ export default function Player() {
             />
             {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
           </div>
+
+          {t.declarer.boards > 0 ? (
+            <PerforatedPanel heading={`CONTRACTS — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
+              <div className="stats-contracts-rows">
+                {CONTRACT_TIER_ROWS.map(({ key, label }) => {
+                  const bucket = cm[key];
+                  const pct = tierPct(bucket);
+                  return (
+                    <div key={key} className="stats-contract-row">
+                      <span className="label-caps stats-contract-label">{label}</span>
+                      {pct !== null ? <PctBar pct={pct} /> : <span />}
+                      <b>{pct !== null ? `${pct}%` : '—'}</b>
+                      <span className="stats-contract-count">
+                        {bucket.boards} board{bucket.boards === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="stats-contracts-divider" />
+                <div className="stats-contract-row">
+                  <span className="label-caps stats-contract-label">DOUBLED</span>
+                  {doubledPct !== null ? <PctBar pct={doubledPct} /> : <span />}
+                  <b>{doubledPct !== null ? `${doubledPct}%` : '—'}</b>
+                  <span className="stats-contract-count">
+                    {cm.doubled.boards} board{cm.doubled.boards === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+              <div className="stats-contracts-note">Redoubled crossings count as doubled too.</div>
+              <div className="stats-contracts-strains">
+                <span className="label-caps">AS DECLARER</span>
+                <span>
+                  NOTRUMP {strainPct(cm.strains.notrump)}% · MAJOR {strainPct(cm.strains.major)}% · MINOR{' '}
+                  {strainPct(cm.strains.minor)}%
+                </span>
+              </div>
+            </PerforatedPanel>
+          ) : null}
 
           {stats.trickDelta.avgDelta !== null ? (
             <PerforatedPanel

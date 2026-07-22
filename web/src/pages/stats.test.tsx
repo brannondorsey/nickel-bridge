@@ -118,6 +118,51 @@ describe('Stats', () => {
     expect(within(best as HTMLElement).getByText('no crossings yet')).toBeInTheDocument();
   });
 
+  it('renders the contract mix panel with tier rows, doubled tally, and strain split', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    expect(await screen.findByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
+    // partscore: 38/51 -> 75%
+    const partscore = screen.getByText('PARTSCORE').closest('.stats-contract-row')!;
+    expect(within(partscore as HTMLElement).getByText('75%')).toBeInTheDocument();
+    expect(within(partscore as HTMLElement).getByText('51 boards')).toBeInTheDocument();
+    // doubled: 5/9 -> 56%
+    const doubled = screen.getByText('DOUBLED').closest('.stats-contract-row')!;
+    expect(within(doubled as HTMLElement).getByText('56%')).toBeInTheDocument();
+    expect(within(doubled as HTMLElement).getByText('9 boards')).toBeInTheDocument();
+    // strains: 21/45/22 of 88 -> 24%/51%/25%
+    expect(screen.getByText('NOTRUMP 24% · MAJOR 51% · MINOR 25%')).toBeInTheDocument();
+    expect(screen.getByText('Redoubled crossings count as doubled too.')).toBeInTheDocument();
+  });
+
+  it('shows an em-dash for an untouched contract tier', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      contractMix: { ...playerStatsFull.contractMix, slam: { boards: 0, made: 0 } },
+    });
+    renderStats();
+    const slam = (await screen.findByText('SLAM')).closest('.stats-contract-row')!;
+    expect(within(slam as HTMLElement).getByText('—')).toBeInTheDocument();
+    expect(within(slam as HTMLElement).getByText('0 boards')).toBeInTheDocument();
+  });
+
+  it('hides the contracts panel when the player has never declared', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      totals: { ...playerStatsFull.totals, declarer: { boards: 0, made: 0 } },
+      contractMix: {
+        partscore: { boards: 0, made: 0 },
+        game: { boards: 0, made: 0 },
+        slam: { boards: 0, made: 0 },
+        doubled: { boards: 0, made: 0 },
+        strains: { notrump: 0, major: 0, minor: 0 },
+      },
+    });
+    renderStats();
+    await screen.findByText('DECLARING');
+    expect(screen.queryByText(/^CONTRACTS —/)).not.toBeInTheDocument();
+  });
+
   it('renders the declaring trick-delta histogram, bucketed and averaged', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
@@ -180,6 +225,8 @@ describe('Stats', () => {
     expect(screen.getByText('TOUGHEST CROSSING')).toBeInTheDocument();
     // nor is the trick-delta histogram
     expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
+    // nor the contract mix panel
+    expect(screen.getByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

@@ -1,4 +1,4 @@
-import { BidCategory, Call, Contract, ELO_INITIAL, Seat, bidCategory, boardConditions } from '@bridge/core';
+import { BidCategory, Call, Contract, ELO_INITIAL, Seat, Strain, bidCategory, boardConditions } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
@@ -37,6 +37,14 @@ const stmtAllDoneEvals = db.prepare(
    WHERE b.state = 'done'`,
 );
 const stmtAllTournamentIds = db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' ORDER BY id`);
+// Contracts across every user, for the "Declaring" percentile row — same
+// declaring-side filter (contract.declarer % 2 === 0) applies to every row
+// regardless of whose board it is, since every player always sits South.
+const stmtAllDoneContracts = db.prepare(
+  `SELECT b.user_id, b.contract, b.tricks_declarer FROM boards b
+   JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   WHERE b.state = 'done' AND b.contract IS NOT NULL`,
+);
 
 interface StatPoint {
   tournamentId: number;
@@ -86,8 +94,12 @@ interface PlayerStats {
     elo: number | null;
     avgPct: number | null;
     bidAccuracy: number | null;
+    /** declaring-side make-rate percentile — the one new row this batch adds, see stats-page blueprint §4 */
+    declaring: number | null;
     ratedPlayers: number;
     activePlayers: number;
+    /** size of the declaring-rate comparison pool (players with at least one declaring board) */
+    declaringPlayers: number;
   };
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
@@ -100,6 +112,25 @@ interface PlayerStats {
    * ones. Only buckets the player has actually visited appear.
    */
   bidTypes: { category: BidCategory; total: number; satisfactory: number }[];
+  /**
+   * Declaring-side contracts only (same population as `totals.declarer`, i.e.
+   * boards where contract.declarer is on the human's side, N-S), bucketed two
+   * ways: partscore/game/slam tier (contractTier — level 6-7 is always slam;
+   * otherwise game at 3NT/4-of-a-major/5-of-a-minor and up, partscore below
+   * that) and doubled-or-redoubled (contract.doubled || contract.redoubled
+   * collapsed into one bucket — the auction state machine makes the two
+   * booleans mutually exclusive, see auction.ts, and redoubled contracts are
+   * rare enough on their own that a separate row would mostly read 0/0).
+   * `strains` is a pure distribution (not a make-rate) of the same declaring
+   * boards by strain family — its three counts sum to `totals.declarer.boards`.
+   */
+  contractMix: {
+    partscore: { boards: number; made: number };
+    game: { boards: number; made: number };
+    slam: { boards: number; made: number };
+    doubled: { boards: number; made: number };
+    strains: { notrump: number; major: number; minor: number };
+  };
 }
 
 interface EvalRow {
@@ -120,6 +151,25 @@ interface DoneBoardRow {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/**
+ * Standard partscore/game/slam boundary. Level 6-7 is always slam regardless
+ * of strain (a slam already implies game); otherwise it's game once the
+ * trick score alone would hit 100 — 3NT, 4-of-a-major, or 5-of-a-minor and up
+ * (see packages/core/src/score.ts's game-bonus threshold) — partscore below
+ * that.
+ */
+function contractTier(level: number, strain: Strain): 'partscore' | 'game' | 'slam' {
+  if (level >= 6) return 'slam';
+  const gameLevel = strain === 4 ? 3 : strain === 2 || strain === 3 ? 4 : 5; // NT / major / minor
+  return level >= gameLevel ? 'game' : 'partscore';
+}
+
+/** Notrump vs. major (♥♠) vs. minor (♣♦) — for the declarer-side strain split. */
+function strainFamily(strain: Strain): 'notrump' | 'major' | 'minor' {
+  if (strain === 4) return 'notrump';
+  return strain === 2 || strain === 3 ? 'major' : 'minor';
+}
 
 /** The human always bids from South (game.ts's HUMAN_SEAT). */
 const HUMAN_SEAT: Seat = 2;
@@ -161,6 +211,13 @@ export function playerStats(userId: number): PlayerStats | null {
   const byBidType = new Map<BidCategory, { total: number; satisfactory: number }>();
   const trickDeltaHist = new Map<number, number>(); // clamped delta -> count
   const trickDeltas: number[] = []; // unclamped, for the true average
+  const contractMix = {
+    partscore: { boards: 0, made: 0 },
+    game: { boards: 0, made: 0 },
+    slam: { boards: 0, made: 0 },
+    doubled: { boards: 0, made: 0 },
+    strains: { notrump: 0, major: 0, minor: 0 },
+  };
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -197,11 +254,21 @@ export function playerStats(userId: number): PlayerStats | null {
       // the human always sits N-S, so an even declarer seat is the user's side
       declarer.boards++;
       const tricks = b.tricks_declarer ?? 0;
-      if (tricks >= 6 + contract.level) declarer.made++;
+      const made = tricks >= 6 + contract.level;
+      if (made) declarer.made++;
       const delta = tricks - (6 + contract.level);
       const clamped = Math.max(-3, Math.min(3, delta));
       trickDeltaHist.set(clamped, (trickDeltaHist.get(clamped) ?? 0) + 1);
       trickDeltas.push(delta);
+
+      const tier = contractMix[contractTier(contract.level, contract.strain)];
+      tier.boards++;
+      if (made) tier.made++;
+      if (contract.doubled || contract.redoubled) {
+        contractMix.doubled.boards++;
+        if (made) contractMix.doubled.made++;
+      }
+      contractMix.strains[strainFamily(contract.strain)]++;
     } else {
       defense.boards++;
       if ((b.tricks_declarer ?? 0) < 6 + contract.level) defense.beat++;
@@ -264,6 +331,8 @@ export function playerStats(userId: number): PlayerStats | null {
         a.category.localeCompare(b.category),
     );
 
+  const declaringRate = declarer.boards ? Math.round((declarer.made / declarer.boards) * 100) : null;
+
   return {
     user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
@@ -284,11 +353,12 @@ export function playerStats(userId: number): PlayerStats | null {
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
     trickDelta,
-    percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
+    percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy, declaringRate),
     eloSeries,
     pctSeries,
     accuracySeries,
     bidTypes,
+    contractMix,
   };
 }
 
@@ -321,6 +391,7 @@ function fieldPercentiles(
   isRated: boolean,
   avgPct: number | null,
   avgBidAccuracy: number | null,
+  declaringRate: number | null,
 ): PlayerStats['percentiles'] {
   const ratedElos = (stmtRatedElos.all() as { elo: number }[]).map((r) => r.elo);
 
@@ -348,11 +419,27 @@ function fieldPercentiles(
   }
   const avgPcts = [...pctsByUser.values()].map((p) => round1(mean(p)));
 
+  // declaring-side make-rate per user (same declarer-side filter as
+  // totals.declarer — every player always sits South, so it applies row-wise
+  // across the whole table, not just for the profile subject)
+  const declareByUser = new Map<number, { boards: number; made: number }>();
+  for (const row of stmtAllDoneContracts.all() as { user_id: number; contract: string; tricks_declarer: number | null }[]) {
+    const contract = JSON.parse(row.contract) as Contract;
+    if (contract.declarer % 2 !== 0) continue;
+    const rec = declareByUser.get(row.user_id) ?? { boards: 0, made: 0 };
+    rec.boards++;
+    if ((row.tricks_declarer ?? 0) >= 6 + contract.level) rec.made++;
+    declareByUser.set(row.user_id, rec);
+  }
+  const declareRates = [...declareByUser.values()].map((r) => Math.round((r.made / r.boards) * 100));
+
   return {
     elo: isRated ? betterThan(elo, ratedElos) : null,
     avgPct: avgPct !== null ? betterThan(avgPct, avgPcts) : null,
     bidAccuracy: avgBidAccuracy !== null ? betterThan(avgBidAccuracy, accuracies) : null,
+    declaring: declaringRate !== null ? betterThan(declaringRate, declareRates) : null,
     ratedPlayers: ratedElos.length,
     activePlayers: scoresByUser.size,
+    declaringPlayers: declareByUser.size,
   };
 }

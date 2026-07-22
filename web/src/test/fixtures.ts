@@ -388,7 +388,7 @@ export const playerStatsFull: PlayerStats = {
       { delta: 3, count: 8 },
     ],
   },
-  percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, ratedPlayers: 54, activePlayers: 60 },
+  percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, declaring: 58, ratedPlayers: 54, activePlayers: 60, declaringPlayers: 52 },
   eloSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), elo: 1380 + i * 11 })),
   pctSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), pct: 44 + ((i * 7) % 30), boards: 4, fieldSize: 8 })),
   accuracySeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), accuracy: 60 + i * 2, calls: 18 })),
@@ -401,6 +401,14 @@ export const playerStatsFull: PlayerStats = {
     { category: 'double', total: 6, satisfactory: 5 },
     { category: 'overcall', total: 24, satisfactory: 19 },
   ],
+  // sums to declarer.boards: 88 (51+30+7 tiers, 21+45+22 strains)
+  contractMix: {
+    partscore: { boards: 51, made: 38 },
+    game: { boards: 30, made: 14 },
+    slam: { boards: 7, made: 2 },
+    doubled: { boards: 9, made: 5 },
+    strains: { notrump: 21, major: 45, minor: 22 },
+  },
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -427,11 +435,26 @@ export const playerStatsEmpty: PlayerStats = {
     avgDelta: null,
     buckets: ([-3, -2, -1, 0, 1, 2, 3] as const).map((delta) => ({ delta, count: 0 })),
   },
-  percentiles: { elo: null, avgPct: null, bidAccuracy: null, ratedPlayers: 0, activePlayers: 0 },
+  percentiles: {
+    elo: null,
+    avgPct: null,
+    bidAccuracy: null,
+    declaring: null,
+    ratedPlayers: 0,
+    activePlayers: 0,
+    declaringPlayers: 0,
+  },
   eloSeries: [],
   pctSeries: [],
   accuracySeries: [],
   bidTypes: [],
+  contractMix: {
+    partscore: { boards: 0, made: 0 },
+    game: { boards: 0, made: 0 },
+    slam: { boards: 0, made: 0 },
+    doubled: { boards: 0, made: 0 },
+    strains: { notrump: 0, major: 0, minor: 0 },
+  },
 };
 
 // ---- leaderboard ----
