@@ -546,6 +546,37 @@ input {
   text-align: left;
 }
 
+/* ---- NotFound: the router catch-all ---- */
+.notfound-page {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+  padding: 24px;
+}
+.notfound-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 21px;
+  margin: 0;
+}
+.notfound-hint {
+  max-width: 300px;
+  margin: 0;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.notfound-actions {
+  width: min(280px, 100%);
+  margin-top: 4px;
+}
+
 /* ================= design-system components ================= */
 
 /* ---- Button ---- */
