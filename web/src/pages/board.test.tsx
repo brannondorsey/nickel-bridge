@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -56,7 +56,11 @@ describe('Board — bidding', () => {
   it('plays the ink-wash pulse on a vulnerable board entering bidding, but not on a non-vulnerable one', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();
-    expect(await screen.findByText('NS VUL')).toHaveClass('board-vul-pulse');
+    // The pulse-triggering effect fires in the render after the one that
+    // first paints the vul chip's text, so wait for the class rather than
+    // asserting on it the instant the text itself appears.
+    const nsVulChip = await screen.findByText('NS VUL');
+    await waitFor(() => expect(nsVulChip).toHaveClass('board-vul-pulse'));
 
     apiMock.board.mockResolvedValue({ ...boardBidding, vul: { ns: false, ew: false } });
     renderWithMe(
@@ -84,7 +88,7 @@ describe('Board — bidding', () => {
       { me: meFixture, route: '/t/12/b/4' },
     );
     const ewVulChip = await screen.findByText('EW VUL');
-    expect(ewVulChip).toHaveClass('board-vul-pulse');
+    await waitFor(() => expect(ewVulChip).toHaveClass('board-vul-pulse'));
     // EW-only vulnerable: the resting chip is plain ink, not red (unchanged,
     // pre-existing behavior) — --chip-color must stay unset so the pulse's
     // CSS fallback (var(--ink)) kicks in instead of a red flourish over a
@@ -403,7 +407,10 @@ describe('Board — claims', () => {
       fireEvent.click(queen);
       fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
 
-      // pops up right as the claim is detected — no artificial hold first
+      // pops up right as the claim is detected — no artificial hold first.
+      // Two zero-length advances: React 19 resolves the playCard mock's
+      // promise chain over two microtask-queue drains, not one.
+      await vi.advanceTimersByTimeAsync(0);
       await vi.advanceTimersByTimeAsync(0);
       expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument();
       expect(screen.getByText(/Laydown confirmed/)).toBeInTheDocument();
