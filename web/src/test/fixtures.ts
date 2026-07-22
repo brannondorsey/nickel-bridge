@@ -421,6 +421,17 @@ export const playerStatsFull: PlayerStats = {
     defense: { plain: 4, over: 1, under: 0 },
   },
   holdUps: { opportunities: 11, taken: 6 }, // 55%
+  // 6/3/9/5 of 23 -> 26%/13%/39%/22%
+  openingLeads: {
+    boards: 23,
+    suits: [
+      { suit: 0, count: 6 },
+      { suit: 1, count: 3 },
+      { suit: 2, count: 9 },
+      { suit: 3, count: 5 },
+    ],
+    style: { topOfSequence: 10, fourthBest: 8, other: 5 }, // 43%/35%/22%
+  },
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -473,6 +484,11 @@ export const playerStatsEmpty: PlayerStats = {
     defense: { plain: 0, over: 0, under: 0 },
   },
   holdUps: { opportunities: 0, taken: 0 },
+  openingLeads: {
+    boards: 0,
+    suits: [0, 1, 2, 3].map((suit) => ({ suit, count: 0 })),
+    style: { topOfSequence: 0, fourthBest: 0, other: 0 },
+  },
 };
 
 // ---- leaderboard ----

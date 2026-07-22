@@ -185,6 +185,23 @@ interface PlayerStats {
    * `opportunities` were ducked.
    */
   holdUps: { opportunities: number; taken: number };
+  /**
+   * The human's own opening-lead choices — only boards where East declared
+   * (see the loop comment above for why). `suits` always has all 4 entries
+   * in fixed ♠♥♦♣ order (Card suit convention), count 0 for suits never
+   * led, so the client can render a stable 4-row chart without reflow —
+   * same fixed-domain-always-present shape as `totals.gradeCounts`, chosen
+   * over `bidTypes`'s "only visited buckets appear" precedent because the
+   * suit domain here is small and fixed, not open-ended. `style` likewise
+   * always has all three keys. Never null; `boards: 0` with all-zero
+   * children is the empty state (brand-new player, or one who has simply
+   * never faced an East contract yet).
+   */
+  openingLeads: {
+    boards: number;
+    suits: { suit: number; count: number }[];
+    style: { topOfSequence: number; fourthBest: number; other: number };
+  };
 }
 
 interface EvalRow {
@@ -229,6 +246,9 @@ function strainFamily(strain: Strain): 'notrump' | 'major' | 'minor' {
 
 /** The human always bids from South (game.ts's HUMAN_SEAT). */
 const HUMAN_SEAT: Seat = 2;
+
+/** the opening leader is nextSeat(declarer); that's HUMAN_SEAT only when declarer is East */
+const EAST: Seat = 1;
 
 /**
  * Duplicated from game.ts's private helper of the same name and same
@@ -349,6 +369,32 @@ export function accumulateHoldUps(
   }
 }
 
+type OpeningLeadStyle = 'topOfSequence' | 'fourthBest' | 'other';
+
+/**
+ * Classify one opening-lead card against the leader's full pre-play holding
+ * in the suit led (ranks only, 0..12 = 2..A, any order). Opening lead is the
+ * very first card of the board, so "holding at that point" is just the
+ * dealt hand filtered to the led suit — no trick replay needed.
+ *
+ * "Top of sequence": the led rank's immediate next-lower rank is also held
+ * (KQx -> lead K; QJx -> lead Q). Deliberately no honor floor — a low-card
+ * run (e.g. leading the 9 from K-J-9-8-x) also counts by this literal
+ * definition. Checked first, so it takes priority over "fourth best" on the
+ * rare holding where both could apply (e.g. K-Q-J-9-8: leading the 9 is
+ * both the 4th-highest card AND sits on top of a 9-8 pair).
+ * "Fourth best": the led card is exactly the 4th-highest of a 4+ card
+ * holding, and isn't already a sequence lead.
+ * Everything else (short-suit leads, MUD, an untouched low card, etc.) is
+ * "other" — the catch-all, not a claim about strategy.
+ */
+export function classifyOpeningLead(ledRank: number, holdingRanks: number[]): OpeningLeadStyle {
+  const ranksDesc = [...holdingRanks].sort((a, b) => b - a);
+  if (ranksDesc.includes(ledRank - 1)) return 'topOfSequence';
+  if (ranksDesc.length >= 4 && ranksDesc[3] === ledRank) return 'fourthBest';
+  return 'other';
+}
+
 /** share of *other* players this value beats, 0..100; null without a comparison field */
 function betterThan(value: number, field: number[]): number | null {
   if (field.length < 2) return null;
@@ -399,6 +445,9 @@ export function playerStats(userId: number): PlayerStats | null {
     defense: { plain: 0, over: 0, under: 0 },
   };
   const holdUps: PlayerStats['holdUps'] = { opportunities: 0, taken: 0 };
+  const leadSuitCounts = [0, 0, 0, 0]; // indexed by Suit: 0=♠ 1=♥ 2=♦ 3=♣
+  const leadStyleCounts: Record<OpeningLeadStyle, number> = { topOfSequence: 0, fourthBest: 0, other: 0 };
+  let openingLeadBoards = 0;
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -465,12 +514,28 @@ export function playerStats(userId: number): PlayerStats | null {
         if ((b.tricks_declarer ?? 0) < 6 + contract.level) defense.beat++;
       }
 
-      // Ruffs/hold-ups need the actual cards, not just the contract + trick
-      // count — reconstruct the deal + full play replay once and feed both
-      // accumulators from it (declaring and defending boards both count).
-      const { deal, ps } = reconstructBoardPlay(b, contract);
+      // Ruffs/hold-ups/opening-lead all need the actual cards, not just the
+      // contract + trick count — reconstruct the deal + full play replay
+      // once and feed all three accumulators from it (declaring and
+      // defending boards both count for ruffs/opening-lead; hold-ups is
+      // declaring-only, gated inside its own accumulator).
+      const { deal, plays, ps } = reconstructBoardPlay(b, contract);
       accumulateRuffs(ruffs, contract, ps.completedTricks);
       accumulateHoldUps(holdUps, deal, contract, ps.completedTricks);
+
+      // Opening-lead habits: the human only ever chooses the opening-lead
+      // card itself when the opening leader (nextSeat(declarer)) is South —
+      // i.e. exactly when East declared. When West declares, North (the
+      // human's AI-controlled defensive partner) leads instead; that board
+      // is excluded even though the human defends the rest of the hand.
+      if (contract.declarer === EAST) {
+        const led = plays[0]; // a stored, completed board always has a full play array
+        const suit = cardSuit(led);
+        leadSuitCounts[suit]++;
+        const holdingRanks = deal.hands[HUMAN_SEAT].filter((c) => cardSuit(c) === suit).map(cardRank);
+        leadStyleCounts[classifyOpeningLead(cardRank(led), holdingRanks)]++;
+        openingLeadBoards++;
+      }
     }
   }
 
@@ -541,6 +606,12 @@ export function playerStats(userId: number): PlayerStats | null {
 
   const declaringRate = declarer.boards ? Math.round((declarer.made / declarer.boards) * 100) : null;
 
+  const openingLeads = {
+    boards: openingLeadBoards,
+    suits: leadSuitCounts.map((count, suit) => ({ suit, count })),
+    style: leadStyleCounts,
+  };
+
   return {
     user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
@@ -570,6 +641,7 @@ export function playerStats(userId: number): PlayerStats | null {
     contractMix,
     ruffs,
     holdUps,
+    openingLeads,
   };
 }
 

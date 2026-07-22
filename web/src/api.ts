@@ -245,6 +245,12 @@ export interface PlayerStats {
   ruffs: { declarerDummy: RuffCounts; defense: RuffCounts };
   /** the classic NT hold-up, on notrump boards the player's side declared */
   holdUps: { opportunities: number; taken: number };
+  /** the human's own opening-lead choices (only boards where East declared — see server); suits always 4 entries in ♠♥♦♣ order, style always 3 keys, all-zero when the player has none yet */
+  openingLeads: {
+    boards: number;
+    suits: { suit: number; count: number }[];
+    style: { topOfSequence: number; fourthBest: number; other: number };
+  };
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */
