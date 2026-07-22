@@ -118,6 +118,27 @@ describe('Stats', () => {
     expect(within(best as HTMLElement).getByText('no crossings yet')).toBeInTheDocument();
   });
 
+  it('renders the declaring trick-delta histogram, bucketed and averaged', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    expect(await screen.findByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
+    expect(screen.getByText('2 OVER')).toBeInTheDocument();
+    // 20/88 -> 23%
+    expect(screen.getByText('23%')).toBeInTheDocument();
+    expect(screen.getByText('20 boards')).toBeInTheDocument();
+    expect(screen.getByText(/mark of an honest auction/)).toBeInTheDocument();
+  });
+
+  it('hides the trick-delta panel when the player has no declaring boards', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      trickDelta: playerStatsEmpty.trickDelta,
+    });
+    renderStats();
+    await screen.findByText('DECLARING');
+    expect(screen.queryByText(/TRICKS TAKEN —/)).not.toBeInTheDocument();
+  });
+
   it('offers sign-out to the owner only', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     apiMock.logout.mockResolvedValue({ ok: true });
@@ -157,6 +178,8 @@ describe('Stats', () => {
     // personal-best tiles aren't Elo-specific, so they stay for house profiles too
     expect(screen.getByText('BEST CROSSING')).toBeInTheDocument();
     expect(screen.getByText('TOUGHEST CROSSING')).toBeInTheDocument();
+    // nor is the trick-delta histogram
+    expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

@@ -54,6 +54,9 @@ describe('player stats', () => {
     expect(stats.pctSeries).toEqual([]);
     expect(stats.accuracySeries).toEqual([]);
     expect(stats.bidTypes).toEqual([]);
+    expect(stats.trickDelta.boards).toBe(0);
+    expect(stats.trickDelta.avgDelta).toBeNull();
+    expect(stats.trickDelta.buckets).toEqual([-3, -2, -1, 0, 1, 2, 3].map((delta) => ({ delta, count: 0 })));
     expect(stats.percentiles.elo).toBeNull();
     expect(stats.percentiles.avgPct).toBeNull();
     expect(stats.totals.currentElo).toBe(1200);
@@ -124,6 +127,15 @@ describe('player stats', () => {
     expect(declarer.boards + defense.boards + passedOut).toBe(4);
     expect(declarer.made).toBeLessThanOrEqual(declarer.boards);
     expect(defense.beat).toBeLessThanOrEqual(defense.boards);
+
+    // signed trick-delta histogram partitions declaring boards
+    const buckets = stats.trickDelta.buckets;
+    expect(buckets.map((b: any) => b.delta)).toEqual([-3, -2, -1, 0, 1, 2, 3]);
+    expect(buckets.reduce((s: number, b: any) => s + b.count, 0)).toBe(declarer.boards);
+    expect(stats.trickDelta.boards).toBe(declarer.boards);
+    // non-negative buckets are exactly the made contracts, negative buckets exactly the downs
+    const madeFromBuckets = buckets.filter((b: any) => b.delta >= 0).reduce((s: number, b: any) => s + b.count, 0);
+    expect(madeFromBuckets).toBe(declarer.made);
   });
 
   it('is visible to other signed-in players', async () => {

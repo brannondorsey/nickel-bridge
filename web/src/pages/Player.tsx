@@ -61,6 +61,28 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   pass: 'PASSES',
 };
 
+/** Row labels for the signed trick-delta histogram, keyed by clamped bucket value. */
+const TRICK_DELTA_LABELS: Record<number, string> = {
+  [-3]: '3+ DOWN',
+  [-2]: '2 DOWN',
+  [-1]: '1 DOWN',
+  [0]: 'MADE EXACTLY',
+  [1]: '1 OVER',
+  [2]: '2 OVER',
+  [3]: '3+ OVER',
+};
+
+/** Toll-bridge-voice takeaway for the trick-delta histogram. */
+function trickDeltaNote(avgDelta: number): string {
+  if (avgDelta <= -0.5) {
+    return 'Falling short of contract more often than clearing it — bid a touch closer to the hand next time.';
+  }
+  if (avgDelta >= 0.5) {
+    return 'Clearing contract more often than falling short — the auction could afford to reach a little further.';
+  }
+  return 'Tricks made track the bid closely — the mark of an honest auction.';
+}
+
 /** Bordered chart panel: tracked-caps heading, right-aligned key figure. */
 function ChartPanel({ heading, figure, children }: { heading: string; figure?: string; children: ReactNode }) {
   return (
@@ -327,6 +349,32 @@ export default function Player() {
             />
             {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
           </div>
+
+          {stats.trickDelta.avgDelta !== null ? (
+            <PerforatedPanel
+              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'} · Ø ${
+                stats.trickDelta.avgDelta >= 0 ? '+' : '−'
+              }${Math.abs(stats.trickDelta.avgDelta)}`}
+              className="stats-trickdelta num"
+            >
+              <div className="stats-trickdelta-rows">
+                {stats.trickDelta.buckets.map((b) => {
+                  const pct = Math.round((b.count / stats.trickDelta.boards) * 100);
+                  return (
+                    <div key={b.delta} className="stats-trickdelta-row">
+                      <span className="label-caps stats-trickdelta-label">{TRICK_DELTA_LABELS[b.delta]}</span>
+                      <PctBar pct={pct} />
+                      <b>{pct}%</b>
+                      <span className="stats-trickdelta-count">
+                        {b.count} board{b.count === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="stats-trickdelta-note">{trickDeltaNote(stats.trickDelta.avgDelta)}</div>
+            </PerforatedPanel>
+          ) : null}
 
           {percentileRows.length > 0 ? (
             <PerforatedPanel heading="VERSUS THE FIELD" className="stats-versus num">

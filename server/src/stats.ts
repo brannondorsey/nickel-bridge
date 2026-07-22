@@ -67,6 +67,20 @@ interface PlayerStats {
     /** rating change since the start of the current UTC month; null when unrated */
     monthlyEloDelta: number | null;
   };
+  /**
+   * Signed histogram of tricks made vs. contract, declaring boards only (same
+   * "user's side declared" filter as totals.declarer). delta = tricks_declarer
+   * - (6 + contract.level); buckets clip at ±3 ("3+ down"/"3+ over") so one
+   * blown slam can't stretch the row scale. avgDelta is the *unclamped* mean
+   * across those boards — a true trick-differential figure even though the
+   * display buckets saturate. boards === totals.declarer.boards always; kept
+   * as its own field so the client doesn't have to cross-reference totals.
+   */
+  trickDelta: {
+    buckets: { delta: -3 | -2 | -1 | 0 | 1 | 2 | 3; count: number }[]; // fixed order, always 7 entries
+    boards: number;
+    avgDelta: number | null; // null only when boards === 0
+  };
   /** "better than N% of players" per metric; null when the player or field lacks data */
   percentiles: {
     elo: number | null;
@@ -145,6 +159,8 @@ export function playerStats(userId: number): PlayerStats | null {
   const allScores: number[] = [];
   const byTournament = new Map<number, { name: string; finishedAt: number; scores: number[] }>();
   const byBidType = new Map<BidCategory, { total: number; satisfactory: number }>();
+  const trickDeltaHist = new Map<number, number>(); // clamped delta -> count
+  const trickDeltas: number[] = []; // unclamped, for the true average
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -180,7 +196,12 @@ export function playerStats(userId: number): PlayerStats | null {
     } else if (contract.declarer % 2 === 0) {
       // the human always sits N-S, so an even declarer seat is the user's side
       declarer.boards++;
-      if ((b.tricks_declarer ?? 0) >= 6 + contract.level) declarer.made++;
+      const tricks = b.tricks_declarer ?? 0;
+      if (tricks >= 6 + contract.level) declarer.made++;
+      const delta = tricks - (6 + contract.level);
+      const clamped = Math.max(-3, Math.min(3, delta));
+      trickDeltaHist.set(clamped, (trickDeltaHist.get(clamped) ?? 0) + 1);
+      trickDeltas.push(delta);
     } else {
       defense.boards++;
       if ((b.tricks_declarer ?? 0) < 6 + contract.level) defense.beat++;
@@ -226,6 +247,13 @@ export function playerStats(userId: number): PlayerStats | null {
   const avgPct = pctSeries.length ? round1(mean(pctSeries.map((p) => p.pct))) : null;
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
+  const TRICK_DELTA_BUCKETS = [-3, -2, -1, 0, 1, 2, 3] as const;
+  const trickDelta = {
+    buckets: TRICK_DELTA_BUCKETS.map((delta) => ({ delta, count: trickDeltaHist.get(delta) ?? 0 })),
+    boards: declarer.boards,
+    avgDelta: trickDeltas.length ? round1(mean(trickDeltas)) : null,
+  };
+
   // ranked best to worst; ties break toward the larger sample, then alphabetically
   const bidTypes = [...byBidType.entries()]
     .map(([category, counts]) => ({ category, ...counts }))
@@ -255,6 +283,7 @@ export function playerStats(userId: number): PlayerStats | null {
       passedOut,
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
+    trickDelta,
     percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy),
     eloSeries,
     pctSeries,

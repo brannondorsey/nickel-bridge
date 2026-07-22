@@ -192,6 +192,12 @@ export interface PlayerStats {
     /** rating change since the start of the current UTC month; null when unrated */
     monthlyEloDelta: number | null;
   };
+  /** signed histogram of tricks made vs. contract, declaring boards only — buckets clip at ±3 */
+  trickDelta: {
+    buckets: { delta: -3 | -2 | -1 | 0 | 1 | 2 | 3; count: number }[];
+    boards: number;
+    avgDelta: number | null;
+  };
   percentiles: {
     elo: number | null;
     avgPct: number | null;
