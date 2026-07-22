@@ -17,6 +17,10 @@ judgment, not card luck.
   AI's preferred call shown when yours differs — like Tricky Bridge. A per-board and
   per-tournament *bidding accuracy* stat tracks your progress.
 - **HCP counter** — your high-card points are always displayed (and dummy's, once revealed).
+- **The Glossary** — a top-level, tappable bridge dictionary: ~124 curated terms with
+  themes and search, the full Wikipedia glossary one toggle deeper, and every term
+  mentioned in bid meanings, grades, or the toll receipt deep-links to its definition
+  sheet in place.
 - **Full review** — after each board: everyone's contract/result on that deal, matchpoint
   percentages, and all four hands.
 
@@ -225,6 +229,10 @@ scripts         e2e smoke test
 ## Licenses of bundled work
 
 - Bidding model weights: [harukaki/brl](https://github.com/harukaki/brl), Apache-2.0
+- Glossary definitions adapted from Wikipedia's
+  [*Glossary of contract bridge terms*](https://en.wikipedia.org/wiki/Glossary_of_contract_bridge_terms),
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) — our adapted text
+  (`web/src/glossary/`) is shared under the same license
 - Observation encoding derived from [sotetsuk/pgx](https://github.com/sotetsuk/pgx), Apache-2.0
 - Double-dummy solver: [dds-bridge/dds](https://github.com/dds-bridge/dds) via
   [bridge-dds](https://github.com/bookchris/bridge-dds-js), Apache-2.0 (vendored in

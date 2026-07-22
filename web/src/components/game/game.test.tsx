@@ -144,10 +144,11 @@ describe('AuctionGrid', () => {
 describe('MeaningPanel', () => {
   it('renders a full meaning with chips', () => {
     render(<MeaningPanel meaning={meaning2H} call={bid2H} prefix="Your" />);
-    expect(screen.getByText(/Rebid, invitational/)).toBeInTheDocument();
+    // toHaveTextContent, not getByText: glossary links split the prose across elements
+    expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
     expect(screen.getByText('10–12 HCP')).toBeInTheDocument();
     expect(screen.getByText('6+ hearts')).toBeInTheDocument();
-    expect(screen.getByText(/long heart suit/)).toBeInTheDocument();
+    expect(document.querySelector('.meaning-body')).toHaveTextContent('long heart suit');
   });
 
   it('shows the beyond-SAYC caveat for inexact meanings', () => {

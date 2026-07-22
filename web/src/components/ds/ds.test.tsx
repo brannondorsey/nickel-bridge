@@ -202,9 +202,19 @@ describe('TabBar', () => {
     const nav = screen.getByRole('navigation');
     expect(nav).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'CROSSINGS' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'GLOSSARY' })).toHaveAttribute('href', '/glossary');
     expect(screen.getByRole('link', { name: 'STATS' })).toHaveAttribute('href', '/players/1');
     const active = screen.getByRole('link', { name: 'RANKINGS' });
     expect(active).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps GLOSSARY active on term deep links (/glossary/:slug)', () => {
+    render(
+      <MemoryRouter initialEntries={['/glossary/finesse']}>
+        <TabBar myId={1} pathname="/glossary/finesse" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'GLOSSARY' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('does not mark STATS active on someone else\'s profile, only your own', () => {

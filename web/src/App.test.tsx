@@ -111,6 +111,19 @@ describe('App — authenticated', () => {
     expect(stats).not.toHaveAttribute('aria-current');
   });
 
+  it('serves the Glossary on /glossary with its tab active — deep links included', async () => {
+    stampVisit();
+    renderApp('/glossary');
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GLOSSARY' })).toHaveAttribute('aria-current', 'page');
+
+    renderApp('/glossary/stayman');
+    const tabs = await screen.findAllByRole('link', { name: 'GLOSSARY' });
+    expect(tabs.at(-1)).toHaveAttribute('aria-current', 'page');
+    const dialogs = await screen.findAllByRole('dialog');
+    expect(dialogs.at(-1)).toHaveTextContent(/2♣ response to 1NT/);
+  });
+
   it('serves NotFound for any unmatched URL instead of a blank shell', async () => {
     stampVisit();
     renderApp('/this/route/does/not/exist');

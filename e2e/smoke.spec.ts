@@ -129,6 +129,29 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.fieldtable')).toBeVisible();
 });
 
+/** Glossary wiring: bottom tab → ledger, search, term sheet with attribution. */
+test('glossary is reachable, searchable, and opens term sheets', async ({ page }) => {
+  const name = `Gloss ${Date.now()}`;
+
+  await signInAndOnboard(page, name);
+
+  await page.click('.tabbar >> text=GLOSSARY');
+  await expect(page).toHaveURL('/glossary');
+  await expect(page.locator('.gloss-row').first()).toBeVisible();
+
+  // search narrows to the aliased term, and its sheet carries the credit
+  await page.fill('.gloss-search', 'hook');
+  // ^-anchored: other rows can mention "finesse" mid-definition
+  await expect(page.locator('.gloss-row', { hasText: /^Finesse/ })).toBeVisible();
+  await page.locator('.gloss-row', { hasText: /^Finesse/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Finesse');
+  await expect(dialog).toContainText('CC BY-SA 4.0');
+  await page.getByRole('button', { name: /close/i }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 /** Stats page wiring: bottom tab → own page, rankings row → other pages. */
 test('player stats page is reachable for self and others', async ({ page, context }) => {
   const name = `Stats ${Date.now()}`;

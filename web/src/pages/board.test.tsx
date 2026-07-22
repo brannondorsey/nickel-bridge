@@ -106,7 +106,8 @@ describe('Board — bidding', () => {
     // placeholder first
     expect(await screen.findByText(/Tap a bid to see what it means/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '2♥' }));
-    expect(screen.getByText(/Rebid, invitational/)).toBeInTheDocument();
+    // toHaveTextContent, not getByText: glossary links split the prose across elements
+    expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
     expect(screen.getByText('10–12 HCP')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
     expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
@@ -126,7 +127,7 @@ describe('Board — bidding', () => {
     expect(await screen.findByText(/tap again to make the call/i)).toBeInTheDocument();
     // first tap selects and previews it — no submit yet
     await userEvent.click(screen.getByRole('button', { name: '2♥' }));
-    expect(screen.getByText(/Rebid, invitational/)).toBeInTheDocument();
+    expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
     expect(apiMock.call).not.toHaveBeenCalled();
     // second tap on the same call commits, just like tap-again in card play
     await userEvent.click(screen.getByRole('button', { name: '2♥' }));
@@ -190,7 +191,7 @@ describe('Board — bidding', () => {
     await screen.findByText('SOUTH · YOU');
     await userEvent.click(inAuction().getByRole('button', { name: '1♥' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/Opening, one of a major/)).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Opening, one of a major');
     await userEvent.click(within(dialog).getByRole('button', { name: /close/i }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -228,7 +229,7 @@ describe('Board — play', () => {
     expect(screen.queryByText('?')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '1♥' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/Opening, one of a major/)).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Opening, one of a major');
   });
 
   it('switches the interactive fan to dummy on dummy’s turn', async () => {

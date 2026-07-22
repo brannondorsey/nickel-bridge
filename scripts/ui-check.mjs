@@ -147,6 +147,15 @@ await page.click('.tabbar >> text=CROSSINGS');
 await page.waitForSelector('.home-cta');
 await shot('16-home-tolls-paid');
 
+// 16b/16c — glossary ledger + a term sheet
+await page.click('.tabbar >> text=GLOSSARY');
+await page.waitForSelector('.gloss-row');
+await shot('16b-glossary');
+await page.locator('.gloss-row', { hasText: /^Finesse/ }).click();
+await page.waitForSelector('.sheet');
+await shot('16c-glossary-term-sheet');
+await page.click('[aria-label="Close"]');
+
 // 17 — desktop viewport (same session)
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.goto(base);

@@ -67,9 +67,16 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 pages/ (Board.tsx is the gameplay UI; sign-out AND the night-mode switch
-                live on the Stats page; Scenarios.tsx is the demo-mode gallery),
+                live on the Stats page; Scenarios.tsx is the demo-mode gallery;
+                Glossary.tsx is the glossary screen),
+                glossary/ (the Interactive Glossary: terms.ts curated core data + themes,
+                deep.json the generated Wikipedia-derived deep reference (CC BY-SA 4.0,
+                lazy-loaded — the web bundle's only dynamic import), linkify.ts the prose
+                matcher, GlossaryContext.tsx the app-wide term-sheet provider — see
+                "The glossary" below),
                 components/ds/ (design-system pieces) + components/game/ (auction, bid box,
-                fans, trick area, deal diagram, toll-receipt score breakdown),
+                fans, trick area, deal diagram, toll-receipt score breakdown,
+                GlossaryProse.tsx — SuitText + tappable glossary terms),
                 src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype;
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
@@ -80,6 +87,9 @@ tools           offline Python weight conversion + golden-fixture generation;
                 (build first: `node tools/policy_probe.mjs "K98.QT95.AQJT5.7" --calls "1H P"`);
                 find_scenarios.mjs records/mines demo-scenario replay recipes (offline —
                 results are hand-curated into server/src/scenarios.ts);
+                gen_glossary_deep.mjs regenerates web/src/glossary/deep.json from
+                Wikipedia's bridge glossary (offline; pass a saved HTML file in
+                network-restricted environments — see its doc comment);
                 calibrate_k.mjs sweeps sampled-DD K values (plus --bid-topn/--forget-window)
                 against true-DD reference play; calibrate_stats.mjs is the same sweeps with
                 standard error; calibrate_stack.mjs measures the combined bid+play effect for
@@ -394,6 +404,24 @@ paint — keep it in sync with `theme.ts` by hand, since it has to run before th
 graph loads. The `@media (prefers-color-scheme: dark)` copy of the night token block is
 scoped to `:not([data-theme])` so it never fights an explicit override — if you add a new
 base token, add it to both the `[data-theme="night"]` block and that media copy.
+
+**The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
+holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,
+search/link aliases, related slugs); `deep.json` is the generated "deep reference" — the
+full Wikipedia bridge glossary as one-liners (regenerate with `tools/gen_glossary_deep.mjs`,
+which also dedupes against core) — lazy-loaded via the web bundle's only dynamic import.
+Both are CC BY-SA 4.0 adaptations, so the `Attribution` credit must stay on the Glossary
+page and every term sheet. Deep linking works in two directions: `GlossaryProse`
+(components/game) renders prose with core terms tappable — it wraps `SuitText`, and is what
+the meaning panel, call inspector, grade toast, and receipt captions render through — and
+`/glossary/:slug` routes open the same sheet from a URL. The sheet itself mounts once,
+app-wide, from `GlossaryProvider` (App.tsx): `useGlossary().openTerm(slug)` is pure state,
+no history entries. Linkifier noise is tuned in data, not code: `linkify: false` in
+terms.ts keeps ultra-common words (bid, pass, game…) unlinked, and `segmentProse` links
+only the first occurrence per block — `web/src/glossary/glossary.test.ts` guards the data
+invariants (unique slugs, resolvable relateds, core/deep disjointness). The bottom TabBar
+is the "turnstile" nav pattern (scrollable fixed-width tabs, right fade + chevron,
+active tab auto-centers) so GLOSSARY and future gates fit without a hamburger.
 
 ## Invariants — do not break
 
