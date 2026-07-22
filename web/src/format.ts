@@ -14,6 +14,16 @@ export function shortDate(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Same as shortDate, but rendered in UTC — for a UTC calendar-day bucket
+ * (e.g. DayGrid's dateToUnix), not a genuine instant in time. shortDate's
+ * default local-timezone rendering would otherwise shift a UTC-midnight
+ * bucket back a day for every viewer west of UTC.
+ */
+export function shortDateUTC(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /** Time-of-day word for the Home greeting. */
 export function timeGreeting(hour: number): 'morning' | 'afternoon' | 'evening' {
   if (hour >= 5 && hour < 12) return 'morning';

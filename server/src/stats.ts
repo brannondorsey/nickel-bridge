@@ -328,14 +328,16 @@ export function accumulateRuffs(
 /**
  * The classic NT hold-up, scoped to notrump boards where N-S is the
  * declaring side. For each of the four suits, the FIRST trick where that
- * suit is led by the opposing side is the one genuine hold-up opportunity
- * for that suit: if the outright highest still-unplayed card of the suit
- * was in a human-controlled hand (South always; North too, since N-S is
- * declaring — humanControls) at the moment that hand played into the trick,
- * it counts as an opportunity, and as "taken" iff that hand played a lower
- * card of the same suit instead (a duck — following suit is mandatory when
- * held, so "played lower" here always means "chose to duck", never a forced
- * discard).
+ * suit is led BY THE DEFENSE is the one genuine hold-up opportunity for
+ * that suit — N-S developing the same suit themselves first (very common —
+ * declarer's own side suit) doesn't count and must not poison a later,
+ * genuine defensive attack on it: if the outright highest still-unplayed
+ * card of the suit was in a human-controlled hand (South always; North too,
+ * since N-S is declaring — humanControls) at the moment that hand played
+ * into the trick, it counts as an opportunity, and as "taken" iff that hand
+ * played a lower card of the same suit instead (a duck — following suit is
+ * mandatory when held, so "played lower" here always means "chose to duck",
+ * never a forced discard).
  */
 export function accumulateHoldUps(
   holdUps: { opportunities: number; taken: number },
@@ -344,15 +346,15 @@ export function accumulateHoldUps(
   completedTricks: { seat: Seat; card: Card }[][],
 ): void {
   if (contract.strain !== 4 || contract.declarer % 2 !== 0) return; // NT, N-S declaring only
-  const ledBefore = new Set<Suit>();
+  const ledByDefenseBefore = new Set<Suit>();
   const played = new Set<Card>();
   for (const trick of completedTricks) {
     const ledSuit = cardSuit(trick[0].card);
-    const firstLeadOfSuit = !ledBefore.has(ledSuit);
-    ledBefore.add(ledSuit);
     const openedByDefense = trick[0].seat % 2 !== contract.declarer % 2;
+    const firstLeadOfSuit = openedByDefense && !ledByDefenseBefore.has(ledSuit);
+    if (openedByDefense) ledByDefenseBefore.add(ledSuit);
     for (const play of trick) {
-      if (firstLeadOfSuit && openedByDefense && humanControls(play.seat, contract)) {
+      if (firstLeadOfSuit && humanControls(play.seat, contract)) {
         let topRemaining: Card | null = null;
         for (let r = 12; r >= 0; r--) {
           const c = makeCard(ledSuit, r);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { shortDate } from '../../format';
+import { shortDateUTC } from '../../format';
 
 export interface DayGridPoint {
   /** UTC calendar day, 'YYYY-MM-DD' */
@@ -48,7 +48,7 @@ export function sumInWindow(days: DayGridPoint[], weeks: number = DAYGRID_WEEKS,
   return days.filter((d) => d.date >= startYMD && d.date <= endYMD).reduce((s, d) => s + d.count, 0);
 }
 
-/** 'YYYY-MM-DD' → unix seconds at UTC midnight, for reuse with format.ts's shortDate. */
+/** 'YYYY-MM-DD' → unix seconds at UTC midnight, for reuse with format.ts's shortDateUTC. */
 export function dateToUnix(date: string): number {
   return Date.parse(`${date}T00:00:00Z`) / 1000;
 }
@@ -133,7 +133,7 @@ export function DayGrid({
                 key={c.date}
                 type="button"
                 style={style}
-                aria-label={`${shortDate(dateToUnix(c.date))} — ${boardsLabel(c.count)}`}
+                aria-label={`${shortDateUTC(dateToUnix(c.date))} — ${boardsLabel(c.count)}`}
                 aria-pressed={selected === c.date}
                 onClick={() => setSelected(selected === c.date ? null : c.date)}
               />
@@ -142,11 +142,11 @@ export function DayGrid({
         </div>
       </div>
       <div className="daygrid-captions">
-        <span>{shortDate(dateToUnix(toYMD(start)))}</span>
+        <span>{shortDateUTC(dateToUnix(toYMD(start)))}</span>
         <span className="daygrid-legend">
           fewer
-          <svg aria-hidden="true" width="44" height="11" viewBox="0 0 44 11">
-            {[0, 1, 2, 3].map((lvl) => (
+          <svg aria-hidden="true" width="58" height="11" viewBox="0 0 58 11">
+            {[0, 1, 2, 3, 4].map((lvl) => (
               <rect key={lvl} x={lvl * 12} y="0" width="10" height="10" rx="1.5" className={`daygrid-cell level-${lvl}`} />
             ))}
           </svg>
@@ -156,7 +156,7 @@ export function DayGrid({
       </div>
       {selected !== null ? (
         <div className="daygrid-detail num">
-          {shortDate(dateToUnix(selected))} · {boardsLabel(byDate.get(selected) ?? 0)}
+          {shortDateUTC(dateToUnix(selected))} · {boardsLabel(byDate.get(selected) ?? 0)}
         </div>
       ) : null}
     </div>

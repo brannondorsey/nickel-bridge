@@ -586,6 +586,26 @@ describe('hold-ups', () => {
     expect(holdUps).toEqual({ opportunities: 0, taken: 0 });
   });
 
+  it("still counts the defense's own first lead of a suit even after N-S led it themselves earlier", () => {
+    const holdUps = { opportunities: 0, taken: 0 };
+    const c = contract(4, 0); // NT, North declares (N-S side)
+    const d = deal({ 2: [makeCard(0, 12)] }); // South holds the actual ♠A
+    const nsLeadsFirst = [
+      { seat: 0 as Seat, card: makeCard(0, 5) }, // North (N-S) develops the suit themselves — not a hold-up trick
+      { seat: 1 as Seat, card: makeCard(0, 8) },
+      { seat: 2 as Seat, card: makeCard(0, 6) },
+      { seat: 3 as Seat, card: makeCard(0, 2) },
+    ];
+    const defenseLeadsLater = [
+      { seat: 3 as Seat, card: makeCard(0, 3) }, // West (defense) leads spades — its own first lead of the suit
+      { seat: 0 as Seat, card: makeCard(0, 7) },
+      { seat: 1 as Seat, card: makeCard(0, 9) },
+      { seat: 2 as Seat, card: makeCard(0, 4) }, // South ducks — plays low, not the ace
+    ];
+    accumulateHoldUps(holdUps, d, c, [nsLeadsFirst, defenseLeadsLater]);
+    expect(holdUps).toEqual({ opportunities: 1, taken: 1 });
+  });
+
   it('is a no-op for suit contracts even with a textbook duck shape', () => {
     const holdUps = { opportunities: 0, taken: 0 };
     const c = contract(2, 0); // hearts, not NT

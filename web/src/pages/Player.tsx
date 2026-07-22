@@ -12,7 +12,7 @@ import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
 import { StemChart } from '../components/ds/StemChart';
 import { StarGrade } from '../components/ds/StarGrade';
-import { shortDate } from '../format';
+import { shortDate, shortDateUTC } from '../format';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
 const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
@@ -340,7 +340,7 @@ export default function Player() {
             <DayGrid days={stats.dailyBoards} />
             {dailyTotal === 0 && t.boardsCompleted > 0 ? (
               <div className="stats-daygrid-note">
-                Quiet lately — the last toll paid was {shortDate(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
+                Quiet lately — the last toll paid was {shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
               </div>
             ) : null}
           </PerforatedPanel>
