@@ -98,6 +98,7 @@ export default function App() {
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/players/:id" element={<Player />} />
               <Route path="/t/:tid" element={<Tournament />} />
+              <Route path="/t/:tid/review" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
               <Route path="/scenarios" element={<Scenarios />} />
             </Routes>

@@ -1,6 +1,8 @@
-import { screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { MeContext } from '../App';
 import { meFixture, tournamentComplete, tournamentInProgress } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Tournament from './Tournament';
@@ -112,7 +114,7 @@ describe('Tournament result', () => {
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
   });
 
-  it('toggles between the result and the reviewable sheet without a new route', async () => {
+  it('toggles between the result and the reviewable sheet via /review, replacing history', async () => {
     apiMock.tournament.mockResolvedValue(tournamentComplete);
     renderWithMe(<Tournament />, { me: meFixture });
     await userEvent.click(await screen.findByRole('button', { name: /review the boards/i }));
@@ -125,5 +127,42 @@ describe('Tournament result', () => {
     // and back
     await userEvent.click(screen.getByRole('button', { name: /back to the summary/i }));
     expect(await screen.findByText('TOLL PAID')).toBeInTheDocument();
+  });
+
+  it('returns to the review sheet, not the summary, when navigating back out of a board', async () => {
+    // Regression test: the sheet/summary toggle used to be untracked local
+    // state, so drilling into a board from the review sheet (a real pushed
+    // route) and then navigating back would remount Tournament fresh and
+    // fall back to the postmarked summary instead of the sheet you came
+    // from. Reviewing is now derived from the URL (/t/:tid vs
+    // /t/:tid/review) so it survives the round trip.
+    apiMock.tournament.mockResolvedValue(tournamentComplete);
+    function BoardStub() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          go back
+        </button>
+      );
+    }
+    render(
+      <MeContext.Provider value={{ me: meFixture, refresh: vi.fn() }}>
+        <MemoryRouter initialEntries={['/t/11']}>
+          <Routes>
+            <Route path="/t/:tid" element={<Tournament />} />
+            <Route path="/t/:tid/review" element={<Tournament />} />
+            <Route path="/t/:tid/b/:no" element={<BoardStub />} />
+          </Routes>
+        </MemoryRouter>
+      </MeContext.Provider>,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: /review the boards/i }));
+    const scored = (await screen.findByText((_, el) => el?.textContent === '4♠ by S · +620')).closest('a')!;
+    await userEvent.click(scored);
+    await userEvent.click(await screen.findByRole('button', { name: /go back/i }));
+
+    expect(await screen.findAllByText('SCORED')).toHaveLength(4);
+    expect(screen.queryByText('TOLL PAID')).not.toBeInTheDocument();
   });
 });

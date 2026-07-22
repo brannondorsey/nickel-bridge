@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMe } from '../App';
 import { SEAT_SHORT, TournamentInfo, api, boardConditions } from '../api';
 import { ScreenHeader } from '../components/ds/AppHeader';
@@ -16,18 +16,25 @@ import { ordinal, postmarkDate, signedScore, tournamentNo, vulLabel } from '../f
 const TOTAL_BOARDS = 4;
 
 /**
- * One page, two faces. The scoresheet lists all four boards as tickets
- * (scored / live / sealed — deals stay sealed until the previous board is
- * scored) over the live field. Once my four boards are done it flips to the
- * postmarked result; "Review the boards" toggles back without a new route.
+ * One page, two faces, both real URLs: /t/:tid (scoresheet — all four
+ * boards as tickets, scored / live / sealed, over the live field) and
+ * /t/:tid/review (the same sheet, reachable only once complete, for
+ * revisiting boards after the postmarked result). Once my four boards are
+ * done, /t/:tid itself shows the postmarked result instead of the sheet;
+ * "Review the boards" / "Back to the summary" swap between the two routes
+ * with history replace, so the toggle itself never grows the back-stack —
+ * but because each face has its own URL, drilling into a board (a real
+ * pushed route) and hitting back correctly lands back on whichever face you
+ * came from, instead of losing the toggle to a fresh-mount default.
  */
 export default function Tournament() {
   const { tid } = useParams();
   const { me } = useMe();
   const navigate = useNavigate();
+  const location = useLocation();
   const [t, setT] = useState<TournamentInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reviewing, setReviewing] = useState(false);
+  const reviewing = location.pathname.endsWith('/review');
 
   useEffect(() => {
     api
@@ -110,7 +117,7 @@ export default function Tournament() {
         </PerforatedPanel>
         <div className="tourney-actions">
           <Button to="/">BACK TO THE BRIDGE →</Button>
-          <Button variant="secondary" onClick={() => setReviewing(true)}>
+          <Button variant="secondary" onClick={() => navigate(`/t/${t.id}/review`, { replace: true })}>
             Review the boards
           </Button>
         </div>
@@ -198,7 +205,7 @@ export default function Tournament() {
       </PerforatedPanel>
       <div className="tourney-actions">
         {complete ? (
-          <Button variant="secondary" onClick={() => setReviewing(false)}>
+          <Button variant="secondary" onClick={() => navigate(`/t/${t.id}`, { replace: true })}>
             Back to the summary
           </Button>
         ) : (
