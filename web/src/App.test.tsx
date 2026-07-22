@@ -110,6 +110,12 @@ describe('App — authenticated', () => {
     expect(stats).toHaveAttribute('href', '/players/1');
     expect(stats).not.toHaveAttribute('aria-current');
   });
+
+  it('serves NotFound for any unmatched URL instead of a blank shell', async () => {
+    stampVisit();
+    renderApp('/this/route/does/not/exist');
+    expect(await screen.findByText('This page does not exist.')).toBeInTheDocument();
+  });
 });
 
 describe('App — demo mode', () => {
