@@ -279,34 +279,6 @@ describe('Stats', () => {
     expect(screen.queryByText('CARD PLAY')).not.toBeInTheDocument();
   });
 
-  it('renders the opening leads panel with suit and style breakdowns', async () => {
-    apiMock.playerStats.mockResolvedValue(playerStatsFull);
-    renderStats();
-    expect(await screen.findByText('OPENING LEADS — 23 BOARDS LED')).toBeInTheDocument();
-    // suits: 6/3/9/5 of 23 -> 26%/13%/39%/22%
-    const spades = screen.getByText('♠ SPADES').closest('.stats-leads-row')!;
-    expect(within(spades as HTMLElement).getByText('26%')).toBeInTheDocument();
-    expect(within(spades as HTMLElement).getByText('6')).toBeInTheDocument();
-    expect(screen.getByText('♥ HEARTS')).toBeInTheDocument();
-    expect(screen.getByText('♦ DIAMONDS')).toBeInTheDocument();
-    expect(screen.getByText('♣ CLUBS')).toBeInTheDocument();
-    // style: 10/8/5 of 23 -> 43%/35%/22%
-    const topOfSequence = screen.getByText('TOP OF SEQUENCE').closest('.stats-leads-row')!;
-    expect(within(topOfSequence as HTMLElement).getByText('43%')).toBeInTheDocument();
-    expect(screen.getByText('FOURTH BEST')).toBeInTheDocument();
-    expect(screen.getByText('OTHER')).toBeInTheDocument();
-  });
-
-  it('hides the opening leads panel when the player has never led as East’s opponent', async () => {
-    apiMock.playerStats.mockResolvedValue({
-      ...playerStatsFull,
-      openingLeads: playerStatsEmpty.openingLeads,
-    });
-    renderStats();
-    await screen.findByText('TOURNAMENTS');
-    expect(screen.queryByText(/OPENING LEADS —/)).not.toBeInTheDocument();
-  });
-
   it('renders the rivalries panel with handle, record, and a HOUSE tag on an AI rival', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
@@ -385,8 +357,6 @@ describe('Stats', () => {
     expect(screen.getByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
     // nor the ruffs/hold-ups panel — none of these 10 features are Elo-specific
     expect(screen.getByText('CARD PLAY')).toBeInTheDocument();
-    // nor the opening-leads panel
-    expect(screen.getByText(/OPENING LEADS —/)).toBeInTheDocument();
     // nor the toll log calendar
     expect(screen.getByText(/TOLL LOG —/)).toBeInTheDocument();
     // nor the rivalries panel

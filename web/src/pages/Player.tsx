@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, ConventionKey, PlayerStats, Rival, RuffCounts, SUIT_SYMBOLS, api, suitClass } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, Rival, RuffCounts, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
@@ -102,14 +102,6 @@ const TRICK_DELTA_LABELS: Record<number, string> = {
   [2]: '2 OVER',
   [3]: '3+ OVER',
 };
-
-const SUIT_NAMES = ['SPADES', 'HEARTS', 'DIAMONDS', 'CLUBS']; // ♠♥♦♣ order, matches suit index
-
-const LEAD_STYLE_ROWS: { key: 'topOfSequence' | 'fourthBest' | 'other'; label: string }[] = [
-  { key: 'topOfSequence', label: 'TOP OF SEQUENCE' },
-  { key: 'fourthBest', label: 'FOURTH BEST' },
-  { key: 'other', label: 'OTHER' },
-];
 
 /** Toll-bridge-voice takeaway for the trick-delta histogram. */
 function trickDeltaNote(avgDelta: number): string {
@@ -501,50 +493,6 @@ export default function Player() {
                   </div>
                 </div>
               ) : null}
-            </PerforatedPanel>
-          ) : null}
-
-          {stats.openingLeads.boards > 0 ? (
-            <PerforatedPanel
-              heading={`OPENING LEADS — ${stats.openingLeads.boards} BOARD${stats.openingLeads.boards === 1 ? '' : 'S'} LED`}
-              className="stats-leads num"
-            >
-              <div className="label-caps stats-leads-subhead">BY SUIT</div>
-              <div className="stats-leads-rows">
-                {stats.openingLeads.suits.map((s) => {
-                  const pct = Math.round((s.count / stats.openingLeads.boards) * 100);
-                  return (
-                    <div key={s.suit} className="stats-leads-row">
-                      <span className={`stats-leads-label ${suitClass(s.suit)}`}>
-                        {SUIT_SYMBOLS[s.suit]} {SUIT_NAMES[s.suit]}
-                      </span>
-                      <PctBar pct={pct} />
-                      <b>{pct}%</b>
-                      <span className="stats-leads-count">{s.count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="label-caps stats-leads-subhead stats-leads-subhead-second">LEAD STYLE</div>
-              <div className="stats-leads-rows">
-                {LEAD_STYLE_ROWS.map((row) => {
-                  const n = stats.openingLeads.style[row.key];
-                  const pct = Math.round((n / stats.openingLeads.boards) * 100);
-                  return (
-                    <div key={row.key} className="stats-leads-row">
-                      <span className="stats-leads-label">{row.label}</span>
-                      <PctBar pct={pct} />
-                      <b>{pct}%</b>
-                      <span className="stats-leads-count">{n}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="stats-leads-note">
-                Top of sequence and fourth best are the textbook leads; "other" covers short suits, middle-up-down,
-                and everything else.
-              </div>
             </PerforatedPanel>
           ) : null}
 

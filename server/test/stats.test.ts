@@ -1,11 +1,11 @@
-import { Contract, Deal, PASS, Seat, boardConditions, cardRank, cardSuit, dealBoard, makeBid, makeCard } from '@bridge/core';
+import { Contract, Deal, PASS, Seat, boardConditions, makeBid, makeCard } from '@bridge/core';
 import { describe, expect, it } from 'vitest';
 import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 freshDbEnv('stats');
 const app = await makeApp();
 const { db } = await import('../src/db.js');
-const { accumulateHoldUps, accumulateRuffs, classifyOpeningLead } = await import('../src/stats.js');
+const { accumulateHoldUps, accumulateRuffs } = await import('../src/stats.js');
 
 const alice = new TestClient(app, 'StatsAlice');
 const bob = new TestClient(app, 'StatsBob');
@@ -77,11 +77,6 @@ describe('player stats', () => {
       defense: { plain: 0, over: 0, under: 0 },
     });
     expect(stats.holdUps).toEqual({ opportunities: 0, taken: 0 });
-    expect(stats.openingLeads).toEqual({
-      boards: 0,
-      suits: [0, 1, 2, 3].map((suit) => ({ suit, count: 0 })),
-      style: { topOfSequence: 0, fourthBest: 0, other: 0 },
-    });
     expect(stats.dailyBoards).toEqual([]);
     expect(stats.rivals).toEqual([]);
   });
@@ -185,15 +180,6 @@ describe('player stats', () => {
     expect(ruffTotal(stats.ruffs.defense)).toBeGreaterThanOrEqual(0);
     expect(stats.holdUps.taken).toBeLessThanOrEqual(stats.holdUps.opportunities);
 
-    // opening leads: pure structural sanity (real playthroughs are seed-dependent)
-    expect(stats.openingLeads.suits.map((r: any) => r.suit)).toEqual([0, 1, 2, 3]);
-    const leadSuitTotal = stats.openingLeads.suits.reduce((s: number, r: any) => s + r.count, 0);
-    const leadStyleTotal =
-      stats.openingLeads.style.topOfSequence + stats.openingLeads.style.fourthBest + stats.openingLeads.style.other;
-    expect(leadSuitTotal).toBe(stats.openingLeads.boards);
-    expect(leadStyleTotal).toBe(stats.openingLeads.boards);
-    expect(stats.openingLeads.boards).toBeLessThanOrEqual(stats.totals.boardsCompleted);
-
     // daily-boards calendar: sparse, ascending, and sums to every completed board
     expect(stats.dailyBoards.length).toBeGreaterThan(0);
     for (const d of stats.dailyBoards) expect(d.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -258,65 +244,6 @@ describe('player stats', () => {
     const stats = await carol.get(`/api/users/${uid}/stats`);
     expect(stats.conventions).toEqual([{ family: 'stayman', total: 1, satisfactory: 1 }]);
     expect(stats.bidTypes).toEqual([{ category: 'response', total: 2, satisfactory: 2 }]);
-  });
-
-  it('records the human opening lead only on East-declared boards, classified by suit and style', async () => {
-    const uid = await userId(carol);
-    // A fixed seed so the deal (and thus South's real holding) is
-    // reproducible; playState only replays trick winners from the given
-    // cards, it never validates follow-suit legality, so a hand-built
-    // `plays` array is enough — no need to drive a real auction/play-out.
-    const seed = 'opening-lead-fixture-seed';
-    const boardNo = 1;
-    const deal = dealBoard(seed, boardNo);
-    const southHand = deal.hands[2]; // HUMAN_SEAT
-
-    // Lead South's highest card in whichever suit South holds the most of,
-    // so classifyOpeningLead's own logic (exercised directly in the
-    // describe block below) determines the expected style here too — this
-    // test is checking the loop wiring, not re-deriving the classification.
-    const bySuit: number[][] = [[], [], [], []];
-    for (const c of southHand) bySuit[cardSuit(c)].push(c);
-    let ledSuit = 0;
-    for (let s = 1; s < 4; s++) if (bySuit[s].length > bySuit[ledSuit].length) ledSuit = s;
-    const suitCards = bySuit[ledSuit];
-    const ledCard = suitCards.reduce((best, c) => (cardRank(c) > cardRank(best) ? c : best));
-    const holdingRanks = suitCards.map(cardRank);
-    const expectedStyle = classifyOpeningLead(cardRank(ledCard), holdingRanks);
-
-    // Full 52-card play so the board reconstructs cleanly; only plays[0]
-    // (the opening lead) matters for this feature.
-    const allCards = ([0, 1, 2, 3] as const).flatMap((s) => deal.hands[s]);
-    const plays = [ledCard, ...allCards.filter((c) => c !== ledCard)];
-
-    const contract: Contract = { level: 1, strain: 4, declarer: 1, doubled: false, redoubled: false }; // East, NT
-    const tid1 = (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', ?) RETURNING id`).get(seed) as { id: number }).id;
-    db.prepare(
-      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract, tricks_declarer, updated_at)
-       VALUES (?, ?, ?, 'done', '[]', ?, '[]', ?, 7, unixepoch())`,
-    ).run(tid1, uid, boardNo, JSON.stringify(plays), JSON.stringify(contract));
-
-    // A second board, in a different tournament, with West declaring — the
-    // human defends but North (not South) leads, so it must NOT count.
-    const tid2 = (
-      db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t2', ?) RETURNING id`).get(seed) as { id: number }
-    ).id;
-    const westContract: Contract = { level: 1, strain: 4, declarer: 3, doubled: false, redoubled: false };
-    db.prepare(
-      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract, tricks_declarer, updated_at)
-       VALUES (?, ?, ?, 'done', '[]', ?, '[]', ?, 7, unixepoch())`,
-    ).run(tid2, uid, boardNo, JSON.stringify(plays), JSON.stringify(westContract));
-
-    const stats = await carol.get(`/api/users/${uid}/stats`);
-    expect(stats.openingLeads.boards).toBe(1);
-    expect(stats.openingLeads.suits).toEqual(
-      [0, 1, 2, 3].map((suit) => ({ suit, count: suit === ledSuit ? 1 : 0 })),
-    );
-    expect(stats.openingLeads.style).toEqual({
-      topOfSequence: expectedStyle === 'topOfSequence' ? 1 : 0,
-      fourthBest: expectedStyle === 'fourthBest' ? 1 : 0,
-      other: expectedStyle === 'other' ? 1 : 0,
-    });
   });
 
   it('is visible to other signed-in players', async () => {
@@ -711,27 +638,5 @@ describe('hold-ups', () => {
     // North's opportunity resolved against the ♠K (the ace was already gone),
     // and North played it outright rather than ducking
     expect(holdUps).toEqual({ opportunities: 1, taken: 0 });
-  });
-});
-
-describe('classifyOpeningLead', () => {
-  it('classifies top of sequence: led rank plus the next-lower rank both held', () => {
-    // K-Q-x: lead the K (rank 11), Q (rank 10) also held
-    expect(classifyOpeningLead(11, [11, 10, 0])).toBe('topOfSequence');
-  });
-  it('classifies fourth best: exactly the 4th-highest of a 4+ card holding, no sequence', () => {
-    // K-J-8-5-3: lead the 5 (rank 3), the 4th-highest; rank 2 ('4') not held
-    expect(classifyOpeningLead(3, [11, 9, 6, 3, 1])).toBe('fourthBest');
-  });
-  it('falls to other on a short, non-sequence holding', () => {
-    // 9-5-2: lead the 5 (rank 3); only 3 cards, and rank 2 not held
-    expect(classifyOpeningLead(3, [7, 3, 0])).toBe('other');
-  });
-  it('prioritizes sequence over fourth-best when both could apply', () => {
-    // K-Q-J-9-8: lead the 9 (rank 7) — it's the 4th-highest AND 8 (rank 6) is held
-    expect(classifyOpeningLead(7, [11, 10, 9, 7, 6])).toBe('topOfSequence');
-  });
-  it('does not classify fourth-best on a 3-card or shorter holding, even at a matching index', () => {
-    expect(classifyOpeningLead(0, [7, 4, 0])).toBe('other');
   });
 });
