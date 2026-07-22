@@ -3,7 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { Me, api } from './api';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
-import { TabBar, type TabName } from './components/ds/TabBar';
+import { TabBar } from './components/ds/TabBar';
 import Board from './pages/Board';
 import CreateHandle from './pages/CreateHandle';
 import Leaderboard from './pages/Leaderboard';
@@ -19,12 +19,19 @@ import { applyThemePref, readThemePref } from './theme';
 export const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
 export const useMe = () => useContext(MeContext);
 
-/** Bottom tabs appear on the three top-level screens only; tournament and board flows use their own headers. */
-function activeTab(pathname: string): TabName | null {
-  if (pathname === '/') return 'CROSSINGS';
-  if (pathname === '/leaderboard') return 'RANKINGS';
-  if (pathname.startsWith('/players/')) return 'STATS';
-  return null;
+/**
+ * Bottom tabs appear on the three top-level screens only — including
+ * someone else's profile, reachable from the leaderboard or a tournament's
+ * field standings, since it's still useful chrome to jump back out from
+ * there — while tournament and board flows use their own headers. Which tab
+ * (if any) reads as *active* is a separate question TabBar answers itself,
+ * by comparing the current path against each tab's own link: the STATS tab
+ * always links to /players/:myId, so it only lights up on your own profile,
+ * not anyone else's — tapping it there is a real navigation, not a no-op,
+ * so it shouldn't claim "you are here".
+ */
+function inTabScope(pathname: string): boolean {
+  return pathname === '/' || pathname === '/leaderboard' || pathname.startsWith('/players/');
 }
 
 export default function App() {
@@ -85,7 +92,7 @@ export default function App() {
     );
   }
 
-  const tab = me?.user ? activeTab(pathname) : null;
+  const showTabs = Boolean(me?.user) && inTabScope(pathname);
 
   return (
     <MeContext.Provider value={{ me, refresh }}>
@@ -104,7 +111,7 @@ export default function App() {
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            {tab ? <TabBar myId={me.user.id} active={tab} /> : null}
+            {showTabs ? <TabBar myId={me.user.id} pathname={pathname} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}
           </>
         ) : (

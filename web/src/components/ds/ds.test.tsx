@@ -194,7 +194,7 @@ describe('TabBar', () => {
   it('renders nav links with aria-current on the active tab', () => {
     render(
       <MemoryRouter initialEntries={['/leaderboard']}>
-        <TabBar myId={1} active="RANKINGS" />
+        <TabBar myId={1} pathname="/leaderboard" />
       </MemoryRouter>,
     );
     const nav = screen.getByRole('navigation');
@@ -203,6 +203,25 @@ describe('TabBar', () => {
     expect(screen.getByRole('link', { name: 'STATS' })).toHaveAttribute('href', '/players/1');
     const active = screen.getByRole('link', { name: 'RANKINGS' });
     expect(active).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('does not mark STATS active on someone else\'s profile, only your own', () => {
+    render(
+      <MemoryRouter initialEntries={['/players/90']}>
+        <TabBar myId={1} pathname="/players/90" />
+      </MemoryRouter>,
+    );
+    // STATS still links to your own profile, but tapping it from here is a
+    // real navigation (id 90 → id 1), so it must not claim "you are here"
+    expect(screen.getByRole('link', { name: 'STATS' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByText((_, el) => el?.className === 'tab-active')).not.toBeInTheDocument();
+
+    render(
+      <MemoryRouter initialEntries={['/players/1']}>
+        <TabBar myId={1} pathname="/players/1" />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('link', { name: 'STATS' }).at(-1)).toHaveAttribute('aria-current', 'page');
   });
 });
 
