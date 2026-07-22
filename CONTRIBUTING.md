@@ -14,7 +14,7 @@ covers how the code is organized, how to work on it, and which invariants you mu
   see `tsconfig.base.json`). **Node >= 24** required.
 - **npm workspaces** monorepo: `packages/*`, `server`, `web`.
 - **Server:** Fastify 5, `better-sqlite3` (synchronous SQLite), cookie sessions, Google OAuth.
-- **Web:** React 18 + `react-router-dom` 6, built with Vite 5. No chart library — sparklines
+- **Web:** React 19 + `react-router-dom` 7, built with Vite 8. No chart library — sparklines
   are hand-rolled SVG. Fonts self-hosted via `@fontsource` (imported in `web/src/main.tsx`).
 - **AI:** pure-TypeScript MLP inference (no GPU/native ML deps) + vendored DDS WebAssembly
   double-dummy solver.
