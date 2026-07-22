@@ -307,6 +307,37 @@ describe('Stats', () => {
     expect(screen.queryByText(/OPENING LEADS —/)).not.toBeInTheDocument();
   });
 
+  it('renders the rivalries panel with handle, record, and a HOUSE tag on an AI rival', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const panel = (await screen.findByText('RIVALRIES')).closest('.stats-rivals') as HTMLElement;
+    // The Novice: ai, 6 shared, 4-2 ahead
+    const novice = within(panel).getByText('The Novice').closest('.stats-rival-row')!;
+    expect(within(novice as HTMLElement).getByText('HOUSE')).toBeInTheDocument();
+    expect(within(novice as HTMLElement).getByText('4-2')).toBeInTheDocument();
+    expect(within(novice as HTMLElement).getByText('Crossed paths 6 times — ahead 4-2.')).toBeInTheDocument();
+    // Marge: human, 5 shared, 2-2-1 tied
+    const marge = within(panel).getByText('Marge').closest('.stats-rival-row')!;
+    expect(within(marge as HTMLElement).queryByText('HOUSE')).not.toBeInTheDocument();
+    expect(within(marge as HTMLElement).getByText('2-2-1')).toBeInTheDocument();
+    expect(
+      within(marge as HTMLElement).getByText('Crossed paths 5 times — dead even 2-2 (1 tied).'),
+    ).toBeInTheDocument();
+    // Dev: human, 4 shared, 1-3 behind
+    const dev = within(panel).getByText('Dev').closest('.stats-rival-row')!;
+    expect(within(dev as HTMLElement).getByText('1-3')).toBeInTheDocument();
+    expect(within(dev as HTMLElement).getByText('Crossed paths 4 times — behind 1-3.')).toBeInTheDocument();
+    // links to the rival's own profile
+    expect(dev).toHaveAttribute('href', '/players/51');
+  });
+
+  it('hides the rivalries panel when the player has no rivals yet', async () => {
+    apiMock.playerStats.mockResolvedValue({ ...playerStatsFull, rivals: [] });
+    renderStats();
+    await screen.findByText('TOURNAMENTS');
+    expect(screen.queryByText('RIVALRIES')).not.toBeInTheDocument();
+  });
+
   it('offers sign-out to the owner only', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     apiMock.logout.mockResolvedValue({ ok: true });
@@ -335,7 +366,9 @@ describe('Stats', () => {
     });
     renderStats();
     expect(await screen.findByText('The Shark')).toBeInTheDocument();
-    expect(screen.getByText('HOUSE')).toBeInTheDocument();
+    // scoped to the hero: the RIVALRIES panel also reuses the HOUSE tag, on an unrelated rival row
+    const hero = document.querySelector('.player-hero')!;
+    expect(within(hero as HTMLElement).getByText('HOUSE')).toBeInTheDocument();
     expect(screen.getByText(/House player/)).toBeInTheDocument();
     // personas never rate: no rating hero, no rating chart, no RATED tile
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
@@ -356,6 +389,8 @@ describe('Stats', () => {
     expect(screen.getByText(/OPENING LEADS —/)).toBeInTheDocument();
     // nor the toll log calendar
     expect(screen.getByText(/TOLL LOG —/)).toBeInTheDocument();
+    // nor the rivalries panel
+    expect(screen.getByText('RIVALRIES')).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

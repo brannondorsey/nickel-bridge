@@ -83,6 +83,7 @@ describe('player stats', () => {
       style: { topOfSequence: 0, fourthBest: 0, other: 0 },
     });
     expect(stats.dailyBoards).toEqual([]);
+    expect(stats.rivals).toEqual([]);
   });
 
   it('excludes in-progress boards from all stats', async () => {
@@ -363,6 +364,104 @@ describe('player stats', () => {
       expect(stats.percentiles.declaring).toBeNull();
     }
     expect(stats.percentiles.declaringPlayers).toBeGreaterThanOrEqual(0);
+  });
+
+  it('tracks head-to-head rivalries, matching standings() and mirroring on the opponent\'s own profile', async () => {
+    // Give alice a real, differentiated auction (the default strategy is
+    // all-pass for both sides, which usually ties) so at least one shared
+    // tournament has a genuine ahead/behind result, not just ties.
+    const placed = await alice.post('/api/play');
+    const tid = placed.tournamentId;
+    for (let no = 1; no <= 4; no++) {
+      await playBoard(alice, tid, no, { call: (view: any) => view.legalCalls.find((a: number) => a >= 3) ?? 0 });
+    }
+    await bob.post('/api/play');
+    for (let no = 1; no <= 4; no++) await playBoard(bob, tid, no);
+
+    const aliceId = await userId(alice);
+    const bobId = await userId(bob);
+    const aliceStats = await alice.get(`/api/users/${aliceId}/stats`);
+    const bobStats = await bob.get(`/api/users/${bobId}/stats`);
+
+    // Recompute the expected record straight from standings() — the same
+    // source rivalries() itself reads — over every tournament both pctSeries
+    // agree on, rather than re-asserting whatever the implementation
+    // produced. Alice and bob may already share tournaments from earlier
+    // tests in this file, so this doesn't assume a specific shared count.
+    const sharedTids: number[] = aliceStats.pctSeries
+      .map((p: any) => p.tournamentId)
+      .filter((t: number) => bobStats.pctSeries.some((p: any) => p.tournamentId === t));
+    expect(sharedTids.length).toBeGreaterThan(0);
+    let ahead = 0;
+    let behind = 0;
+    let tied = 0;
+    for (const t of sharedTids) {
+      const standings = (await alice.get(`/api/tournaments/${t}`)).standings;
+      const a = standings.find((s: any) => s.userId === aliceId).totalPct;
+      const b = standings.find((s: any) => s.userId === bobId).totalPct;
+      if (a > b) ahead++;
+      else if (a < b) behind++;
+      else tied++;
+    }
+
+    const rival = aliceStats.rivals.find((r: any) => r.userId === bobId);
+    expect(rival).toBeDefined();
+    expect(rival.handle).toBe('StatsBob');
+    expect(rival.kind).toBe('human');
+    expect(rival.shared).toBe(sharedTids.length);
+    expect(rival.record).toEqual({ ahead, behind, tied });
+
+    // mirror-image on bob's own profile: shared unchanged, ahead/behind swap
+    const mirror = bobStats.rivals.find((r: any) => r.userId === aliceId);
+    expect(mirror).toBeDefined();
+    expect(mirror.shared).toBe(rival.shared);
+    expect(mirror.record).toEqual({ ahead: behind, behind: ahead, tied });
+  });
+
+  it('ranks rivals by shared-tournament count, not by who is winning', async () => {
+    // Fully synthetic boards (raw INSERT, same pattern as the day-bucket
+    // test above) rather than real play: rivalries() only ever needs
+    // score_ns (fed to standings()' matchpointing) — no auction/play state —
+    // so this is the more direct way to pin down an exact ahead/behind
+    // outcome per tournament instead of hoping real play lands one.
+    const subject = new TestClient(app, 'RivalSubject');
+    const oppA = new TestClient(app, 'RivalOppA'); // crosses paths twice, always tied
+    const oppB = new TestClient(app, 'RivalOppB'); // crosses paths once, but wins every board
+    await subject.login();
+    await oppA.login();
+    await oppB.login();
+    const subjectId = await userId(subject);
+    const oppAId = await userId(oppA);
+    const oppBId = await userId(oppB);
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, updated_at) VALUES (?, ?, ?, 'done', ?, unixepoch())`,
+    );
+    const playAllBoards = (tid: number, userId: number, scoreNS: number) => {
+      for (let no = 1; no <= 4; no++) insertBoard.run(tid, userId, no, scoreNS);
+    };
+
+    // subject vs oppA, twice, tied every board (equal score_ns)
+    const tidA1 = mkTournament('rival-a1');
+    playAllBoards(tidA1, subjectId, 100);
+    playAllBoards(tidA1, oppAId, 100);
+    const tidA2 = mkTournament('rival-a2');
+    playAllBoards(tidA2, subjectId, 100);
+    playAllBoards(tidA2, oppAId, 100);
+
+    // subject vs oppB, once, oppB wins every board outright
+    const tidB1 = mkTournament('rival-b1');
+    playAllBoards(tidB1, subjectId, 0);
+    playAllBoards(tidB1, oppBId, 400);
+
+    const stats = await subject.get(`/api/users/${subjectId}/stats`);
+    expect(stats.rivals).toEqual([
+      { userId: oppAId, handle: 'RivalOppA', kind: 'human', shared: 2, record: { ahead: 0, behind: 0, tied: 2 } },
+      { userId: oppBId, handle: 'RivalOppB', kind: 'human', shared: 1, record: { ahead: 0, behind: 1, tied: 0 } },
+    ]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, ConventionKey, PlayerStats, RuffCounts, SUIT_SYMBOLS, api, suitClass } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, Rival, RuffCounts, SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
@@ -120,6 +120,16 @@ function trickDeltaNote(avgDelta: number): string {
     return 'Clearing contract more often than falling short — the auction could afford to reach a little further.';
   }
   return 'Tricks made track the bid closely — the mark of an honest auction.';
+}
+
+/** "Crossed paths 6 times — ahead 4-2." / "...— dead even 3-3." / "...— behind 2-4 (1 tied)." */
+function rivalLine(r: Rival): string {
+  const { ahead, behind, tied } = r.record;
+  const times = `${r.shared} time${r.shared === 1 ? '' : 's'}`;
+  const tiedNote = tied ? ` (${tied} tied)` : '';
+  if (ahead === behind) return `Crossed paths ${times} — dead even ${ahead}-${behind}${tiedNote}.`;
+  const verb = ahead > behind ? 'ahead' : 'behind';
+  return `Crossed paths ${times} — ${verb} ${ahead}-${behind}${tiedNote}.`;
 }
 
 /** Bordered chart panel: tracked-caps heading, right-aligned key figure. */
@@ -639,6 +649,26 @@ export default function Player() {
                     better than {r.pct}% of {r.of}
                   </span>
                 </div>
+              ))}
+            </PerforatedPanel>
+          ) : null}
+
+          {stats.rivals.length > 0 ? (
+            <PerforatedPanel heading="RIVALRIES" className="stats-rivals num">
+              {stats.rivals.map((r) => (
+                <Link key={r.userId} to={`/players/${r.userId}`} className="stats-rival-row">
+                  <div className="stats-rival-head">
+                    <span className="stats-rival-name">
+                      {r.handle}
+                      {r.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
+                    </span>
+                    <span className="stats-rival-record">
+                      {r.record.ahead}-{r.record.behind}
+                      {r.record.tied ? `-${r.record.tied}` : ''}
+                    </span>
+                  </div>
+                  <div className="stats-rival-note">{rivalLine(r)}</div>
+                </Link>
               ))}
             </PerforatedPanel>
           ) : null}

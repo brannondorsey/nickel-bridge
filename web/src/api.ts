@@ -185,6 +185,16 @@ export interface DailyBoardCount {
   count: number;
 }
 
+/** One entry in the RIVALRIES panel — head-to-head record vs. a shared-field opponent (server: stats.ts's Rival). */
+export interface Rival {
+  userId: number;
+  handle: string;
+  /** 'ai' = one of the benchmark house players (ai-players.ts) */
+  kind: 'human' | 'ai';
+  shared: number;
+  record: { ahead: number; behind: number; tied: number };
+}
+
 /** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
 export type ConventionKey =
   | 'stayman'
@@ -260,6 +270,8 @@ export interface PlayerStats {
   };
   /** completed boards by UTC day, sparse, ascending — see server's stats.ts doc comment */
   dailyBoards: DailyBoardCount[];
+  /** other players ranked by shared-tournament count, most-crossed-paths first (max 5) */
+  rivals: Rival[];
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

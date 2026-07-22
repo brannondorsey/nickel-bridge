@@ -439,6 +439,16 @@ export const playerStatsFull: PlayerStats = {
     { date: '2026-06-02', count: 1 },
     { date: '2026-06-09', count: 1 },
   ],
+  // ranked by shared count; covers all three rivalLine branches (ahead/tied/behind).
+  // Deliberately NOT userId 90 / 'The Shark' — several other fixtures reuse
+  // playerStatsFull with the profile subject itself set to that id/handle
+  // (see App.test.tsx, stats.test.tsx's house-profile test), and a rival row
+  // with the same handle would collide with the page's own name heading.
+  rivals: [
+    { userId: 92, handle: 'The Novice', kind: 'ai', shared: 6, record: { ahead: 4, behind: 2, tied: 0 } },
+    { userId: 50, handle: 'Marge', kind: 'human', shared: 5, record: { ahead: 2, behind: 2, tied: 1 } },
+    { userId: 51, handle: 'Dev', kind: 'human', shared: 4, record: { ahead: 1, behind: 3, tied: 0 } },
+  ],
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -497,6 +507,7 @@ export const playerStatsEmpty: PlayerStats = {
     style: { topOfSequence: 0, fourthBest: 0, other: 0 },
   },
   dailyBoards: [],
+  rivals: [],
 };
 
 // ---- leaderboard ----

@@ -75,6 +75,18 @@ export interface RuffCounts {
   under: number;
 }
 
+const RIVAL_TOP_N = 5;
+
+/** head-to-head summary against one other player who has shared a field with this user. */
+export interface Rival {
+  userId: number;
+  handle: string;
+  kind: 'human' | 'ai';
+  /** tournaments where both players have >=1 scored board (see rivalries()'s doc comment) */
+  shared: number;
+  record: { ahead: number; behind: number; tied: number };
+}
+
 interface StatPoint {
   tournamentId: number;
   tournamentName: string;
@@ -213,6 +225,8 @@ interface PlayerStats {
    * N"), so this field's UI-facing copy says "tolls," not "crossings."
    */
   dailyBoards: { date: string; count: number }[];
+  /** other players ranked by shared-tournament count, most-crossed-paths first (max RIVAL_TOP_N) */
+  rivals: Rival[];
 }
 
 interface EvalRow {
@@ -406,6 +420,72 @@ export function classifyOpeningLead(ledRank: number, holdingRanks: number[]): Op
   return 'other';
 }
 
+/**
+ * Head-to-head record against everyone who has shared a completed field with
+ * this user, ranked by how often paths crossed (not by who's winning) and
+ * capped to the top RIVAL_TOP_N. "Shared" = a standard tournament where BOTH
+ * this user and the other player have a standings() row with totalPct !==
+ * null — i.e. at least one scored board each, matching standings()'s own
+ * inclusion rule. Deliberately NOT gated on `complete` (all 4 boards done):
+ * requiring completeness would silently drop rivalries formed in tournaments
+ * either side is still mid-way through, which is most of them in an evergreen
+ * app where tournaments never close.
+ *
+ * ahead/behind/tied compares totalPct DIRECTLY, not standings()'s `rank`
+ * field: rank is only assigned to players who have completed every board
+ * (`s.complete`), so two players who've each played a handful of boards in a
+ * still-open tournament would both lack a rank and silently drop out of the
+ * tally if this used rank instead. totalPct is populated the moment either
+ * side has scored even one board, so it's the only field that gives every
+ * shared tournament a comparison. Comparing the rounded (1-decimal) totalPct
+ * — the same value the standings/percentage panels already display — means a
+ * "tied" result here always matches what a user would see printed side by
+ * side.
+ *
+ * Cost: one standings() call per tournament in `tournamentIds` (bounded by
+ * this user's own played-tournament count) — strictly smaller than the
+ * standings() sweep fieldPercentiles() already performs on every profile
+ * load (every 'standard' tournament in the whole database), so this adds no
+ * new order of magnitude to the request.
+ */
+function rivalries(userId: number, tournamentIds: number[]): Rival[] {
+  const tally = new Map<
+    number,
+    { handle: string; kind: 'human' | 'ai'; shared: number; ahead: number; behind: number; tied: number }
+  >();
+  for (const tid of tournamentIds) {
+    const field = standings(tid);
+    const mine = field.find((s) => s.userId === userId);
+    if (!mine || mine.totalPct === null) continue;
+    for (const s of field) {
+      if (s.userId === userId || s.totalPct === null) continue;
+      const r = tally.get(s.userId) ?? { handle: s.handle, kind: s.kind, shared: 0, ahead: 0, behind: 0, tied: 0 };
+      r.handle = s.handle; // latest handle wins, same as any other join-on-userId display
+      r.kind = s.kind;
+      r.shared++;
+      if (mine.totalPct > s.totalPct) r.ahead++;
+      else if (mine.totalPct < s.totalPct) r.behind++;
+      else r.tied++;
+      tally.set(s.userId, r);
+    }
+  }
+  return [...tally.entries()]
+    .map(([rivalUserId, r]) => ({
+      userId: rivalUserId,
+      handle: r.handle,
+      kind: r.kind,
+      shared: r.shared,
+      record: { ahead: r.ahead, behind: r.behind, tied: r.tied },
+    }))
+    .sort(
+      (a, b) =>
+        b.shared - a.shared ||
+        b.record.ahead - b.record.behind - (a.record.ahead - a.record.behind) ||
+        a.handle.localeCompare(b.handle),
+    )
+    .slice(0, RIVAL_TOP_N);
+}
+
 /** share of *other* players this value beats, 0..100; null without a comparison field */
 function betterThan(value: number, field: number[]): number | null {
   if (field.length < 2) return null;
@@ -557,6 +637,11 @@ export function playerStats(userId: number): PlayerStats | null {
   // ordered by the user's play order — their learning timeline
   const tournaments = [...byTournament.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt);
 
+  const rivals = rivalries(
+    userId,
+    tournaments.map(([tid]) => tid),
+  );
+
   const accuracySeries = tournaments.map(([tid, t]) => ({
     tournamentId: tid,
     tournamentName: t.name,
@@ -664,6 +749,7 @@ export function playerStats(userId: number): PlayerStats | null {
     holdUps,
     openingLeads,
     dailyBoards,
+    rivals,
   };
 }
 

@@ -2402,6 +2402,45 @@ a.board-row:hover {
   font-size: 12.5px;
 }
 
+.stats-page .stats-rivals {
+  margin: 12px 16px 0;
+}
+.stats-rival-row {
+  display: block;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-quiet);
+  text-decoration: none;
+  color: var(--ink);
+}
+.stats-rival-row:last-child {
+  border-bottom: none;
+}
+.stats-rival-row:hover {
+  background: var(--surface);
+  margin: 0 -12px;
+  padding: 8px 12px;
+}
+.stats-rival-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.stats-rival-name {
+  font-weight: 600;
+}
+.stats-rival-record {
+  font-family: var(--font-label);
+  font-size: 13px;
+}
+.stats-rival-note {
+  margin-top: 2px;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12.5px;
+}
+
 .stats-footer {
   margin: 20px 16px 0;
 }
