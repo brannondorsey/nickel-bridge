@@ -118,6 +118,31 @@ export function finalContract(dealer: Seat, calls: Call[]): Contract | null {
   };
 }
 
+/**
+ * Coarse auction-role buckets for a single call — the "bid type" axis of the
+ * stats page's bidding ledger. Deliberately role-based (who opened, relative
+ * to the caller) rather than convention-based: SAYC convention names would
+ * scatter a player's record across dozens of one-call rows, while these six
+ * buckets each collect enough calls to say something about where a player's
+ * bidding leaks. Derivable from (dealer, prior calls, call) alone — no hand
+ * knowledge — so historical boards classify exactly like new ones.
+ */
+export type BidCategory = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
+
+export function bidCategory(dealer: Seat, callsBefore: Call[], call: Call): BidCategory {
+  if (call === DOUBLE || call === REDOUBLE) return 'double';
+  if (call === PASS) return 'pass';
+  const seat = ((dealer + callsBefore.length) % 4) as Seat;
+  const openerIndex = callsBefore.findIndex(isBid);
+  if (openerIndex < 0) return 'opening';
+  const opener = ((dealer + openerIndex) % 4) as Seat;
+  if (opener === seat) return 'rebid';
+  // Partner opened → every later bid of ours (responses and responder
+  // rebids alike) is a response; opponents opened → overcalls, advances,
+  // and later competitive bids all land in the overcall bucket.
+  return sameSide(opener, seat) ? 'response' : 'overcall';
+}
+
 export function applyCall(dealer: Seat, calls: Call[], call: Call): Call[] {
   const state = auctionState(dealer, calls);
   if (!legalCalls(state)[call]) {

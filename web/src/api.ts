@@ -168,6 +168,9 @@ interface StatPoint {
   finishedAt: number | null;
 }
 
+/** Auction-role bucket for the bidding ledger (server: core's bidCategory). */
+export type BidTypeKey = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
+
 export interface PlayerStats {
   /** 'ai' = one of the benchmark house players (ai-players.ts) */
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
@@ -197,6 +200,8 @@ export interface PlayerStats {
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
+  /** graded calls by auction role, ranked best to worst by satisfactory-or-better share */
+  bidTypes: { category: BidTypeKey; total: number; satisfactory: number }[];
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

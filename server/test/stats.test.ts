@@ -51,6 +51,7 @@ describe('player stats', () => {
     expect(stats.eloSeries).toEqual([]);
     expect(stats.pctSeries).toEqual([]);
     expect(stats.accuracySeries).toEqual([]);
+    expect(stats.bidTypes).toEqual([]);
     expect(stats.percentiles.elo).toBeNull();
     expect(stats.percentiles.avgPct).toBeNull();
     expect(stats.totals.currentElo).toBe(1200);
@@ -99,6 +100,18 @@ describe('player stats', () => {
     expect(graded).toBe(stats.accuracySeries[0].calls);
     expect(graded).toBeGreaterThan(0);
     expect(stats.accuracySeries[0].accuracy).toBe(stats.totals.avgBidAccuracy);
+
+    // bid types partition the graded calls, ranked best to worst
+    const KNOWN_CATEGORIES = ['opening', 'response', 'rebid', 'overcall', 'double', 'pass'];
+    expect(stats.bidTypes.length).toBeGreaterThan(0);
+    expect(stats.bidTypes.reduce((s: number, b: any) => s + b.total, 0)).toBe(graded);
+    expect(stats.bidTypes.reduce((s: number, b: any) => s + b.satisfactory, 0)).toBe(grades.excellent + grades.good);
+    const rates = stats.bidTypes.map((b: any) => b.satisfactory / b.total);
+    expect([...rates].sort((a: number, b: number) => b - a)).toEqual(rates);
+    for (const b of stats.bidTypes) {
+      expect(KNOWN_CATEGORIES).toContain(b.category);
+      expect(b.satisfactory).toBeLessThanOrEqual(b.total);
+    }
 
     // every board lands in exactly one bucket
     const { declarer, defense, passedOut } = stats.totals;

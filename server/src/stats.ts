@@ -1,4 +1,4 @@
-import { Contract, ELO_INITIAL } from '@bridge/core';
+import { BidCategory, Call, Contract, ELO_INITIAL, Seat, bidCategory, boardConditions } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
@@ -20,7 +20,8 @@ const stmtEloSeries = db.prepare(
 // not inflate boardsCompleted, chart series, or anyone's percentile pool.
 // Inert in production, where every tournament is 'standard'.
 const stmtDoneBoards = db.prepare(
-  `SELECT b.tournament_id, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at, t.name AS tournament_name
+  `SELECT b.tournament_id, b.board_no, b.calls, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at,
+          t.name AS tournament_name
    FROM boards b JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
    WHERE b.user_id = ? AND b.state = 'done' ORDER BY b.updated_at, b.id`,
 );
@@ -73,6 +74,14 @@ interface PlayerStats {
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
+  /**
+   * The player's graded calls bucketed by auction role (see core's
+   * bidCategory), ranked best to worst by share of satisfactory-or-better
+   * (2+ star, i.e. 'good'/'excellent') calls. Derived entirely from the
+   * stored auction + bid_evals — historical boards count the same as new
+   * ones. Only buckets the player has actually visited appear.
+   */
+  bidTypes: { category: BidCategory; total: number; satisfactory: number }[];
 }
 
 interface EvalRow {
@@ -82,6 +91,8 @@ interface EvalRow {
 
 interface DoneBoardRow {
   tournament_id: number;
+  board_no: number;
+  calls: string;
   bid_evals: string;
   contract: string | null;
   tricks_declarer: number | null;
@@ -91,6 +102,9 @@ interface DoneBoardRow {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/** The human always bids from South (game.ts's HUMAN_SEAT). */
+const HUMAN_SEAT: Seat = 2;
 
 /** share of *other* players this value beats, 0..100; null without a comparison field */
 function betterThan(value: number, field: number[]): number | null {
@@ -126,16 +140,35 @@ export function playerStats(userId: number): PlayerStats | null {
   let passedOut = 0;
   const allScores: number[] = [];
   const byTournament = new Map<number, { name: string; finishedAt: number; scores: number[] }>();
+  const byBidType = new Map<BidCategory, { total: number; satisfactory: number }>();
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
     t.finishedAt = Math.max(t.finishedAt, b.updated_at);
-    for (const e of JSON.parse(b.bid_evals) as EvalRow[]) {
+    const evals = JSON.parse(b.bid_evals) as EvalRow[];
+    for (const e of evals) {
       gradeCounts[e.grade]++;
       t.scores.push(e.score);
       allScores.push(e.score);
     }
     byTournament.set(b.tournament_id, t);
+
+    // Re-pair each eval with its auction context: evals are appended one per
+    // human call, so the nth eval belongs to the nth call made from the human
+    // seat (South). The dealer comes from the standard board rotation, making
+    // the whole classification a pure function of the stored auction.
+    const calls = JSON.parse(b.calls) as Call[];
+    const { dealer } = boardConditions(b.board_no);
+    let n = 0;
+    for (let i = 0; i < calls.length && n < evals.length; i++) {
+      if ((dealer + i) % 4 !== HUMAN_SEAT) continue;
+      const e = evals[n++];
+      const category = bidCategory(dealer, calls.slice(0, i), calls[i]);
+      const bucket = byBidType.get(category) ?? { total: 0, satisfactory: 0 };
+      bucket.total++;
+      if (e.grade === 'excellent' || e.grade === 'good') bucket.satisfactory++;
+      byBidType.set(category, bucket);
+    }
 
     const contract = b.contract ? (JSON.parse(b.contract) as Contract) : null;
     if (!contract) {
@@ -183,6 +216,16 @@ export function playerStats(userId: number): PlayerStats | null {
   const avgPct = pctSeries.length ? round1(mean(pctSeries.map((p) => p.pct))) : null;
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
+  // ranked best to worst; ties break toward the larger sample, then alphabetically
+  const bidTypes = [...byBidType.entries()]
+    .map(([category, counts]) => ({ category, ...counts }))
+    .sort(
+      (a, b) =>
+        b.satisfactory / b.total - a.satisfactory / a.total ||
+        b.total - a.total ||
+        a.category.localeCompare(b.category),
+    );
+
   return {
     user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
@@ -204,6 +247,7 @@ export function playerStats(userId: number): PlayerStats | null {
     eloSeries,
     pctSeries,
     accuracySeries,
+    bidTypes,
   };
 }
 

@@ -56,6 +56,34 @@ describe('Stats', () => {
     expect(screen.getByText('64%')).toBeInTheDocument();
   });
 
+  it('unfolds the bid-type ledger on tap, ranked best to worst, and folds it back', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const toggle = await screen.findByRole('button', { name: /ledger by bid type/i });
+    expect(screen.queryByText('★★ OR BETTER — BY BID TYPE')).not.toBeInTheDocument();
+
+    await userEvent.click(toggle);
+    const ledger = screen.getByText('★★ OR BETTER — BY BID TYPE').closest('.stats-bidtypes')!;
+    // rows keep the server's best-to-worst order
+    const labels = [...ledger.querySelectorAll('.stats-bidtype-label')].map((el) => el.textContent);
+    expect(labels).toEqual(['OPENINGS', 'PASSES', 'RESPONSES', 'REBIDS', 'DOUBLES', 'OVERCALLS']);
+    // 40/41 → 98%, with its sample size alongside
+    expect(within(ledger as HTMLElement).getByText('98%')).toBeInTheDocument();
+    expect(within(ledger as HTMLElement).getByText('41 calls')).toBeInTheDocument();
+    // the weakest line is called out for practice
+    expect(within(ledger as HTMLElement).getByText(/overcalls are the line to sharpen next/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /fold the ledger away/i }));
+    expect(screen.queryByText('★★ OR BETTER — BY BID TYPE')).not.toBeInTheDocument();
+  });
+
+  it('keeps the bidding panel inert when there is no bid-type data', async () => {
+    apiMock.playerStats.mockResolvedValue({ ...playerStatsFull, bidTypes: [] });
+    renderStats();
+    await screen.findByText('BIDDING — 214 CALLS GRADED');
+    expect(screen.queryByText(/ledger by bid type/i)).not.toBeInTheDocument();
+  });
+
   it('computes declaring/defending tiles from the play record', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
