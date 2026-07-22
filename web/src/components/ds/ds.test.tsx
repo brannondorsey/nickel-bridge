@@ -6,6 +6,7 @@ import { AppHeader, ScreenHeader } from './AppHeader';
 import { BridgeMark } from './BridgeMark';
 import { Button } from './Button';
 import { Chip } from './Chip';
+import { DayGrid, sumInWindow } from './DayGrid';
 import { Dialog } from './Dialog';
 import { FlipDigits } from './FlipDigits';
 import { HcpBadge } from './HcpBadge';
@@ -264,5 +265,41 @@ describe('Sparkline', () => {
   it('renders the no-data note when empty', () => {
     render(<Sparkline points={[]} />);
     expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
+  });
+});
+
+describe('DayGrid', () => {
+  const today = new Date('2026-07-22T12:00:00Z');
+  const days = [
+    { date: '2026-07-20', count: 3 },
+    { date: '2026-07-13', count: 1 },
+  ];
+
+  it('renders one cell per day in the window, future days excluded from taps', () => {
+    render(<DayGrid days={days} weeks={2} today={today} />);
+    expect(screen.getByRole('button', { name: /Jul 20 — 3 boards/ })).toBeInTheDocument();
+    // a day after `today` inside the same window has no button
+    expect(screen.queryByRole('button', { name: /Jul 25/ })).not.toBeInTheDocument();
+  });
+
+  it('tapping a cell shows its detail line', async () => {
+    render(<DayGrid days={days} weeks={2} today={today} />);
+    await userEvent.click(screen.getByRole('button', { name: /Jul 13/ }));
+    expect(screen.getByText(/Jul 13 · 1 board/)).toBeInTheDocument();
+  });
+
+  it('labels a zero-count day distinctly from an unplayed future day', () => {
+    render(<DayGrid days={[]} weeks={1} today={today} />);
+    expect(screen.getAllByRole('button', { name: /— no boards/ }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('sumInWindow', () => {
+  it('only counts days inside the trailing window', () => {
+    const days = [
+      { date: '2020-01-01', count: 5 },
+      { date: '2026-07-20', count: 3 },
+    ];
+    expect(sumInWindow(days, 2, new Date('2026-07-22T00:00:00Z'))).toBe(3);
   });
 });

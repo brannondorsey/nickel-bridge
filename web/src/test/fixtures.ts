@@ -432,6 +432,13 @@ export const playerStatsFull: PlayerStats = {
     ],
     style: { topOfSequence: 10, fourthBest: 8, other: 5 }, // 43%/35%/22%
   },
+  // a handful of days across the fixture's history, including one multi-board day
+  dailyBoards: [
+    { date: '2026-05-14', count: 4 },
+    { date: '2026-05-21', count: 2 },
+    { date: '2026-06-02', count: 1 },
+    { date: '2026-06-09', count: 1 },
+  ],
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -489,6 +496,7 @@ export const playerStatsEmpty: PlayerStats = {
     suits: [0, 1, 2, 3].map((suit) => ({ suit, count: 0 })),
     style: { topOfSequence: 0, fourthBest: 0, other: 0 },
   },
+  dailyBoards: [],
 };
 
 // ---- leaderboard ----

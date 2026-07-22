@@ -82,6 +82,7 @@ describe('player stats', () => {
       suits: [0, 1, 2, 3].map((suit) => ({ suit, count: 0 })),
       style: { topOfSequence: 0, fourthBest: 0, other: 0 },
     });
+    expect(stats.dailyBoards).toEqual([]);
   });
 
   it('excludes in-progress boards from all stats', async () => {
@@ -191,6 +192,39 @@ describe('player stats', () => {
     expect(leadSuitTotal).toBe(stats.openingLeads.boards);
     expect(leadStyleTotal).toBe(stats.openingLeads.boards);
     expect(stats.openingLeads.boards).toBeLessThanOrEqual(stats.totals.boardsCompleted);
+
+    // daily-boards calendar: sparse, ascending, and sums to every completed board
+    expect(stats.dailyBoards.length).toBeGreaterThan(0);
+    for (const d of stats.dailyBoards) expect(d.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const dates = stats.dailyBoards.map((d: any) => d.date);
+    expect([...dates].sort()).toEqual(dates);
+    expect(stats.dailyBoards.reduce((s: number, d: any) => s + d.count, 0)).toBe(stats.totals.boardsCompleted);
+  });
+
+  it('buckets completed boards by UTC calendar day, ascending', async () => {
+    const uid = await userId(carol);
+    const tid = (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', 'seed') RETURNING id`).get() as { id: number })
+      .id;
+    // Four pass-out boards (empty auction, no contract) split across two UTC
+    // days — content doesn't matter for this feature, only `updated_at` does.
+    // Raw INSERT with an explicit updated_at, same pattern the Stayman test
+    // above uses (precedent for backdating via raw SQL against test-owned
+    // rows: ai-players.test.ts's `UPDATE boards SET ...`).
+    const day1 = Math.floor(new Date('2026-01-05T18:00:00Z').getTime() / 1000);
+    const day2 = Math.floor(new Date('2026-01-07T03:00:00Z').getTime() / 1000);
+    const insert = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, bid_evals, updated_at) VALUES (?, ?, ?, 'done', '[]', '[]', ?)`,
+    );
+    insert.run(tid, uid, 1, day1);
+    insert.run(tid, uid, 2, day1);
+    insert.run(tid, uid, 3, day2);
+
+    const stats = await carol.get(`/api/users/${uid}/stats`);
+    expect(stats.dailyBoards).toEqual([
+      { date: '2026-01-05', count: 2 },
+      { date: '2026-01-07', count: 1 },
+    ]);
+    expect(stats.dailyBoards.reduce((s: number, d: any) => s + d.count, 0)).toBe(stats.totals.boardsCompleted);
   });
 
   it('buckets a Stayman ask under conventions and excludes the natural continuation', async () => {

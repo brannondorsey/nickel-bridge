@@ -178,6 +178,13 @@ export interface RuffCounts {
   under: number;
 }
 
+/** One UTC calendar day with at least one completed board (server: stats.ts's dailyBoards). */
+export interface DailyBoardCount {
+  /** UTC calendar day, 'YYYY-MM-DD' */
+  date: string;
+  count: number;
+}
+
 /** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
 export type ConventionKey =
   | 'stayman'
@@ -251,6 +258,8 @@ export interface PlayerStats {
     suits: { suit: number; count: number }[];
     style: { topOfSequence: number; fourthBest: number; other: number };
   };
+  /** completed boards by UTC day, sparse, ascending — see server's stats.ts doc comment */
+  dailyBoards: DailyBoardCount[];
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

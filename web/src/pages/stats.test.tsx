@@ -46,6 +46,33 @@ describe('Stats', () => {
     expect(screen.getByText('BID ACCURACY')).toBeInTheDocument();
   });
 
+  it('shows the toll log with the window total baked into the heading', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    // count is a function of "now" vs. the fixture's dates, so assert the
+    // shape rather than a specific number (see DayGrid's windowing doc).
+    expect(await screen.findByText(/TOLL LOG — \d+ TOLLS? THIS SEASON/)).toBeInTheDocument();
+  });
+
+  it('renders the toll log on a house profile too — nothing here is Elo-specific', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      user: { ...playerStatsFull.user, kind: 'ai' },
+    });
+    renderStats();
+    expect(await screen.findByText(/TOLL LOG —/)).toBeInTheDocument();
+  });
+
+  it('notes the last-played date when the display window has no activity but the player has history', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      dailyBoards: [{ date: '2020-01-15', count: 3 }],
+    });
+    renderStats();
+    expect(await screen.findByText('TOLL LOG — 0 TOLLS THIS SEASON')).toBeInTheDocument();
+    expect(screen.getByText(/Quiet lately — the last toll paid was/)).toBeInTheDocument();
+  });
+
   it('shows four graded-call rows including the ✗ row', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
@@ -327,6 +354,8 @@ describe('Stats', () => {
     expect(screen.getByText('CARD PLAY')).toBeInTheDocument();
     // nor the opening-leads panel
     expect(screen.getByText(/OPENING LEADS —/)).toBeInTheDocument();
+    // nor the toll log calendar
+    expect(screen.getByText(/TOLL LOG —/)).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

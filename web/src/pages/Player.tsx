@@ -4,6 +4,7 @@ import { useMe } from '../App';
 import { BidTypeKey, ConventionKey, PlayerStats, RuffCounts, SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
+import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
 import { FlipDigits } from '../components/ds/FlipDigits';
 import { Loading } from '../components/ds/Loading';
 import { PctBar } from '../components/ds/PctBar';
@@ -239,6 +240,8 @@ export default function Player() {
     ? Math.round((stats.holdUps.taken / stats.holdUps.opportunities) * 100)
     : null;
 
+  const dailyTotal = sumInWindow(stats.dailyBoards);
+
   return (
     <div className="stats-page">
       <AppHeader context="STATS" />
@@ -326,6 +329,18 @@ export default function Player() {
               format={(v) => `${Math.round(v)}%`}
             />
           </ChartPanel>
+
+          <PerforatedPanel
+            heading={`TOLL LOG — ${dailyTotal} TOLL${dailyTotal === 1 ? '' : 'S'} THIS SEASON`}
+            className="stats-daygrid"
+          >
+            <DayGrid days={stats.dailyBoards} />
+            {dailyTotal === 0 && t.boardsCompleted > 0 ? (
+              <div className="stats-daygrid-note">
+                Quiet lately — the last toll paid was {shortDate(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
+              </div>
+            ) : null}
+          </PerforatedPanel>
 
           <PerforatedPanel heading={`BIDDING — ${gradedCalls} CALLS GRADED`} className="stats-bidding num">
             <button

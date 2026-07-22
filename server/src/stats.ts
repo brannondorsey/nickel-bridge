@@ -202,6 +202,17 @@ interface PlayerStats {
     suits: { suit: number; count: number }[];
     style: { topOfSequence: number; fourthBest: number; other: number };
   };
+  /**
+   * Completed boards bucketed by UTC calendar day (the day `updated_at` last
+   * flipped to `state = 'done'` — `stmtDoneBoards` already filters on that
+   * state, so this is "the day the board was finished," not started), sparse
+   * — only days with at least one board appear — ordered ascending by date.
+   * Deliberately NOT named "crossings": that word already means a whole
+   * tournament elsewhere in the app (Lobby's TOLLS PAID list, the CROSSINGS
+   * tab); a single board is a "toll" (see ScoreReceipt's "THE TOLL — BOARD
+   * N"), so this field's UI-facing copy says "tolls," not "crossings."
+   */
+  dailyBoards: { date: string; count: number }[];
 }
 
 interface EvalRow {
@@ -448,6 +459,7 @@ export function playerStats(userId: number): PlayerStats | null {
   const leadSuitCounts = [0, 0, 0, 0]; // indexed by Suit: 0=♠ 1=♥ 2=♦ 3=♣
   const leadStyleCounts: Record<OpeningLeadStyle, number> = { topOfSequence: 0, fourthBest: 0, other: 0 };
   let openingLeadBoards = 0;
+  const byDay = new Map<string, number>(); // UTC 'YYYY-MM-DD' -> completed-board count
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -459,6 +471,9 @@ export function playerStats(userId: number): PlayerStats | null {
       allScores.push(e.score);
     }
     byTournament.set(b.tournament_id, t);
+
+    const day = new Date(b.updated_at * 1000).toISOString().slice(0, 10); // UTC 'YYYY-MM-DD'
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
 
     // Re-pair each eval with its auction context: evals are appended one per
     // human call, so the nth eval belongs to the nth call made from the human
@@ -612,6 +627,12 @@ export function playerStats(userId: number): PlayerStats | null {
     style: leadStyleCounts,
   };
 
+  // 'YYYY-MM-DD' sorts lexically = chronologically, so localeCompare is a
+  // plain ascending date sort here.
+  const dailyBoards = [...byDay.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
@@ -642,6 +663,7 @@ export function playerStats(userId: number): PlayerStats | null {
     ruffs,
     holdUps,
     openingLeads,
+    dailyBoards,
   };
 }
 
