@@ -182,6 +182,8 @@ export interface PlayerStats {
     currentElo: number;
     peakElo: number;
     avgPct: number | null;
+    bestPct: { pct: number; tournamentName: string } | null;
+    worstPct: { pct: number; tournamentName: string } | null;
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };

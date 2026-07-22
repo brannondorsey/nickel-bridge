@@ -315,6 +315,16 @@ export default function Player() {
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
             <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
+            <Tile
+              label="BEST CROSSING"
+              value={t.bestPct ? `${t.bestPct.pct}%` : '—'}
+              sub={t.bestPct ? t.bestPct.tournamentName : 'no crossings yet'}
+            />
+            <Tile
+              label="TOUGHEST CROSSING"
+              value={t.worstPct ? `${t.worstPct.pct}%` : '—'}
+              sub={t.worstPct ? t.worstPct.tournamentName : 'no crossings yet'}
+            />
             {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
           </div>
 

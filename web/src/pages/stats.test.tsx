@@ -96,6 +96,28 @@ describe('Stats', () => {
     expect(screen.getByText(/better than 72% of 54 rated players/)).toBeInTheDocument();
   });
 
+  it('shows the best and toughest crossing tiles', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
+    expect(within(best as HTMLElement).getByText('74%')).toBeInTheDocument();
+    expect(within(best as HTMLElement).getByText('Tournament #9')).toBeInTheDocument();
+    const worst = screen.getByText('TOUGHEST CROSSING').closest('.stat-tile')!;
+    expect(within(worst as HTMLElement).getByText('31%')).toBeInTheDocument();
+    expect(within(worst as HTMLElement).getByText('Tournament #4')).toBeInTheDocument();
+  });
+
+  it('falls back gracefully when personal-best data is absent', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      totals: { ...playerStatsFull.totals, bestPct: null, worstPct: null },
+    });
+    renderStats();
+    const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
+    expect(within(best as HTMLElement).getByText('—')).toBeInTheDocument();
+    expect(within(best as HTMLElement).getByText('no crossings yet')).toBeInTheDocument();
+  });
+
   it('offers sign-out to the owner only', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     apiMock.logout.mockResolvedValue({ ok: true });
@@ -132,6 +154,9 @@ describe('Stats', () => {
     expect(screen.queryByText('RATED')).not.toBeInTheDocument();
     // matchpoint surfaces stay — the house competes on the scoresheet
     expect(screen.getByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
+    // personal-best tiles aren't Elo-specific, so they stay for house profiles too
+    expect(screen.getByText('BEST CROSSING')).toBeInTheDocument();
+    expect(screen.getByText('TOUGHEST CROSSING')).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

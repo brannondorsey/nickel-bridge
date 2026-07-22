@@ -55,6 +55,10 @@ interface PlayerStats {
     currentElo: number;
     peakElo: number;
     avgPct: number | null;
+    /** the player's best single-tournament score, from pctSeries; null if pctSeries is empty */
+    bestPct: { pct: number; tournamentName: string } | null;
+    /** the player's worst single-tournament score, from pctSeries; null if pctSeries is empty */
+    worstPct: { pct: number; tournamentName: string } | null;
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };
@@ -213,6 +217,12 @@ export function playerStats(userId: number): PlayerStats | null {
     ];
   });
 
+  // Personal-best callouts: a plain min/max reduction over pctSeries, which
+  // is already chronological — a strict >/< comparison keeps the earliest
+  // tournament on a tie (same tie-break convention as bidTypes' sort below).
+  const bestPct = pctSeries.length ? pctSeries.reduce((best, p) => (p.pct > best.pct ? p : best)) : null;
+  const worstPct = pctSeries.length ? pctSeries.reduce((worst, p) => (p.pct < worst.pct ? p : worst)) : null;
+
   const avgPct = pctSeries.length ? round1(mean(pctSeries.map((p) => p.pct))) : null;
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
 
@@ -236,6 +246,8 @@ export function playerStats(userId: number): PlayerStats | null {
       currentElo: u.elo,
       peakElo: Math.max(ELO_INITIAL, ...eloSeries.map((e) => e.elo)),
       avgPct,
+      bestPct: bestPct ? { pct: bestPct.pct, tournamentName: bestPct.tournamentName } : null,
+      worstPct: worstPct ? { pct: worstPct.pct, tournamentName: worstPct.tournamentName } : null,
       avgBidAccuracy,
       gradeCounts,
       declarer,

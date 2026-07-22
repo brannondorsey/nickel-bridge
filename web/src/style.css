@@ -2082,6 +2082,7 @@ a.board-row:hover {
   border: 1px solid var(--ink);
   background: var(--panel);
   padding: 12px 14px;
+  min-width: 0; /* let the sub-line ellipsize instead of overflowing the grid cell */
 }
 .stat-tile-label {
   font-size: 9.5px;
@@ -2096,6 +2097,9 @@ a.board-row:hover {
 .stat-tile-sub {
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stats-page .stats-versus {
