@@ -11,7 +11,6 @@ import { postmarkDate } from '../format';
 export default function NotFound() {
   return (
     <div className="notfound-page">
-      <div className="label-caps">AT THE GATE</div>
       <Postmark size={120} arcBottom="AT THE GATE" line1="REFUSED" line2={postmarkDate(Date.now() / 1000)} />
       <h1 className="notfound-title">This page does not exist.</h1>
       <p className="notfound-hint">
