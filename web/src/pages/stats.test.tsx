@@ -107,10 +107,13 @@ describe('Stats', () => {
   it('computes declaring/defending tiles from the play record', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
-    const declaring = (await screen.findByText('DECLARING')).closest('.stat-tile')!;
+    // DECLARING/DEFENDING also label the CARD PLAY panel's ruff sub-groups
+    // (deliberately, per its own copy note) — scope to the tiles grid.
+    const tiles = (await screen.findByText('TOURNAMENTS')).closest('.stats-tiles') as HTMLElement;
+    const declaring = within(tiles).getByText('DECLARING').closest('.stat-tile')!;
     expect(within(declaring as HTMLElement).getByText('61%')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('88 boards')).toBeInTheDocument();
-    const defending = screen.getByText('DEFENDING').closest('.stat-tile')!;
+    const defending = within(tiles).getByText('DEFENDING').closest('.stat-tile')!;
     expect(within(defending as HTMLElement).getByText('52%')).toBeInTheDocument();
     expect(screen.getByText('TOURNAMENTS')).toBeInTheDocument();
     expect(screen.getByText(/better than 72% of 54 rated players/)).toBeInTheDocument();
@@ -179,7 +182,7 @@ describe('Stats', () => {
       },
     });
     renderStats();
-    await screen.findByText('DECLARING');
+    await screen.findByText('TOURNAMENTS');
     expect(screen.queryByText(/^CONTRACTS —/)).not.toBeInTheDocument();
   });
 
@@ -200,8 +203,53 @@ describe('Stats', () => {
       trickDelta: playerStatsEmpty.trickDelta,
     });
     renderStats();
-    await screen.findByText('DECLARING');
+    await screen.findByText('TOURNAMENTS');
     expect(screen.queryByText(/TRICKS TAKEN —/)).not.toBeInTheDocument();
+  });
+
+  it('renders the CARD PLAY panel with ruff and hold-up breakdowns', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const panel = (await screen.findByText('CARD PLAY')).closest('.stats-cardplay') as HTMLElement;
+    // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%
+    const declaring = within(panel).getByText('DECLARING').closest('.stats-ruff-group')!;
+    expect(within(declaring as HTMLElement).getByText('13 ruffs')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('RUFF')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('77%')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('OVER-RUFF')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('15%')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('UNDER-RUFF')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('8%')).toBeInTheDocument();
+    // defense: 4/1/0 of 5 -> 80%/20%/0%
+    const defending = within(panel).getByText('DEFENDING').closest('.stats-ruff-group')!;
+    expect(within(defending as HTMLElement).getByText('5 ruffs')).toBeInTheDocument();
+    expect(within(defending as HTMLElement).getByText('80%')).toBeInTheDocument();
+    // hold-ups: 6/11 -> 55%
+    expect(within(panel).getByText('HOLD-UP PLAYS')).toBeInTheDocument();
+    expect(within(panel).getByText('55%')).toBeInTheDocument();
+    expect(within(panel).getByText(/Ducked 6 of 11 chances/)).toBeInTheDocument();
+  });
+
+  it('hides an empty ruff-side group but keeps the other', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      ruffs: { ...playerStatsFull.ruffs, defense: { plain: 0, over: 0, under: 0 } },
+    });
+    renderStats();
+    const panel = (await screen.findByText('CARD PLAY')).closest('.stats-cardplay') as HTMLElement;
+    expect(within(panel).getByText('DECLARING')).toBeInTheDocument();
+    expect(within(panel).queryByText('DEFENDING')).not.toBeInTheDocument();
+  });
+
+  it('hides the whole CARD PLAY panel when both ruffs and hold-ups are empty', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      ruffs: playerStatsEmpty.ruffs,
+      holdUps: playerStatsEmpty.holdUps,
+    });
+    renderStats();
+    await screen.findByText('TOURNAMENTS');
+    expect(screen.queryByText('CARD PLAY')).not.toBeInTheDocument();
   });
 
   it('offers sign-out to the owner only', async () => {
@@ -247,6 +295,8 @@ describe('Stats', () => {
     expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS · Ø +0.3')).toBeInTheDocument();
     // nor the contract mix panel
     expect(screen.getByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
+    // nor the ruffs/hold-ups panel — none of these 10 features are Elo-specific
+    expect(screen.getByText('CARD PLAY')).toBeInTheDocument();
   });
 
   it('invites the owner to play their first board when empty', async () => {

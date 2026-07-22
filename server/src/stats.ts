@@ -1,15 +1,25 @@
 import {
   BidCategory,
   Call,
+  Card,
   Contract,
   ConventionFamily,
+  Deal,
   ELO_INITIAL,
   Seat,
   Strain,
+  Suit,
   bidCategory,
   boardConditions,
+  cardRank,
+  cardSuit,
   conventionFamily,
+  dealBoard,
   explainBid,
+  makeCard,
+  partnerOf,
+  playState,
+  trumpSuit,
 } from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
@@ -32,8 +42,8 @@ const stmtEloSeries = db.prepare(
 // not inflate boardsCompleted, chart series, or anyone's percentile pool.
 // Inert in production, where every tournament is 'standard'.
 const stmtDoneBoards = db.prepare(
-  `SELECT b.tournament_id, b.board_no, b.calls, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at,
-          t.name AS tournament_name
+  `SELECT b.tournament_id, b.board_no, b.calls, b.plays, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at,
+          t.name AS tournament_name, t.seed AS tournament_seed
    FROM boards b JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
    WHERE b.user_id = ? AND b.state = 'done' ORDER BY b.updated_at, b.id`,
 );
@@ -57,6 +67,13 @@ const stmtAllDoneContracts = db.prepare(
    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
    WHERE b.state = 'done' AND b.contract IS NOT NULL`,
 );
+
+/** plain/over/under-ruff counts for one side (declarer/dummy or defense). */
+export interface RuffCounts {
+  plain: number;
+  over: number;
+  under: number;
+}
 
 interface StatPoint {
   tournamentId: number;
@@ -153,6 +170,21 @@ interface PlayerStats {
     doubled: { boards: number; made: number };
     strains: { notrump: number; major: number; minor: number };
   };
+  /**
+   * Ruffs made by the player's own hands (South always; North too whenever
+   * N-S is the declaring side — see humanControls), classified plain/over/
+   * under. Split by which side those hands were playing: declaring
+   * (declarer or dummy) vs defending. NT boards contribute nothing.
+   */
+  ruffs: { declarerDummy: RuffCounts; defense: RuffCounts };
+  /**
+   * The classic NT hold-up: on notrump boards where the player's side
+   * declared, the first time each suit is led by the opposing side, did the
+   * player duck a trick they could have won outright with that suit's
+   * actual highest remaining card? `taken` counts how many of
+   * `opportunities` were ducked.
+   */
+  holdUps: { opportunities: number; taken: number };
 }
 
 interface EvalRow {
@@ -164,11 +196,13 @@ interface DoneBoardRow {
   tournament_id: number;
   board_no: number;
   calls: string;
+  plays: string;
   bid_evals: string;
   contract: string | null;
   tricks_declarer: number | null;
   updated_at: number;
   tournament_name: string;
+  tournament_seed: string;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -195,6 +229,125 @@ function strainFamily(strain: Strain): 'notrump' | 'major' | 'minor' {
 
 /** The human always bids from South (game.ts's HUMAN_SEAT). */
 const HUMAN_SEAT: Seat = 2;
+
+/**
+ * Duplicated from game.ts's private helper of the same name and same
+ * hand-flip rule (see that file's doc comment) — kept local rather than
+ * imported so this read-only stats module doesn't pull in game.ts's
+ * module-load-time model instantiation. Keep both in sync by hand if the
+ * hand-flip rule ever changes.
+ */
+function humanControls(hand: Seat, contract: Contract): boolean {
+  if (hand === HUMAN_SEAT) return true;
+  return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
+}
+
+/**
+ * Reconstructs the full deal + complete trick-by-trick play state for one
+ * completed, contract-reaching board — the shared "I need to see actual
+ * cards, not just calls/contract/trick-count" path for ruffs/hold-ups (and,
+ * later, opening-lead habits). The deal is re-derived on demand from the
+ * tournament seed (packages/core's dealBoard), exactly as game.ts's
+ * loadBoard() does for live play. Nothing here touches the DDS solver or
+ * the robot engine — it only replays cards that were already played and
+ * stored — so it can never affect robot determinism (invariant 1).
+ */
+function reconstructBoardPlay(
+  row: DoneBoardRow,
+  contract: Contract,
+): { deal: Deal; plays: Card[]; ps: ReturnType<typeof playState> } {
+  const deal = dealBoard(row.tournament_seed, row.board_no);
+  const plays = JSON.parse(row.plays) as Card[];
+  const ps = playState(deal, contract, plays);
+  return { deal, plays, ps };
+}
+
+/**
+ * Classifies every ruff made by the player's own hands (South always; North
+ * too whenever N-S is the declaring side — humanControls) across one
+ * board's completed tricks. Within a trick, the first trump play on a
+ * non-trump lead is a plain ruff; any further trump play in the same trick
+ * is an over-ruff if it beats the highest trump played so far in that
+ * trick, else an under-ruff. Non-human-controlled ruffs still update the
+ * trick's running best trump (so a human over/under-ruff against an
+ * opponent's earlier ruff classifies correctly) but are never attributed to
+ * a bucket. NT contracts (trumpSuit === null) contribute nothing.
+ */
+export function accumulateRuffs(
+  ruffs: { declarerDummy: RuffCounts; defense: RuffCounts },
+  contract: Contract,
+  completedTricks: { seat: Seat; card: Card }[][],
+): void {
+  const trump = trumpSuit(contract.strain);
+  if (trump === null) return; // NT — no ruffs possible
+  for (const trick of completedTricks) {
+    const ledSuit = cardSuit(trick[0].card);
+    if (ledSuit === trump) continue; // trump led — playing trumps isn't ruffing
+    let bestTrumpRank = -1; // highest trump rank played so far THIS trick
+    for (const play of trick) {
+      if (cardSuit(play.card) !== trump) continue; // following suit or discarding — not a ruff
+      const rank = cardRank(play.card);
+      const isFirstRuffInTrick = bestTrumpRank < 0;
+      const bucket = humanControls(play.seat, contract)
+        ? play.seat % 2 === contract.declarer % 2
+          ? ruffs.declarerDummy
+          : ruffs.defense
+        : null;
+      if (bucket) {
+        if (isFirstRuffInTrick) bucket.plain++;
+        else if (rank > bestTrumpRank) bucket.over++;
+        else bucket.under++;
+      }
+      bestTrumpRank = Math.max(bestTrumpRank, rank);
+    }
+  }
+}
+
+/**
+ * The classic NT hold-up, scoped to notrump boards where N-S is the
+ * declaring side. For each of the four suits, the FIRST trick where that
+ * suit is led by the opposing side is the one genuine hold-up opportunity
+ * for that suit: if the outright highest still-unplayed card of the suit
+ * was in a human-controlled hand (South always; North too, since N-S is
+ * declaring — humanControls) at the moment that hand played into the trick,
+ * it counts as an opportunity, and as "taken" iff that hand played a lower
+ * card of the same suit instead (a duck — following suit is mandatory when
+ * held, so "played lower" here always means "chose to duck", never a forced
+ * discard).
+ */
+export function accumulateHoldUps(
+  holdUps: { opportunities: number; taken: number },
+  deal: Deal,
+  contract: Contract,
+  completedTricks: { seat: Seat; card: Card }[][],
+): void {
+  if (contract.strain !== 4 || contract.declarer % 2 !== 0) return; // NT, N-S declaring only
+  const ledBefore = new Set<Suit>();
+  const played = new Set<Card>();
+  for (const trick of completedTricks) {
+    const ledSuit = cardSuit(trick[0].card);
+    const firstLeadOfSuit = !ledBefore.has(ledSuit);
+    ledBefore.add(ledSuit);
+    const openedByDefense = trick[0].seat % 2 !== contract.declarer % 2;
+    for (const play of trick) {
+      if (firstLeadOfSuit && openedByDefense && humanControls(play.seat, contract)) {
+        let topRemaining: Card | null = null;
+        for (let r = 12; r >= 0; r--) {
+          const c = makeCard(ledSuit, r);
+          if (!played.has(c)) {
+            topRemaining = c;
+            break;
+          }
+        }
+        if (topRemaining !== null && deal.hands[play.seat].includes(topRemaining)) {
+          holdUps.opportunities++;
+          if (play.card !== topRemaining) holdUps.taken++;
+        }
+      }
+      played.add(play.card);
+    }
+  }
+}
 
 /** share of *other* players this value beats, 0..100; null without a comparison field */
 function betterThan(value: number, field: number[]): number | null {
@@ -241,6 +394,11 @@ export function playerStats(userId: number): PlayerStats | null {
     doubled: { boards: 0, made: 0 },
     strains: { notrump: 0, major: 0, minor: 0 },
   };
+  const ruffs: PlayerStats['ruffs'] = {
+    declarerDummy: { plain: 0, over: 0, under: 0 },
+    defense: { plain: 0, over: 0, under: 0 },
+  };
+  const holdUps: PlayerStats['holdUps'] = { opportunities: 0, taken: 0 };
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -282,28 +440,37 @@ export function playerStats(userId: number): PlayerStats | null {
     const contract = b.contract ? (JSON.parse(b.contract) as Contract) : null;
     if (!contract) {
       passedOut++;
-    } else if (contract.declarer % 2 === 0) {
-      // the human always sits N-S, so an even declarer seat is the user's side
-      declarer.boards++;
-      const tricks = b.tricks_declarer ?? 0;
-      const made = tricks >= 6 + contract.level;
-      if (made) declarer.made++;
-      const delta = tricks - (6 + contract.level);
-      const clamped = Math.max(-3, Math.min(3, delta));
-      trickDeltaHist.set(clamped, (trickDeltaHist.get(clamped) ?? 0) + 1);
-      trickDeltas.push(delta);
-
-      const tier = contractMix[contractTier(contract.level, contract.strain)];
-      tier.boards++;
-      if (made) tier.made++;
-      if (contract.doubled || contract.redoubled) {
-        contractMix.doubled.boards++;
-        if (made) contractMix.doubled.made++;
-      }
-      contractMix.strains[strainFamily(contract.strain)]++;
     } else {
-      defense.boards++;
-      if ((b.tricks_declarer ?? 0) < 6 + contract.level) defense.beat++;
+      if (contract.declarer % 2 === 0) {
+        // the human always sits N-S, so an even declarer seat is the user's side
+        declarer.boards++;
+        const tricks = b.tricks_declarer ?? 0;
+        const made = tricks >= 6 + contract.level;
+        if (made) declarer.made++;
+        const delta = tricks - (6 + contract.level);
+        const clamped = Math.max(-3, Math.min(3, delta));
+        trickDeltaHist.set(clamped, (trickDeltaHist.get(clamped) ?? 0) + 1);
+        trickDeltas.push(delta);
+
+        const tier = contractMix[contractTier(contract.level, contract.strain)];
+        tier.boards++;
+        if (made) tier.made++;
+        if (contract.doubled || contract.redoubled) {
+          contractMix.doubled.boards++;
+          if (made) contractMix.doubled.made++;
+        }
+        contractMix.strains[strainFamily(contract.strain)]++;
+      } else {
+        defense.boards++;
+        if ((b.tricks_declarer ?? 0) < 6 + contract.level) defense.beat++;
+      }
+
+      // Ruffs/hold-ups need the actual cards, not just the contract + trick
+      // count — reconstruct the deal + full play replay once and feed both
+      // accumulators from it (declaring and defending boards both count).
+      const { deal, ps } = reconstructBoardPlay(b, contract);
+      accumulateRuffs(ruffs, contract, ps.completedTricks);
+      accumulateHoldUps(holdUps, deal, contract, ps.completedTricks);
     }
   }
 
@@ -401,6 +568,8 @@ export function playerStats(userId: number): PlayerStats | null {
     bidTypes,
     conventions,
     contractMix,
+    ruffs,
+    holdUps,
   };
 }
 

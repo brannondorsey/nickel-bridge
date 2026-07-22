@@ -21,7 +21,7 @@ export interface PlayState {
   dummyVisible: boolean;
 }
 
-function trumpSuit(strain: Strain): number | null {
+export function trumpSuit(strain: Strain): number | null {
   // strain 0=♣ 1=♦ 2=♥ 3=♠ 4=NT; our suits 0=♠ 1=♥ 2=♦ 3=♣
   return strain === 4 ? null : 3 - strain;
 }

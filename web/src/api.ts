@@ -171,6 +171,13 @@ interface StatPoint {
 /** Auction-role bucket for the bidding ledger (server: core's bidCategory). */
 export type BidTypeKey = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
 
+/** plain/over/under-ruff counts for one side (declarer/dummy or defense). */
+export interface RuffCounts {
+  plain: number;
+  over: number;
+  under: number;
+}
+
 /** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
 export type ConventionKey =
   | 'stayman'
@@ -234,6 +241,10 @@ export interface PlayerStats {
     doubled: { boards: number; made: number };
     strains: { notrump: number; major: number; minor: number };
   };
+  /** ruffs by the player's own hands, split declaring vs defending; NT boards contribute nothing */
+  ruffs: { declarerDummy: RuffCounts; defense: RuffCounts };
+  /** the classic NT hold-up, on notrump boards the player's side declared */
+  holdUps: { opportunities: number; taken: number };
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

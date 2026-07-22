@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, ConventionKey, PlayerStats, api } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, RuffCounts, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -77,6 +77,19 @@ const CONTRACT_TIER_ROWS = [
   { key: 'game', label: 'GAME' },
   { key: 'slam', label: 'SLAM' },
 ] as const;
+
+/** Ruff-side sub-groups, declaring reuses the same wording as the DECLARING/DEFENDING stat tiles. */
+const RUFF_SIDE_ROWS = [
+  { key: 'declarerDummy', label: 'DECLARING' },
+  { key: 'defense', label: 'DEFENDING' },
+] as const;
+
+/** Row labels for the plain/over/under-ruff breakdown, precise unabbreviated bridge terms. */
+const RUFF_KIND_LABELS: Record<'plain' | 'over' | 'under', string> = {
+  plain: 'RUFF',
+  over: 'OVER-RUFF',
+  under: 'UNDER-RUFF',
+};
 
 /** Row labels for the signed trick-delta histogram, keyed by clamped bucket value. */
 const TRICK_DELTA_LABELS: Record<number, string> = {
@@ -211,6 +224,12 @@ export default function Player() {
   const strainTotal = cm.strains.notrump + cm.strains.major + cm.strains.minor;
   const strainPct = (n: number) => (strainTotal ? Math.round((n / strainTotal) * 100) : 0);
   const doubledPct = tierPct(cm.doubled);
+
+  const ruffTotal = (c: RuffCounts) => c.plain + c.over + c.under;
+  const totalRuffs = ruffTotal(stats.ruffs.declarerDummy) + ruffTotal(stats.ruffs.defense);
+  const holdUpPct = stats.holdUps.opportunities
+    ? Math.round((stats.holdUps.taken / stats.holdUps.opportunities) * 100)
+    : null;
 
   return (
     <div className="stats-page">
@@ -402,6 +421,55 @@ export default function Player() {
               </div>
             ) : null}
           </PerforatedPanel>
+
+          {totalRuffs > 0 || holdUpPct !== null ? (
+            <PerforatedPanel heading="CARD PLAY" className="stats-cardplay num">
+              {totalRuffs > 0 ? (
+                <div className="stats-cardplay-section">
+                  <div className="label-caps stats-cardplay-head">RUFFS</div>
+                  {RUFF_SIDE_ROWS.filter(({ key }) => ruffTotal(stats.ruffs[key]) > 0).map(({ key, label }) => {
+                    const counts = stats.ruffs[key];
+                    const total = ruffTotal(counts);
+                    return (
+                      <div key={key} className="stats-ruff-group">
+                        <div className="stats-ruff-group-head">
+                          <span className="label-caps">{label}</span>
+                          <span className="stats-ruff-count">
+                            {total} ruff{total === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        {(['plain', 'over', 'under'] as const).map((kind) => {
+                          const pct = Math.round((counts[kind] / total) * 100);
+                          return (
+                            <div key={kind} className="stats-ruff-row">
+                              <span className="label-caps stats-ruff-label">{RUFF_KIND_LABELS[kind]}</span>
+                              <PctBar pct={pct} />
+                              <b>{pct}%</b>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {holdUpPct !== null ? (
+                <div className="stats-cardplay-section">
+                  <div className="label-caps stats-cardplay-head">HOLD-UP PLAYS</div>
+                  <div className="stats-holdup-row">
+                    <PctBar pct={holdUpPct} />
+                    <b>{holdUpPct}%</b>
+                  </div>
+                  <div className="stats-cardplay-note">
+                    Ducked {stats.holdUps.taken} of {stats.holdUps.opportunities} chance
+                    {stats.holdUps.opportunities === 1 ? '' : 's'} to win a suit's first lead outright — notrump
+                    contracts you declared.
+                  </div>
+                </div>
+              ) : null}
+            </PerforatedPanel>
+          ) : null}
 
           <div className="stats-tiles">
             <Tile
