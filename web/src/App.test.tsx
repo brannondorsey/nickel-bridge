@@ -92,6 +92,12 @@ describe('App — authenticated', () => {
     await vi.waitFor(() => expect(apiMock.tournament).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
   });
+
+  it('serves NotFound for any unmatched URL instead of a blank shell', async () => {
+    stampVisit();
+    renderApp('/this/route/does/not/exist');
+    expect(await screen.findByText('This page does not exist.')).toBeInTheDocument();
+  });
 });
 
 describe('App — demo mode', () => {

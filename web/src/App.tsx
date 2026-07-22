@@ -9,6 +9,7 @@ import CreateHandle from './pages/CreateHandle';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
+import NotFound from './pages/NotFound';
 import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
 import Tournament from './pages/Tournament';
@@ -101,6 +102,7 @@ export default function App() {
               <Route path="/t/:tid/review" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
               <Route path="/scenarios" element={<Scenarios />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
             {tab ? <TabBar myId={me.user.id} active={tab} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}
