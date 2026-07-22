@@ -401,6 +401,12 @@ export const playerStatsFull: PlayerStats = {
     { category: 'double', total: 6, satisfactory: 5 },
     { category: 'overcall', total: 24, satisfactory: 19 },
   ],
+  // server-ranked best to worst; a subset of the graded calls above (natural bids never appear here)
+  conventions: [
+    { family: 'stayman', total: 9, satisfactory: 8 },
+    { family: 'blackwood', total: 3, satisfactory: 3 },
+    { family: 'jacobyTransfer', total: 5, satisfactory: 2 },
+  ],
   // sums to declarer.boards: 88 (51+30+7 tiers, 21+45+22 strains)
   contractMix: {
     partscore: { boards: 51, made: 38 },
@@ -448,6 +454,7 @@ export const playerStatsEmpty: PlayerStats = {
   pctSeries: [],
   accuracySeries: [],
   bidTypes: [],
+  conventions: [],
   contractMix: {
     partscore: { boards: 0, made: 0 },
     game: { boards: 0, made: 0 },

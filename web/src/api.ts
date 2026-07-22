@@ -171,6 +171,16 @@ interface StatPoint {
 /** Auction-role bucket for the bidding ledger (server: core's bidCategory). */
 export type BidTypeKey = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
 
+/** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
+export type ConventionKey =
+  | 'stayman'
+  | 'jacobyTransfer'
+  | 'blackwood'
+  | 'gerber'
+  | 'weakTwo'
+  | 'negativeDouble'
+  | 'michaels';
+
 export interface PlayerStats {
   /** 'ai' = one of the benchmark house players (ai-players.ts) */
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
@@ -214,6 +224,8 @@ export interface PlayerStats {
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
   /** graded calls by auction role, ranked best to worst by satisfactory-or-better share */
   bidTypes: { category: BidTypeKey; total: number; satisfactory: number }[];
+  /** graded calls that were a named convention, by which one (server: conventionFamily) */
+  conventions: { family: ConventionKey; total: number; satisfactory: number }[];
   /** declaring-side contract mix: partscore/game/slam + doubled/redoubled + strain family (server/src/stats.ts) */
   contractMix: {
     partscore: { boards: number; made: number };

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, PlayerStats, api } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -59,6 +59,17 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   overcall: 'OVERCALLS',
   double: 'DOUBLES',
   pass: 'PASSES',
+};
+
+/** Display names for the tracked-convention buckets. */
+const CONVENTION_LABELS: Record<ConventionKey, string> = {
+  stayman: 'STAYMAN',
+  jacobyTransfer: 'JACOBY TRANSFERS',
+  blackwood: 'BLACKWOOD',
+  gerber: 'GERBER',
+  weakTwo: 'WEAK TWOS',
+  negativeDouble: 'NEGATIVE DOUBLES',
+  michaels: 'MICHAELS',
 };
 
 const CONTRACT_TIER_ROWS = [
@@ -119,11 +130,13 @@ export default function Player() {
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [error, setError] = useState('');
   const [bidLedgerOpen, setBidLedgerOpen] = useState(false);
+  const [ledgerView, setLedgerView] = useState<'type' | 'convention'>('type');
 
   useEffect(() => {
     setStats(null);
     setError('');
     setBidLedgerOpen(false);
+    setLedgerView('type');
     api
       .playerStats(Number(id))
       .then(setStats)
@@ -306,32 +319,86 @@ export default function Player() {
               </div>
               {stats.bidTypes.length > 0 ? (
                 <div className="stats-bidding-hint">
-                  {bidLedgerOpen ? 'Fold the ledger away ▴' : 'Tap for the ledger by bid type ▾'}
+                  {bidLedgerOpen
+                    ? 'Fold the ledger away ▴'
+                    : stats.conventions.length > 0
+                      ? 'Tap for the bidding ledger ▾'
+                      : 'Tap for the ledger by bid type ▾'}
                 </div>
               ) : null}
             </button>
             {bidLedgerOpen && stats.bidTypes.length > 0 ? (
               <div className="stats-bidtypes">
-                <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY BID TYPE</div>
-                {stats.bidTypes.map((b) => {
-                  const pct = Math.round((b.satisfactory / b.total) * 100);
-                  return (
-                    <div key={b.category} className="stats-bidtype-row">
-                      <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
-                      <PctBar pct={pct} />
-                      <b>{pct}%</b>
-                      <span className="stats-bidtype-count">
-                        {b.total} call{b.total === 1 ? '' : 's'}
-                      </span>
+                {stats.conventions.length > 0 ? (
+                  <div className="stats-ledger-tabs" role="tablist" aria-label="Bidding ledger view">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={ledgerView === 'type'}
+                      className={ledgerView === 'type' ? 'active' : ''}
+                      onClick={() => setLedgerView('type')}
+                    >
+                      BID TYPE
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={ledgerView === 'convention'}
+                      className={ledgerView === 'convention' ? 'active' : ''}
+                      onClick={() => setLedgerView('convention')}
+                    >
+                      CONVENTION
+                    </button>
+                  </div>
+                ) : null}
+
+                {ledgerView === 'type' || stats.conventions.length === 0 ? (
+                  <>
+                    <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY BID TYPE</div>
+                    {stats.bidTypes.map((b) => {
+                      const pct = Math.round((b.satisfactory / b.total) * 100);
+                      return (
+                        <div key={b.category} className="stats-bidtype-row">
+                          <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
+                          <PctBar pct={pct} />
+                          <b>{pct}%</b>
+                          <span className="stats-bidtype-count">
+                            {b.total} call{b.total === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="stats-bidtypes-note">
+                      Ranked by your share of ★★-or-better calls
+                      {stats.bidTypes.length >= 2
+                        ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
+                        : '.'}
                     </div>
-                  );
-                })}
-                <div className="stats-bidtypes-note">
-                  Ranked by your share of ★★-or-better calls
-                  {stats.bidTypes.length >= 2
-                    ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
-                    : '.'}
-                </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY CONVENTION</div>
+                    {stats.conventions.map((c) => {
+                      const pct = Math.round((c.satisfactory / c.total) * 100);
+                      return (
+                        <div key={c.family} className="stats-bidtype-row">
+                          <span className="label-caps stats-bidtype-label">{CONVENTION_LABELS[c.family]}</span>
+                          <PctBar pct={pct} />
+                          <b>{pct}%</b>
+                          <span className="stats-bidtype-count">
+                            {c.total} call{c.total === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="stats-bidtypes-note">
+                      Named conventions only — natural bids don't count here
+                      {stats.conventions.length >= 2
+                        ? ` — ${CONVENTION_LABELS[stats.conventions[stats.conventions.length - 1].family].toLowerCase()} could use a refresher.`
+                        : '.'}
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
           </PerforatedPanel>

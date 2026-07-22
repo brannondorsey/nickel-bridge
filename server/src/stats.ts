@@ -1,4 +1,16 @@
-import { BidCategory, Call, Contract, ELO_INITIAL, Seat, Strain, bidCategory, boardConditions } from '@bridge/core';
+import {
+  BidCategory,
+  Call,
+  Contract,
+  ConventionFamily,
+  ELO_INITIAL,
+  Seat,
+  Strain,
+  bidCategory,
+  boardConditions,
+  conventionFamily,
+  explainBid,
+} from '@bridge/core';
 import { db } from './db.js';
 import { standings } from './tournaments.js';
 
@@ -113,6 +125,16 @@ interface PlayerStats {
    */
   bidTypes: { category: BidCategory; total: number; satisfactory: number }[];
   /**
+   * The subset of graded calls that were a named SAYC convention (Stayman,
+   * Jacoby transfer, Blackwood, Gerber, weak two, negative double, Michaels
+   * — see core's conventionFamily), bucketed by which one. A second view
+   * onto the same bid_evals as `bidTypes`, along a different axis (named
+   * convention, not auction role) — natural bids never appear here. Ranked
+   * the same way as bidTypes (best to worst by satisfactory share); only
+   * conventions the player has actually called appear.
+   */
+  conventions: { family: ConventionFamily; total: number; satisfactory: number }[];
+  /**
    * Declaring-side contracts only (same population as `totals.declarer`, i.e.
    * boards where contract.declarer is on the human's side, N-S), bucketed two
    * ways: partscore/game/slam tier (contractTier — level 6-7 is always slam;
@@ -209,6 +231,7 @@ export function playerStats(userId: number): PlayerStats | null {
   const allScores: number[] = [];
   const byTournament = new Map<number, { name: string; finishedAt: number; scores: number[] }>();
   const byBidType = new Map<BidCategory, { total: number; satisfactory: number }>();
+  const byConvention = new Map<ConventionFamily, { total: number; satisfactory: number }>();
   const trickDeltaHist = new Map<number, number>(); // clamped delta -> count
   const trickDeltas: number[] = []; // unclamped, for the true average
   const contractMix = {
@@ -245,6 +268,15 @@ export function playerStats(userId: number): PlayerStats | null {
       bucket.total++;
       if (e.grade === 'excellent' || e.grade === 'good') bucket.satisfactory++;
       byBidType.set(category, bucket);
+
+      // second axis: which named convention (if any) this call was
+      const family = conventionFamily(explainBid(dealer, calls.slice(0, i), calls[i]));
+      if (family) {
+        const cbucket = byConvention.get(family) ?? { total: 0, satisfactory: 0 };
+        cbucket.total++;
+        if (e.grade === 'excellent' || e.grade === 'good') cbucket.satisfactory++;
+        byConvention.set(family, cbucket);
+      }
     }
 
     const contract = b.contract ? (JSON.parse(b.contract) as Contract) : null;
@@ -331,6 +363,15 @@ export function playerStats(userId: number): PlayerStats | null {
         a.category.localeCompare(b.category),
     );
 
+  const conventions = [...byConvention.entries()]
+    .map(([family, counts]) => ({ family, ...counts }))
+    .sort(
+      (a, b) =>
+        b.satisfactory / b.total - a.satisfactory / a.total ||
+        b.total - a.total ||
+        a.family.localeCompare(b.family),
+    );
+
   const declaringRate = declarer.boards ? Math.round((declarer.made / declarer.boards) * 100) : null;
 
   return {
@@ -358,6 +399,7 @@ export function playerStats(userId: number): PlayerStats | null {
     pctSeries,
     accuracySeries,
     bidTypes,
+    conventions,
     contractMix,
   };
 }

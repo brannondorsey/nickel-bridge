@@ -59,7 +59,7 @@ describe('Stats', () => {
   it('unfolds the bid-type ledger on tap, ranked best to worst, and folds it back', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
-    const toggle = await screen.findByRole('button', { name: /ledger by bid type/i });
+    const toggle = await screen.findByRole('button', { name: /bidding ledger/i });
     expect(screen.queryByText('★★ OR BETTER — BY BID TYPE')).not.toBeInTheDocument();
 
     await userEvent.click(toggle);
@@ -78,10 +78,30 @@ describe('Stats', () => {
   });
 
   it('keeps the bidding panel inert when there is no bid-type data', async () => {
-    apiMock.playerStats.mockResolvedValue({ ...playerStatsFull, bidTypes: [] });
+    apiMock.playerStats.mockResolvedValue({ ...playerStatsFull, bidTypes: [], conventions: [] });
     renderStats();
     await screen.findByText('BIDDING — 214 CALLS GRADED');
     expect(screen.queryByText(/ledger by bid type/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a convention tab alongside bid type and switches between them', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    await userEvent.click(await screen.findByText(/Tap for the bidding ledger/));
+    expect(screen.getByRole('tab', { name: 'BID TYPE' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'CONVENTION' }));
+    expect(screen.getByText('STAYMAN')).toBeInTheDocument();
+    expect(screen.getByText('89%')).toBeInTheDocument(); // 8/9
+    expect(screen.queryByText('OPENINGS')).not.toBeInTheDocument();
+    expect(screen.getByText(/jacoby transfers could use a refresher/)).toBeInTheDocument();
+  });
+
+  it('omits the convention tab when the player has no graded conventions', async () => {
+    apiMock.playerStats.mockResolvedValue({ ...playerStatsFull, conventions: [] });
+    renderStats();
+    await userEvent.click(await screen.findByText(/Tap for the ledger by bid type/));
+    expect(screen.queryByRole('tab', { name: 'CONVENTION' })).not.toBeInTheDocument();
+    expect(screen.getByText('★★ OR BETTER — BY BID TYPE')).toBeInTheDocument();
   });
 
   it('computes declaring/defending tiles from the play record', async () => {

@@ -1031,3 +1031,51 @@ function explainContinuation(ctx: Ctx, call: Call, level: number, strain: Strain
   }
   return generic(`${level}${S[strain]}`, `Natural: length in ${S[strain]}. Exact ranges in this sequence are beyond the SAYC pamphlet.`);
 }
+
+export type ConventionFamily =
+  | 'stayman'
+  | 'jacobyTransfer'
+  | 'blackwood'
+  | 'gerber'
+  | 'weakTwo'
+  | 'negativeDouble'
+  | 'michaels';
+
+/**
+ * Which named SAYC convention (if any) a bid's explanation belongs to — a
+ * teaching-oriented axis distinct from bidCategory's auction-ROLE bucketing
+ * (opening/response/rebid/...), used by the stats page's convention-accuracy
+ * ledger. Matched on BidMeaning.title against a fixed, deliberately short
+ * allow-list, NOT on the `artificial` flag: weak twos are structurally
+ * natural (built at the "weak two" opening rule, no `artificial: true`) but
+ * are still a named convention worth their own line, while `artificial`
+ * alone would both admit unrelated artificial relays (2♦ waiting,
+ * fourth-suit-forcing, Unusual 2NT, takeout doubles) this breakdown isn't
+ * meant to cover and exclude weak twos. Scope is intentionally narrow —
+ * extend CONVENTION_MATCHERS if a new family earns its own line, but this
+ * is a curated teaching list, not "every artificial call".
+ *
+ * Jacoby transfer matches by substring ("transfer"), not prefix: the ask is
+ * titled "Jacoby transfer to ♥/♠", but the *other side* of the same
+ * convention — opener's forced completion ("Accepts the transfer to ♥/♠")
+ * and the jump super-accept ("Super-accept of the transfer") — shares no
+ * title prefix with the ask, the same way "Stayman" and "Stayman response:
+ * no major" are both bucketed 'stayman' below. weakTwo is scoped to the
+ * opening bid itself only — the follow-up mini-system (2NT feature ask,
+ * raise of the preempt, feature responses) doesn't share the "Weak two"
+ * title prefix and is deliberately left untracked.
+ */
+const CONVENTION_MATCHERS: [ConventionFamily, (title: string) => boolean][] = [
+  ['stayman', (t) => t.startsWith('Stayman')],
+  ['jacobyTransfer', (t) => t.includes('transfer')],
+  ['blackwood', (t) => t.startsWith('Blackwood')],
+  ['gerber', (t) => t.startsWith('Gerber')],
+  ['weakTwo', (t) => t.startsWith('Weak two')],
+  ['negativeDouble', (t) => t.startsWith('Negative double')],
+  ['michaels', (t) => t.startsWith('Michaels')],
+];
+
+export function conventionFamily(meaning: BidMeaning | null): ConventionFamily | null {
+  const hit = meaning && CONVENTION_MATCHERS.find(([, test]) => test(meaning.title));
+  return hit ? hit[0] : null;
+}

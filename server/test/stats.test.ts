@@ -1,8 +1,10 @@
+import { PASS, boardConditions, makeBid } from '@bridge/core';
 import { describe, expect, it } from 'vitest';
 import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 freshDbEnv('stats');
 const app = await makeApp();
+const { db } = await import('../src/db.js');
 
 const alice = new TestClient(app, 'StatsAlice');
 const bob = new TestClient(app, 'StatsBob');
@@ -54,6 +56,7 @@ describe('player stats', () => {
     expect(stats.pctSeries).toEqual([]);
     expect(stats.accuracySeries).toEqual([]);
     expect(stats.bidTypes).toEqual([]);
+    expect(stats.conventions).toEqual([]);
     expect(stats.trickDelta.boards).toBe(0);
     expect(stats.trickDelta.avgDelta).toBeNull();
     expect(stats.trickDelta.buckets).toEqual([-3, -2, -1, 0, 1, 2, 3].map((delta) => ({ delta, count: 0 })));
@@ -130,6 +133,15 @@ describe('player stats', () => {
       expect(b.satisfactory).toBeLessThanOrEqual(b.total);
     }
 
+    // conventions are a subset of the graded calls, along a different axis
+    const KNOWN_FAMILIES = ['stayman', 'jacobyTransfer', 'blackwood', 'gerber', 'weakTwo', 'negativeDouble', 'michaels'];
+    const conventionTotal = stats.conventions.reduce((s: number, c: any) => s + c.total, 0);
+    expect(conventionTotal).toBeLessThanOrEqual(graded);
+    for (const c of stats.conventions) {
+      expect(KNOWN_FAMILIES).toContain(c.family);
+      expect(c.satisfactory).toBeLessThanOrEqual(c.total);
+    }
+
     // every board lands in exactly one bucket
     const { declarer, defense, passedOut } = stats.totals;
     expect(declarer.boards + defense.boards + passedOut).toBe(4);
@@ -153,6 +165,38 @@ describe('player stats', () => {
     }
     expect(cm.doubled.boards).toBeLessThanOrEqual(declarer.boards);
     expect(cm.strains.notrump + cm.strains.major + cm.strains.minor).toBe(declarer.boards);
+  });
+
+  it('buckets a Stayman ask under conventions and excludes the natural continuation', async () => {
+    const uid = await userId(carol);
+    const tid = (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', 'seed') RETURNING id`).get() as { id: number })
+      .id;
+    // board 1's dealer is North (seat 0), so calls[2] is South's (human) first call.
+    // N:1NT P S:2C(Stayman) P N:2H P S:4H(natural raise) P P P
+    expect(boardConditions(1).dealer).toBe(0);
+    const calls = [
+      makeBid(1, 4),
+      PASS,
+      makeBid(2, 0),
+      PASS,
+      makeBid(2, 2),
+      PASS,
+      makeBid(4, 2),
+      PASS,
+      PASS,
+      PASS,
+    ];
+    const bidEvals = [
+      { grade: 'excellent', score: 1 }, // South's Stayman ask
+      { grade: 'good', score: 0.8 }, // South's natural raise — NOT a tracked convention
+    ];
+    db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, bid_evals, updated_at) VALUES (?, ?, 1, 'done', ?, ?, unixepoch())`,
+    ).run(tid, uid, JSON.stringify(calls), JSON.stringify(bidEvals));
+
+    const stats = await carol.get(`/api/users/${uid}/stats`);
+    expect(stats.conventions).toEqual([{ family: 'stayman', total: 1, satisfactory: 1 }]);
+    expect(stats.bidTypes).toEqual([{ category: 'response', total: 2, satisfactory: 2 }]);
   });
 
   it('is visible to other signed-in players', async () => {
