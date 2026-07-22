@@ -377,6 +377,15 @@ export const playerStatsFull: PlayerStats = {
   eloSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), elo: 1380 + i * 11 })),
   pctSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), pct: 44 + ((i * 7) % 30), boards: 4, fieldSize: 8 })),
   accuracySeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), accuracy: 60 + i * 2, calls: 18 })),
+  // server-ranked best to worst; totals sum to the 214 graded calls
+  bidTypes: [
+    { category: 'opening', total: 41, satisfactory: 40 },
+    { category: 'pass', total: 62, satisfactory: 58 },
+    { category: 'response', total: 56, satisfactory: 52 },
+    { category: 'rebid', total: 25, satisfactory: 21 },
+    { category: 'double', total: 6, satisfactory: 5 },
+    { category: 'overcall', total: 24, satisfactory: 19 },
+  ],
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -400,6 +409,7 @@ export const playerStatsEmpty: PlayerStats = {
   eloSeries: [],
   pctSeries: [],
   accuracySeries: [],
+  bidTypes: [],
 };
 
 // ---- leaderboard ----

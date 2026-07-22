@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { PlayerStats, api } from '../api';
+import { BidTypeKey, PlayerStats, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -51,6 +51,16 @@ const GRADE_ROWS = [
   { stars: 0, key: 'poor' },
 ] as const;
 
+/** Display names for the auction-role buckets, in the server's ranked order. */
+const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
+  opening: 'OPENINGS',
+  response: 'RESPONSES',
+  rebid: 'REBIDS',
+  overcall: 'OVERCALLS',
+  double: 'DOUBLES',
+  pass: 'PASSES',
+};
+
 /** Bordered chart panel: tracked-caps heading, right-aligned key figure. */
 function ChartPanel({ heading, figure, children }: { heading: string; figure?: string; children: ReactNode }) {
   return (
@@ -80,10 +90,12 @@ export default function Player() {
   const { me, refresh } = useMe();
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [error, setError] = useState('');
+  const [bidLedgerOpen, setBidLedgerOpen] = useState(false);
 
   useEffect(() => {
     setStats(null);
     setError('');
+    setBidLedgerOpen(false);
     api
       .playerStats(Number(id))
       .then(setStats)
@@ -241,15 +253,52 @@ export default function Player() {
           </ChartPanel>
 
           <PerforatedPanel heading={`BIDDING — ${gradedCalls} CALLS GRADED`} className="stats-bidding num">
-            <div className="stats-grades">
-              {GRADE_ROWS.map((g) => (
-                <div key={g.key} className="stats-grade-row">
-                  <StarGrade stars={g.stars} />
-                  <PctBar pct={gradePct(t.gradeCounts[g.key])} />
-                  <b>{gradePct(t.gradeCounts[g.key])}%</b>
+            <button
+              type="button"
+              className="stats-bidding-toggle"
+              aria-expanded={bidLedgerOpen}
+              disabled={stats.bidTypes.length === 0}
+              onClick={() => setBidLedgerOpen((o) => !o)}
+            >
+              <div className="stats-grades">
+                {GRADE_ROWS.map((g) => (
+                  <div key={g.key} className="stats-grade-row">
+                    <StarGrade stars={g.stars} />
+                    <PctBar pct={gradePct(t.gradeCounts[g.key])} />
+                    <b>{gradePct(t.gradeCounts[g.key])}%</b>
+                  </div>
+                ))}
+              </div>
+              {stats.bidTypes.length > 0 ? (
+                <div className="stats-bidding-hint">
+                  {bidLedgerOpen ? 'Fold the ledger away ▴' : 'Tap for the ledger by bid type ▾'}
                 </div>
-              ))}
-            </div>
+              ) : null}
+            </button>
+            {bidLedgerOpen && stats.bidTypes.length > 0 ? (
+              <div className="stats-bidtypes">
+                <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY BID TYPE</div>
+                {stats.bidTypes.map((b) => {
+                  const pct = Math.round((b.satisfactory / b.total) * 100);
+                  return (
+                    <div key={b.category} className="stats-bidtype-row">
+                      <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
+                      <PctBar pct={pct} />
+                      <b>{pct}%</b>
+                      <span className="stats-bidtype-count">
+                        {b.total} call{b.total === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="stats-bidtypes-note">
+                  Ranked by your share of ★★-or-better calls
+                  {stats.bidTypes.length >= 2
+                    ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
+                    : '.'}
+                </div>
+              </div>
+            ) : null}
           </PerforatedPanel>
 
           <div className="stats-tiles">

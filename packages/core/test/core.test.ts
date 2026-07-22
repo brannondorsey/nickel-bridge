@@ -3,6 +3,7 @@ import {
   auctionState,
   applyCall,
   applyPlay,
+  bidCategory,
   boardConditions,
   boardScoreNS,
   contractScore,
@@ -155,6 +156,42 @@ describe('auction', () => {
   it('rejects illegal calls', () => {
     expect(() => applyCall(0, [makeBid(1, 4)], makeBid(1, 0))).toThrow();
     expect(() => applyCall(0, [], DOUBLE)).toThrow();
+  });
+});
+
+describe('bid category', () => {
+  it('classifies passes and doubles regardless of context', () => {
+    expect(bidCategory(0, [], PASS)).toBe('pass');
+    expect(bidCategory(0, [makeBid(1, 3)], DOUBLE)).toBe('double');
+    expect(bidCategory(0, [makeBid(1, 3), DOUBLE], REDOUBLE)).toBe('double');
+  });
+
+  it('the first bid of the auction is an opening, even after passes', () => {
+    expect(bidCategory(0, [], makeBid(1, 4))).toBe('opening');
+    expect(bidCategory(0, [PASS, PASS, PASS], makeBid(1, 2))).toBe('opening');
+  });
+
+  it('bids after partner opened are responses, including responder rebids', () => {
+    // N opens 1♣, E passes, S responds 1♥
+    expect(bidCategory(0, [makeBid(1, 0), PASS], makeBid(1, 2))).toBe('response');
+    // ... N rebids 1NT, E passes, S's second bid is still in the response bucket
+    expect(bidCategory(0, [makeBid(1, 0), PASS, makeBid(1, 2), PASS, makeBid(1, 4), PASS], makeBid(2, 2))).toBe(
+      'response',
+    );
+    // interference between partner's opening and the response doesn't change it
+    expect(bidCategory(0, [makeBid(1, 0), makeBid(1, 3)], makeBid(2, 2))).toBe('response');
+  });
+
+  it('later bids by the opener are rebids', () => {
+    // S opens 1♠ (dealer S), W passes, N raises, E passes, S rebids
+    expect(bidCategory(2, [makeBid(1, 3), PASS, makeBid(2, 3), PASS], makeBid(4, 3))).toBe('rebid');
+  });
+
+  it('bids over the opponents’ opening are overcalls, advances included', () => {
+    // E opens 1♦ (dealer E), S overcalls 1♠
+    expect(bidCategory(1, [makeBid(1, 1)], makeBid(1, 3))).toBe('overcall');
+    // W opens, N overcalls, E passes, S advances — still the overcall bucket
+    expect(bidCategory(3, [makeBid(1, 1), makeBid(1, 2), PASS], makeBid(2, 2))).toBe('overcall');
   });
 });
 
