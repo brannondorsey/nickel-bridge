@@ -2239,6 +2239,13 @@ a.board-row:hover {
   background: var(--panel);
   padding: 12px 14px;
   min-width: 0; /* let the sub-line ellipsize instead of overflowing the grid cell */
+  /* harmless on the plain <div> tiles; resets the <a> tiles (BEST/TOUGHEST
+     CROSSING link to that tournament) back to looking like every other tile */
+  text-decoration: none;
+  color: inherit;
+}
+a.stat-tile:hover {
+  background: var(--surface);
 }
 .stat-tile-label {
   font-size: 9.5px;

@@ -105,9 +105,9 @@ interface PlayerStats {
     peakElo: number;
     avgPct: number | null;
     /** the player's best single-tournament score, from pctSeries; null if pctSeries is empty */
-    bestPct: { pct: number; tournamentName: string } | null;
+    bestPct: { pct: number; tournamentName: string; tournamentId: number } | null;
     /** the player's worst single-tournament score, from pctSeries; null if pctSeries is empty */
-    worstPct: { pct: number; tournamentName: string } | null;
+    worstPct: { pct: number; tournamentName: string; tournamentId: number } | null;
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };
@@ -658,8 +658,10 @@ export function playerStats(userId: number): PlayerStats | null {
       currentElo: u.elo,
       peakElo: Math.max(ELO_INITIAL, ...eloSeries.map((e) => e.elo)),
       avgPct,
-      bestPct: bestPct ? { pct: bestPct.pct, tournamentName: bestPct.tournamentName } : null,
-      worstPct: worstPct ? { pct: worstPct.pct, tournamentName: worstPct.tournamentName } : null,
+      bestPct: bestPct ? { pct: bestPct.pct, tournamentName: bestPct.tournamentName, tournamentId: bestPct.tournamentId } : null,
+      worstPct: worstPct
+        ? { pct: worstPct.pct, tournamentName: worstPct.tournamentName, tournamentId: worstPct.tournamentId }
+        : null,
       avgBidAccuracy,
       gradeCounts,
       declarer,

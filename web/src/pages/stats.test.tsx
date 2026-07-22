@@ -54,6 +54,21 @@ describe('Stats', () => {
     expect(await screen.findByText(/TOLL LOG — \d+ TOLLS? THIS SEASON/)).toBeInTheDocument();
   });
 
+  it('puts the toll log first, keeps the bidding charts together, and hoists contracts right under bidding', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    await screen.findByText('TOURNAMENTS');
+    const headings = Array.from(document.querySelectorAll('.chart-panel-head .label-caps, .perf-panel-heading')).map(
+      (el) => el.textContent ?? '',
+    );
+    const index = (prefix: string) => headings.findIndex((h) => h.startsWith(prefix));
+    expect(index('TOLL LOG')).toBe(0);
+    // toll log no longer sits between the two bidding sections
+    expect(index('BID ACCURACY') + 1).toBe(index('BIDDING —'));
+    // contracts hoisted to right under the two bidding sections
+    expect(index('BIDDING —') + 1).toBe(index('CONTRACTS —'));
+  });
+
   it('renders the toll log on a house profile too — nothing here is Elo-specific', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
@@ -146,18 +161,43 @@ describe('Stats', () => {
     expect(screen.getByText(/better than 72% of 54 rated players/)).toBeInTheDocument();
   });
 
-  it('shows the best and toughest crossing tiles', async () => {
+  it('orders the tile grid so best and toughest crossing land together on the bottom row', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const tiles = (await screen.findByText('TOURNAMENTS')).closest('.stats-tiles') as HTMLElement;
+    const labels = Array.from(tiles.querySelectorAll('.stat-tile-label')).map((el) => el.textContent);
+    expect(labels).toEqual([
+      'DECLARING',
+      'DEFENDING',
+      'TOURNAMENTS',
+      'BOARDS',
+      'RATED',
+      'AVG SCORE',
+      'BEST CROSSING',
+      'TOUGHEST CROSSING',
+    ]);
+    // RATED moved up one row and left one column; best/toughest are now the
+    // final row (indices 6 and 7 of an 8-tile, 2-column grid) — horizontal
+    // together on the bottom.
+    expect(labels.indexOf('RATED')).toBe(4);
+    expect(labels.indexOf('BEST CROSSING')).toBe(6);
+    expect(labels.indexOf('TOUGHEST CROSSING')).toBe(7);
+  });
+
+  it('shows the best and toughest crossing tiles, each linking to that tournament', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
     expect(within(best as HTMLElement).getByText('74%')).toBeInTheDocument();
     expect(within(best as HTMLElement).getByText('Tournament #9')).toBeInTheDocument();
+    expect(best).toHaveAttribute('href', '/t/9');
     const worst = screen.getByText('TOUGHEST CROSSING').closest('.stat-tile')!;
     expect(within(worst as HTMLElement).getByText('31%')).toBeInTheDocument();
     expect(within(worst as HTMLElement).getByText('Tournament #4')).toBeInTheDocument();
+    expect(worst).toHaveAttribute('href', '/t/4');
   });
 
-  it('falls back gracefully when personal-best data is absent', async () => {
+  it('falls back gracefully — no link — when personal-best data is absent', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
       totals: { ...playerStatsFull.totals, bestPct: null, worstPct: null },
@@ -166,6 +206,7 @@ describe('Stats', () => {
     const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
     expect(within(best as HTMLElement).getByText('—')).toBeInTheDocument();
     expect(within(best as HTMLElement).getByText('no crossings yet')).toBeInTheDocument();
+    expect(best.tagName).toBe('DIV');
   });
 
   it('renders the contract mix panel with tier rows, doubled tally, and strain split', async () => {
@@ -239,18 +280,20 @@ describe('Stats', () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     const panel = (await screen.findByText('CARD PLAY')).closest('.stats-cardplay') as HTMLElement;
-    // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%
+    // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%; 13 of 18 total ruffs -> 72%
     const declaring = within(panel).getByText('DECLARING').closest('.stats-ruff-group')!;
-    expect(within(declaring as HTMLElement).getByText('13 ruffs')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText(/13 ruffs/)).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText(/72%/)).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('77%')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('OVER-RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('15%')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('UNDER-RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('8%')).toBeInTheDocument();
-    // defense: 4/1/0 of 5 -> 80%/20%/0%
+    // defense: 4/1/0 of 5 -> 80%/20%/0%; 5 of 18 total ruffs -> 28%
     const defending = within(panel).getByText('DEFENDING').closest('.stats-ruff-group')!;
-    expect(within(defending as HTMLElement).getByText('5 ruffs')).toBeInTheDocument();
+    expect(within(defending as HTMLElement).getByText(/5 ruffs/)).toBeInTheDocument();
+    expect(within(defending as HTMLElement).getByText(/28%/)).toBeInTheDocument();
     expect(within(defending as HTMLElement).getByText('80%')).toBeInTheDocument();
     // hold-ups: 6/11 -> 55%
     expect(within(panel).getByText('HOLD-UP PLAYS')).toBeInTheDocument();

@@ -138,14 +138,22 @@ function ChartPanel({ heading, figure, children }: { heading: string; figure?: s
   );
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div className="stat-tile">
+function Tile({ label, value, sub, to }: { label: string; value: string; sub: string; to?: string }) {
+  const content = (
+    <>
       <div className="label-caps stat-tile-label">{label}</div>
       <div className="stat-tile-value num">{value}</div>
       <div className="stat-tile-sub num">{sub}</div>
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <Link to={to} className="stat-tile">
+        {content}
+      </Link>
+    );
+  }
+  return <div className="stat-tile">{content}</div>;
 }
 
 /** Stats: the turnstile rating hero, trend sparklines, and the bidding/play record. */
@@ -301,6 +309,18 @@ export default function Player() {
         </>
       ) : (
         <>
+          <PerforatedPanel
+            heading={`TOLL LOG — ${dailyTotal} TOLL${dailyTotal === 1 ? '' : 'S'} THIS SEASON`}
+            className="stats-daygrid"
+          >
+            <DayGrid days={stats.dailyBoards} />
+            {dailyTotal === 0 && t.boardsCompleted > 0 ? (
+              <div className="stats-daygrid-note">
+                Quiet lately — the last toll paid was {shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
+              </div>
+            ) : null}
+          </PerforatedPanel>
+
           <ChartPanel
             heading={`MATCHPOINTS — LAST ${pctPoints.length} TOURNAMENT${pctPoints.length === 1 ? '' : 'S'}`}
             figure={t.avgPct !== null ? `Ø ${t.avgPct}%` : undefined}
@@ -332,18 +352,6 @@ export default function Player() {
               format={(v) => `${Math.round(v)}%`}
             />
           </ChartPanel>
-
-          <PerforatedPanel
-            heading={`TOLL LOG — ${dailyTotal} TOLL${dailyTotal === 1 ? '' : 'S'} THIS SEASON`}
-            className="stats-daygrid"
-          >
-            <DayGrid days={stats.dailyBoards} />
-            {dailyTotal === 0 && t.boardsCompleted > 0 ? (
-              <div className="stats-daygrid-note">
-                Quiet lately — the last toll paid was {shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
-              </div>
-            ) : null}
-          </PerforatedPanel>
 
           <PerforatedPanel heading={`BIDDING — ${gradedCalls} CALLS GRADED`} className="stats-bidding num">
             <button
@@ -448,6 +456,44 @@ export default function Player() {
             ) : null}
           </PerforatedPanel>
 
+          {t.declarer.boards > 0 ? (
+            <PerforatedPanel heading={`CONTRACTS — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
+              <div className="stats-contracts-rows">
+                {CONTRACT_TIER_ROWS.map(({ key, label }) => {
+                  const bucket = cm[key];
+                  const pct = tierPct(bucket);
+                  return (
+                    <div key={key} className="stats-contract-row">
+                      <span className="label-caps stats-contract-label">{label}</span>
+                      {pct !== null ? <PctBar pct={pct} /> : <span />}
+                      <b>{pct !== null ? `${pct}%` : '—'}</b>
+                      <span className="stats-contract-count">
+                        {bucket.boards} board{bucket.boards === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="stats-contracts-divider" />
+                <div className="stats-contract-row">
+                  <span className="label-caps stats-contract-label">DOUBLED</span>
+                  {doubledPct !== null ? <PctBar pct={doubledPct} /> : <span />}
+                  <b>{doubledPct !== null ? `${doubledPct}%` : '—'}</b>
+                  <span className="stats-contract-count">
+                    {cm.doubled.boards} board{cm.doubled.boards === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+              <div className="stats-contracts-note">Redoubled crossings count as doubled too.</div>
+              <div className="stats-contracts-strains">
+                <span className="label-caps">AS DECLARER</span>
+                <span>
+                  NOTRUMP {strainPct(cm.strains.notrump)}% · MAJOR {strainPct(cm.strains.major)}% · MINOR{' '}
+                  {strainPct(cm.strains.minor)}%
+                </span>
+              </div>
+            </PerforatedPanel>
+          ) : null}
+
           {totalRuffs > 0 || holdUpPct !== null ? (
             <PerforatedPanel heading="CARD PLAY" className="stats-cardplay num">
               {totalRuffs > 0 ? (
@@ -456,12 +502,13 @@ export default function Player() {
                   {RUFF_SIDE_ROWS.filter(({ key }) => ruffTotal(stats.ruffs[key]) > 0).map(({ key, label }) => {
                     const counts = stats.ruffs[key];
                     const total = ruffTotal(counts);
+                    const shareOfRuffs = Math.round((total / totalRuffs) * 100);
                     return (
                       <div key={key} className="stats-ruff-group">
                         <div className="stats-ruff-group-head">
                           <span className="label-caps">{label}</span>
                           <span className="stats-ruff-count">
-                            {total} ruff{total === 1 ? '' : 's'}
+                            {total} ruff{total === 1 ? '' : 's'} · {shareOfRuffs}%
                           </span>
                         </div>
                         {(['plain', 'over', 'under'] as const).map((kind) => {
@@ -510,57 +557,21 @@ export default function Player() {
             />
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
+            {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
             <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
             <Tile
               label="BEST CROSSING"
               value={t.bestPct ? `${t.bestPct.pct}%` : '—'}
               sub={t.bestPct ? t.bestPct.tournamentName : 'no crossings yet'}
+              to={t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
             />
             <Tile
               label="TOUGHEST CROSSING"
               value={t.worstPct ? `${t.worstPct.pct}%` : '—'}
               sub={t.worstPct ? t.worstPct.tournamentName : 'no crossings yet'}
+              to={t.worstPct ? `/t/${t.worstPct.tournamentId}` : undefined}
             />
-            {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
           </div>
-
-          {t.declarer.boards > 0 ? (
-            <PerforatedPanel heading={`CONTRACTS — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
-              <div className="stats-contracts-rows">
-                {CONTRACT_TIER_ROWS.map(({ key, label }) => {
-                  const bucket = cm[key];
-                  const pct = tierPct(bucket);
-                  return (
-                    <div key={key} className="stats-contract-row">
-                      <span className="label-caps stats-contract-label">{label}</span>
-                      {pct !== null ? <PctBar pct={pct} /> : <span />}
-                      <b>{pct !== null ? `${pct}%` : '—'}</b>
-                      <span className="stats-contract-count">
-                        {bucket.boards} board{bucket.boards === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  );
-                })}
-                <div className="stats-contracts-divider" />
-                <div className="stats-contract-row">
-                  <span className="label-caps stats-contract-label">DOUBLED</span>
-                  {doubledPct !== null ? <PctBar pct={doubledPct} /> : <span />}
-                  <b>{doubledPct !== null ? `${doubledPct}%` : '—'}</b>
-                  <span className="stats-contract-count">
-                    {cm.doubled.boards} board{cm.doubled.boards === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </div>
-              <div className="stats-contracts-note">Redoubled crossings count as doubled too.</div>
-              <div className="stats-contracts-strains">
-                <span className="label-caps">AS DECLARER</span>
-                <span>
-                  NOTRUMP {strainPct(cm.strains.notrump)}% · MAJOR {strainPct(cm.strains.major)}% · MINOR{' '}
-                  {strainPct(cm.strains.minor)}%
-                </span>
-              </div>
-            </PerforatedPanel>
-          ) : null}
 
           {stats.trickDelta.avgDelta !== null ? (
             <PerforatedPanel

@@ -119,7 +119,11 @@ describe('player stats', () => {
     expect(stats.pctSeries[0].finishedAt).toBeGreaterThan(0);
 
     // with a single pctSeries entry, best and worst crossing are that entry
-    expect(stats.totals.bestPct).toEqual({ pct: stats.pctSeries[0].pct, tournamentName: stats.pctSeries[0].tournamentName });
+    expect(stats.totals.bestPct).toEqual({
+      pct: stats.pctSeries[0].pct,
+      tournamentName: stats.pctSeries[0].tournamentName,
+      tournamentId: stats.pctSeries[0].tournamentId,
+    });
     expect(stats.totals.worstPct).toEqual(stats.totals.bestPct);
 
     // every graded call is counted exactly once
@@ -268,8 +272,16 @@ describe('player stats', () => {
     const [p0, p1] = stats.pctSeries;
     const expectedBest = p1.pct > p0.pct ? p1 : p0;
     const expectedWorst = p1.pct < p0.pct ? p1 : p0;
-    expect(stats.totals.bestPct).toEqual({ pct: expectedBest.pct, tournamentName: expectedBest.tournamentName });
-    expect(stats.totals.worstPct).toEqual({ pct: expectedWorst.pct, tournamentName: expectedWorst.tournamentName });
+    expect(stats.totals.bestPct).toEqual({
+      pct: expectedBest.pct,
+      tournamentName: expectedBest.tournamentName,
+      tournamentId: expectedBest.tournamentId,
+    });
+    expect(stats.totals.worstPct).toEqual({
+      pct: expectedWorst.pct,
+      tournamentName: expectedWorst.tournamentName,
+      tournamentId: expectedWorst.tournamentId,
+    });
 
     // percentiles: Alice and Bob are both rated/active; exactly one of them
     // beats the other on elo (or they tie at 0)
