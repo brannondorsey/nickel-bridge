@@ -280,20 +280,22 @@ describe('Stats', () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     const panel = (await screen.findByText('CARD PLAY')).closest('.stats-cardplay') as HTMLElement;
-    // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%; 13 of 18 total ruffs -> 72%
+    // 18 total ruffs across 214 contract boards' 2782 tricks -> 1%
+    const ruffs = within(panel).getByText('RUFFS').closest('.stats-cardplay-section')!;
+    expect(within(ruffs as HTMLElement).getByText('1%')).toBeInTheDocument();
+    expect(within(ruffs as HTMLElement).getByText('Ruffed in 18 of the 2782 tricks you played.')).toBeInTheDocument();
+    // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%
     const declaring = within(panel).getByText('DECLARING').closest('.stats-ruff-group')!;
     expect(within(declaring as HTMLElement).getByText(/13 ruffs/)).toBeInTheDocument();
-    expect(within(declaring as HTMLElement).getByText(/72%/)).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('77%')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('OVER-RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('15%')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('UNDER-RUFF')).toBeInTheDocument();
     expect(within(declaring as HTMLElement).getByText('8%')).toBeInTheDocument();
-    // defense: 4/1/0 of 5 -> 80%/20%/0%; 5 of 18 total ruffs -> 28%
+    // defense: 4/1/0 of 5 -> 80%/20%/0%
     const defending = within(panel).getByText('DEFENDING').closest('.stats-ruff-group')!;
     expect(within(defending as HTMLElement).getByText(/5 ruffs/)).toBeInTheDocument();
-    expect(within(defending as HTMLElement).getByText(/28%/)).toBeInTheDocument();
     expect(within(defending as HTMLElement).getByText('80%')).toBeInTheDocument();
     // hold-ups: 6/11 -> 55%
     expect(within(panel).getByText('HOLD-UP PLAYS')).toBeInTheDocument();

@@ -247,6 +247,12 @@ export default function Player() {
 
   const ruffTotal = (c: RuffCounts) => c.plain + c.over + c.under;
   const totalRuffs = ruffTotal(stats.ruffs.declarerDummy) + ruffTotal(stats.ruffs.defense);
+  // every contract board (declaring or defending — passed-out boards have no
+  // play at all) runs exactly 13 tricks, so this is "of every trick you
+  // played, how often did you or your side ruff" — not a share of ruffs
+  // among ruffs, which is what the % on each side-group used to (wrongly) show.
+  const contractBoards = t.declarer.boards + t.defense.boards;
+  const ruffPct = contractBoards > 0 ? Math.round((totalRuffs / (contractBoards * 13)) * 100) : null;
   const holdUpPct = stats.holdUps.opportunities
     ? Math.round((stats.holdUps.taken / stats.holdUps.opportunities) * 100)
     : null;
@@ -499,16 +505,26 @@ export default function Player() {
               {totalRuffs > 0 ? (
                 <div className="stats-cardplay-section">
                   <div className="label-caps stats-cardplay-head">RUFFS</div>
+                  {ruffPct !== null ? (
+                    <>
+                      <div className="stats-holdup-row">
+                        <PctBar pct={ruffPct} />
+                        <b>{ruffPct}%</b>
+                      </div>
+                      <div className="stats-cardplay-note">
+                        Ruffed in {totalRuffs} of the {contractBoards * 13} tricks you played.
+                      </div>
+                    </>
+                  ) : null}
                   {RUFF_SIDE_ROWS.filter(({ key }) => ruffTotal(stats.ruffs[key]) > 0).map(({ key, label }) => {
                     const counts = stats.ruffs[key];
                     const total = ruffTotal(counts);
-                    const shareOfRuffs = Math.round((total / totalRuffs) * 100);
                     return (
                       <div key={key} className="stats-ruff-group">
                         <div className="stats-ruff-group-head">
                           <span className="label-caps">{label}</span>
                           <span className="stats-ruff-count">
-                            {total} ruff{total === 1 ? '' : 's'} · {shareOfRuffs}%
+                            {total} ruff{total === 1 ? '' : 's'}
                           </span>
                         </div>
                         {(['plain', 'over', 'under'] as const).map((kind) => {
