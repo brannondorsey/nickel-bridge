@@ -13,6 +13,7 @@ import { Sparkline } from '../components/ds/Sparkline';
 import { StemChart } from '../components/ds/StemChart';
 import { StarGrade } from '../components/ds/StarGrade';
 import { GlossaryProse } from '../components/game/GlossaryProse';
+import { useGlossary } from '../glossary/GlossaryContext';
 import { shortDate, shortDateUTC } from '../format';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -63,6 +64,25 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   double: 'DOUBLES',
   pass: 'PASSES',
 };
+
+/**
+ * BID_TYPE_LABELS[category] as a glossary link. "Pass" opts out of prose
+ * auto-linking sitewide (too common a word — see terms.ts), but here it's a
+ * standalone ledger key rather than free prose, so it gets a direct manual
+ * link to its term instead of running through GlossaryProse.
+ */
+function BidTypeLabel({ category }: { category: BidTypeKey }) {
+  const { openTerm } = useGlossary();
+  const label = BID_TYPE_LABELS[category];
+  if (category === 'pass') {
+    return (
+      <button type="button" className="gloss-link" onClick={() => openTerm('pass')}>
+        {label}
+      </button>
+    );
+  }
+  return <GlossaryProse text={label} />;
+}
 
 /** Display names for the tracked-convention buckets. */
 const CONVENTION_LABELS: Record<ConventionKey, string> = {
@@ -405,7 +425,7 @@ export default function Player() {
                       return (
                         <div key={b.category} className="stats-bidtype-row">
                           <span className="label-caps stats-bidtype-label">
-                            <GlossaryProse text={BID_TYPE_LABELS[b.category]} />
+                            <BidTypeLabel category={b.category} />
                           </span>
                           <PctBar pct={pct} />
                           <b>{pct}%</b>
