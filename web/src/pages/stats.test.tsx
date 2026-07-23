@@ -314,9 +314,29 @@ describe('Stats', () => {
     expect(within(panel).queryByText('DEFENDING')).not.toBeInTheDocument();
   });
 
-  it('hides the whole CARD PLAY panel when both ruffs and hold-ups are empty', async () => {
+  it('shows RUFFS at 0% — not hidden — when contract boards were played but none produced a ruff', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
+      ruffs: playerStatsEmpty.ruffs,
+      holdUps: playerStatsEmpty.holdUps,
+    });
+    renderStats();
+    const panel = (await screen.findByText('CARD PLAY')).closest('.stats-cardplay') as HTMLElement;
+    const ruffs = within(panel).getByText('RUFFS').closest('.stats-cardplay-section')!;
+    expect(within(ruffs as HTMLElement).getByText('0%')).toBeInTheDocument();
+    // 214 contract boards (88 declaring + 126 defending) * 13 tricks
+    expect(within(ruffs as HTMLElement).getByText('Ruffed in 0 of the 2782 tricks you played.')).toBeInTheDocument();
+    // no ruffs means no per-side breakdown to show
+    expect(within(ruffs as HTMLElement).queryByText('DECLARING')).not.toBeInTheDocument();
+    expect(within(ruffs as HTMLElement).queryByText('DEFENDING')).not.toBeInTheDocument();
+    // hold-ups genuinely has nothing to show (0 opportunities, not just 0 taken)
+    expect(within(panel).queryByText('HOLD-UP PLAYS')).not.toBeInTheDocument();
+  });
+
+  it('hides the whole CARD PLAY panel when the player has never played a contract board', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      totals: { ...playerStatsFull.totals, declarer: { boards: 0, made: 0 }, defense: { boards: 0, beat: 0 } },
       ruffs: playerStatsEmpty.ruffs,
       holdUps: playerStatsEmpty.holdUps,
     });

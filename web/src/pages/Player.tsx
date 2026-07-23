@@ -500,22 +500,18 @@ export default function Player() {
             </PerforatedPanel>
           ) : null}
 
-          {totalRuffs > 0 || holdUpPct !== null ? (
+          {ruffPct !== null || holdUpPct !== null ? (
             <PerforatedPanel heading="CARD PLAY" className="stats-cardplay num">
-              {totalRuffs > 0 ? (
+              {ruffPct !== null ? (
                 <div className="stats-cardplay-section">
                   <div className="label-caps stats-cardplay-head">RUFFS</div>
-                  {ruffPct !== null ? (
-                    <>
-                      <div className="stats-holdup-row">
-                        <PctBar pct={ruffPct} />
-                        <b>{ruffPct}%</b>
-                      </div>
-                      <div className="stats-cardplay-note">
-                        Ruffed in {totalRuffs} of the {contractBoards * 13} tricks you played.
-                      </div>
-                    </>
-                  ) : null}
+                  <div className="stats-holdup-row">
+                    <PctBar pct={ruffPct} />
+                    <b>{ruffPct}%</b>
+                  </div>
+                  <div className="stats-cardplay-note">
+                    Ruffed in {totalRuffs} of the {contractBoards * 13} tricks you played.
+                  </div>
                   {RUFF_SIDE_ROWS.filter(({ key }) => ruffTotal(stats.ruffs[key]) > 0).map(({ key, label }) => {
                     const counts = stats.ruffs[key];
                     const total = ruffTotal(counts);
