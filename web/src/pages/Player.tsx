@@ -66,21 +66,27 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
 };
 
 /**
- * BID_TYPE_LABELS[category] as a glossary link. "Pass" opts out of prose
- * auto-linking sitewide (too common a word — see terms.ts), but here it's a
- * standalone ledger key rather than free prose, so it gets a direct manual
- * link to its term instead of running through GlossaryProse.
+ * A manual glossary link for a standalone ledger/tile key (as opposed to free
+ * prose): used where GlossaryProse's auto-matching wouldn't fire — either the
+ * term is `linkify: false` sitewide because it's too common a word in prose
+ * ("pass", "game"), or the display text is a different word form than the
+ * term itself ("Declaring" vs. the "Declarer" term) — but the key here is a
+ * short, deliberate label rather than a sentence, so linking it doesn't
+ * create prose noise.
  */
-function BidTypeLabel({ category }: { category: BidTypeKey }) {
+function GlossLabel({ text, slug }: { text: string; slug: string }) {
   const { openTerm } = useGlossary();
+  return (
+    <button type="button" className="gloss-link" onClick={() => openTerm(slug)}>
+      {text}
+    </button>
+  );
+}
+
+/** BID_TYPE_LABELS[category] as a glossary link. */
+function BidTypeLabel({ category }: { category: BidTypeKey }) {
   const label = BID_TYPE_LABELS[category];
-  if (category === 'pass') {
-    return (
-      <button type="button" className="gloss-link" onClick={() => openTerm('pass')}>
-        {label}
-      </button>
-    );
-  }
+  if (category === 'pass') return <GlossLabel text={label} slug="pass" />;
   return <GlossaryProse text={label} />;
 }
 
@@ -244,8 +250,13 @@ export default function Player() {
     { label: 'Elo', pct: stats.percentiles.elo, of: `${stats.percentiles.ratedPlayers} rated players` },
     { label: 'Score', pct: stats.percentiles.avgPct, of: `${stats.percentiles.activePlayers} players` },
     { label: 'Bidding', pct: stats.percentiles.bidAccuracy, of: `${stats.percentiles.activePlayers} players` },
-    { label: 'Declaring', pct: stats.percentiles.declaring, of: `${stats.percentiles.declaringPlayers} declarers` },
-  ].filter((r) => r.pct !== null) as { label: string; pct: number; of: string }[];
+    {
+      label: 'Declaring',
+      slug: 'declarer',
+      pct: stats.percentiles.declaring,
+      of: `${stats.percentiles.declaringPlayers} declarers`,
+    },
+  ].filter((r) => r.pct !== null) as { label: string; slug?: string; pct: number; of: string }[];
 
   const cm = stats.contractMix;
   const tierPct = (b: { boards: number; made: number }) => (b.boards ? Math.round((b.made / b.boards) * 100) : null);
@@ -487,7 +498,7 @@ export default function Player() {
                   return (
                     <div key={key} className="stats-contract-row">
                       <span className="label-caps stats-contract-label">
-                        <GlossaryProse text={label} />
+                        {key === 'game' ? <GlossLabel text={label} slug="game" /> : <GlossaryProse text={label} />}
                       </span>
                       {pct !== null ? <PctBar pct={pct} /> : <span />}
                       <b>{pct !== null ? `${pct}%` : '—'}</b>
@@ -581,7 +592,7 @@ export default function Player() {
               {percentileRows.map((r) => (
                 <div key={r.label} className="stats-versus-row">
                   <span className="stats-versus-label">
-                    <GlossaryProse text={r.label} />
+                    {r.slug ? <GlossLabel text={r.label} slug={r.slug} /> : <GlossaryProse text={r.label} />}
                   </span>
                   <PctBar pct={r.pct} />
                   <span className="stats-versus-note">
