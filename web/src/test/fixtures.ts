@@ -366,6 +366,8 @@ export const playerStatsFull: PlayerStats = {
     currentElo: 1487,
     peakElo: 1502,
     avgPct: 57,
+    bestPct: { pct: 74, tournamentName: 'Tournament #9', tournamentId: 9 },
+    worstPct: { pct: 31, tournamentName: 'Tournament #4', tournamentId: 4 },
     avgBidAccuracy: 78,
     gradeCounts: { excellent: 137, good: 58, fair: 15, poor: 4 },
     declarer: { boards: 88, made: 54 },
@@ -373,7 +375,20 @@ export const playerStatsFull: PlayerStats = {
     passedOut: 3,
     monthlyEloDelta: 34,
   },
-  percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, ratedPlayers: 54, activePlayers: 60 },
+  trickDelta: {
+    boards: 88,
+    avgDelta: 0.3,
+    buckets: [
+      { delta: -3, count: 5 },
+      { delta: -2, count: 10 },
+      { delta: -1, count: 19 },
+      { delta: 0, count: 10 },
+      { delta: 1, count: 16 },
+      { delta: 2, count: 20 },
+      { delta: 3, count: 8 },
+    ],
+  },
+  percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, declaring: 58, ratedPlayers: 54, activePlayers: 60, declaringPlayers: 52 },
   eloSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), elo: 1380 + i * 11 })),
   pctSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), pct: 44 + ((i * 7) % 30), boards: 4, fieldSize: 8 })),
   accuracySeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), accuracy: 60 + i * 2, calls: 18 })),
@@ -385,6 +400,37 @@ export const playerStatsFull: PlayerStats = {
     { category: 'rebid', total: 25, satisfactory: 21 },
     { category: 'double', total: 6, satisfactory: 5 },
     { category: 'overcall', total: 24, satisfactory: 19 },
+  ],
+  // server-ranked best to worst; a subset of the graded calls above (natural bids never appear here)
+  conventions: [
+    { family: 'stayman', total: 9, satisfactory: 8 },
+    { family: 'blackwood', total: 3, satisfactory: 3 },
+    { family: 'jacobyTransfer', total: 5, satisfactory: 2 },
+  ],
+  // sums to declarer.boards: 88 (51+30+7 tiers, 21+45+22 strains)
+  contractMix: {
+    partscore: { boards: 51, made: 38 },
+    game: { boards: 30, made: 14 },
+    slam: { boards: 7, made: 2 },
+    doubled: { boards: 9, made: 5 },
+    strains: { notrump: 21, major: 45, minor: 22 },
+  },
+  // a handful of days across the fixture's history, including one multi-board day
+  dailyBoards: [
+    { date: '2026-05-14', count: 4 },
+    { date: '2026-05-21', count: 2 },
+    { date: '2026-06-02', count: 1 },
+    { date: '2026-06-09', count: 1 },
+  ],
+  // ranked by shared count; covers all three rivalLine branches (ahead/tied/behind).
+  // Deliberately NOT userId 90 / 'The Shark' — several other fixtures reuse
+  // playerStatsFull with the profile subject itself set to that id/handle
+  // (see App.test.tsx, stats.test.tsx's house-profile test), and a rival row
+  // with the same handle would collide with the page's own name heading.
+  rivals: [
+    { userId: 92, handle: 'The Novice', kind: 'ai', shared: 6, record: { ahead: 4, behind: 2, tied: 0 } },
+    { userId: 50, handle: 'Marge', kind: 'human', shared: 5, record: { ahead: 2, behind: 2, tied: 1 } },
+    { userId: 51, handle: 'Dev', kind: 'human', shared: 4, record: { ahead: 1, behind: 3, tied: 0 } },
   ],
 };
 
@@ -398,6 +444,8 @@ export const playerStatsEmpty: PlayerStats = {
     currentElo: 1200,
     peakElo: 1200,
     avgPct: null,
+    bestPct: null,
+    worstPct: null,
     avgBidAccuracy: null,
     gradeCounts: { excellent: 0, good: 0, fair: 0, poor: 0 },
     declarer: { boards: 0, made: 0 },
@@ -405,11 +453,34 @@ export const playerStatsEmpty: PlayerStats = {
     passedOut: 0,
     monthlyEloDelta: null,
   },
-  percentiles: { elo: null, avgPct: null, bidAccuracy: null, ratedPlayers: 0, activePlayers: 0 },
+  trickDelta: {
+    boards: 0,
+    avgDelta: null,
+    buckets: ([-3, -2, -1, 0, 1, 2, 3] as const).map((delta) => ({ delta, count: 0 })),
+  },
+  percentiles: {
+    elo: null,
+    avgPct: null,
+    bidAccuracy: null,
+    declaring: null,
+    ratedPlayers: 0,
+    activePlayers: 0,
+    declaringPlayers: 0,
+  },
   eloSeries: [],
   pctSeries: [],
   accuracySeries: [],
   bidTypes: [],
+  conventions: [],
+  contractMix: {
+    partscore: { boards: 0, made: 0 },
+    game: { boards: 0, made: 0 },
+    slam: { boards: 0, made: 0 },
+    doubled: { boards: 0, made: 0 },
+    strains: { notrump: 0, major: 0, minor: 0 },
+  },
+  dailyBoards: [],
+  rivals: [],
 };
 
 // ---- leaderboard ----

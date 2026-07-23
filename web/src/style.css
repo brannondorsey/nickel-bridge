@@ -970,6 +970,73 @@ a.ds-btn-secondary:hover {
   margin-top: 6px;
 }
 
+/* ---- DayGrid ---- */
+.daygrid-plot {
+  position: relative;
+}
+.daygrid-hits {
+  position: absolute;
+  inset: 0;
+}
+.daygrid-hits button,
+.daygrid-hits div {
+  position: absolute;
+}
+.daygrid-hits button {
+  opacity: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.daygrid-cell {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.daygrid-cell.level-0 {
+  fill: var(--panel);
+}
+.daygrid-cell.level-1 {
+  fill: var(--ink);
+  fill-opacity: 0.22;
+}
+.daygrid-cell.level-2 {
+  fill: var(--ink);
+  fill-opacity: 0.45;
+}
+.daygrid-cell.level-3 {
+  fill: var(--ink);
+  fill-opacity: 0.7;
+}
+.daygrid-cell.level-4 {
+  fill: var(--ink);
+  fill-opacity: 1;
+}
+.daygrid-cell.future {
+  fill: none;
+  stroke: var(--line-dashed);
+  stroke-dasharray: 1.5 1.5;
+}
+.daygrid-captions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.daygrid-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.daygrid-detail {
+  font-size: 12.5px;
+  text-align: center;
+  margin-top: 6px;
+}
+
 /* ---- PctBar ---- */
 .pctbar {
   display: inline-block;
@@ -1989,6 +2056,15 @@ a.board-row:hover {
 .stats-page .stats-appearance {
   margin: 12px 16px 0;
 }
+.stats-page .stats-daygrid {
+  margin: 12px 16px 0;
+}
+.stats-daygrid-note {
+  margin-top: 9px;
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 .stats-grades {
   display: flex;
   flex-direction: column;
@@ -2072,6 +2148,30 @@ a.board-row:hover {
   color: var(--muted);
 }
 
+.stats-ledger-tabs {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.stats-ledger-tabs button {
+  flex: 1;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  color: var(--ink);
+  min-height: 30px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  border-radius: var(--radius-btn);
+}
+.stats-ledger-tabs button.active {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+
 .stats-tiles {
   margin: 12px 16px 0;
   display: grid;
@@ -2082,6 +2182,14 @@ a.board-row:hover {
   border: 1px solid var(--ink);
   background: var(--panel);
   padding: 12px 14px;
+  min-width: 0; /* let the sub-line ellipsize instead of overflowing the grid cell */
+  /* harmless on the plain <div> tiles; resets the <a> tiles (BEST/TOUGHEST
+     CROSSING link to that tournament) back to looking like every other tile */
+  text-decoration: none;
+  color: inherit;
+}
+a.stat-tile:hover {
+  background: var(--surface);
 }
 .stat-tile-label {
   font-size: 9.5px;
@@ -2096,6 +2204,104 @@ a.board-row:hover {
 .stat-tile-sub {
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-page .stats-contracts {
+  margin: 12px 16px 0;
+}
+.stats-contracts-rows {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13.5px;
+}
+.stats-contract-row {
+  display: contents;
+}
+.stats-contract-label {
+  font-size: 10px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.stats-contract-row .pctbar {
+  width: 100%;
+  height: 8px;
+}
+.stats-contract-count {
+  color: var(--muted);
+  font-size: 12px;
+  justify-self: end;
+  white-space: nowrap;
+}
+.stats-contracts-divider {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  margin: 2px 0;
+}
+.stats-contracts-note {
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.stats-contracts-strains {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.stats-page .stats-trickdelta {
+  margin: 12px 16px 0;
+}
+.stats-trickdelta-note {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--ink);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ---- StemChart ---- */
+.stemchart-captions {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.stemchart-val,
+.stemchart-tick {
+  text-anchor: middle;
+}
+.stemchart-val {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 11px;
+  fill: var(--ink);
+}
+.stemchart-tick {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  fill: var(--muted);
+}
+.stemchart-avg {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  fill: var(--accent);
 }
 
 .stats-page .stats-versus {
@@ -2111,6 +2317,45 @@ a.board-row:hover {
 }
 .stats-versus-note {
   color: var(--muted);
+  font-size: 12.5px;
+}
+
+.stats-page .stats-rivals {
+  margin: 12px 16px 0;
+}
+.stats-rival-row {
+  display: block;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-quiet);
+  text-decoration: none;
+  color: var(--ink);
+}
+.stats-rival-row:last-child {
+  border-bottom: none;
+}
+.stats-rival-row:hover {
+  background: var(--surface);
+  margin: 0 -12px;
+  padding: 8px 12px;
+}
+.stats-rival-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.stats-rival-name {
+  font-weight: 600;
+}
+.stats-rival-record {
+  font-family: var(--font-label);
+  font-size: 13px;
+}
+.stats-rival-note {
+  margin-top: 2px;
+  color: var(--muted);
+  font-style: italic;
   font-size: 12.5px;
 }
 

@@ -1,16 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, PlayerStats, api } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, Rival, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
+import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
 import { FlipDigits } from '../components/ds/FlipDigits';
 import { Loading } from '../components/ds/Loading';
 import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
+import { StemChart } from '../components/ds/StemChart';
 import { StarGrade } from '../components/ds/StarGrade';
-import { shortDate } from '../format';
+import { shortDate, shortDateUTC } from '../format';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
 const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
@@ -61,6 +63,55 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   pass: 'PASSES',
 };
 
+/** Display names for the tracked-convention buckets. */
+const CONVENTION_LABELS: Record<ConventionKey, string> = {
+  stayman: 'STAYMAN',
+  jacobyTransfer: 'JACOBY TRANSFERS',
+  blackwood: 'BLACKWOOD',
+  gerber: 'GERBER',
+  weakTwo: 'WEAK TWOS',
+  negativeDouble: 'NEGATIVE DOUBLES',
+  michaels: 'MICHAELS',
+};
+
+const CONTRACT_TIER_ROWS = [
+  { key: 'partscore', label: 'PARTSCORE' },
+  { key: 'game', label: 'GAME' },
+  { key: 'slam', label: 'SLAM' },
+] as const;
+
+/** Axis ticks for the trick-delta stem plot, keyed by clamped bucket value. */
+const TRICK_DELTA_TICKS: Record<number, string> = {
+  [-3]: '−3',
+  [-2]: '−2',
+  [-1]: '−1',
+  [0]: 'MADE',
+  [1]: '+1',
+  [2]: '+2',
+  [3]: '+3',
+};
+
+/** Toll-bridge-voice takeaway for the trick-delta histogram. */
+function trickDeltaNote(avgDelta: number): string {
+  if (avgDelta <= -0.5) {
+    return 'Falling short of contract more often than clearing it — bid a touch closer to the hand next time.';
+  }
+  if (avgDelta >= 0.5) {
+    return 'Clearing contract more often than falling short — the auction could afford to reach a little further.';
+  }
+  return 'Tricks made track the bid closely — the mark of an honest auction.';
+}
+
+/** "Crossed paths 6 times — ahead 4-2." / "...— dead even 3-3." / "...— behind 2-4 (1 tied)." */
+function rivalLine(r: Rival): string {
+  const { ahead, behind, tied } = r.record;
+  const times = `${r.shared} time${r.shared === 1 ? '' : 's'}`;
+  const tiedNote = tied ? ` (${tied} tied)` : '';
+  if (ahead === behind) return `Crossed paths ${times} — dead even ${ahead}-${behind}${tiedNote}.`;
+  const verb = ahead > behind ? 'ahead' : 'behind';
+  return `Crossed paths ${times} — ${verb} ${ahead}-${behind}${tiedNote}.`;
+}
+
 /** Bordered chart panel: tracked-caps heading, right-aligned key figure. */
 function ChartPanel({ heading, figure, children }: { heading: string; figure?: string; children: ReactNode }) {
   return (
@@ -74,14 +125,22 @@ function ChartPanel({ heading, figure, children }: { heading: string; figure?: s
   );
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div className="stat-tile">
+function Tile({ label, value, sub, to }: { label: string; value: string; sub: string; to?: string }) {
+  const content = (
+    <>
       <div className="label-caps stat-tile-label">{label}</div>
       <div className="stat-tile-value num">{value}</div>
       <div className="stat-tile-sub num">{sub}</div>
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <Link to={to} className="stat-tile">
+        {content}
+      </Link>
+    );
+  }
+  return <div className="stat-tile">{content}</div>;
 }
 
 /** Stats: the turnstile rating hero, trend sparklines, and the bidding/play record. */
@@ -91,11 +150,13 @@ export default function Player() {
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [error, setError] = useState('');
   const [bidLedgerOpen, setBidLedgerOpen] = useState(false);
+  const [ledgerView, setLedgerView] = useState<'type' | 'convention'>('type');
 
   useEffect(() => {
     setStats(null);
     setError('');
     setBidLedgerOpen(false);
+    setLedgerView('type');
     api
       .playerStats(Number(id))
       .then(setStats)
@@ -162,7 +223,16 @@ export default function Player() {
     { label: 'Elo', pct: stats.percentiles.elo, of: `${stats.percentiles.ratedPlayers} rated players` },
     { label: 'Score', pct: stats.percentiles.avgPct, of: `${stats.percentiles.activePlayers} players` },
     { label: 'Bidding', pct: stats.percentiles.bidAccuracy, of: `${stats.percentiles.activePlayers} players` },
+    { label: 'Declaring', pct: stats.percentiles.declaring, of: `${stats.percentiles.declaringPlayers} declarers` },
   ].filter((r) => r.pct !== null) as { label: string; pct: number; of: string }[];
+
+  const cm = stats.contractMix;
+  const tierPct = (b: { boards: number; made: number }) => (b.boards ? Math.round((b.made / b.boards) * 100) : null);
+  const strainTotal = cm.strains.notrump + cm.strains.major + cm.strains.minor;
+  const strainPct = (n: number) => (strainTotal ? Math.round((n / strainTotal) * 100) : 0);
+  const doubledPct = tierPct(cm.doubled);
+
+  const dailyTotal = sumInWindow(stats.dailyBoards);
 
   return (
     <div className="stats-page">
@@ -220,6 +290,18 @@ export default function Player() {
         </>
       ) : (
         <>
+          <PerforatedPanel
+            heading={`TOLL LOG — ${dailyTotal} TOLL${dailyTotal === 1 ? '' : 'S'} THIS SEASON`}
+            className="stats-daygrid"
+          >
+            <DayGrid days={stats.dailyBoards} />
+            {dailyTotal === 0 && t.boardsCompleted > 0 ? (
+              <div className="stats-daygrid-note">
+                Quiet lately — the last toll paid was {shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
+              </div>
+            ) : null}
+          </PerforatedPanel>
+
           <ChartPanel
             heading={`MATCHPOINTS — LAST ${pctPoints.length} TOURNAMENT${pctPoints.length === 1 ? '' : 'S'}`}
             figure={t.avgPct !== null ? `Ø ${t.avgPct}%` : undefined}
@@ -271,35 +353,127 @@ export default function Player() {
               </div>
               {stats.bidTypes.length > 0 ? (
                 <div className="stats-bidding-hint">
-                  {bidLedgerOpen ? 'Fold the ledger away ▴' : 'Tap for the ledger by bid type ▾'}
+                  {bidLedgerOpen
+                    ? 'Fold the ledger away ▴'
+                    : stats.conventions.length > 0
+                      ? 'Tap for the bidding ledger ▾'
+                      : 'Tap for the ledger by bid type ▾'}
                 </div>
               ) : null}
             </button>
             {bidLedgerOpen && stats.bidTypes.length > 0 ? (
               <div className="stats-bidtypes">
-                <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY BID TYPE</div>
-                {stats.bidTypes.map((b) => {
-                  const pct = Math.round((b.satisfactory / b.total) * 100);
+                {stats.conventions.length > 0 ? (
+                  <div className="stats-ledger-tabs" role="tablist" aria-label="Bidding ledger view">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={ledgerView === 'type'}
+                      className={ledgerView === 'type' ? 'active' : ''}
+                      onClick={() => setLedgerView('type')}
+                    >
+                      BID TYPE
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={ledgerView === 'convention'}
+                      className={ledgerView === 'convention' ? 'active' : ''}
+                      onClick={() => setLedgerView('convention')}
+                    >
+                      CONVENTION
+                    </button>
+                  </div>
+                ) : null}
+
+                {ledgerView === 'type' || stats.conventions.length === 0 ? (
+                  <>
+                    <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY BID TYPE</div>
+                    {stats.bidTypes.map((b) => {
+                      const pct = Math.round((b.satisfactory / b.total) * 100);
+                      return (
+                        <div key={b.category} className="stats-bidtype-row">
+                          <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
+                          <PctBar pct={pct} />
+                          <b>{pct}%</b>
+                          <span className="stats-bidtype-count">
+                            {b.total} call{b.total === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="stats-bidtypes-note">
+                      Ranked by your share of ★★-or-better calls
+                      {stats.bidTypes.length >= 2
+                        ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
+                        : '.'}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="label-caps stats-bidtypes-head">★★ OR BETTER — BY CONVENTION</div>
+                    {stats.conventions.map((c) => {
+                      const pct = Math.round((c.satisfactory / c.total) * 100);
+                      return (
+                        <div key={c.family} className="stats-bidtype-row">
+                          <span className="label-caps stats-bidtype-label">{CONVENTION_LABELS[c.family]}</span>
+                          <PctBar pct={pct} />
+                          <b>{pct}%</b>
+                          <span className="stats-bidtype-count">
+                            {c.total} call{c.total === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="stats-bidtypes-note">
+                      Named conventions only — natural bids don't count here
+                      {stats.conventions.length >= 2
+                        ? ` — ${CONVENTION_LABELS[stats.conventions[stats.conventions.length - 1].family].toLowerCase()} could use a refresher.`
+                        : '.'}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </PerforatedPanel>
+
+          {t.declarer.boards > 0 ? (
+            <PerforatedPanel heading={`CONTRACTS — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
+              <div className="stats-contracts-rows">
+                {CONTRACT_TIER_ROWS.map(({ key, label }) => {
+                  const bucket = cm[key];
+                  const pct = tierPct(bucket);
                   return (
-                    <div key={b.category} className="stats-bidtype-row">
-                      <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
-                      <PctBar pct={pct} />
-                      <b>{pct}%</b>
-                      <span className="stats-bidtype-count">
-                        {b.total} call{b.total === 1 ? '' : 's'}
+                    <div key={key} className="stats-contract-row">
+                      <span className="label-caps stats-contract-label">{label}</span>
+                      {pct !== null ? <PctBar pct={pct} /> : <span />}
+                      <b>{pct !== null ? `${pct}%` : '—'}</b>
+                      <span className="stats-contract-count">
+                        {bucket.boards} board{bucket.boards === 1 ? '' : 's'}
                       </span>
                     </div>
                   );
                 })}
-                <div className="stats-bidtypes-note">
-                  Ranked by your share of ★★-or-better calls
-                  {stats.bidTypes.length >= 2
-                    ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
-                    : '.'}
+                <div className="stats-contracts-divider" />
+                <div className="stats-contract-row">
+                  <span className="label-caps stats-contract-label">DOUBLED</span>
+                  {doubledPct !== null ? <PctBar pct={doubledPct} /> : <span />}
+                  <b>{doubledPct !== null ? `${doubledPct}%` : '—'}</b>
+                  <span className="stats-contract-count">
+                    {cm.doubled.boards} board{cm.doubled.boards === 1 ? '' : 's'}
+                  </span>
                 </div>
               </div>
-            ) : null}
-          </PerforatedPanel>
+              <div className="stats-contracts-note">Redoubled crossings count as doubled too.</div>
+              <div className="stats-contracts-strains">
+                <span className="label-caps">AS DECLARER</span>
+                <span>
+                  NOTRUMP {strainPct(cm.strains.notrump)}% · MAJOR {strainPct(cm.strains.major)}% · MINOR{' '}
+                  {strainPct(cm.strains.minor)}%
+                </span>
+              </div>
+            </PerforatedPanel>
+          ) : null}
 
           <div className="stats-tiles">
             <Tile
@@ -314,9 +488,41 @@ export default function Player() {
             />
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
-            <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
             {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
+            <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
+            <Tile
+              label="BEST CROSSING"
+              value={t.bestPct ? `${t.bestPct.pct}%` : '—'}
+              sub={t.bestPct ? t.bestPct.tournamentName : 'no crossings yet'}
+              to={t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
+            />
+            <Tile
+              label="TOUGHEST CROSSING"
+              value={t.worstPct ? `${t.worstPct.pct}%` : '—'}
+              sub={t.worstPct ? t.worstPct.tournamentName : 'no crossings yet'}
+              to={t.worstPct ? `/t/${t.worstPct.tournamentId}` : undefined}
+            />
           </div>
+
+          {stats.trickDelta.avgDelta !== null ? (
+            <PerforatedPanel
+              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'}`}
+              className="stats-trickdelta num"
+            >
+              <StemChart
+                points={stats.trickDelta.buckets.map((b) => ({
+                  tick: TRICK_DELTA_TICKS[b.delta],
+                  pct: Math.round((b.count / stats.trickDelta.boards) * 100),
+                  count: b.count,
+                }))}
+                avgIndex={stats.trickDelta.avgDelta + 3}
+                avgLabel={`Ø ${stats.trickDelta.avgDelta >= 0 ? '+' : '−'}${Math.abs(stats.trickDelta.avgDelta)}`}
+                leftCaption="short of contract"
+                rightCaption="over contract"
+              />
+              <div className="stats-trickdelta-note">{trickDeltaNote(stats.trickDelta.avgDelta)}</div>
+            </PerforatedPanel>
+          ) : null}
 
           {percentileRows.length > 0 ? (
             <PerforatedPanel heading="VERSUS THE FIELD" className="stats-versus num">
@@ -328,6 +534,26 @@ export default function Player() {
                     better than {r.pct}% of {r.of}
                   </span>
                 </div>
+              ))}
+            </PerforatedPanel>
+          ) : null}
+
+          {stats.rivals.length > 0 ? (
+            <PerforatedPanel heading="RIVALRIES" className="stats-rivals num">
+              {stats.rivals.map((r) => (
+                <Link key={r.userId} to={`/players/${r.userId}`} className="stats-rival-row">
+                  <div className="stats-rival-head">
+                    <span className="stats-rival-name">
+                      {r.handle}
+                      {r.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
+                    </span>
+                    <span className="stats-rival-record">
+                      {r.record.ahead}-{r.record.behind}
+                      {r.record.tied ? `-${r.record.tied}` : ''}
+                    </span>
+                  </div>
+                  <div className="stats-rival-note">{rivalLine(r)}</div>
+                </Link>
               ))}
             </PerforatedPanel>
           ) : null}

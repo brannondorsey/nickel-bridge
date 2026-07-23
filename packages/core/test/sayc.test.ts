@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DOUBLE, PASS, REDOUBLE, explainBid, makeBid } from '../src/index.js';
+import { DOUBLE, PASS, REDOUBLE, conventionFamily, explainBid, makeBid } from '../src/index.js';
 
 /**
  * Data-driven SAYC explainer spec: one row per rule family.
@@ -135,5 +135,40 @@ describe('SAYC explainer spec table', () => {
 
   it('returns null once the auction is over', () => {
     expect(explainBid(0, [PASS, PASS, PASS, PASS], PASS)).toBeNull();
+  });
+});
+
+describe('conventionFamily', () => {
+  // Reuses the exact (dealer, calls, candidate) fixtures already proven
+  // correct by the SPEC table above, rather than re-deriving new auctions.
+  const fam = (dealer: 0 | 1 | 2 | 3, calls: number[], candidate: number) =>
+    conventionFamily(explainBid(dealer, calls, candidate));
+
+  it('buckets each tracked convention, ask and reply together', () => {
+    expect(fam(0, [b(1, 4), PASS], b(2, 0))).toBe('stayman'); // Stayman ask
+    expect(fam(2, [b(1, 4), PASS, b(2, 0), PASS], b(2, 1))).toBe('stayman'); // Stayman "no major" reply
+    expect(fam(2, [b(1, 4), PASS, b(2, 0), PASS], b(2, 2))).toBe('stayman'); // Stayman "shows a major" reply
+    expect(fam(0, [b(1, 4), PASS], b(2, 1))).toBe('jacobyTransfer'); // transfer ask (to hearts)
+    expect(fam(0, [b(1, 4), PASS], b(2, 2))).toBe('jacobyTransfer'); // transfer ask (to spades)
+    expect(fam(2, [b(1, 4), PASS, b(2, 1), PASS], b(2, 2))).toBe('jacobyTransfer'); // accepts transfer
+    expect(fam(2, [b(1, 4), PASS, b(2, 2), PASS], b(2, 3))).toBe('jacobyTransfer'); // accepts transfer
+    expect(fam(2, [b(1, 4), PASS, b(2, 2), PASS], b(3, 3))).toBe('jacobyTransfer'); // super-accept
+    expect(fam(0, [b(1, 4), PASS], b(4, 0))).toBe('gerber'); // Gerber ask
+    expect(fam(2, [b(1, 4), PASS, b(4, 0), PASS], b(4, 1))).toBe('gerber'); // Gerber reply
+    expect(fam(2, [b(1, 4), PASS, b(4, 0), PASS], b(4, 3))).toBe('gerber'); // Gerber reply
+    expect(fam(0, [b(1, 3), PASS, b(3, 3), PASS], b(4, 4))).toBe('blackwood'); // Blackwood 4NT
+    expect(fam(2, [b(1, 3), PASS, b(3, 3), PASS, b(4, 4), PASS], b(5, 1))).toBe('blackwood'); // Blackwood reply
+    expect(fam(0, [], b(2, 3))).toBe('weakTwo');
+    expect(fam(0, [b(1, 1), b(1, 3)], DOUBLE)).toBe('negativeDouble');
+    expect(fam(0, [b(1, 2)], b(2, 2))).toBe('michaels');
+  });
+
+  it('excludes natural bids and untracked artificial conventions', () => {
+    expect(fam(0, [], b(1, 0))).toBeNull(); // natural opening
+    expect(fam(0, [b(1, 2)], DOUBLE)).toBeNull(); // takeout double, not negative
+    expect(fam(0, [b(1, 4), PASS], b(4, 4))).toBeNull(); // Quantitative 4NT, not Blackwood
+    expect(fam(0, [b(2, 0), PASS], b(2, 1))).toBeNull(); // 2♦ waiting, untracked
+    expect(fam(0, [b(1, 2)], b(2, 4))).toBeNull(); // Unusual 2NT, untracked
+    expect(fam(0, [b(1, 2), b(2, 2), PASS], b(2, 3))).toBeNull(); // Michaels advance, not the cue-bid itself
   });
 });

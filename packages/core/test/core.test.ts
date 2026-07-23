@@ -218,7 +218,7 @@ describe('play', () => {
     expect(trickWinner(trick, 4)).toBe(0);
   });
 
-  it('highest trump wins an all-trump trick; overruff beats ruff', () => {
+it('highest trump wins an all-trump trick; overruff beats ruff', () => {
     const allTrump = [
       { seat: 0 as Seat, card: makeCard(1, 3) }, // ♥5 led
       { seat: 1 as Seat, card: makeCard(1, 12) }, // ♥A

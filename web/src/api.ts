@@ -171,6 +171,33 @@ interface StatPoint {
 /** Auction-role bucket for the bidding ledger (server: core's bidCategory). */
 export type BidTypeKey = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
 
+/** One UTC calendar day with at least one completed board (server: stats.ts's dailyBoards). */
+export interface DailyBoardCount {
+  /** UTC calendar day, 'YYYY-MM-DD' */
+  date: string;
+  count: number;
+}
+
+/** One entry in the RIVALRIES panel — head-to-head record vs. a shared-field opponent (server: stats.ts's Rival). */
+export interface Rival {
+  userId: number;
+  handle: string;
+  /** 'ai' = one of the benchmark house players (ai-players.ts) */
+  kind: 'human' | 'ai';
+  shared: number;
+  record: { ahead: number; behind: number; tied: number };
+}
+
+/** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
+export type ConventionKey =
+  | 'stayman'
+  | 'jacobyTransfer'
+  | 'blackwood'
+  | 'gerber'
+  | 'weakTwo'
+  | 'negativeDouble'
+  | 'michaels';
+
 export interface PlayerStats {
   /** 'ai' = one of the benchmark house players (ai-players.ts) */
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
@@ -182,6 +209,8 @@ export interface PlayerStats {
     currentElo: number;
     peakElo: number;
     avgPct: number | null;
+    bestPct: { pct: number; tournamentName: string; tournamentId: number } | null;
+    worstPct: { pct: number; tournamentName: string; tournamentId: number } | null;
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };
@@ -190,18 +219,42 @@ export interface PlayerStats {
     /** rating change since the start of the current UTC month; null when unrated */
     monthlyEloDelta: number | null;
   };
+  /** signed histogram of tricks made vs. contract, declaring boards only — buckets clip at ±3 */
+  trickDelta: {
+    buckets: { delta: -3 | -2 | -1 | 0 | 1 | 2 | 3; count: number }[];
+    boards: number;
+    avgDelta: number | null;
+  };
   percentiles: {
     elo: number | null;
     avgPct: number | null;
     bidAccuracy: number | null;
+    /** declaring-side make-rate percentile (server/src/stats.ts) */
+    declaring: number | null;
     ratedPlayers: number;
     activePlayers: number;
+    /** size of the declaring-rate comparison pool (players with at least one declaring board) */
+    declaringPlayers: number;
   };
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
   /** graded calls by auction role, ranked best to worst by satisfactory-or-better share */
   bidTypes: { category: BidTypeKey; total: number; satisfactory: number }[];
+  /** graded calls that were a named convention, by which one (server: conventionFamily) */
+  conventions: { family: ConventionKey; total: number; satisfactory: number }[];
+  /** declaring-side contract mix: partscore/game/slam + doubled/redoubled + strain family (server/src/stats.ts) */
+  contractMix: {
+    partscore: { boards: number; made: number };
+    game: { boards: number; made: number };
+    slam: { boards: number; made: number };
+    doubled: { boards: number; made: number };
+    strains: { notrump: number; major: number; minor: number };
+  };
+  /** completed boards by UTC day, sparse, ascending — see server's stats.ts doc comment */
+  dailyBoards: DailyBoardCount[];
+  /** other players ranked by shared-tournament count, most-crossed-paths first (max 5) */
+  rivals: Rival[];
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */

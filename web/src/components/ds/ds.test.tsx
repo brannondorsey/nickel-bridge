@@ -6,6 +6,7 @@ import { AppHeader, ScreenHeader } from './AppHeader';
 import { BridgeMark } from './BridgeMark';
 import { Button } from './Button';
 import { Chip } from './Chip';
+import { DayGrid, sumInWindow } from './DayGrid';
 import { Dialog } from './Dialog';
 import { FlipDigits } from './FlipDigits';
 import { HcpBadge } from './HcpBadge';
@@ -16,6 +17,7 @@ import { PerforatedPanel } from './PerforatedPanel';
 import { Postmark } from './Postmark';
 import { Sparkline } from './Sparkline';
 import { StarGrade } from './StarGrade';
+import { StemChart } from './StemChart';
 import { TabBar } from './TabBar';
 import { TicketStub } from './TicketStub';
 import { Toast } from './Toast';
@@ -264,5 +266,80 @@ describe('Sparkline', () => {
   it('renders the no-data note when empty', () => {
     render(<Sparkline points={[]} />);
     expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
+  });
+});
+
+describe('StemChart', () => {
+  const points = [
+    { tick: '−1', pct: 30, count: 3 },
+    { tick: 'MADE', pct: 40, count: 4 },
+    { tick: '+1', pct: 30, count: 3 },
+  ];
+
+  it('renders one bar per point plus a dashed average marker', () => {
+    const { container } = render(
+      <StemChart
+        points={points}
+        avgIndex={1.2}
+        avgLabel="Ø +0.2"
+        leftCaption="short of contract"
+        rightCaption="over contract"
+      />,
+    );
+    expect(container.querySelectorAll('rect')).toHaveLength(3);
+    expect(screen.getByText('MADE')).toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
+    expect(screen.getByText('Ø +0.2')).toBeInTheDocument();
+    expect(screen.getByText('short of contract')).toBeInTheDocument();
+    expect(screen.getByText('over contract')).toBeInTheDocument();
+  });
+
+  it('clamps an out-of-range average index onto the visible axis', () => {
+    const { container } = render(
+      <StemChart points={points} avgIndex={9} avgLabel="Ø +6" leftCaption="short" rightCaption="over" />,
+    );
+    const marker = container.querySelectorAll('line')[1] as SVGLineElement; // [0] is the baseline
+    expect(marker.getAttribute('x1')).toBe('310'); // clamped to the last point's x
+  });
+
+  it('carries the same data as text for screen readers', () => {
+    render(<StemChart points={points} avgIndex={1} avgLabel="Ø 0" leftCaption="short" rightCaption="over" />);
+    expect(screen.getByText('−1: 30% — 3 boards')).toBeInTheDocument();
+  });
+});
+
+describe('DayGrid', () => {
+  const today = new Date('2026-07-22T12:00:00Z');
+  const days = [
+    { date: '2026-07-20', count: 3 },
+    { date: '2026-07-13', count: 1 },
+  ];
+
+  it('renders one cell per day in the window, future days excluded from taps', () => {
+    render(<DayGrid days={days} weeks={2} today={today} />);
+    expect(screen.getByRole('button', { name: /Jul 20 — 3 boards/ })).toBeInTheDocument();
+    // a day after `today` inside the same window has no button
+    expect(screen.queryByRole('button', { name: /Jul 25/ })).not.toBeInTheDocument();
+  });
+
+  it('tapping a cell shows its detail line', async () => {
+    render(<DayGrid days={days} weeks={2} today={today} />);
+    await userEvent.click(screen.getByRole('button', { name: /Jul 13/ }));
+    expect(screen.getByText(/Jul 13 · 1 board/)).toBeInTheDocument();
+  });
+
+  it('labels a zero-count day distinctly from an unplayed future day', () => {
+    render(<DayGrid days={[]} weeks={1} today={today} />);
+    expect(screen.getAllByRole('button', { name: /— no boards/ }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('sumInWindow', () => {
+  it('only counts days inside the trailing window', () => {
+    const days = [
+      { date: '2020-01-01', count: 5 },
+      { date: '2026-07-20', count: 3 },
+    ];
+    expect(sumInWindow(days, 2, new Date('2026-07-22T00:00:00Z'))).toBe(3);
   });
 });
