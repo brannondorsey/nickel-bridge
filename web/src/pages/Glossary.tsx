@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Loading } from '../components/ds/Loading';
 import { SuitText } from '../components/game/SuitText';
@@ -24,16 +24,19 @@ import { TERMS, THEMES, THEME_CHIP, type GlossaryTheme } from '../glossary/terms
 export default function Glossary() {
   const { slug } = useParams();
   const { openTerm } = useGlossary();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [theme, setTheme] = useState<'ALL' | GlossaryTheme>('ALL');
   const [deep, setDeep] = useState<DeepEntry[] | null>(null);
   const [deepOpen, setDeepOpen] = useState(false);
   const groupRefs = useRef(new Map<string, HTMLDivElement>());
 
-  // A /glossary/:slug deep link opens the term sheet over the list.
+  // /glossary/:slug is the canonical share link; normalize it into the one
+  // live mechanism (?term= on /glossary, see GlossaryContext) with a replace,
+  // so the sheet opens without adding a history entry to unwind.
   useEffect(() => {
-    if (slug) openTerm(slug);
-  }, [slug, openTerm]);
+    if (slug) navigate({ pathname: '/glossary', search: `?term=${slug}` }, { replace: true });
+  }, [slug, navigate]);
 
   // Fetch the deep-reference chunk up front so the search fallthrough can
   // answer on the first keystroke; it's code-split, so this is the only

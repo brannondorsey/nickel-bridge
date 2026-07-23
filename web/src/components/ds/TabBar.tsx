@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-export type TabName = 'CROSSINGS' | 'GLOSSARY' | 'STATS' | 'RANKINGS';
+export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'GLOSSARY';
 
 /**
  * Bottom tabs — Besley caps, inset 3px ink top bar marks the active tab.
- * Since gaining a fourth gate the bar is a "turnstile" (approved nav pattern
- * 1g): tabs keep a fixed min-width and the row scrolls horizontally, with a
- * right-edge paper fade + chevron signalling more stations and the active tab
- * auto-centering on navigation. That scales to Learn/Clubs later without a
- * hamburger.
+ * The bar is a "turnstile" (approved nav pattern 1g), but a latent one: tabs
+ * grow to share the full width and only overflow into a horizontal scroll —
+ * with the right-edge paper fade + chevron and active-tab auto-centering —
+ * when their labels genuinely can't fit. Today's four gates fit at phone
+ * width; Learn/Clubs later will engage the scroll without a hamburger.
  *
  * Active is decided per-tab, by comparing `pathname` against that tab's own
  * link — not by which route "family" the page belongs to — so STATS only
@@ -20,10 +20,10 @@ export type TabName = 'CROSSINGS' | 'GLOSSARY' | 'STATS' | 'RANKINGS';
 export function TabBar({ myId, pathname }: { myId: number; pathname: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabs: { name: TabName; to: string; active: boolean }[] = [
-    { name: 'CROSSINGS', to: '/', active: pathname === '/' },
-    { name: 'GLOSSARY', to: '/glossary', active: pathname === '/glossary' || pathname.startsWith('/glossary/') },
+    { name: 'TOURNEYS', to: '/', active: pathname === '/' },
     { name: 'STATS', to: `/players/${myId}`, active: pathname === `/players/${myId}` },
     { name: 'RANKINGS', to: '/leaderboard', active: pathname === '/leaderboard' },
+    { name: 'GLOSSARY', to: '/glossary', active: pathname === '/glossary' || pathname.startsWith('/glossary/') },
   ];
 
   // The fade/chevron only makes sense when the row actually overflows —

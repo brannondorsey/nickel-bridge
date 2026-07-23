@@ -143,7 +143,7 @@ await page.waitForSelector('.player-hero');
 await shot('15-stats', true);
 
 // 16 — Home with a paid toll
-await page.click('.tabbar >> text=CROSSINGS');
+await page.click('.tabbar >> text=TOURNEYS');
 await page.waitForSelector('.home-cta');
 await shot('16-home-tolls-paid');
 

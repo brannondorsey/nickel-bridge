@@ -148,8 +148,23 @@ test('glossary is reachable, searchable, and opens term sheets', async ({ page }
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Finesse');
   await expect(dialog).toContainText('CC BY-SA 4.0');
+  await expect(page).toHaveURL(/term=finesse/);
+
+  // the sheet lives in the URL: browser back closes it (and unwinds nested
+  // related-term taps one level at a time)
+  await dialog.getByRole('button', { name: 'Tenace' }).click();
+  await expect(page).toHaveURL(/term=tenace/);
+  await page.goBack();
+  await expect(dialog).toContainText('Finesse');
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // ✕ pops a whole chain at once
+  await page.locator('.gloss-row', { hasText: /^Finesse/ }).click();
+  await dialog.getByRole('button', { name: 'Tenace' }).click();
   await page.getByRole('button', { name: /close/i }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/term=/);
 });
 
 /** Stats page wiring: bottom tab → own page, rankings row → other pages. */

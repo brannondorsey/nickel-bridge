@@ -414,14 +414,20 @@ Both are CC BY-SA 4.0 adaptations, so the `Attribution` credit must stay on the 
 page and every term sheet. Deep linking works in two directions: `GlossaryProse`
 (components/game) renders prose with core terms tappable — it wraps `SuitText`, and is what
 the meaning panel, call inspector, grade toast, and receipt captions render through — and
-`/glossary/:slug` routes open the same sheet from a URL. The sheet itself mounts once,
-app-wide, from `GlossaryProvider` (App.tsx): `useGlossary().openTerm(slug)` is pure state,
-no history entries. Linkifier noise is tuned in data, not code: `linkify: false` in
-terms.ts keeps ultra-common words (bid, pass, game…) unlinked, and `segmentProse` links
-only the first occurrence per block — `web/src/glossary/glossary.test.ts` guards the data
-invariants (unique slugs, resolvable relateds, core/deep disjointness). The bottom TabBar
-is the "turnstile" nav pattern (scrollable fixed-width tabs, right fade + chevron,
-active tab auto-centers) so GLOSSARY and future gates fit without a hamburger.
+`/glossary/:slug` routes open the same sheet from a URL (they normalize, via replace, to
+the live mechanism: a `?term=<slug>` search param on whatever route you're on). The sheet
+mounts once, app-wide, from `GlossaryProvider` (App.tsx); `useGlossary().openTerm(slug)`
+PUSHES a history entry carrying its chain depth in `location.state`, so browser
+back/swipe unwinds nested related-term taps one sheet at a time while ✕/scrim/Escape
+pops the whole chain in one `navigate(-depth)` (a cold load arriving with `?term=` set
+just strips the param with a replace). Linkifier noise is tuned in data, not code:
+`linkify: false` in terms.ts keeps ultra-common words (bid, pass, game…) unlinked, and
+`segmentProse` links only the first occurrence per block —
+`web/src/glossary/glossary.test.ts` guards the data invariants (unique slugs, resolvable
+relateds, core/deep disjointness). The bottom TabBar is the "turnstile" nav pattern:
+tabs share the width while they fit, and only overflow into the horizontal scroll (right
+fade + chevron, active tab auto-centers) once the gates outgrow it — so future gates fit
+without a hamburger.
 
 ## Invariants — do not break
 

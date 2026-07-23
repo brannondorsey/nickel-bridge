@@ -914,8 +914,9 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
 }
 
-/* ---- TabBar (the turnstile: fixed-width tabs in a scrollable row, right
-   paper-fade + chevron signalling more stations) ---- */
+/* ---- TabBar (the turnstile: tabs share the width while they fit; once the
+   gates outgrow it the row scrolls, with a right paper-fade + chevron
+   signalling more stations) ---- */
 .tabbar {
   border-top: 1px solid var(--ink);
   background: var(--paper);
@@ -932,10 +933,10 @@ a.ds-btn-secondary:hover {
   display: none;
 }
 .tabbar a {
-  flex: none;
-  min-width: 104px;
-  flex-grow: 1; /* fewer tabs than fit ⇒ fill the row like before */
-  padding: 15px 0;
+  /* grow to share the row, never shrink below the label — overflow (and the
+     turnstile scroll + fade) only happens when the labels can't fit */
+  flex: 1 0 auto;
+  padding: 15px 10px;
   text-align: center;
   font-family: var(--font-label);
   font-weight: 700;

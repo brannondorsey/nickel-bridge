@@ -201,7 +201,7 @@ describe('TabBar', () => {
     );
     const nav = screen.getByRole('navigation');
     expect(nav).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'CROSSINGS' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'TOURNEYS' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'GLOSSARY' })).toHaveAttribute('href', '/glossary');
     expect(screen.getByRole('link', { name: 'STATS' })).toHaveAttribute('href', '/players/1');
     const active = screen.getByRole('link', { name: 'RANKINGS' });
