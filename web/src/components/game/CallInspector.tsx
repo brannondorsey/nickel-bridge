@@ -3,7 +3,7 @@ import { Chip } from '../ds/Chip';
 import { Dialog } from '../ds/Dialog';
 import { CallText } from './CallText';
 import { ForcingChip } from './MeaningPanel';
-import { SuitText } from './SuitText';
+import { GlossaryProse } from './GlossaryProse';
 
 /** Bottom-sheet inspector for a past auction call. */
 export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose: () => void }) {
@@ -14,7 +14,7 @@ export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose
       {m ? (
         <>
           {' — '}
-          <SuitText text={m.title} />
+          <GlossaryProse text={m.title} />
         </>
       ) : null}
     </>
@@ -28,14 +28,14 @@ export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose
               {m.points ? <Chip>{m.points}</Chip> : null}
               {m.shapePromise ? (
                 <Chip quiet>
-                  <SuitText text={m.shapePromise} />
+                  <GlossaryProse text={m.shapePromise} />
                 </Chip>
               ) : null}
               <ForcingChip forcing={m.forcing} />
             </div>
           ) : null}
           <div className="meaning-body">
-            <SuitText text={m.description} />
+            <GlossaryProse text={m.description} />
           </div>
           {!m.exact ? <div className="meaning-caveat">Beyond the SAYC pamphlet — general guidance only.</div> : null}
         </>

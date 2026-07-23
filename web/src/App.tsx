@@ -4,8 +4,10 @@ import { Me, api } from './api';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
 import { TabBar } from './components/ds/TabBar';
+import { GlossaryProvider } from './glossary/GlossaryContext';
 import Board from './pages/Board';
 import CreateHandle from './pages/CreateHandle';
+import Glossary from './pages/Glossary';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
@@ -20,7 +22,7 @@ export const MeContext = createContext<{ me: Me | null; refresh: () => void }>({
 export const useMe = () => useContext(MeContext);
 
 /**
- * Bottom tabs appear on the three top-level screens only — including
+ * Bottom tabs appear on the top-level screens only — including
  * someone else's profile, reachable from the leaderboard or a tournament's
  * field standings, since it's still useful chrome to jump back out from
  * there — while tournament and board flows use their own headers. Which tab
@@ -31,7 +33,13 @@ export const useMe = () => useContext(MeContext);
  * so it shouldn't claim "you are here".
  */
 function inTabScope(pathname: string): boolean {
-  return pathname === '/' || pathname === '/leaderboard' || pathname.startsWith('/players/');
+  return (
+    pathname === '/' ||
+    pathname === '/leaderboard' ||
+    pathname.startsWith('/players/') ||
+    pathname === '/glossary' ||
+    pathname.startsWith('/glossary/')
+  );
 }
 
 export default function App() {
@@ -100,11 +108,13 @@ export default function App() {
         {me?.user && !me.user.handle ? (
           <CreateHandle />
         ) : me?.user ? (
-          <>
+          <GlossaryProvider>
             <Routes>
               <Route path="/" element={<Lobby />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/players/:id" element={<Player />} />
+              <Route path="/glossary" element={<Glossary />} />
+              <Route path="/glossary/:slug" element={<Glossary />} />
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/review" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
@@ -113,7 +123,7 @@ export default function App() {
             </Routes>
             {showTabs ? <TabBar myId={me.user.id} pathname={pathname} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}
-          </>
+          </GlossaryProvider>
         ) : (
           <Login />
         )}

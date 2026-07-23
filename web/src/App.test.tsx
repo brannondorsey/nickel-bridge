@@ -67,7 +67,7 @@ describe('App — authenticated', () => {
     stampVisit();
     renderApp();
     expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'CROSSINGS' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'TOURNEYS' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe('App — authenticated', () => {
     renderApp('/t/12');
     // the page hangs on load — the shell decision is what's under test
     await vi.waitFor(() => expect(apiMock.tournament).toHaveBeenCalled());
-    expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
   });
 
   it('shows the tab bar on someone else\'s profile, but does not claim STATS is active there', async () => {
@@ -109,6 +109,21 @@ describe('App — authenticated', () => {
     // be marked as the current page
     expect(stats).toHaveAttribute('href', '/players/1');
     expect(stats).not.toHaveAttribute('aria-current');
+  });
+
+  it('serves the Glossary on /glossary with its tab active — deep links included', async () => {
+    stampVisit();
+    renderApp('/glossary');
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GLOSSARY' })).toHaveAttribute('aria-current', 'page');
+
+    renderApp('/glossary/stayman');
+    const tabs = await screen.findAllByRole('link', { name: 'GLOSSARY' });
+    expect(tabs.at(-1)).toHaveAttribute('aria-current', 'page');
+    // patient: this arrives via the /glossary/:slug → ?term= replace-redirect,
+    // an extra render round-trip that can lag under full-suite load
+    const dialogs = await screen.findAllByRole('dialog', {}, { timeout: 5000 });
+    expect(dialogs.at(-1)).toHaveTextContent(/2♣ response to 1NT/);
   });
 
   it('serves NotFound for any unmatched URL instead of a blank shell', async () => {
@@ -133,6 +148,6 @@ describe('App — demo mode', () => {
     apiMock.demoScenarios.mockResolvedValue({ scenarios: [] });
     renderApp('/scenarios');
     expect(await screen.findByText('The Exhibit Hall')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'CROSSINGS' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
   });
 });

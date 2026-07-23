@@ -5,6 +5,7 @@ import { PerforatedPanel } from '../ds/PerforatedPanel';
 import { Postmark } from '../ds/Postmark';
 import { postmarkDate, signedScore, tournamentNo, vulLabel } from '../../format';
 import { ContractLabel } from './ContractLabel';
+import { GlossaryProse } from './GlossaryProse';
 
 /**
  * The toll receipt — an interstitial shown when a board is scored, before the
@@ -112,7 +113,11 @@ function ReceiptRow({
           {total ? (amount === 0 ? '0' : signedScore(amount)) : amount < 0 ? `−${-amount}` : amount}
         </span>
       </div>
-      {caption ? <div className="receipt-caption">{caption}</div> : null}
+      {caption ? (
+        <div className="receipt-caption">
+          <GlossaryProse text={caption} />
+        </div>
+      ) : null}
     </div>
   );
 }

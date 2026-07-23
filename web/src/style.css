@@ -914,18 +914,29 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
 }
 
-/* ---- TabBar ---- */
+/* ---- TabBar (the turnstile: tabs share the width while they fit; once the
+   gates outgrow it the row scrolls, with a right paper-fade + chevron
+   signalling more stations) ---- */
 .tabbar {
-  display: flex;
   border-top: 1px solid var(--ink);
   background: var(--paper);
   margin-top: auto;
   position: sticky;
   bottom: 0;
 }
+.tabbar-scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabbar-scroll::-webkit-scrollbar {
+  display: none;
+}
 .tabbar a {
-  flex: 1;
-  padding: 15px 0;
+  /* grow to share the row, never shrink below the label — overflow (and the
+     turnstile scroll + fade) only happens when the labels can't fit */
+  flex: 1 0 auto;
+  padding: 15px 10px;
   text-align: center;
   font-family: var(--font-label);
   font-weight: 700;
@@ -937,6 +948,23 @@ a.ds-btn-secondary:hover {
 .tabbar a.tab-active {
   color: var(--ink);
   box-shadow: inset 0 3px 0 var(--ink);
+}
+.tabbar-fade {
+  position: absolute;
+  right: 0;
+  top: 1px;
+  bottom: 0;
+  width: 34px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--paper) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 3px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* ---- Sparkline ---- */
@@ -1307,6 +1335,25 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
   font-style: italic;
   margin-top: 8px;
+}
+/* Glossary term links in prose (GlossaryProse) — a quiet dotted underline,
+   inheriting the surrounding type entirely; tap opens the term sheet. */
+.gloss-link {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.gloss-link:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
 }
 
 /* ---- BidBox ---- */
@@ -2993,5 +3040,297 @@ a.stat-tile:hover {
   border: 1px solid var(--ink);
   color: var(--ink);
   padding: 8px 12px;
+  cursor: pointer;
+}
+
+/* ---- Glossary ---- */
+.glossary {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding-bottom: 24px;
+}
+.gloss-head {
+  padding: 18px 16px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gloss-title {
+  font-weight: 600;
+  font-size: 19px;
+}
+.gloss-search {
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-btn);
+  background: var(--panel);
+  font-size: 15px;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.gloss-search:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.gloss-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 16px 0;
+}
+.gloss-chip {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.gloss-chip-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--btn-primary-fg);
+}
+.gloss-main {
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px 0 16px;
+}
+.gloss-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gloss-letterhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 6px;
+}
+.gloss-letter {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 15px;
+}
+.gloss-letterrule {
+  flex: 1;
+  border-top: 1px solid var(--line-quiet);
+}
+.gloss-row {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-quiet);
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+}
+.gloss-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.gloss-row-term {
+  font-weight: 600;
+  font-size: 15.5px;
+  flex: 1;
+}
+.gloss-badge {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  white-space: nowrap;
+}
+.gloss-row-def {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.gloss-scrub {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  position: sticky;
+  top: 10px;
+  padding-top: 14px;
+}
+.gloss-scrub-letter {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  line-height: 1.4;
+  color: var(--ink);
+  cursor: pointer;
+}
+.gloss-scrub-letter:disabled {
+  color: var(--line-dashed);
+  cursor: default;
+}
+.gloss-notice {
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 12px 0 0;
+}
+.gloss-deep-toggle {
+  appearance: none;
+  background: none;
+  margin-top: 14px;
+  border: 1px dashed var(--line-dashed);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.gloss-deep-toggle-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-align: left;
+}
+.gloss-deep-toggle-count {
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-style: italic;
+  white-space: nowrap;
+}
+.gloss-deep-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 0;
+}
+.gloss-deep-head-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+.gloss-deep-head-rule {
+  flex: 1;
+  border-top: 1px dashed var(--line-dashed);
+}
+.gloss-deep-row {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-quiet);
+}
+.gloss-deep-term {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--muted);
+  flex: 1;
+}
+.gloss-deepcut {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 7.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  border: 1px dashed var(--line-dashed);
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  white-space: nowrap;
+}
+.gloss-deep-def {
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.gloss-deep-link {
+  font-style: italic;
+  color: var(--muted);
+  text-decoration: underline dotted var(--muted);
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.gloss-attrib {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 14px 16px 0;
+}
+.gloss-attrib a {
+  color: var(--muted);
+  text-decoration: underline dotted var(--muted);
+  text-underline-offset: 2px;
+}
+/* sheet extras (TermSheet) */
+.gloss-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.gloss-aliases {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.gloss-def {
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin-top: 8px;
+}
+.gloss-example {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 8px 11px;
+  margin-top: 9px;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+.gloss-related {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.gloss-related-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+.gloss-related-chip {
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10.5px;
+  color: var(--ink);
+  padding: 3px 8px;
+  border-radius: var(--radius-chip);
   cursor: pointer;
 }
