@@ -438,7 +438,7 @@ export default function Player() {
           </PerforatedPanel>
 
           {t.declarer.boards > 0 ? (
-            <PerforatedPanel heading={`CONTRACTS — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
+            <PerforatedPanel heading={`CONTRACTS MADE — ${t.declarer.boards} DECLARED`} className="stats-contracts num">
               <div className="stats-contracts-rows">
                 {CONTRACT_TIER_ROWS.map(({ key, label }) => {
                   const bucket = cm[key];

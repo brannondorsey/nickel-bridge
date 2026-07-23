@@ -66,7 +66,7 @@ describe('Stats', () => {
     // toll log no longer sits between the two bidding sections
     expect(index('BID ACCURACY') + 1).toBe(index('BIDDING —'));
     // contracts hoisted to right under the two bidding sections
-    expect(index('BIDDING —') + 1).toBe(index('CONTRACTS —'));
+    expect(index('BIDDING —') + 1).toBe(index('CONTRACTS MADE —'));
   });
 
   it('renders the toll log on a house profile too — nothing here is Elo-specific', async () => {
@@ -210,7 +210,7 @@ describe('Stats', () => {
   it('renders the contract mix panel with tier rows, doubled tally, and strain split', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
-    expect(await screen.findByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
+    expect(await screen.findByText('CONTRACTS MADE — 88 DECLARED')).toBeInTheDocument();
     // partscore: 38/51 -> 75%
     const partscore = screen.getByText('PARTSCORE').closest('.stats-contract-row')!;
     expect(within(partscore as HTMLElement).getByText('75%')).toBeInTheDocument();
@@ -249,7 +249,7 @@ describe('Stats', () => {
     });
     renderStats();
     await screen.findByText('TOURNAMENTS');
-    expect(screen.queryByText(/^CONTRACTS —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^CONTRACTS MADE —/)).not.toBeInTheDocument();
   });
 
   it('renders the declaring trick-delta stem plot, bucketed and averaged', async () => {
@@ -349,7 +349,7 @@ describe('Stats', () => {
     // nor is the trick-delta stem plot
     expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS')).toBeInTheDocument();
     // nor the contract mix panel
-    expect(screen.getByText('CONTRACTS — 88 DECLARED')).toBeInTheDocument();
+    expect(screen.getByText('CONTRACTS MADE — 88 DECLARED')).toBeInTheDocument();
     // nor the toll log calendar
     expect(screen.getByText(/TOLL LOG —/)).toBeInTheDocument();
     // nor the rivalries panel
