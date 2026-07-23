@@ -42,6 +42,24 @@ describe('glossary core data', () => {
   it('covers the whole curated sheet', () => {
     expect(TERMS.length).toBe(124);
   });
+
+  it('never lets two terms claim the same linkable name/alias', () => {
+    // linkify.ts's matcher builds one phrase -> slug map across every term;
+    // a collision would silently mislink one of the two terms, so guard the
+    // data invariant the matcher relies on rather than trusting it by eye.
+    const ownerOf = new Map<string, string>();
+    for (const t of TERMS) {
+      if (t.linkify === false) continue;
+      for (const phrase of [t.term, ...(t.aliases ?? [])]) {
+        const key = phrase.toLowerCase();
+        const owner = ownerOf.get(key);
+        expect(owner === undefined || owner === t.slug, `"${phrase}" is claimed by both ${owner} and ${t.slug}`).toBe(
+          true,
+        );
+        ownerOf.set(key, t.slug);
+      }
+    }
+  });
 });
 
 describe('glossary deep reference (generated)', () => {
@@ -89,6 +107,10 @@ describe('segmentProse (the linkifier)', () => {
 
   it('matches simple plurals back to the singular term', () => {
     expect(linksOf('Two finesses both worked.')[0]).toEqual({ text: 'finesses', slug: 'finesse' });
+  });
+
+  it('matches consonant+y plurals back to the singular term ("entries" -> entry)', () => {
+    expect(linksOf('Count your entries before playing the suit.')[0]).toEqual({ text: 'entries', slug: 'entry' });
   });
 
   it('matches aliases ("trump out" → drawing trumps, "hook" → finesse)', () => {

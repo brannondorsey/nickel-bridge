@@ -235,6 +235,48 @@ describe('TabBar', () => {
     );
     expect(screen.getAllByRole('link', { name: 'STATS' }).at(-1)).toHaveAttribute('aria-current', 'page');
   });
+
+  it('hides the fade + chevron when the tabs fit without scrolling', () => {
+    // jsdom reports 0/0 for scrollWidth/clientWidth by default (no layout
+    // engine), which is itself the "fits" case for the overflow check.
+    render(
+      <MemoryRouter initialEntries={['/leaderboard']}>
+        <TabBar myId={1} pathname="/leaderboard" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('›')).not.toBeInTheDocument();
+  });
+
+  it('shows the right-edge fade + chevron once the tabs overflow their row', () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 });
+    try {
+      render(
+        <MemoryRouter initialEntries={['/leaderboard']}>
+          <TabBar myId={1} pathname="/leaderboard" />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('›')).toBeInTheDocument();
+    } finally {
+      delete (HTMLElement.prototype as { scrollWidth?: unknown }).scrollWidth;
+      delete (HTMLElement.prototype as { clientWidth?: unknown }).clientWidth;
+    }
+  });
+
+  it('auto-centers the active tab on navigation', () => {
+    const scrollIntoView = vi.fn();
+    (Element.prototype as unknown as { scrollIntoView: typeof scrollIntoView }).scrollIntoView = scrollIntoView;
+    try {
+      render(
+        <MemoryRouter initialEntries={['/leaderboard']}>
+          <TabBar myId={1} pathname="/leaderboard" />
+        </MemoryRouter>,
+      );
+      expect(scrollIntoView).toHaveBeenCalledWith({ inline: 'center', block: 'nearest' });
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
 });
 
 describe('PctBar', () => {

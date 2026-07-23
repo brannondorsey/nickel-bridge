@@ -53,9 +53,15 @@ describe('Glossary page', () => {
 
   it('search matches names, definitions, and aliases live', async () => {
     renderGlossary();
+    // "hook" — alias match (Finesse)
     await userEvent.type(screen.getByRole('searchbox'), 'hook');
     expect(screen.getByRole('button', { name: /Finesse/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Stayman/ })).not.toBeInTheDocument();
+    // "2♣ response" — definition-text match (Stayman), not present in its name/aliases
+    await userEvent.clear(screen.getByRole('searchbox'));
+    await userEvent.type(screen.getByRole('searchbox'), '2♣ response');
+    expect(screen.getByRole('button', { name: /Stayman/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Finesse/ })).not.toBeInTheDocument();
   });
 
   it('falls through to the deep reference when the core ledger has nothing', async () => {
@@ -85,14 +91,15 @@ describe('Glossary page', () => {
     expect(within(scrub).getByRole('button', { name: 'S' })).toBeEnabled();
   });
 
-  it('tapping a row opens the term sheet; /glossary/:slug opens it on arrival', async () => {
+  it('tapping a row opens the term sheet', async () => {
     renderGlossary();
     await userEvent.click(screen.getByRole('button', { name: /Finesse/ }));
     expect(await screen.findByRole('dialog')).toHaveTextContent(/also searched as: hook/);
+  });
 
+  it('/glossary/:slug opens the term sheet on arrival', async () => {
     renderGlossary('/glossary/stayman');
-    const dialogs = await screen.findAllByRole('dialog');
-    expect(dialogs.at(-1)).toHaveTextContent(/2♣ response to 1NT/);
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/2♣ response to 1NT/);
   });
 
   it('carries the CC BY-SA attribution in the footer', () => {

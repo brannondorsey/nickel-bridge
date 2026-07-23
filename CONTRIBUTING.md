@@ -71,8 +71,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 Glossary.tsx is the glossary screen),
                 glossary/ (the Interactive Glossary: terms.ts curated core data + themes,
                 deep.json the generated Wikipedia-derived deep reference (CC BY-SA 4.0,
-                lazy-loaded — the web bundle's only dynamic import), linkify.ts the prose
-                matcher, GlossaryContext.tsx the app-wide term-sheet provider — see
+                lazy-loaded via deep.ts — the web bundle's only dynamic import), linkify.ts
+                the prose matcher, search.ts the Glossary-page filter/group helpers,
+                GlossaryContext.tsx the app-wide term-sheet provider, TermSheet.tsx the
+                sheet itself, Attribution.tsx the shared CC BY-SA credit block — see
                 "The glossary" below),
                 components/ds/ (design-system pieces) + components/game/ (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,

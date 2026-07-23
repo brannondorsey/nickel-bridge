@@ -15,11 +15,16 @@
  * pass the file instead). Output is checked in; rerun only when refreshing
  * the reference content, and eyeball the diff — the one-liners ship verbatim.
  *
- * Adaptation rules ("adapted" per the CC BY-SA credit): strip markup and
- * citations, keep the first sentence (with an abbreviation guard so "e.g." /
- * "i.e." don't truncate), cap at ~220 chars. Suit glyphs survive untouched —
- * the web's SuitText colors them. "See <other term>." cross-reference entries
- * are kept as-is; every row links to its own anchor on Wikipedia for the rest.
+ * Adaptation rules ("adapted" per the CC BY-SA credit): strip markup,
+ * citations, and embedded hand-diagram tables (a few entries illustrate with
+ * a bridge-suit diagram instead of, or in addition to, prose — the table's
+ * cell text has no sentence structure and reads as gibberish if flattened
+ * in), then keep the first sentence (with an abbreviation guard so "e.g." /
+ * "i.e." don't truncate), cap at ~220 chars. An entry whose only content was
+ * a diagram (no prose left after stripping the table) is dropped rather than
+ * shipped empty or garbled. Suit glyphs survive untouched — the web's
+ * SuitText colors them. "See <other term>." cross-reference entries are kept
+ * as-is; every row links to its own anchor on Wikipedia for the rest.
  */
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -51,6 +56,7 @@ function stripHtml(s) {
   return decodeEntities(
     s
       .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<table[\s\S]*?<\/table>/gi, '')
       .replace(/<sup[^>]*class="[^"]*reference[^"]*"[^>]*>[\s\S]*?<\/sup>/gi, '')
       .replace(/<[^>]+>/g, ''),
   )

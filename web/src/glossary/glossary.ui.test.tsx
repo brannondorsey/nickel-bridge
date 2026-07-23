@@ -72,9 +72,12 @@ describe('GlossaryProse + GlossaryProvider', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders linklessly (no crash) outside the provider', () => {
+  it('renders links outside the provider, and tapping one is a no-op (no crash)', async () => {
     render(<GlossaryProse text="Try the finesse." />);
-    expect(screen.getByRole('button', { name: 'finesse' })).toBeInTheDocument();
+    const link = screen.getByRole('button', { name: 'finesse' });
+    expect(link).toBeInTheDocument();
+    await userEvent.click(link);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

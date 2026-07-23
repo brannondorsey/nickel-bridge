@@ -6,7 +6,9 @@
  * (term + aliases of each entry not flagged `linkify: false`):
  * - phrases sorted longest-first, so alternation order gives longest-match-
  *   wins for free ("takeout double" beats "double");
- * - a trailing (?:s|es)? absorbs simple plurals ("finesses", "raises");
+ * - a trailing (?:s|es)? absorbs simple plurals ("finesses", "raises"); a
+ *   phrase ending in a consonant + "y" swaps in (?:y|ies) instead ("entry"
+ *   also matches "entries", "dummy" also matches "dummies");
  * - lookaround boundaries instead of \b, because terms like "1NT opening"
  *   start/end on characters where \b misfires — a match must not touch an
  *   adjacent letter or digit ("3NT" never matches the "nt" alias).
@@ -38,7 +40,10 @@ function getMatcher(): { re: RegExp; slugByPhrase: Map<string, string> } {
     }
   }
   const phrases = [...slugByPhrase.keys()].sort((a, b) => b.length - a.length);
-  const alts = phrases.map((p) => escape(p) + (/s$/.test(p) ? '' : '(?:s|es)?'));
+  const alts = phrases.map((p) => {
+    if (/[^aeiou]y$/i.test(p)) return escape(p.slice(0, -1)) + '(?:y|ies)';
+    return escape(p) + (/s$/.test(p) ? '' : '(?:s|es)?');
+  });
   const re = new RegExp(`(?<![a-zA-Z0-9])(?:${alts.join('|')})(?![a-zA-Z0-9])`, 'gi');
   matcher = { re, slugByPhrase };
   return matcher;
@@ -49,6 +54,7 @@ function slugForMatch(slugByPhrase: Map<string, string>, match: string): string 
   const m = match.toLowerCase();
   return (
     slugByPhrase.get(m) ??
+    slugByPhrase.get(m.replace(/ies$/, 'y')) ??
     slugByPhrase.get(m.replace(/es$/, '')) ??
     slugByPhrase.get(m.replace(/s$/, ''))
   );

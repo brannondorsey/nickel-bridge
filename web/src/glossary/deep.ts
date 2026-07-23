@@ -23,6 +23,16 @@ export function deepEntryUrl(e: DeepEntry): string {
 let cache: Promise<DeepEntry[]> | null = null;
 
 export function loadDeep(): Promise<DeepEntry[]> {
-  cache ??= import('./deep.json').then((m) => m.default.entries);
+  if (!cache) {
+    // Don't memoize a rejected fetch (e.g. a stale tab requesting a chunk
+    // hash a newer deploy removed) — clear the cache so the next call can
+    // retry instead of leaving the deep reference permanently broken.
+    cache = import('./deep.json')
+      .then((m) => m.default.entries)
+      .catch((err) => {
+        cache = null;
+        throw err;
+      });
+  }
   return cache;
 }

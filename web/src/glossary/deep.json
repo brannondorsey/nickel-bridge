@@ -83,11 +83,6 @@
    "anchor": "agreement"
   },
   {
-   "term": "Air, as \"on air\"",
-   "def": "♥ K Q 5 4 ♥ A 7 6 2 W N↑ S↓ E ♥ J 10 9 3 ♥ 8",
-   "anchor": "A"
-  },
-  {
    "term": "Alcatraz coup",
    "def": "Declarer's intentional and unethical attempt to locate a finessable card by revoking.",
    "anchor": "A"
@@ -1301,16 +1296,6 @@
    "term": "IMPs",
    "def": "The form of duplicate bridge that uses International Match Points as a scoring method, as distinct from a tournament scored using matchpoints (MPs).",
    "anchor": "IMPs"
-  },
-  {
-   "term": "In back of",
-   "def": "♠ Q 5 4 Irrelevant W N↑ S↓ E ♠ K 7 6 ♠ A 9 8",
-   "anchor": "inbackof"
-  },
-  {
-   "term": "In front of",
-   "def": "♠ Q 5 4 ♠ K 7 6 W N↑ S↓ E Irrelevant ♠ A 9 8",
-   "anchor": "infrontof"
   },
   {
    "term": "Individual",

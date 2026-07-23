@@ -6,10 +6,12 @@ import { TERM_BY_SLUG, THEME_CHIP, type GlossaryTerm } from './terms';
 
 /**
  * The term-definition bottom sheet (design "entry sheet"). Mounted globally
- * by GlossaryProvider; RELATED chips call onOpenTerm, which swaps the sheet's
- * content in place rather than stacking sheets or touching history. The
- * definition itself renders through GlossaryProse, so terms mentioned inside
- * it are live links too (minus the term itself).
+ * by GlossaryProvider; RELATED chips call onOpenTerm (GlossaryContext's
+ * openTerm), which re-renders this same sheet for the new slug but pushes a
+ * history entry for the hop, so a chain of related-term taps unwinds one
+ * sheet at a time on back/swipe (see GlossaryContext.tsx). The definition
+ * itself renders through GlossaryProse, so terms mentioned inside it are
+ * live links too (minus the term itself).
  */
 export function TermSheet({
   slug,
