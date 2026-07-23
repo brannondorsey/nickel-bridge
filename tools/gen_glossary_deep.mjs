@@ -59,6 +59,23 @@ function stripHtml(s) {
     .trim();
 }
 
+// A trailing comma, coordinating conjunction, article, or preposition reads
+// as a stranded clause fragment right before the truncation ellipsis (e.g.
+// "...for bonuses for scoring game, small slam," or "...tapping on them with
+// a"). Back the cut up past these so the hard-capped line ends cleanly.
+const DANGLING_WORD = /^(?:a|an|the|and|or|of|in|on|for|with|to|at|by|from|that|this|as)$/i;
+
+function trimDangling(s) {
+  let out = s.replace(/[,;:]\s*$/, '').trimEnd();
+  let words = out.split(/\s+/);
+  while (words.length > 1 && DANGLING_WORD.test(words[words.length - 1])) {
+    words.pop();
+    out = words.join(' ').replace(/[,;:]\s*$/, '').trimEnd();
+    words = out.split(/\s+/);
+  }
+  return out;
+}
+
 /** First sentence, guarded against common abbreviations, hard-capped. */
 function oneLiner(text) {
   const ABBREV = /(?:e\.g|i\.e|cf|vs|etc|viz|approx|no|St)\.$/i;
@@ -75,7 +92,7 @@ function oneLiner(text) {
   let out = text.slice(0, cut).trim();
   if (out.length > 220) {
     const clipped = out.slice(0, 220);
-    out = clipped.slice(0, Math.max(clipped.lastIndexOf(' '), 180)) + '…';
+    out = trimDangling(clipped.slice(0, Math.max(clipped.lastIndexOf(' '), 180))) + '…';
   }
   return out;
 }

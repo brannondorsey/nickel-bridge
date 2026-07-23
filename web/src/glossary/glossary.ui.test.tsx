@@ -84,7 +84,7 @@ describe('TermSheet', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('CARD PLAY');
     expect(dialog).toHaveTextContent('also searched as: hook, finessing');
-    expect(dialog).toHaveTextContent(/50% play made free/);
+    expect(dialog).toHaveTextContent(/roughly 50-50 shot/);
     expect(dialog).toHaveTextContent(/Lead low toward AQ/);
     expect(within(dialog).getByRole('button', { name: 'Tenace' })).toBeInTheDocument();
     expect(dialog).toHaveTextContent(/CC BY-SA 4.0/);

@@ -444,7 +444,7 @@ export const TERMS: GlossaryTerm[] = [
   {
     slug: 'finesse',
     term: 'Finesse',
-    def: 'Trying to win a trick with a lower honor by leading toward it, hoping the missing higher card sits in front of it — a 50% play made free.',
+    def: 'Trying to win a trick with a lower honor by leading toward it, hoping the missing higher card sits in front of it — a roughly 50-50 shot that costs nothing to try.',
     example: 'Lead low toward AQ, playing the Q if LHO plays low.',
     themes: ['cardplay'],
     aliases: ['hook', 'finessing'],
@@ -771,7 +771,7 @@ export const TERMS: GlossaryTerm[] = [
   {
     slug: 'penalty-points',
     term: 'Penalty points',
-    def: 'What a failed contract pays the defenders — 50 or 100 per undertrick, climbing steeply when doubled.',
+    def: 'What a failed contract pays the defenders — 50 per undertrick not vulnerable, 100 vulnerable, climbing steeply when doubled.',
     example: 'Down 3 doubled vulnerable = −800.',
     themes: ['scoring'],
     related: ['undertrick', 'double'],
@@ -864,7 +864,7 @@ export const TERMS: GlossaryTerm[] = [
     slug: 'sacrifice',
     term: 'Sacrifice',
     def: 'Deliberately bidding a contract you expect to fail because going down will cost less than the opponents’ making game or slam.',
-    example: '5♣ over their 4♠, down 2 for −300 vs their −620.',
+    example: '5♣ doubled over their 4♠, down 2 for −300 vs their −620.',
     themes: ['auction', 'scoring'],
     related: ['penalty-double', 'vulnerability'],
   },
@@ -1013,12 +1013,12 @@ export const TERMS: GlossaryTerm[] = [
     related: ['second-hand-low'],
   },
   {
-    slug: 'toll-ticket',
-    term: 'Toll ticket',
-    def: 'The app’s results card for a board or session: contract, tricks, score, matchpoints, and rating change — stamped like a bridge toll receipt.',
+    slug: 'toll-receipt',
+    term: 'Toll receipt',
+    def: 'The app’s results card for a board or session: contract, tricks, score, matchpoints, and rating change — stamped like a bridge toll ticket.',
     example: 'Every crossing ends with one — learn to read each line of it.',
     themes: ['scoring'],
-    aliases: ['toll receipt'],
+    aliases: ['toll ticket'],
     related: ['elo-rating', 'matchpoints'],
   },
   {
