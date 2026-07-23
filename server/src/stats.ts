@@ -12,7 +12,7 @@ import {
   explainBid,
 } from '@bridge/core';
 import { db } from './db.js';
-import { standings } from './tournaments.js';
+import { Standing, standings } from './tournaments.js';
 
 const stmtUser = db.prepare(
   `SELECT id, handle, picture, elo, created_at, kind FROM users WHERE id = ? AND handle IS NOT NULL`,
@@ -222,6 +222,31 @@ function strainFamily(strain: Strain): 'notrump' | 'major' | 'minor' {
 const HUMAN_SEAT: Seat = 2;
 
 /**
+ * One playerStats() request touches standings() for the same tournament from
+ * up to three places — this profile's own pctSeries, rivalries() (same
+ * tournament set as pctSeries), and fieldPercentiles()'s site-wide sweep
+ * (which includes every tournament the other two touch, plus everyone
+ * else's). Without sharing, an active player's own tournaments get
+ * matchpointed two or three times over on every single profile load. A
+ * request-scoped memoization closure — passed explicitly into rivalries()
+ * and fieldPercentiles() rather than a module-level cache — keeps each
+ * tournament's standings() call to once per request while staying free of
+ * any cross-request staleness concern (a fresh closure, and thus a fresh
+ * cache, is created at the top of every playerStats() call).
+ */
+function memoizedStandings(): (tournamentId: number) => Standing[] {
+  const cache = new Map<number, Standing[]>();
+  return (tournamentId: number) => {
+    let s = cache.get(tournamentId);
+    if (!s) {
+      s = standings(tournamentId);
+      cache.set(tournamentId, s);
+    }
+    return s;
+  };
+}
+
+/**
  * Head-to-head record against everyone who has shared a completed field with
  * this user, ranked by how often paths crossed (not by who's winning) and
  * capped to the top RIVAL_TOP_N. "Shared" = a standard tournament where BOTH
@@ -243,19 +268,18 @@ const HUMAN_SEAT: Seat = 2;
  * "tied" result here always matches what a user would see printed side by
  * side.
  *
- * Cost: one standings() call per tournament in `tournamentIds` (bounded by
- * this user's own played-tournament count) — strictly smaller than the
- * standings() sweep fieldPercentiles() already performs on every profile
- * load (every 'standard' tournament in the whole database), so this adds no
- * new order of magnitude to the request.
+ * Cost: one standings() lookup per tournament in `tournamentIds` (bounded by
+ * this user's own played-tournament count), via the request-scoped
+ * `getStandings` cache — so a tournament already matchpointed for pctSeries
+ * or about to be swept by fieldPercentiles() isn't recomputed here.
  */
-function rivalries(userId: number, tournamentIds: number[]): Rival[] {
+function rivalries(userId: number, tournamentIds: number[], getStandings: (id: number) => Standing[]): Rival[] {
   const tally = new Map<
     number,
     { handle: string; kind: 'human' | 'ai'; shared: number; ahead: number; behind: number; tied: number }
   >();
   for (const tid of tournamentIds) {
-    const field = standings(tid);
+    const field = getStandings(tid);
     const mine = field.find((s) => s.userId === userId);
     if (!mine || mine.totalPct === null) continue;
     for (const s of field) {
@@ -407,9 +431,15 @@ export function playerStats(userId: number): PlayerStats | null {
   // ordered by the user's play order — their learning timeline
   const tournaments = [...byTournament.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt);
 
+  // shared across pctSeries/rivalries/fieldPercentiles below, so a
+  // tournament this player has played gets matchpointed once per request
+  // instead of up to three times over — see memoizedStandings()'s doc comment.
+  const getStandings = memoizedStandings();
+
   const rivals = rivalries(
     userId,
     tournaments.map(([tid]) => tid),
+    getStandings,
   );
 
   const accuracySeries = tournaments.map(([tid, t]) => ({
@@ -422,7 +452,7 @@ export function playerStats(userId: number): PlayerStats | null {
 
   let tournamentsCompleted = 0;
   const pctSeries = tournaments.flatMap(([tid, t]) => {
-    const field = standings(tid);
+    const field = getStandings(tid);
     const mine = field.find((s) => s.userId === userId);
     if (!mine || mine.totalPct === null) return [];
     if (mine.complete) tournamentsCompleted++;
@@ -504,7 +534,7 @@ export function playerStats(userId: number): PlayerStats | null {
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
     trickDelta,
-    percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy, declaringRate),
+    percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy, declaringRate, getStandings),
     eloSeries,
     pctSeries,
     accuracySeries,
@@ -546,6 +576,7 @@ function fieldPercentiles(
   avgPct: number | null,
   avgBidAccuracy: number | null,
   declaringRate: number | null,
+  getStandings: (id: number) => Standing[],
 ): PlayerStats['percentiles'] {
   const ratedElos = (stmtRatedElos.all() as { elo: number }[]).map((r) => r.elo);
 
@@ -563,10 +594,12 @@ function fieldPercentiles(
   // tournament-weighted mean pct per user (any kind — the personas are pool
   // members like everyone else, so betterThan's "everyone but me"
   // denominator is right for every profile, persona pages included), from
-  // one standings() pass per tournament
+  // one standings() pass per tournament — via getStandings, so the subject's
+  // own tournaments (already matchpointed for pctSeries/rivalries above)
+  // aren't matchpointed a second time here
   const pctsByUser = new Map<number, number[]>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
-    for (const s of standings(id)) {
+    for (const s of getStandings(id)) {
       if (s.totalPct === null) continue;
       pctsByUser.set(s.userId, [...(pctsByUser.get(s.userId) ?? []), s.totalPct]);
     }
