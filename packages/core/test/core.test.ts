@@ -26,7 +26,6 @@ import {
   REDOUBLE,
   scoreBreakdown,
   trickWinner,
-  trumpSuit,
   Contract,
   Seat,
 } from '../src/index.js';
@@ -219,15 +218,7 @@ describe('play', () => {
     expect(trickWinner(trick, 4)).toBe(0);
   });
 
-  it('trumpSuit maps bid strain to suit, and NT to null', () => {
-    expect(trumpSuit(0)).toBe(3); // ♣ bid strain -> ♣ suit
-    expect(trumpSuit(1)).toBe(2); // ♦ -> ♦
-    expect(trumpSuit(2)).toBe(1); // ♥ -> ♥
-    expect(trumpSuit(3)).toBe(0); // ♠ -> ♠
-    expect(trumpSuit(4)).toBeNull(); // NT
-  });
-
-  it('highest trump wins an all-trump trick; overruff beats ruff', () => {
+it('highest trump wins an all-trump trick; overruff beats ruff', () => {
     const allTrump = [
       { seat: 0 as Seat, card: makeCard(1, 3) }, // ♥5 led
       { seat: 1 as Seat, card: makeCard(1, 12) }, // ♥A

@@ -171,13 +171,6 @@ interface StatPoint {
 /** Auction-role bucket for the bidding ledger (server: core's bidCategory). */
 export type BidTypeKey = 'opening' | 'response' | 'rebid' | 'overcall' | 'double' | 'pass';
 
-/** plain/over/under-ruff counts for one side (declarer/dummy or defense). */
-export interface RuffCounts {
-  plain: number;
-  over: number;
-  under: number;
-}
-
 /** One UTC calendar day with at least one completed board (server: stats.ts's dailyBoards). */
 export interface DailyBoardCount {
   /** UTC calendar day, 'YYYY-MM-DD' */
@@ -258,10 +251,6 @@ export interface PlayerStats {
     doubled: { boards: number; made: number };
     strains: { notrump: number; major: number; minor: number };
   };
-  /** ruffs by the player's own hands, split declaring vs defending; NT boards contribute nothing */
-  ruffs: { declarerDummy: RuffCounts; defense: RuffCounts };
-  /** the classic NT hold-up, on notrump boards the player's side declared */
-  holdUps: { opportunities: number; taken: number };
   /** completed boards by UTC day, sparse, ascending — see server's stats.ts doc comment */
   dailyBoards: DailyBoardCount[];
   /** other players ranked by shared-tournament count, most-crossed-paths first (max 5) */

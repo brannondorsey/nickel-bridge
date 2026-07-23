@@ -415,12 +415,6 @@ export const playerStatsFull: PlayerStats = {
     doubled: { boards: 9, made: 5 },
     strains: { notrump: 21, major: 45, minor: 22 },
   },
-  // declarerDummy: 10/2/1 of 13 -> 77%/15%/8%; defense: 4/1/0 of 5 -> 80%/20%/0%
-  ruffs: {
-    declarerDummy: { plain: 10, over: 2, under: 1 },
-    defense: { plain: 4, over: 1, under: 0 },
-  },
-  holdUps: { opportunities: 11, taken: 6 }, // 55%
   // a handful of days across the fixture's history, including one multi-board day
   dailyBoards: [
     { date: '2026-05-14', count: 4 },
@@ -485,11 +479,6 @@ export const playerStatsEmpty: PlayerStats = {
     doubled: { boards: 0, made: 0 },
     strains: { notrump: 0, major: 0, minor: 0 },
   },
-  ruffs: {
-    declarerDummy: { plain: 0, over: 0, under: 0 },
-    defense: { plain: 0, over: 0, under: 0 },
-  },
-  holdUps: { opportunities: 0, taken: 0 },
   dailyBoards: [],
   rivals: [],
 };

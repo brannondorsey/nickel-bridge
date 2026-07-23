@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, ConventionKey, PlayerStats, Rival, RuffCounts, api } from '../api';
+import { BidTypeKey, ConventionKey, PlayerStats, Rival, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
@@ -79,19 +79,6 @@ const CONTRACT_TIER_ROWS = [
   { key: 'game', label: 'GAME' },
   { key: 'slam', label: 'SLAM' },
 ] as const;
-
-/** Ruff-side sub-groups, declaring reuses the same wording as the DECLARING/DEFENDING stat tiles. */
-const RUFF_SIDE_ROWS = [
-  { key: 'declarerDummy', label: 'DECLARING' },
-  { key: 'defense', label: 'DEFENDING' },
-] as const;
-
-/** Row labels for the plain/over/under-ruff breakdown, precise unabbreviated bridge terms. */
-const RUFF_KIND_LABELS: Record<'plain' | 'over' | 'under', string> = {
-  plain: 'RUFF',
-  over: 'OVER-RUFF',
-  under: 'UNDER-RUFF',
-};
 
 /** Axis ticks for the trick-delta stem plot, keyed by clamped bucket value. */
 const TRICK_DELTA_TICKS: Record<number, string> = {
@@ -244,18 +231,6 @@ export default function Player() {
   const strainTotal = cm.strains.notrump + cm.strains.major + cm.strains.minor;
   const strainPct = (n: number) => (strainTotal ? Math.round((n / strainTotal) * 100) : 0);
   const doubledPct = tierPct(cm.doubled);
-
-  const ruffTotal = (c: RuffCounts) => c.plain + c.over + c.under;
-  const totalRuffs = ruffTotal(stats.ruffs.declarerDummy) + ruffTotal(stats.ruffs.defense);
-  // every contract board (declaring or defending — passed-out boards have no
-  // play at all) runs exactly 13 tricks, so this is "of every trick you
-  // played, how often did you or your side ruff" — not a share of ruffs
-  // among ruffs, which is what the % on each side-group used to (wrongly) show.
-  const contractBoards = t.declarer.boards + t.defense.boards;
-  const ruffPct = contractBoards > 0 ? Math.round((totalRuffs / (contractBoards * 13)) * 100) : null;
-  const holdUpPct = stats.holdUps.opportunities
-    ? Math.round((stats.holdUps.taken / stats.holdUps.opportunities) * 100)
-    : null;
 
   const dailyTotal = sumInWindow(stats.dailyBoards);
 
@@ -497,62 +472,6 @@ export default function Player() {
                   {strainPct(cm.strains.minor)}%
                 </span>
               </div>
-            </PerforatedPanel>
-          ) : null}
-
-          {ruffPct !== null || holdUpPct !== null ? (
-            <PerforatedPanel heading="CARD PLAY" className="stats-cardplay num">
-              {ruffPct !== null ? (
-                <div className="stats-cardplay-section">
-                  <div className="label-caps stats-cardplay-head">RUFFS</div>
-                  <div className="stats-holdup-row">
-                    <PctBar pct={ruffPct} />
-                    <b>{ruffPct}%</b>
-                  </div>
-                  <div className="stats-cardplay-note">
-                    Ruffed in {totalRuffs} of the {contractBoards * 13} tricks you played.
-                  </div>
-                  {RUFF_SIDE_ROWS.filter(({ key }) => ruffTotal(stats.ruffs[key]) > 0).map(({ key, label }) => {
-                    const counts = stats.ruffs[key];
-                    const total = ruffTotal(counts);
-                    return (
-                      <div key={key} className="stats-ruff-group">
-                        <div className="stats-ruff-group-head">
-                          <span className="label-caps">{label}</span>
-                          <span className="stats-ruff-count">
-                            {total} ruff{total === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                        {(['plain', 'over', 'under'] as const).map((kind) => {
-                          const pct = Math.round((counts[kind] / total) * 100);
-                          return (
-                            <div key={kind} className="stats-ruff-row">
-                              <span className="label-caps stats-ruff-label">{RUFF_KIND_LABELS[kind]}</span>
-                              <PctBar pct={pct} />
-                              <b>{pct}%</b>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {holdUpPct !== null ? (
-                <div className="stats-cardplay-section">
-                  <div className="label-caps stats-cardplay-head">HOLD-UP PLAYS</div>
-                  <div className="stats-holdup-row">
-                    <PctBar pct={holdUpPct} />
-                    <b>{holdUpPct}%</b>
-                  </div>
-                  <div className="stats-cardplay-note">
-                    Ducked {stats.holdUps.taken} of {stats.holdUps.opportunities} chance
-                    {stats.holdUps.opportunities === 1 ? '' : 's'} to win a suit's first lead outright — notrump
-                    contracts you declared.
-                  </div>
-                </div>
-              ) : null}
             </PerforatedPanel>
           ) : null}
 

@@ -2172,67 +2172,6 @@ a.board-row:hover {
   color: var(--btn-primary-fg);
 }
 
-.stats-page .stats-cardplay {
-  margin: 12px 16px 0;
-}
-.stats-cardplay-section + .stats-cardplay-section {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--ink);
-}
-.stats-cardplay-head {
-  margin-bottom: 8px;
-}
-.stats-ruff-group + .stats-ruff-group {
-  margin-top: 10px;
-}
-.stats-ruff-group-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-.stats-ruff-count {
-  color: var(--muted);
-}
-.stats-ruff-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  font-size: 13.5px;
-  padding: 3px 0;
-}
-.stats-ruff-label {
-  font-size: 10px;
-  white-space: nowrap;
-}
-.stats-ruff-row .pctbar {
-  width: 100%;
-  height: 8px;
-}
-.stats-holdup-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-}
-.stats-holdup-row .pctbar {
-  width: 100%;
-  height: 8px;
-}
-.stats-cardplay-note {
-  margin-top: 6px;
-  font-style: italic;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-/* the RUFFS section's headline note sits above its declaring/defending
-   breakdown, not below everything the way HOLD-UP PLAYS' note does */
-.stats-cardplay-note + .stats-ruff-group {
-  margin-top: 10px;
-}
-
 .stats-tiles {
   margin: 12px 16px 0;
   display: grid;
