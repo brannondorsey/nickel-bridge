@@ -239,13 +239,20 @@ export default function Tour() {
   return <PracticeBoard onDone={() => setStage('postmark')} />;
 }
 
-/** The tollkeeper's ribbon — the tour's one net-new gameplay surface. */
+/**
+ * The tollkeeper's ribbon — the tour's one net-new gameplay surface. Sticky
+ * at the top of the viewport so the narration stays readable from any scroll
+ * position (play and result phases scroll the document; content passes
+ * underneath rather than being covered), with a run-in label to keep the
+ * band shallow. Keyed by its text: a line change remounts it, replaying the
+ * brief ink-wash pulse (same "don't miss this" idea as the vulnerability
+ * chip's one-time pulse; stilled under reduced motion).
+ */
 function Tollkeeper({ text }: { text: string }) {
   return (
-    <div className="tour-narr">
-      <span className="label-caps">THE TOLLKEEPER</span>
+    <div className="tour-narr" role="status">
       <p>
-        <SuitText text={text} />
+        <span className="label-caps tour-narr-who">THE TOLLKEEPER</span> <SuitText text={text} />
       </p>
     </div>
   );
@@ -409,7 +416,8 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <TourHead view={view} />
-      <Tollkeeper text={narration} />
+      {/* keyed by its line so a narration change remounts the ribbon and replays its wash */}
+      <Tollkeeper key={narration} text={narration} />
       {done ? (
         resultView === 'receipt' ? (
           <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} />

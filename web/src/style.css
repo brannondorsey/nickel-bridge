@@ -3554,23 +3554,44 @@ a.stat-tile:hover {
   }
 }
 
-/* The tollkeeper's ribbon: inset-surface strip above the live board */
+/* The tollkeeper's ribbon: a shallow inset-surface band pinned to the top of
+   the viewport, so narration reads from any scroll position — the play and
+   result phases scroll underneath it. Full-bleed while stuck so nothing
+   ghosts past its edges; a fresh line replays the ink-wash (remount via key,
+   see Tour.tsx). */
 .tour-narr {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   background: var(--surface-inset, var(--surface));
-  border: 1px solid var(--line);
-  padding: 10px 13px;
-  margin: 10px 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 14px;
+  margin: 6px 0 8px;
 }
-.tour-narr .label-caps {
-  display: block;
-  margin-bottom: 2px;
+@media (prefers-reduced-motion: no-preference) {
+  .tour-narr {
+    animation: nbNarrWash 0.6s ease-out both;
+  }
+}
+@keyframes nbNarrWash {
+  from {
+    background-color: var(--line-quiet);
+  }
+  to {
+    background-color: var(--surface-inset, var(--surface));
+  }
+}
+.tour-narr .tour-narr-who {
+  color: var(--ink);
+  margin-right: 4px;
 }
 .tour-narr p {
   margin: 0;
   font-family: var(--font-body);
   font-style: italic;
-  font-size: 14.5px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.42;
 }
 
 /* The tollkeeper's suggestion: a breathing outline on the one suggested
