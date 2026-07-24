@@ -12,6 +12,8 @@ import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
 import { StemChart } from '../components/ds/StemChart';
 import { StarGrade } from '../components/ds/StarGrade';
+import { GlossaryProse } from '../components/game/GlossaryProse';
+import { useGlossary } from '../glossary/GlossaryContext';
 import { shortDate, shortDateUTC } from '../format';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -62,6 +64,31 @@ const BID_TYPE_LABELS: Record<BidTypeKey, string> = {
   double: 'DOUBLES',
   pass: 'PASSES',
 };
+
+/**
+ * A manual glossary link for a standalone ledger/tile key (as opposed to free
+ * prose): used where GlossaryProse's auto-matching wouldn't fire — either the
+ * term is `linkify: false` sitewide because it's too common a word in prose
+ * ("pass", "game"), or the display text is a different word form than the
+ * term itself ("Declaring" vs. the "Declarer" term) — but the key here is a
+ * short, deliberate label rather than a sentence, so linking it doesn't
+ * create prose noise.
+ */
+function GlossLabel({ text, slug }: { text: string; slug: string }) {
+  const { openTerm } = useGlossary();
+  return (
+    <button type="button" className="gloss-link" onClick={() => openTerm(slug)}>
+      {text}
+    </button>
+  );
+}
+
+/** BID_TYPE_LABELS[category] as a glossary link. */
+function BidTypeLabel({ category }: { category: BidTypeKey }) {
+  const label = BID_TYPE_LABELS[category];
+  if (category === 'pass') return <GlossLabel text={label} slug="pass" />;
+  return <GlossaryProse text={label} />;
+}
 
 /** Display names for the tracked-convention buckets. */
 const CONVENTION_LABELS: Record<ConventionKey, string> = {
@@ -223,8 +250,13 @@ export default function Player() {
     { label: 'Elo', pct: stats.percentiles.elo, of: `${stats.percentiles.ratedPlayers} rated players` },
     { label: 'Score', pct: stats.percentiles.avgPct, of: `${stats.percentiles.activePlayers} players` },
     { label: 'Bidding', pct: stats.percentiles.bidAccuracy, of: `${stats.percentiles.activePlayers} players` },
-    { label: 'Declaring', pct: stats.percentiles.declaring, of: `${stats.percentiles.declaringPlayers} declarers` },
-  ].filter((r) => r.pct !== null) as { label: string; pct: number; of: string }[];
+    {
+      label: 'Declaring',
+      slug: 'declarer',
+      pct: stats.percentiles.declaring,
+      of: `${stats.percentiles.declaringPlayers} declarers`,
+    },
+  ].filter((r) => r.pct !== null) as { label: string; slug?: string; pct: number; of: string }[];
 
   const cm = stats.contractMix;
   const tierPct = (b: { boards: number; made: number }) => (b.boards ? Math.round((b.made / b.boards) * 100) : null);
@@ -254,7 +286,13 @@ export default function Player() {
                 {house ? <span className="house-tag">HOUSE</span> : null}
               </div>
               <div className="stats-since">
-                {house ? 'House player — a fixed skill level, in the field of every crossing' : `Learning since ${since}`}
+                <GlossaryProse
+                  text={
+                    house
+                      ? 'House player — a fixed skill level, in the field of every crossing'
+                      : `Learning since ${since}`
+                  }
+                />
               </div>
             </div>
           </div>
@@ -278,7 +316,9 @@ export default function Player() {
       {t.boardsCompleted === 0 ? (
         <>
           <div className="empty-note">
-            {isMe ? 'No boards played yet — the first crossing sets your rating.' : 'No completed boards yet.'}
+            <GlossaryProse
+              text={isMe ? 'No boards played yet — the first crossing sets your rating.' : 'No completed boards yet.'}
+            />
           </div>
           {isMe ? (
             <div className="stats-footer">
@@ -297,7 +337,9 @@ export default function Player() {
             <DayGrid days={stats.dailyBoards} />
             {dailyTotal === 0 && t.boardsCompleted > 0 ? (
               <div className="stats-daygrid-note">
-                Quiet lately — the last toll paid was {shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.
+                <GlossaryProse
+                  text={`Quiet lately — the last toll paid was ${shortDateUTC(dateToUnix(stats.dailyBoards.at(-1)!.date))}.`}
+                />
               </div>
             ) : null}
           </PerforatedPanel>
@@ -393,7 +435,9 @@ export default function Player() {
                       const pct = Math.round((b.satisfactory / b.total) * 100);
                       return (
                         <div key={b.category} className="stats-bidtype-row">
-                          <span className="label-caps stats-bidtype-label">{BID_TYPE_LABELS[b.category]}</span>
+                          <span className="label-caps stats-bidtype-label">
+                            <BidTypeLabel category={b.category} />
+                          </span>
                           <PctBar pct={pct} />
                           <b>{pct}%</b>
                           <span className="stats-bidtype-count">
@@ -403,10 +447,13 @@ export default function Player() {
                       );
                     })}
                     <div className="stats-bidtypes-note">
-                      Ranked by your share of ★★-or-better calls
-                      {stats.bidTypes.length >= 2
-                        ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
-                        : '.'}
+                      <GlossaryProse
+                        text={`Ranked by your share of ★★-or-better calls${
+                          stats.bidTypes.length >= 2
+                            ? ` — ${BID_TYPE_LABELS[stats.bidTypes[stats.bidTypes.length - 1].category].toLowerCase()} are the line to sharpen next.`
+                            : '.'
+                        }`}
+                      />
                     </div>
                   </>
                 ) : (
@@ -416,7 +463,9 @@ export default function Player() {
                       const pct = Math.round((c.satisfactory / c.total) * 100);
                       return (
                         <div key={c.family} className="stats-bidtype-row">
-                          <span className="label-caps stats-bidtype-label">{CONVENTION_LABELS[c.family]}</span>
+                          <span className="label-caps stats-bidtype-label">
+                            <GlossaryProse text={CONVENTION_LABELS[c.family]} />
+                          </span>
                           <PctBar pct={pct} />
                           <b>{pct}%</b>
                           <span className="stats-bidtype-count">
@@ -426,10 +475,13 @@ export default function Player() {
                       );
                     })}
                     <div className="stats-bidtypes-note">
-                      Named conventions only — natural bids don't count here
-                      {stats.conventions.length >= 2
-                        ? ` — ${CONVENTION_LABELS[stats.conventions[stats.conventions.length - 1].family].toLowerCase()} could use a refresher.`
-                        : '.'}
+                      <GlossaryProse
+                        text={`Named conventions only — natural bids don't count here${
+                          stats.conventions.length >= 2
+                            ? ` — ${CONVENTION_LABELS[stats.conventions[stats.conventions.length - 1].family].toLowerCase()} could use a refresher.`
+                            : '.'
+                        }`}
+                      />
                     </div>
                   </>
                 )}
@@ -445,7 +497,9 @@ export default function Player() {
                   const pct = tierPct(bucket);
                   return (
                     <div key={key} className="stats-contract-row">
-                      <span className="label-caps stats-contract-label">{label}</span>
+                      <span className="label-caps stats-contract-label">
+                        {key === 'game' ? <GlossLabel text={label} slug="game" /> : <GlossaryProse text={label} />}
+                      </span>
                       {pct !== null ? <PctBar pct={pct} /> : <span />}
                       <b>{pct !== null ? `${pct}%` : '—'}</b>
                       <span className="stats-contract-count">
@@ -456,7 +510,9 @@ export default function Player() {
                 })}
                 <div className="stats-contracts-divider" />
                 <div className="stats-contract-row">
-                  <span className="label-caps stats-contract-label">DOUBLED</span>
+                  <span className="label-caps stats-contract-label">
+                    <GlossaryProse text="DOUBLED" />
+                  </span>
                   {doubledPct !== null ? <PctBar pct={doubledPct} /> : <span />}
                   <b>{doubledPct !== null ? `${doubledPct}%` : '—'}</b>
                   <span className="stats-contract-count">
@@ -464,12 +520,17 @@ export default function Player() {
                   </span>
                 </div>
               </div>
-              <div className="stats-contracts-note">Redoubled crossings count as doubled too.</div>
+              <div className="stats-contracts-note">
+                <GlossaryProse text="Redoubled crossings count as doubled too." />
+              </div>
               <div className="stats-contracts-strains">
-                <span className="label-caps">AS DECLARER</span>
+                <span className="label-caps">
+                  <GlossaryProse text="AS DECLARER" />
+                </span>
                 <span>
-                  NOTRUMP {strainPct(cm.strains.notrump)}% · MAJOR {strainPct(cm.strains.major)}% · MINOR{' '}
-                  {strainPct(cm.strains.minor)}%
+                  <GlossaryProse
+                    text={`NOTRUMP ${strainPct(cm.strains.notrump)}% · MAJOR ${strainPct(cm.strains.major)}% · MINOR ${strainPct(cm.strains.minor)}%`}
+                  />
                 </span>
               </div>
             </PerforatedPanel>
@@ -520,7 +581,9 @@ export default function Player() {
                 leftCaption="short of contract"
                 rightCaption="over contract"
               />
-              <div className="stats-trickdelta-note">{trickDeltaNote(stats.trickDelta.avgDelta)}</div>
+              <div className="stats-trickdelta-note">
+                <GlossaryProse text={trickDeltaNote(stats.trickDelta.avgDelta)} />
+              </div>
             </PerforatedPanel>
           ) : null}
 
@@ -528,10 +591,12 @@ export default function Player() {
             <PerforatedPanel heading="VERSUS THE FIELD" className="stats-versus num">
               {percentileRows.map((r) => (
                 <div key={r.label} className="stats-versus-row">
-                  <span className="stats-versus-label">{r.label}</span>
+                  <span className="stats-versus-label">
+                    {r.slug ? <GlossLabel text={r.label} slug={r.slug} /> : <GlossaryProse text={r.label} />}
+                  </span>
                   <PctBar pct={r.pct} />
                   <span className="stats-versus-note">
-                    better than {r.pct}% of {r.of}
+                    <GlossaryProse text={`better than ${r.pct}% of ${r.of}`} />
                   </span>
                 </div>
               ))}

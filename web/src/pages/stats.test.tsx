@@ -112,8 +112,9 @@ describe('Stats', () => {
     // 40/41 → 98%, with its sample size alongside
     expect(within(ledger as HTMLElement).getByText('98%')).toBeInTheDocument();
     expect(within(ledger as HTMLElement).getByText('41 calls')).toBeInTheDocument();
-    // the weakest line is called out for practice
-    expect(within(ledger as HTMLElement).getByText(/overcalls are the line to sharpen next/)).toBeInTheDocument();
+    // the weakest line is called out for practice (split across a glossary
+    // link for "overcalls", so match the note's full text content directly)
+    expect(ledger.querySelector('.stats-bidtypes-note')?.textContent).toMatch(/overcalls are the line to sharpen next/);
 
     await userEvent.click(screen.getByRole('button', { name: /fold the ledger away/i }));
     expect(screen.queryByText('★★ OR BETTER — BY BID TYPE')).not.toBeInTheDocument();
@@ -135,7 +136,8 @@ describe('Stats', () => {
     expect(screen.getByText('STAYMAN')).toBeInTheDocument();
     expect(screen.getByText('89%')).toBeInTheDocument(); // 8/9
     expect(screen.queryByText('OPENINGS')).not.toBeInTheDocument();
-    expect(screen.getByText(/jacoby transfers could use a refresher/)).toBeInTheDocument();
+    // split across a glossary link for "Jacoby transfers"
+    expect(document.querySelector('.stats-bidtypes-note')?.textContent).toMatch(/jacoby transfers could use a refresher/i);
   });
 
   it('omits the convention tab when the player has no graded conventions', async () => {
@@ -219,9 +221,15 @@ describe('Stats', () => {
     const doubled = screen.getByText('DOUBLED').closest('.stats-contract-row')!;
     expect(within(doubled as HTMLElement).getByText('56%')).toBeInTheDocument();
     expect(within(doubled as HTMLElement).getByText('9 boards')).toBeInTheDocument();
-    // strains: 21/45/22 of 88 -> 24%/51%/25%
-    expect(screen.getByText('NOTRUMP 24% · MAJOR 51% · MINOR 25%')).toBeInTheDocument();
-    expect(screen.getByText('Redoubled crossings count as doubled too.')).toBeInTheDocument();
+    // strains: 21/45/22 of 88 -> 24%/51%/25% (NOTRUMP/MAJOR/MINOR are each
+    // glossary links, so match the line's full text content directly)
+    expect(document.querySelector('.stats-contracts-strains')?.textContent).toBe(
+      'AS DECLARERNOTRUMP 24% · MAJOR 51% · MINOR 25%',
+    );
+    // "doubled" is a glossary link, splitting it from the trailing "too."
+    expect(document.querySelector('.stats-contracts-note')?.textContent).toBe(
+      'Redoubled crossings count as doubled too.',
+    );
   });
 
   it('shows an em-dash for an untouched contract tier', async () => {
@@ -261,7 +269,8 @@ describe('Stats', () => {
     expect(screen.getByText('23%')).toBeInTheDocument();
     expect(screen.getByText(/\+2: 23% — 20 boards/)).toBeInTheDocument();
     expect(screen.getByText('Ø +0.3')).toBeInTheDocument();
-    expect(screen.getByText(/mark of an honest auction/)).toBeInTheDocument();
+    // "auction" is a glossary link, splitting it from the preceding text
+    expect(document.querySelector('.stats-trickdelta-note')?.textContent).toMatch(/mark of an honest auction/);
   });
 
   it('hides the trick-delta panel when the player has no declaring boards', async () => {
