@@ -4,6 +4,7 @@ import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
 import riverSceneNight from '../assets/bridge-river-scene-night.svg';
 import riverScene from '../assets/bridge-river-scene.svg';
+import { BridgeMark } from '../components/ds/BridgeMark';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -22,7 +23,7 @@ import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { SuitText } from '../components/game/SuitText';
 import { AUTO_PLAY_DELAY_MS, motionOK, stagePlaySteps } from '../components/game/playAnim';
-import { postmarkDate, signedScore, vulLabel } from '../format';
+import { postmarkDate, signedScore, timeGreeting, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
 import { COPY, guidanceFor } from '../onboarding/script';
 import { BiddingPhase, PlayPhase } from './Board';
@@ -32,6 +33,10 @@ import { BiddingPhase, PlayPhase } from './Board';
  * first: duplicate (same deals, one ledger), the teaching loop (meanings
  * before you commit, grades after), and the house philosophy (a small,
  * unhurried club; judgment over luck).
+ *
+ * It opens as the toll office's printed pamphlet — a cover and two short
+ * panels (the club philosophy, then duplicate as a specimen ledger) with a
+ * perforation-dot pager and an honest skip on every page.
  *
  * The spine is Board №0, a captured practice deal (onboarding/board0.ts)
  * replayed through Board.tsx's own exported BiddingPhase/PlayPhase — the
@@ -47,13 +52,31 @@ import { BiddingPhase, PlayPhase } from './Board';
  * for whom the automatic gate is suppressed like the splash).
  */
 
-type Stage = 'gate' | 'offer' | 'board' | 'postmark';
+type Stage = 'cover' | 'bridge' | 'ledger' | 'offer' | 'board' | 'postmark';
+
+/** Perforation-dot pager for the pamphlet's four pages. */
+function Pager({ page }: { page: number }) {
+  return (
+    <div className="tour-pager" aria-hidden="true">
+      {[0, 1, 2, 3].map((i) => (
+        <i key={i} className={i <= page ? 'on' : ''} />
+      ))}
+    </div>
+  );
+}
+
+/** Panel II's illustration: one deal, three fates — the whole idea in a table. */
+const SPECIMEN = [
+  { who: 'You', contract: '4♠ by S =', score: 620, pct: 100, me: true },
+  { who: 'Harold', contract: '3♠ by S +1', score: 170, pct: 50, me: false },
+  { who: 'Margaret', contract: '4♠ by S −1', score: -100, pct: 0, me: false },
+];
 
 export default function Tour() {
   const { me, refresh } = useMe();
   const navigate = useNavigate();
   const revisit = me?.user?.onboardedAt != null; // routed /tour visit, not the gate
-  const [stage, setStage] = useState<Stage>('gate');
+  const [stage, setStage] = useState<Stage>('cover');
   const [busy, setBusy] = useState(false);
 
   // Skipping and finishing both stamp the visit server-side (idempotent).
@@ -86,22 +109,29 @@ export default function Tour() {
     }
   };
 
-  if (stage === 'gate') {
+  if (stage === 'cover') {
     return (
       <div className="tour-gate">
-        <div className="tour-booth">
-          <div className="tour-booth-inner">
-            <div className="label-caps">AT THE GATE</div>
-            <p className="tour-booth-line">{COPY.gateLine(me?.user?.handle ?? 'traveler')}</p>
+        <div className="tour-cover-head">
+          <span className="label-caps">{COPY.cover.dept}</span>
+          <InkStamp color="var(--accent)" rotate={-7}>
+            {COPY.cover.stamp}
+          </InkStamp>
+        </div>
+        <div className="tour-cover-main">
+          <p className="tour-greeting">
+            Good {timeGreeting(new Date().getHours())}, {me?.user?.handle ?? 'traveler'} —
+          </p>
+          <h1 className="tour-cover-title">{COPY.cover.title}</h1>
+          <p className="tour-aside">{COPY.cover.aside}</p>
+          <div className="tour-gate-actions">
+            <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
+            <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
+              {COPY.cover.skip}
+            </button>
           </div>
         </div>
-        <div className="tour-gate-actions">
-          <Button onClick={() => setStage('offer')}>FIRST TIME →</Button>
-          <Button variant="secondary" onClick={skip} busy={busy} busyLabel="OPENING THE GATE…">
-            I KNOW THE WAY — LET ME THROUGH
-          </Button>
-          <p className="tour-aside">{COPY.gateAside}</p>
-        </div>
+        <Pager page={0} />
         <div className="tour-scene">
           <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
           <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
@@ -110,9 +140,72 @@ export default function Tour() {
     );
   }
 
+  if (stage === 'bridge') {
+    return (
+      <div className="tour-page">
+        <span className="label-caps tour-page-no">{COPY.bridgePanel.no}</span>
+        <h1 className="tour-title">{COPY.bridgePanel.title}</h1>
+        <p className="tour-copy">{COPY.bridgePanel.body1}</p>
+        <p className="tour-copy">{COPY.bridgePanel.body2}</p>
+        <hr className="tour-rule" />
+        <p className="tour-aside">{COPY.bridgePanel.aside}</p>
+        <div className="tour-page-foot">
+          <BridgeMark variant="footer" width={150} />
+        </div>
+        <div className="tour-gate-actions">
+          <Button onClick={() => setStage('ledger')}>CONTINUE →</Button>
+          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
+            {COPY.pageSkip}
+          </button>
+        </div>
+        <Pager page={1} />
+      </div>
+    );
+  }
+
+  if (stage === 'ledger') {
+    return (
+      <div className="tour-page">
+        <span className="label-caps tour-page-no">{COPY.ledgerPanel.no}</span>
+        <h1 className="tour-title">{COPY.ledgerPanel.title}</h1>
+        <PerforatedPanel heading="THE FIELD — ONE DEAL, THREE CROSSINGS" className="tour-specimen">
+          <table className="fieldtable num">
+            <tbody>
+              {SPECIMEN.map((r) => (
+                <tr key={r.who} className={r.me ? 'me' : ''}>
+                  <td className="fieldtable-name">{r.who}</td>
+                  <td className="fieldtable-contract">
+                    <ContractLabel label={r.contract} /> · {signedScore(r.score)}
+                  </td>
+                  <td className="fieldtable-pct">
+                    <PctBar pct={r.pct} width={56} /> <b className="fieldtable-pctnum">{r.pct}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </PerforatedPanel>
+        <p className="tour-copy">{COPY.ledgerPanel.body1}</p>
+        <p className="tour-copy">{COPY.ledgerPanel.body2}</p>
+        <hr className="tour-rule" />
+        <p className="tour-aside">{COPY.ledgerPanel.aside}</p>
+        <div className="tour-page-foot" />
+        <div className="tour-gate-actions">
+          <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
+          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
+            {COPY.pageSkip}
+          </button>
+        </div>
+        <Pager page={2} />
+      </div>
+    );
+  }
+
   if (stage === 'offer') {
     return (
       <div className="tour-offer">
+        <span className="label-caps tour-page-no">{COPY.offerNo}</span>
+        <div style={{ height: 18 }} />
         <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
         <h1 className="tour-title">{COPY.offerTitle}</h1>
         <p className="tour-copy">{COPY.offerBody}</p>
@@ -123,6 +216,7 @@ export default function Tour() {
             {COPY.offerSkip}
           </button>
         </div>
+        <Pager page={3} />
       </div>
     );
   }

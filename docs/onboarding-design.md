@@ -15,6 +15,10 @@ Three deliberate deltas from the spec below, all by product decision during impl
    a **Jacoby transfer** — an *artificial* call, a sharper "bids are a code" lesson than
    the sketched limit raise — and South corrects partner's 3NT to 4♠ on the eight-card
    fit, making exactly. The pamphlet reference page (§ "left behind") is not yet built.
+4. **Concept A's pamphlet opens the tour** (added on review): the cover ("So you've come
+   to cross.") plus panels I · THE BRIDGE and II · THE LEDGER precede the practice-board
+   offer, replacing the booth-gate screen — the philosophy copy carried the concept
+   exploration and now leads the shipped flow.
 
 The rest of this document is the original spec, kept as the design record. It was
 developed from a three-concept exploration (`onboarding-concepts.html` — pamphlet /

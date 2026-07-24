@@ -386,8 +386,11 @@ hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenario
 the recipe with the tool, label it from the tester's point of view) — the drift-guard test
 keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
-**The first crossing (onboarding):** a new account meets the tollkeeper before the app —
-`users.onboarded_at` NULL makes `App.tsx` render `pages/Tour.tsx` in place of the routes
+**The first crossing (onboarding):** a new account gets the toll office's pamphlet before
+the app — a cover ("So you've come to cross."), the philosophy panel (I · THE BRIDGE), and
+duplicate as a specimen ledger (II · THE LEDGER), perforation-dot pager, honest skip on
+every page — then the tollkeeper's practice board. `users.onboarded_at` NULL makes
+`App.tsx` render `pages/Tour.tsx` in place of the routes
 (the URL is untouched, so deep links resume after), until `POST /api/me/onboarded`
 (write-once, stamped on finishing *or* skipping) flips it; existing accounts were
 grandfathered as onboarded by the migration, demo mode suppresses the automatic gate like

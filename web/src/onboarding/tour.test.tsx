@@ -62,14 +62,31 @@ describe('first-crossing script ↔ capture drift guard', () => {
 });
 
 describe('the first crossing (Tour)', () => {
-  it('skips in-world at the gate, stamping the visit', async () => {
+  it('skips in-world from the pamphlet cover, stamping the visit', async () => {
     apiMock.setOnboarded.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
-    expect(await screen.findByText(/First time across this bridge/)).toBeInTheDocument();
+    expect(await screen.findByText(/come to cross/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /i know the way/i }));
     await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('reads the pamphlet: philosophy panel, then duplicate as a specimen ledger', async () => {
+    const user = userEvent.setup();
+    renderWithMe(<Tour />, { me: meFreshCrosser });
+    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
+    // I · THE BRIDGE — the club philosophy and the naming story
+    expect(screen.getByText(/robot of even temper/)).toBeInTheDocument();
+    expect(screen.getByText(/name outlived the price/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+    // II · THE LEDGER — one deal, three fates
+    expect(screen.getByText(/luck is dealt out of the game/)).toBeInTheDocument();
+    expect(screen.getByText('Harold')).toBeInTheDocument();
+    expect(screen.getByText('Margaret')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+    // III · THE PRACTICE — the board №0 offer
+    expect(screen.getByRole('button', { name: /take the practice board/i })).toBeInTheDocument();
   });
 
   it(
@@ -80,8 +97,10 @@ describe('the first crossing (Tour)', () => {
       const user = userEvent.setup();
       const { container, refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
 
-      // gate → offer → the practice board
-      await user.click(await screen.findByRole('button', { name: /first time/i }));
+      // pamphlet: cover → the bridge → the ledger → the offer → the board
+      await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
+      await user.click(await screen.findByRole('button', { name: /continue/i }));
+      await user.click(await screen.findByRole('button', { name: /continue/i }));
       await user.click(await screen.findByRole('button', { name: /take the practice board/i }));
 
       // decision 0 — the real bid box, meanings before commit

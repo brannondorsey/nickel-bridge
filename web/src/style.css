@@ -3347,7 +3347,7 @@ a.stat-tile:hover {
 
 /* ---- The first crossing (pages/Tour.tsx + web/src/onboarding) ---- */
 
-/* The tollkeeper's booth: the double ink frame ("the table" rule treatment) */
+/* The pamphlet cover ("So you've come to cross.") over the river scene */
 .tour-gate {
   position: relative;
   flex: 1;
@@ -3359,22 +3359,95 @@ a.stat-tile:hover {
   background: var(--paper);
   padding: 24px 24px 170px;
 }
-.tour-booth {
-  border: 1px solid var(--ink);
-  padding: 4px;
-  background: var(--panel);
+.tour-cover-head {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.tour-booth-inner {
-  border: 1px solid var(--ink);
-  padding: 18px 16px;
+.tour-cover-head .label-caps {
+  color: var(--ink);
 }
-.tour-booth-line {
-  font-family: var(--font-body);
+.tour-greeting {
   font-style: italic;
-  font-size: 21px;
-  line-height: 1.4;
-  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 15px;
+  margin: 0 0 8px;
 }
+.tour-cover-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.18;
+  margin: 0;
+}
+.tour-cover-main .tour-aside {
+  text-align: left;
+  margin: 10px 0 0;
+}
+
+/* Inner pamphlet panels (I · THE BRIDGE, II · THE LEDGER) */
+.tour-page {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 24px 12px;
+}
+.tour-page-no {
+  color: var(--ink);
+}
+.tour-page .tour-title {
+  text-align: left;
+  margin: 12px 0 0;
+}
+.tour-page .tour-copy {
+  text-align: left;
+  max-width: none;
+  margin: 12px 0 0;
+  font-size: 16px;
+}
+.tour-page .tour-aside {
+  text-align: left;
+  margin: 12px 0 0;
+}
+.tour-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 16px 0 0;
+  width: 100%;
+}
+.tour-page-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding: 18px 0 6px;
+}
+.tour-specimen {
+  margin: 14px 0 2px;
+}
+
+/* Perforation-dot pager, filled as pages pass */
+.tour-pager {
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  padding: 14px 0 10px;
+}
+.tour-pager i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-dashed);
+}
+.tour-pager i.on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
 .tour-gate-actions {
   display: flex;
   flex-direction: column;
