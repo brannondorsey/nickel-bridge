@@ -1,12 +1,27 @@
 # The First Crossing — new-user onboarding design
 
-**Status: design, not yet implemented.** This is the screen-by-screen spec for Nickel
-Bridge's new-user onboarding tour. It was developed from a three-concept exploration
-(`onboarding-concepts.html` — pamphlet / practice board / tollkeeper conversation); the
-direction chosen is the hybrid recommended there: **a guided practice deal as the spine,
-narrated by the tollkeeper, closed by the difficulty gate**, with a condensed pamphlet left
-behind as a revisitable reference. `onboarding-prototype.html` is a clickable prototype of
-the whole flow — open it in a browser and tap through (or use the jump bar).
+**Status: implemented** — see CONTRIBUTING.md "The first crossing" for the shipped
+architecture (`web/src/onboarding/`, `web/src/pages/Tour.tsx`, `tools/gen_tour_board.mjs`).
+Three deliberate deltas from the spec below, all by product decision during implementation:
+
+1. **The difficulty gate (⑤) was dropped** — the tour ends straight at PLAY THE TOLL and
+   the difficulty preference keeps its server default; a settings UI remains future work.
+2. **Board №0 is an offline engine capture, not a per-user exhibit tournament** (§5's
+   plan): `tools/gen_tour_board.mjs` drives the real engine once — model-argmax human
+   calls, DD play, real meanings/grades, the benchmark personas genuinely playing the same
+   deal for the field — and the tour replays the captured views through Board.tsx's own
+   exported phases. Same honesty guarantees, no server state, no per-signup compute.
+3. **The mined line beat the sketched one:** seed `crossing-43` opens 1NT, partner's 2♥ is
+   a **Jacoby transfer** — an *artificial* call, a sharper "bids are a code" lesson than
+   the sketched limit raise — and South corrects partner's 3NT to 4♠ on the eight-card
+   fit, making exactly. The pamphlet reference page (§ "left behind") is not yet built.
+
+The rest of this document is the original spec, kept as the design record. It was
+developed from a three-concept exploration (`onboarding-concepts.html` — pamphlet /
+practice board / tollkeeper conversation); the direction chosen is the hybrid recommended
+there: **a guided practice deal as the spine, narrated by the tollkeeper**.
+`onboarding-prototype.html` is the pre-implementation clickable prototype — the shipped
+tour supersedes it (it renders real components; the prototype only imitated them).
 
 Everything here follows the design system (`.claude/skills/nickel-bridge-design/readme.md`):
 ink on paper, Besley labels, Crimson body, italic asides, toll vocabulary, no emoji. All

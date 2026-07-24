@@ -1,7 +1,14 @@
 /** Thin typed client for the server API. */
 
 export interface Me {
-  user: { id: number; handle: string | null; picture: string | null; elo: number } | null;
+  user: {
+    id: number;
+    handle: string | null;
+    picture: string | null;
+    elo: number;
+    /** unix seconds when the first-crossing tour was completed or skipped; null = show it */
+    onboardedAt?: number | null;
+  } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
   /** demo mode (preview deployments): /scenarios gallery on, auto-splash off */
@@ -283,6 +290,7 @@ export const api = {
   setHandle: (handle: string) =>
     request<{ user: Me['user'] }>('/api/handle', { method: 'POST', body: JSON.stringify({ handle }) }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),

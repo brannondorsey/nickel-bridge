@@ -175,6 +175,18 @@ export default function Scenarios() {
                 </Button>
               </div>
             ))}
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>The first crossing</b>
+                <span className="exhibit-row-desc">
+                  The new-player tour: meet the tollkeeper, walk practice board №0 through the real Board UI, and
+                  read the ledger. Demo mode never forces it — it only lives here. Skip or finish to come back.
+                </span>
+              </div>
+              <Button variant="secondary" onClick={() => navigate('/tour')}>
+                ENTER →
+              </Button>
+            </div>
           </PerforatedPanel>
 
           <PerforatedPanel heading="PROFILES" className="exhibit-panel">

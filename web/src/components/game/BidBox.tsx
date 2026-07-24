@@ -18,12 +18,15 @@ export function BidBox({
   onSelect,
   onConfirm,
   busy,
+  hint = null,
 }: {
   legalCalls: number[];
   selected: number | null;
   onSelect: (call: number) => void;
   onConfirm: () => void;
   busy: boolean;
+  /** first-crossing tour: pulse this call as the tollkeeper's suggestion */
+  hint?: number | null;
 }) {
   const legal = useMemo(() => new Set(legalCalls), [legalCalls]);
   // calls 3..22 are levels 1–4; 23..37 are levels 5–7
@@ -41,7 +44,7 @@ export function BidBox({
     <button
       key={call}
       type="button"
-      className={`bid${selected === call ? ' selected' : ''}`}
+      className={`bid${selected === call ? ' selected' : ''}${hint === call && selected !== call ? ' bid-hint' : ''}`}
       disabled={busy || !legal.has(call)}
       onClick={() => onSelect(call)}
       aria-label={callDisplay(call)}

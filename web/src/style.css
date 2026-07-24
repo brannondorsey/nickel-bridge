@@ -3344,3 +3344,194 @@ a.stat-tile:hover {
   border-radius: var(--radius-chip);
   cursor: pointer;
 }
+
+/* ---- The first crossing (pages/Tour.tsx + web/src/onboarding) ---- */
+
+/* The tollkeeper's booth: the double ink frame ("the table" rule treatment) */
+.tour-gate {
+  position: relative;
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--paper);
+  padding: 24px 24px 170px;
+}
+.tour-booth {
+  border: 1px solid var(--ink);
+  padding: 4px;
+  background: var(--panel);
+}
+.tour-booth-inner {
+  border: 1px solid var(--ink);
+  padding: 18px 16px;
+}
+.tour-booth-line {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 21px;
+  line-height: 1.4;
+  margin: 8px 0 2px;
+}
+.tour-gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.tour-aside {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  margin: 4px 0 0;
+}
+.tour-scene {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+.tour-scene img {
+  display: block;
+  width: 100%;
+  height: 146px;
+  object-fit: cover;
+  object-position: bottom;
+}
+/* same static day/night asset swap as .splash-bridge (see its comment) */
+.tour-scene img.night-scene {
+  display: none;
+}
+[data-theme='night'] .tour-scene img.day-scene {
+  display: none;
+}
+[data-theme='night'] .tour-scene img.night-scene {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .tour-scene img.day-scene {
+    display: none;
+  }
+  html:not([data-theme]) .tour-scene img.night-scene {
+    display: block;
+  }
+}
+
+/* Offer + postmark interstitials share the auth-screen posture */
+.tour-offer,
+.tour-postmark {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.tour-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  margin: 26px 0 0;
+}
+.tour-copy {
+  max-width: 320px;
+  margin: 10px 0 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.tour-offer .tour-aside,
+.tour-postmark .tour-aside {
+  margin-top: 10px;
+}
+.tour-offer-actions {
+  width: min(300px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+.tour-quietlink {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px;
+}
+.tour-postmark-stamp {
+  animation: nbPostmarkPress 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-postmark-stamp {
+    animation: none;
+  }
+}
+@keyframes nbPostmarkPress {
+  0% {
+    transform: scale(1.55) rotate(-3deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(0.97) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The tollkeeper's ribbon: inset-surface strip above the live board */
+.tour-narr {
+  background: var(--surface-inset, var(--surface));
+  border: 1px solid var(--line);
+  padding: 10px 13px;
+  margin: 10px 12px 0;
+}
+.tour-narr .label-caps {
+  display: block;
+  margin-bottom: 2px;
+}
+.tour-narr p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+/* The tollkeeper's suggestion: a breathing outline on the one suggested
+   control. Redundant with the ribbon's words — motion is never the only
+   signal — and still under reduced motion. */
+.bid.bid-hint,
+.cardbtn.card-hint {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bid.bid-hint,
+  .cardbtn.card-hint {
+    animation: nbHintBreathe 1.4s ease-in-out infinite;
+  }
+}
+@keyframes nbHintBreathe {
+  0%,
+  100% {
+    outline-offset: 1px;
+  }
+  50% {
+    outline-offset: 4px;
+  }
+}
+
+/* Board №0 has no lobby to go back to mid-tour: the receipt's secondary
+   action (Board's "Back to lobby") stays hidden inside the tour shell. */
+.tour-board .receipt .board-actions .ds-btn-secondary {
+  display: none;
+}

@@ -89,6 +89,16 @@ if (!userColumns.has('kind')) {
   db.exec(`ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'human'`);
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle_key ON users(handle_key) WHERE handle_key IS NOT NULL;`);
+// Migration: `onboarded_at` — when the user finished (or skipped) the
+// first-crossing tour (web/src/onboarding). NULL = the web app shows the tour
+// after the handle prompt. Existing accounts are grandfathered as already
+// onboarded at migration time: the tour teaches the app to newcomers, and
+// springing it on every veteran the day it ships would read as a nag, not a
+// welcome.
+if (!userColumns.has('onboarded_at')) {
+  db.exec(`ALTER TABLE users ADD COLUMN onboarded_at INTEGER`);
+  db.exec(`UPDATE users SET onboarded_at = unixepoch()`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -137,6 +147,8 @@ export interface UserRow {
   difficulty: SettableDifficulty;
   /** 'human' = real account; 'ai' = benchmark persona (ai-players.ts), excluded from Elo/placement/leaderboard/stats and shown as a shadow row in standings */
   kind: 'human' | 'ai';
+  /** unix seconds when the first-crossing tour was completed or skipped; NULL = show it */
+  onboarded_at: number | null;
   elo: number;
   created_at: number;
 }

@@ -31,6 +31,7 @@ function freshApiMock(): ApiMock {
     me: stub(),
     devLogin: stub(),
     setHandle: stub(),
+    setOnboarded: stub(),
     logout: stub(),
     play: stub(),
     tournaments: stub(),

@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
+import Tour from './pages/Tour';
 import Tournament from './pages/Tournament';
 import { splashOnReturn, stampVisit } from './splash';
 import { applyThemePref, readThemePref } from './theme';
@@ -83,14 +84,18 @@ export default function App() {
   // today's, or the splash would never show again. Demo mode (PR previews)
   // suppresses the splash itself — testers only see it by opening its
   // exhibit on the /scenarios gallery — but still stamps the visit, so the
-  // record stays correct if the same origin ever leaves demo mode.
+  // record stays correct if the same origin ever leaves demo mode. A
+  // not-yet-onboarded user gets the first-crossing tour instead of the
+  // splash (it IS their first-visit moment); the visit still stamps, so no
+  // splash replays right after the tour either.
   const authed = Boolean(me?.user?.handle);
   const demo = Boolean(me?.demo);
+  const onboarded = me?.user?.onboardedAt != null;
   useEffect(() => {
     if (!authed) return;
-    if (!demo && splashOnReturn()) setSplash(true);
+    if (!demo && onboarded && splashOnReturn()) setSplash(true);
     stampVisit();
-  }, [authed, demo]);
+  }, [authed, demo, onboarded]);
 
   if (!loaded) {
     return (
@@ -107,6 +112,13 @@ export default function App() {
       <div className="shell">
         {me?.user && !me.user.handle ? (
           <CreateHandle />
+        ) : me?.user && !onboarded && !demo ? (
+          // First crossing: new accounts meet the tollkeeper before the app.
+          // Renders in place of the routes (the URL is untouched, so a deep
+          // link resumes normally once the tour completes or is skipped).
+          // Demo mode suppresses it for the shared Inspector the same way it
+          // suppresses the splash; testers open it from /tour instead.
+          <Tour />
         ) : me?.user ? (
           <GlossaryProvider>
             <Routes>
@@ -118,6 +130,7 @@ export default function App() {
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/review" element={<Tournament />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
+              <Route path="/tour" element={<Tour />} />
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

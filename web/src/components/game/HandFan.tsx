@@ -22,12 +22,15 @@ export function HandFan({
   selected,
   onSelect,
   small = false,
+  hint = null,
 }: {
   cards: number[];
   legal?: number[];
   selected?: number | null;
   onSelect?: (card: number) => void;
   small?: boolean;
+  /** first-crossing tour: pulse this card as the tollkeeper's suggestion */
+  hint?: number | null;
 }) {
   const interactive = Boolean(onSelect);
   return (
@@ -41,7 +44,7 @@ export function HandFan({
             key={c}
             type="button"
             data-card={c}
-            className={`cardbtn${selected === c ? ' selected' : ''}${newSuit ? ' suitgap' : ''}`}
+            className={`cardbtn${selected === c ? ' selected' : ''}${newSuit ? ' suitgap' : ''}${hint === c && selected !== c ? ' card-hint' : ''}`}
             style={i > 0 ? { marginLeft: fanMarginLeft(cards[i - 1], small) } : undefined}
             disabled={!playable}
             onClick={

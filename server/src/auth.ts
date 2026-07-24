@@ -25,6 +25,7 @@ const stmtInsertUser = db.prepare(
 const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?`);
 const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
 const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id = ?`);
+const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -166,7 +167,14 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const user = userFromRequest(req);
     return reply.send({
       user: user
-        ? { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty: user.difficulty }
+        ? {
+            id: user.id,
+            handle: user.handle,
+            picture: user.picture,
+            elo: user.elo,
+            difficulty: user.difficulty,
+            onboardedAt: user.onboarded_at,
+          }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
       googleAuth: Boolean(clientId),
@@ -188,6 +196,15 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.send({
       user: { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty },
     });
+  });
+
+  // First-crossing tour completion (or skip). Idempotent — the stamp is
+  // write-once, so re-walking the tour from its revisit route never moves it.
+  app.post('/api/me/onboarded', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    stmtSetOnboarded.run(user.id);
+    return reply.send({ ok: true });
   });
 
   // First-login (and handle-change) endpoint: claims a case-insensitively unique display handle.

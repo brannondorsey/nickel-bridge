@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
-import { meFixture, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
+import { meFixture, meFreshCrosser, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
 import { apiMock } from './test/utils';
 
 vi.mock('./api', async (importOriginal) => ({
@@ -61,6 +61,24 @@ describe('App — authenticated', () => {
     apiMock.me.mockResolvedValue(meNoHandle);
     renderApp();
     expect(await screen.findByPlaceholderText('Handle')).toBeInTheDocument();
+  });
+
+  it('meets a not-yet-onboarded user at the tollkeeper’s gate instead of the routes (and the splash)', async () => {
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/leaderboard'); // even a deep link waits at the gate; the URL survives the tour
+    expect(await screen.findByText(/First time across this bridge/)).toBeInTheDocument();
+    expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
+    // the visit still stamps, so no splash replays the moment the tour ends
+    expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
+  });
+
+  it('demo mode suppresses the automatic tour like the splash (the /tour route stays reachable)', async () => {
+    apiMock.me.mockResolvedValue({ ...meFreshCrosser, demo: true });
+    apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+    renderApp();
+    expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+    expect(screen.queryByText(/First time across this bridge/)).not.toBeInTheDocument();
   });
 
   it('shows Home with bottom tabs for a recent visitor, no splash', async () => {
