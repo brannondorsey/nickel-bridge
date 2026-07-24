@@ -98,7 +98,7 @@ describe('handle (first-login username)', () => {
     expect(allowed.statusCode).toBe(200);
   });
 
-  it('excludes handle-less signups from the leaderboard, then includes them once they register', async () => {
+  it('excludes handle-less signups from the leaderboard, and keeps them out (provisional) once registered', async () => {
     const kate = new TestClient(app, 'Kate');
     await kate.login();
     const judy = new TestClient(app, 'Judy');
@@ -114,10 +114,13 @@ describe('handle (first-login username)', () => {
     const me = await judy.get('/api/me');
     expect(me.user.handle).toBe('Judy');
 
+    // still provisional: 0 rated tournaments is well under the quota, so a
+    // brand-new player at the ELO_INITIAL default can't outrank proven players
     ({ leaderboard } = await kate.get('/api/leaderboard'));
-    const judyRow = leaderboard.find((r: { handle: string }) => r.handle === 'Judy');
-    expect(judyRow).toBeTruthy();
-    expect(judyRow.elo).toBe(1200);
+    expect(leaderboard.some((r: { handle: string }) => r.handle === 'Judy')).toBe(false);
+    const judyView = await judy.get('/api/leaderboard');
+    expect(judyView.yourRatedTournaments).toBe(0);
+    expect(judyView.provisionalMin).toBe(4);
   });
 
   it('rejects invalid handles', async () => {
@@ -195,8 +198,16 @@ describe('tournament lifecycle over the API', () => {
   });
 
   it('rates the tournament immediately (continuous Elo) and re-ranks on late join', async () => {
-    let lb = (await alice.get('/api/leaderboard')).leaderboard;
-    expect(lb.filter((r: any) => r.rated_tournaments === 1).length).toBe(2);
+    // rated_tournaments per player stays below the leaderboard's provisional
+    // quota this early, so assert directly against elo_history rather than
+    // the (now-filtered) public leaderboard list.
+    const ratedFor = (tournamentId: number) =>
+      (
+        db.prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM elo_history WHERE tournament_id = ?`).get(tournamentId) as {
+          n: number;
+        }
+      ).n;
+    expect(ratedFor(tid)).toBe(2);
 
     // carol late-joins the same evergreen tournament with a different auction
     const c = await carol.post('/api/play');
@@ -213,8 +224,7 @@ describe('tournament lifecycle over the API', () => {
         },
       });
     }
-    lb = (await carol.get('/api/leaderboard')).leaderboard;
-    expect(lb.filter((r: any) => r.rated_tournaments === 1).length).toBe(3);
+    expect(ratedFor(tid)).toBe(3);
     const standings = await carol.get(`/api/tournaments/${tid}`);
     expect(standings.standings.filter((s: any) => s.complete).length).toBe(3);
   });

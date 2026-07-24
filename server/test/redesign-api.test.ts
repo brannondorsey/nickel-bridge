@@ -30,23 +30,38 @@ beforeAll(async () => {
   await bob.login();
 });
 
+// Movement math is exercised via leaderboardMovement() directly rather than
+// GET /api/leaderboard: that route now omits players below the provisional
+// quota (PROVISIONAL_MIN_TOURNAMENTS), but alice/bob/carol here only ever
+// complete 1-2 tournaments — well under it — so they'd never appear in the
+// route's list even though the movement math itself is unaffected by that
+// display-eligibility filter.
 describe('leaderboard movement', () => {
   it('is null for everyone before any rated tournament exists', async () => {
-    const { leaderboard } = await alice.get('/api/leaderboard');
-    expect(leaderboard.length).toBe(2);
-    for (const row of leaderboard) expect(row.movement).toBeNull();
+    const { leaderboardMovement } = await import('../src/tournaments.js');
+    const aliceId = (await alice.get('/api/me')).user.id;
+    const bobId = (await bob.get('/api/me')).user.id;
+    const movement = leaderboardMovement();
+    expect(movement.has(aliceId)).toBe(false);
+    expect(movement.has(bobId)).toBe(false);
   });
 
   it('is null after the first rated tournament (no previous snapshot) and numeric after the second', async () => {
-    await completeTournament([alice, bob]);
-    let { leaderboard } = await alice.get('/api/leaderboard');
-    for (const row of leaderboard) expect(row.movement).toBeNull();
+    const { leaderboardMovement } = await import('../src/tournaments.js');
+    const aliceId = (await alice.get('/api/me')).user.id;
+    const bobId = (await bob.get('/api/me')).user.id;
 
     await completeTournament([alice, bob]);
-    ({ leaderboard } = await alice.get('/api/leaderboard'));
-    for (const row of leaderboard) expect(typeof row.movement).toBe('number');
+    let movement = leaderboardMovement();
+    expect(movement.has(aliceId)).toBe(false);
+    expect(movement.has(bobId)).toBe(false);
+
+    await completeTournament([alice, bob]);
+    movement = leaderboardMovement();
+    expect(typeof movement.get(aliceId)).toBe('number');
+    expect(typeof movement.get(bobId)).toBe('number');
     // movement is prevRank − currentRank, so the field's movements sum to 0
-    const sum = leaderboard.reduce((a: number, r: { movement: number }) => a + r.movement, 0);
+    const sum = [...movement.values()].reduce((a, v) => a + v, 0);
     expect(sum).toBe(0);
   });
 
@@ -54,13 +69,14 @@ describe('leaderboard movement', () => {
     // JIT placement grace-serves Carol the oldest young under-filled
     // tournament, which is older than the latest rated one — the recompute
     // inserts her into history retroactively, so she exists in both snapshots.
+    const { leaderboardMovement } = await import('../src/tournaments.js');
     const carol = new TestClient(app, 'Carol');
     await carol.login();
+    const carolId = (await carol.get('/api/me')).user.id;
     const { tournamentId } = await carol.post('/api/play');
     for (let no = 1; no <= 4; no++) await playBoard(carol, tournamentId, no);
-    const { leaderboard } = await alice.get('/api/leaderboard');
-    const carolRow = leaderboard.find((r: { handle: string }) => r.handle === 'Carol');
-    expect(typeof carolRow.movement).toBe('number');
+    const movement = leaderboardMovement();
+    expect(typeof movement.get(carolId)).toBe('number');
   });
 
   it('is null for a player whose first rated tournament is the latest one', async () => {

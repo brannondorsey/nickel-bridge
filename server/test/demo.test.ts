@@ -12,6 +12,7 @@ const silentLog = { info() {}, error() {}, warn() {}, debug() {} } as unknown as
 freshDbEnv('demo');
 process.env.DEMO = '1';
 const app = await makeApp();
+const { db } = await import('../src/db.js');
 
 describe('demo mode', () => {
   const inspector = new TestClient(app, 'unused');
@@ -60,6 +61,25 @@ describe('demo mode', () => {
     const { richProfileId } = await inspector.get('/api/demo/scenarios');
     const stats = await inspector.get(`/api/users/${richProfileId}/stats`);
     expect(stats.totals.boardsCompleted).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('DEMO=1 relaxes the leaderboard provisional quota to 1, not the production 4', async () => {
+    // The boot seeder's DEFAULT_PROFILE plays each bot through at most 2
+    // tournaments — well under the production quota (4) — so without this
+    // override every preview's and the demo app's leaderboard would render
+    // permanently empty. A 2-bot, 1-tournament seed here exercises the same
+    // gap cheaply instead of running the full (deploy-scale) profile.
+    const seeder = await import('../src/demo-seed.js');
+    await seeder.seedDemo(silentLog, {
+      bots: ['ProvisionalBotA', 'ProvisionalBotB'],
+      tournaments: [{ seed: 'demo-test-provisional', ageS: 86400, players: [0, 1] }],
+      exhibitFields: false,
+    });
+    const { leaderboard, provisionalMin } = await inspector.get('/api/leaderboard');
+    expect(provisionalMin).toBe(1);
+    const handles = (leaderboard as { handle: string }[]).map((r) => r.handle);
+    expect(handles).toContain('ProvisionalBotA');
+    expect(handles).toContain('ProvisionalBotB');
   }, 120_000);
 
   it('the handle-collision exhibit prefill is guaranteed to 409', async () => {
@@ -118,13 +138,15 @@ describe('demo mode', () => {
   }, 120_000);
 
   it('reset wipes the database and keeps the requester signed in', async () => {
-    const before = await inspector.get('/api/leaderboard');
-    expect(before.leaderboard.length).toBeGreaterThan(1); // Inspector + Visitor
+    // registered users, not the (now provisional-gated) leaderboard list —
+    // neither Inspector nor Visitor has completed enough rated tournaments to
+    // appear there, so this checks the underlying wipe directly.
+    const userCount = () => (db.prepare(`SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL`).get() as { n: number }).n;
+    expect(userCount()).toBeGreaterThan(1); // Inspector + Visitor
     await inspector.post('/api/demo/reset', { reseed: false });
     const me = await inspector.get('/api/me'); // works: fresh cookie from the reset response
     expect(me.user.handle).toBe('Inspector');
-    const after = await inspector.get('/api/leaderboard');
-    expect(after.leaderboard.length).toBe(1);
+    expect(userCount()).toBe(1);
     const { tournaments } = await inspector.get('/api/tournaments');
     expect(tournaments.length).toBe(0);
   });

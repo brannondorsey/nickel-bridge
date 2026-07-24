@@ -220,7 +220,10 @@ describe('benchmark AI players', () => {
     const aiIds = new Set(Object.values(ensureAiPlayers()).map((u) => u.id));
     expect(leaderboard.some((r: { id: number }) => aiIds.has(r.id))).toBe(false);
 
-    const aliceId = (leaderboard as { id: number; handle: string }[]).find((r) => r.handle === 'Alice')!.id;
+    // Alice hasn't played a tournament yet in this test, so she's below the
+    // leaderboard's provisional quota and won't be in the list — get her id
+    // from /api/me instead.
+    const aliceId = (await alice.get('/api/me')).user.id;
     const stats = await alice.get(`/api/users/${aliceId}/stats`);
     // full field members: Alice + Bob + the three personas
     expect(stats.percentiles.activePlayers).toBe(5);

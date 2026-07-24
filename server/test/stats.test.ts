@@ -95,13 +95,14 @@ describe('player stats', () => {
     expect(stats.totals.tournamentsCompleted).toBe(1);
     expect(stats.totals.ratedTournaments).toBe(1);
 
-    // elo matches the leaderboard
-    const lb = await alice.get('/api/leaderboard');
-    const mine = lb.leaderboard.find((r: any) => r.id === aliceId);
+    // elo matches the stored rating — alice's 1 rated tournament is below the
+    // leaderboard's provisional quota, so she isn't in its list yet (covered
+    // in api.test.ts); check the underlying rating directly instead
+    const mineElo = (db.prepare(`SELECT elo FROM users WHERE id = ?`).get(aliceId) as { elo: number }).elo;
     expect(stats.eloSeries).toHaveLength(1);
-    expect(stats.eloSeries[0].elo).toBe(mine.elo);
-    expect(stats.totals.currentElo).toBe(mine.elo);
-    expect(stats.totals.peakElo).toBeGreaterThanOrEqual(Math.max(1200, mine.elo));
+    expect(stats.eloSeries[0].elo).toBe(mineElo);
+    expect(stats.totals.currentElo).toBe(mineElo);
+    expect(stats.totals.peakElo).toBeGreaterThanOrEqual(Math.max(1200, mineElo));
 
     // pct matches the tournament standings
     const t = await alice.get(`/api/tournaments/${tid}`);

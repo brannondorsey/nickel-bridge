@@ -253,6 +253,31 @@ export function visibleStandings(tournamentId: number): Standing[] {
 }
 
 /**
+ * Provisional-rating threshold for the leaderboard (`/api/leaderboard` in
+ * app.ts): players need this many rated tournaments (`elo_history` rows)
+ * before they're eligible to show up in the ranked list. Below it a fresh
+ * account still sits at or near ELO_INITIAL, which would otherwise rank it
+ * above proven players whose results have pulled them under 1200 — the
+ * classic cold-start problem with any pairwise rating. Doesn't touch the
+ * rating math itself (still computed and stored from tournament 1), only
+ * eligibility for display.
+ */
+export const PROVISIONAL_MIN_TOURNAMENTS = 4;
+
+/**
+ * DEMO=1 override for the quota above (an off-by-default knob — app.ts only
+ * applies it when demo mode is enabled): the boot seeder (`demo-seed.ts`'s
+ * DEFAULT_PROFILE) plays each bot through at most 2 tournaments, well under
+ * the production quota, which would otherwise leave every preview's and the
+ * permanent demo app's leaderboard permanently empty — contradicting the
+ * seeder's own "leaderboard with rated players" ambient-data goal. A quota
+ * of 1 still exercises the real provisional-gating code path (the
+ * always-empty New Crosser persona stays excluded) without defeating the
+ * point of demoing a populated leaderboard.
+ */
+export const DEMO_PROVISIONAL_MIN_TOURNAMENTS = 1;
+
+/**
  * Human-only matchpoint averages — the Elo replay's input, DELIBERATELY not
  * the displayed standings(). House personas count in the displayed field but
  * are unrated, and they must not shape human ratings even indirectly:

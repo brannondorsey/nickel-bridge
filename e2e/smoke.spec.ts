@@ -1,4 +1,4 @@
-import { Page, expect, test } from '@playwright/test';
+import { APIRequestContext, Page, expect, request, test } from '@playwright/test';
 
 /**
  * Dev sign-in on the splash, claim a handle, tap through the first-visit
@@ -15,6 +15,22 @@ async function signInAndOnboard(page: Page, name: string) {
   await splash.waitFor({ timeout: 10_000 }).catch(() => {});
   if (await splash.isVisible().catch(() => false)) await splash.click();
   await expect(page.getByText(new RegExp(`Good (morning|afternoon|evening), ${name.split(' ')[0]}`))).toBeVisible();
+}
+
+/** Fast, UI-free board completion via direct API calls (same shape as scripts/e2e.mjs). */
+async function playBoardFast(req: APIRequestContext, tid: number, no: number) {
+  for (let i = 0; i < 100; i++) {
+    const view = await (await req.get(`/api/tournaments/${tid}/boards/${no}`)).json();
+    if (view.state === 'done') return;
+    if (view.state === 'bidding' && view.myTurn) {
+      await req.post(`/api/tournaments/${tid}/boards/${no}/call`, { data: { call: 0 } });
+    } else if (view.state === 'playing' && view.myTurn) {
+      await req.post(`/api/tournaments/${tid}/boards/${no}/play`, { data: { card: view.legalCards[0] } });
+    } else {
+      throw new Error(`playBoardFast stuck: state=${view.state} myTurn=${view.myTurn}`);
+    }
+  }
+  throw new Error(`playBoardFast: tournament ${tid} board ${no} never finished`);
 }
 
 /**
@@ -169,6 +185,7 @@ test('glossary is reachable, searchable, and opens term sheets', async ({ page }
 
 /** Stats page wiring: bottom tab → own page, rankings row → other pages. */
 test('player stats page is reachable for self and others', async ({ page, context }) => {
+  test.setTimeout(240_000); // seeds real rated history below — see comment there
   const name = `Stats ${Date.now()}`;
 
   await signInAndOnboard(page, name);
@@ -180,6 +197,35 @@ test('player stats page is reachable for self and others', async ({ page, contex
   await expect(page.getByText('NICKEL RATING')).toBeVisible();
   await expect(page.getByText(/No boards played yet/)).toBeVisible();
   await expect(page.getByRole('link', { name: /play your first board/i })).toBeVisible();
+
+  // The leaderboard only surfaces players past its provisional quota
+  // (PROVISIONAL_MIN_TOURNAMENTS in server/src/tournaments.ts, currently 4
+  // — this suite runs under DEV_AUTH, not DEMO, so no override applies), and
+  // a fresh account like the one above never qualifies. Drive two throwaway
+  // accounts through that many jointly-completed tournaments via direct API
+  // calls (fast, no UI) so a genuine row exists to click — exercising the
+  // real production gate instead of faking around it. B joins each of A's
+  // tournaments directly by id (any authenticated handle-holder can play any
+  // non-exhibit tournament this way — no placement/grace-window dependency),
+  // so this doesn't rely on JIT placement routing two accounts together.
+  const origin = new URL(page.url()).origin;
+  const a = await request.newContext({ baseURL: origin });
+  const b = await request.newContext({ baseURL: origin });
+  const aName = `Rank A ${Date.now()}`;
+  const bName = `Rank B ${Date.now()}`;
+  await a.post('/auth/dev', { data: { name: aName } });
+  await a.post('/api/handle', { data: { handle: aName } });
+  await b.post('/auth/dev', { data: { name: bName } });
+  await b.post('/api/handle', { data: { handle: bName } });
+  for (let t = 0; t < 4; t++) {
+    const placement = await (await a.post('/api/play')).json();
+    for (let no = 1; no <= 4; no++) {
+      await playBoardFast(a, placement.tournamentId, no);
+      await playBoardFast(b, placement.tournamentId, no);
+    }
+  }
+  await a.dispose();
+  await b.dispose();
 
   // any rankings row links to that player's stats page
   await page.click('.tabbar >> text=RANKINGS');

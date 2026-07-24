@@ -13,12 +13,14 @@ import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './
 import { playerStats } from './stats.js';
 import {
   boardDifficulty,
+  DEMO_PROVISIONAL_MIN_TOURNAMENTS,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
   myEloDelta,
   myTournaments,
   placeUser,
+  PROVISIONAL_MIN_TOURNAMENTS,
   visibleStandings,
 } from './tournaments.js';
 
@@ -151,18 +153,32 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/leaderboard', (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
+    // DEMO=1 (previews + the permanent demo app) relaxes the quota so the
+    // boot seeder's ambient tournaments — at most 2 per bot, see
+    // DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment — still populate a
+    // visible leaderboard; off (the production quota applies) everywhere else.
+    const provisionalMin = process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
     const rows = db
       .prepare(
-        `SELECT u.id, u.handle, u.picture, u.elo,
-                (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
-                (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
-                  JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
-                  WHERE b.user_id = u.id) AS played_tournaments
-         FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human' ORDER BY u.elo DESC, u.handle`,
+        `SELECT id, handle, picture, elo, rated_tournaments, played_tournaments FROM (
+           SELECT u.id, u.handle, u.picture, u.elo,
+                  (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
+                  (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
+                    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+                    WHERE b.user_id = u.id) AS played_tournaments
+           FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
+         ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all() as { id: number }[];
+      .all(provisionalMin) as { id: number }[];
     const movement = leaderboardMovement();
-    return reply.send({ leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })) });
+    const yourRatedTournaments = (
+      db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }
+    ).n;
+    return reply.send({
+      leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
+      provisionalMin,
+      yourRatedTournaments,
+    });
   });
 
   app.get('/api/users/:id/stats', (req, reply) => {

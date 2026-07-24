@@ -17,6 +17,12 @@ interface Row {
   movement: number | null;
 }
 
+interface LeaderboardData {
+  leaderboard: Row[];
+  provisionalMin: number;
+  yourRatedTournaments: number;
+}
+
 /** Rank movement since the previous rated tournament — glyph + color, never color alone. */
 function Movement({ value }: { value: number | null }) {
   if (!value) return <span className="rank-move quiet">—</span>;
@@ -27,15 +33,18 @@ function Movement({ value }: { value: number | null }) {
 /** Rankings ("The field"): the all-time Elo ladder, one perforated row per player. */
 export default function Leaderboard() {
   const { me } = useMe();
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [data, setData] = useState<LeaderboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .leaderboard()
-      .then((r) => setRows(r.leaderboard))
+      .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'failed to load rankings'));
   }, []);
+
+  const rows = data?.leaderboard ?? null;
+  const stillProvisional = data !== null && data.yourRatedTournaments < data.provisionalMin;
 
   return (
     <div className="rankings">
@@ -53,6 +62,13 @@ export default function Leaderboard() {
               ALL-TIME · {rows.length} {rows.length === 1 ? 'PLAYER' : 'PLAYERS'}
             </div>
           </div>
+          {stillProvisional ? (
+            <div className="rank-provisional-note">
+              You'll join the field once you've completed {data!.provisionalMin}{' '}
+              {data!.provisionalMin === 1 ? 'crossing' : 'crossings'} — {data!.yourRatedTournaments} of{' '}
+              {data!.provisionalMin} so far.
+            </div>
+          ) : null}
           {rows.length === 0 ? (
             <div className="empty-note">No one has crossed yet — rankings appear after the first tournament.</div>
           ) : (
