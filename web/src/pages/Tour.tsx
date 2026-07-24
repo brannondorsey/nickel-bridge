@@ -251,8 +251,9 @@ export default function Tour() {
 function Tollkeeper({ text }: { text: string }) {
   return (
     <div className="tour-narr" role="status">
+      <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
       <p>
-        <span className="label-caps tour-narr-who">THE TOLLKEEPER</span> <SuitText text={text} />
+        <SuitText text={text} />
       </p>
     </div>
   );
