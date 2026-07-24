@@ -67,7 +67,7 @@ describe('the first crossing (Tour)', () => {
     const user = userEvent.setup();
     const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
     expect(await screen.findByText(/come to cross/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /i know the way/i }));
+    await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
     await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });

@@ -3371,12 +3371,6 @@ a.stat-tile:hover {
 .tour-cover-head .label-caps {
   color: var(--ink);
 }
-.tour-greeting {
-  font-style: italic;
-  color: var(--muted);
-  font-size: 15px;
-  margin: 0 0 8px;
-}
 .tour-cover-title {
   font-family: var(--font-body);
   font-weight: 600;

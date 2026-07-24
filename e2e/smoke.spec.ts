@@ -4,7 +4,7 @@ import { APIRequestContext, Page, expect, request, test } from '@playwright/test
  * Dev sign-in on the splash, claim a handle, skip the first-crossing tour at
  * its gate — lands on Home ("Good …, {name}"). (A fresh account meets the
  * tollkeeper instead of the splash; the tour's own flow is covered by the
- * web unit suite, so the smoke tests take the "I know the way" door.)
+ * web unit suite, so the smoke tests take the "skip the tutorial" door.)
  */
 async function signInAndOnboard(page: Page, name: string) {
   await page.goto('/');
@@ -12,7 +12,7 @@ async function signInAndOnboard(page: Page, name: string) {
   await page.getByRole('button', { name: /dev sign-in/i }).click();
   await page.fill('input[placeholder="Handle"]', name);
   await page.getByRole('button', { name: /continue/i }).click();
-  await page.getByRole('button', { name: /i know the way/i }).click();
+  await page.getByRole('button', { name: /skip the tutorial/i }).click();
   // a returning visitor may still get the splash intro — tap skips it
   const splash = page.getByTestId('splash');
   await splash.waitFor({ timeout: 10_000 }).catch(() => {});

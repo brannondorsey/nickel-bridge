@@ -23,7 +23,7 @@ import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { SuitText } from '../components/game/SuitText';
 import { AUTO_PLAY_DELAY_MS, motionOK, stagePlaySteps } from '../components/game/playAnim';
-import { postmarkDate, signedScore, timeGreeting, vulLabel } from '../format';
+import { postmarkDate, signedScore, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
 import { COPY, guidanceFor } from '../onboarding/script';
 import { BiddingPhase, PlayPhase } from './Board';
@@ -119,15 +119,12 @@ export default function Tour() {
           </InkStamp>
         </div>
         <div className="tour-cover-main">
-          <p className="tour-greeting">
-            Good {timeGreeting(new Date().getHours())}, {me?.user?.handle ?? 'traveler'} —
-          </p>
           <h1 className="tour-cover-title">{COPY.cover.title}</h1>
           <p className="tour-aside">{COPY.cover.aside}</p>
           <div className="tour-gate-actions">
             <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
             <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-              {COPY.cover.skip}
+              {COPY.skip}
             </button>
           </div>
         </div>
@@ -155,7 +152,7 @@ export default function Tour() {
         <div className="tour-gate-actions">
           <Button onClick={() => setStage('ledger')}>CONTINUE →</Button>
           <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.pageSkip}
+            {COPY.skip}
           </button>
         </div>
         <Pager page={1} />
@@ -187,13 +184,11 @@ export default function Tour() {
         </PerforatedPanel>
         <p className="tour-copy">{COPY.ledgerPanel.body1}</p>
         <p className="tour-copy">{COPY.ledgerPanel.body2}</p>
-        <hr className="tour-rule" />
-        <p className="tour-aside">{COPY.ledgerPanel.aside}</p>
         <div className="tour-page-foot" />
         <div className="tour-gate-actions">
           <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
           <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.pageSkip}
+            {COPY.skip}
           </button>
         </div>
         <Pager page={2} />
@@ -209,11 +204,10 @@ export default function Tour() {
         <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
         <h1 className="tour-title">{COPY.offerTitle}</h1>
         <p className="tour-copy">{COPY.offerBody}</p>
-        <p className="tour-aside">{COPY.offerAside}</p>
         <div className="tour-offer-actions">
           <Button onClick={() => setStage('board')}>TAKE THE PRACTICE BOARD →</Button>
           <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.offerSkip}
+            {COPY.skip}
           </button>
         </div>
         <Pager page={3} />

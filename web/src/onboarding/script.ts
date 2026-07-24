@@ -38,8 +38,8 @@ export const COPY = {
     title: 'So you’ve come to cross.',
     aside: 'Notes for the first-time crosser. Three minutes, well spent.',
     begin: 'READ THE PAMPHLET →',
-    skip: 'I KNOW THE WAY — STRAIGHT TO THE BRIDGE',
   },
+  skip: 'SKIP THE TUTORIAL',
   bridgePanel: {
     no: 'I · THE BRIDGE',
     title: 'A small club, one crossing at a time.',
@@ -55,16 +55,12 @@ export const COPY = {
     body1:
       'Bad cards are no excuse here — Margaret holds the same ones, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
     body2: 'That’s duplicate: the luck is dealt out of the game, and judgment is what’s left.',
-    aside: 'Standings keep moving as friends cross behind you. A crossing is never quite finished.',
   },
-  pageSkip: 'STRAIGHT TO THE BRIDGE',
 
   offerNo: 'III · THE PRACTICE',
   offerTitle: 'A practice crossing.',
   offerBody:
     'Before your first real crossing, walk one deal with the tollkeeper. You’ll bid a hand, play a card or two, and learn to read the ledger.',
-  offerAside: 'Not scored. Not rated. Never spoken of.',
-  offerSkip: 'STRAIGHT TO THE BRIDGE — I’VE PLAYED BEFORE',
 
   offScriptCall: 'A fine thought — and its meaning is right there. But tonight, follow the tollkeeper.',
   offScriptCard: 'A fair card — but take the marked one tonight. The meanings of your own experiments come later.',
