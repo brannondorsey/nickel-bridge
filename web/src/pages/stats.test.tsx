@@ -330,7 +330,7 @@ describe('Stats', () => {
     });
     renderStats();
     expect(await screen.findByText('Alice')).toBeInTheDocument();
-    expect(screen.getByText(/Learning since/)).toBeInTheDocument();
+    expect(screen.getByText(/Playing since/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
   });
 

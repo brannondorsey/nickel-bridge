@@ -50,7 +50,7 @@ describe('demo seeder', () => {
         .get(bots[0].id) as { at: number };
       expect(finishedAt.at).toBeLessThan(Date.now() / 1000 - 86400);
 
-      // seeded accounts predate their backdated results ("Learning since")
+      // seeded accounts predate their backdated results ("Playing since")
       const botCreated = (db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(bots[0].id) as {
         created_at: number;
       }).created_at;
