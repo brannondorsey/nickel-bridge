@@ -62,8 +62,8 @@ describe('Tournament sheet', () => {
     // house rows are full field members: real rank, tagged and muted only visually
     expect(within(house).getByText('2')).toBeInTheDocument();
     expect(within(house).getByText('The Shark').closest('a')).toHaveAttribute('href', '/players/90');
-    // full pair count: 3 humans + 1 house row → "4 pairs"
-    expect(screen.getByText('4 pairs · matchpoints')).toBeInTheDocument();
+    // full player count: 3 humans + 1 house row → "4 players"
+    expect(screen.getByText('4 players · matchpoints')).toBeInTheDocument();
     // incomplete rows fall back to their position in the pct-sorted field,
     // house included — Bob sits 4th behind Alice, The Shark, and Margaret
     const bob = screen.getByText('Bob').closest('.tourney-field-row')! as HTMLElement;
@@ -90,7 +90,7 @@ describe('Tournament result', () => {
 
     expect(await screen.findByText('TOLL PAID')).toBeInTheDocument();
     expect(screen.getByText('TOURNAMENT Nº11')).toBeInTheDocument();
-    expect(screen.getByText('MATCHPOINTS · 2ND OF 3 PAIRS')).toBeInTheDocument();
+    expect(screen.getByText('MATCHPOINTS · 2ND OF 3 PLAYERS')).toBeInTheDocument();
     expect(screen.getByText('NICKEL RATING')).toBeInTheDocument();
     expect(screen.getByText('1487')).toBeInTheDocument();
     expect(screen.getByText('+12')).toHaveClass('positive');
@@ -110,7 +110,7 @@ describe('Tournament result', () => {
       standings: tournamentComplete.standings.map((s) => (s.userId === 1 ? { ...s, rank: undefined } : s)),
     });
     renderWithMe(<Tournament />, { me: meFixture });
-    expect(await screen.findByText('MATCHPOINTS · 3 PAIRS')).toBeInTheDocument();
+    expect(await screen.findByText('MATCHPOINTS · 3 PLAYERS')).toBeInTheDocument();
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
   });
 

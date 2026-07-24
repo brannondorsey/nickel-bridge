@@ -72,7 +72,7 @@ const DEFAULT_PROFILE: SeedProfile = {
   exhibitFields: true,
 };
 
-/** Seeded accounts predate the oldest seeded tournament ("Learning since"). */
+/** Seeded accounts predate the oldest seeded tournament ("Playing since"). */
 const USER_AGE_S = 40 * 86400;
 
 const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = ?`);
@@ -189,10 +189,10 @@ async function doSeed(log: FastifyBaseLogger, profile: SeedProfile): Promise<voi
   const inspector = ensureDemoUser();
   const bots = profile.bots.map(ensureBot);
   // The New Crosser is ensured here too (also called synchronously from
-  // /api/demo/scenarios) purely for a plausible "Learning since" date — it
+  // /api/demo/scenarios) purely for a plausible "Playing since" date — it
   // never plays a board, so its stats page stays the cold-start empty state.
   const newCrosser = ensureNewCrosser();
-  // "Learning since" on stats pages must predate the backdated results
+  // "Playing since" on stats pages must predate the backdated results
   for (const u of [inspector, newCrosser, ...bots]) stmtBackdateUser.run(now - USER_AGE_S, u.id, now - USER_AGE_S);
 
   // Ambient tournaments are stamped ai_field = 1 but deliberately NOT

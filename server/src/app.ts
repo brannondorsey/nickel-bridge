@@ -21,7 +21,7 @@ import {
   myTournaments,
   placeUser,
   PROVISIONAL_MIN_TOURNAMENTS,
-  standings,
+  visibleStandings,
 } from './tournaments.js';
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
@@ -76,7 +76,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       myDone: t.myDone,
       createdAt: t.created_at,
       myLastPlayedAt: t.myLastPlayedAt,
-      standings: standings(t.id),
+      standings: visibleStandings(t.id),
     }));
     return reply.send({ tournaments: mine });
   });
@@ -96,7 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       myDone: myBoards.filter((b) => b.state === 'done').length,
       myEloDelta: myEloDelta(t.id, user.id),
       myBoards,
-      standings: standings(t.id),
+      standings: visibleStandings(t.id),
     });
   });
 

@@ -61,10 +61,10 @@ export default function Tournament() {
 
   const myDone = t.myDone ?? 0;
   // House (benchmark AI) rows are full field members: they rank and count as
-  // pairs like anyone else — the tag and muted styling below are the only
+  // players like anyone else — the tag and muted styling below are the only
   // thing that sets them apart.
-  const pairs = t.standings.length;
-  const pairsWord = pairs === 1 ? 'pair' : 'pairs';
+  const players = t.standings.length;
+  const playersWord = players === 1 ? 'player' : 'players';
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
   const complete = myDone === TOTAL_BOARDS;
 
@@ -74,7 +74,7 @@ export default function Tournament() {
     const delta = t.myEloDelta ? t.myEloDelta.after - t.myEloDelta.before : null;
     return (
       <div className="tourney-page">
-        <ScreenHeader title={t.name} caption={`Complete · ${pairs} ${pairsWord}`} onBack={() => navigate('/')} />
+        <ScreenHeader title={t.name} caption={`Complete · ${players} ${playersWord}`} onBack={() => navigate('/')} />
         <div className="tourney-result-hero">
           <Postmark size={118} arcBottom={`TOURNAMENT Nº${num}`} line1="TOLL PAID" line2={when ? postmarkDate(when) : ''} />
           <div className="tourney-pct">
@@ -82,7 +82,7 @@ export default function Tournament() {
           </div>
           <div className="label-caps tourney-rank num">
             MATCHPOINTS · {meRow?.rank ? `${ordinal(meRow.rank)} OF ` : ''}
-            {pairs} {pairsWord.toUpperCase()}
+            {players} {playersWord.toUpperCase()}
           </div>
           {t.myEloDelta ? (
             <div className="tourney-rating num">
@@ -171,7 +171,7 @@ export default function Tournament() {
 
   return (
     <div className="tourney-page">
-      <ScreenHeader title={t.name} caption={`${pairs} ${pairsWord} · matchpoints`} onBack={() => navigate('/')} />
+      <ScreenHeader title={t.name} caption={`${players} ${playersWord} · matchpoints`} onBack={() => navigate('/')} />
       <div className="tourney-sheet">{rows}</div>
       <PerforatedPanel
         heading={myDone > 0 ? `THE FIELD — AFTER BOARD ${myDone}` : 'THE FIELD'}

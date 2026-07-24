@@ -201,7 +201,7 @@ Progress dashboard; viewable for yourself ("Your stats") and any other player. T
 "am I getting better?" payoff screen.
 
 - **Content:**
-  - Header: avatar (Google photo, or initial-letter fallback), name, "Learning since
+  - Header: avatar (Google photo, or initial-letter fallback), name, "Playing since
     {month year}".
   - **Six stat tiles:** Elo (with peak), Tournaments played (with completed count), Boards
     (with passed-out count), Avg score % ("50% = field average"), Bid accuracy % (with a
