@@ -179,8 +179,9 @@ export default function Scenarios() {
               <div className="exhibit-row-text">
                 <b>The first crossing</b>
                 <span className="exhibit-row-desc">
-                  The new-player tour: meet the tollkeeper, walk practice board №0 through the real Board UI, and
-                  read the ledger. Demo mode never forces it — it only lives here. Skip or finish to come back.
+                  The new-player tour: read the toll office’s pamphlet, walk practice board №0 through the real
+                  Board UI with the tollkeeper, and read the ledger. Demo mode never forces it — it only lives
+                  here. Skip or finish to come back.
                 </span>
               </div>
               <Button variant="secondary" onClick={() => navigate('/tour')}>
