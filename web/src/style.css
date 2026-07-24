@@ -3382,6 +3382,11 @@ a.stat-tile:hover {
   text-align: left;
   margin: 10px 0 0;
 }
+/* center the cover's content while the quiet skip settles at the page foot,
+   just above the river scene — fine print, apart from the real action */
+.tour-cover-main {
+  margin: auto 0;
+}
 
 /* Inner pamphlet panels (I · THE BRIDGE, II · THE LEDGER) */
 .tour-page {
@@ -3424,22 +3429,20 @@ a.stat-tile:hover {
   margin: 14px 0 2px;
 }
 
-/* Perforation-dot pager, filled as pages pass */
-.tour-pager {
-  display: flex;
-  gap: 9px;
-  justify-content: center;
-  padding: 14px 0 10px;
-}
-.tour-pager i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line-dashed);
-}
-.tour-pager i.on {
-  border-color: var(--ink);
-  background: var(--ink);
+/* The quiet skip: fine print at each pamphlet page's foot — always in the
+   same place, never competing with the page's one real action. */
+.tour-skip {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  align-self: center;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 14px 18px;
 }
 
 .tour-gate-actions {

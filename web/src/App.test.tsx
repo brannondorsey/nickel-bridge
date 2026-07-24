@@ -66,7 +66,7 @@ describe('App — authenticated', () => {
   it('meets a not-yet-onboarded user at the pamphlet cover instead of the routes (and the splash)', async () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/leaderboard'); // even a deep link waits at the gate; the URL survives the tour
-    expect(await screen.findByText(/come to cross/)).toBeInTheDocument();
+    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
     // the visit still stamps, so no splash replays the moment the tour ends
@@ -78,7 +78,7 @@ describe('App — authenticated', () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [] });
     renderApp();
     expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
-    expect(screen.queryByText(/come to cross/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
   });
 
   it('shows Home with bottom tabs for a recent visitor, no splash', async () => {

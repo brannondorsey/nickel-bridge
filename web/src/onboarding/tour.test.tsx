@@ -66,7 +66,7 @@ describe('the first crossing (Tour)', () => {
     apiMock.setOnboarded.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
-    expect(await screen.findByText(/come to cross/)).toBeInTheDocument();
+    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
     await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
     await waitFor(() => expect(refresh).toHaveBeenCalled());

@@ -35,8 +35,8 @@ export const COPY = {
   cover: {
     dept: 'TOLL DIVISION · RICHMOND',
     stamp: 'EST. 1925',
-    title: 'So you’ve come to cross.',
-    aside: 'Notes for the first-time crosser. Three minutes, well spent.',
+    title: 'Welcome to the bridge.',
+    aside: 'A short pamphlet and one practice deal — three minutes, and you’ll know your way across.',
     begin: 'READ THE PAMPHLET →',
   },
   skip: 'SKIP THE TUTORIAL',

@@ -54,17 +54,6 @@ import { BiddingPhase, PlayPhase } from './Board';
 
 type Stage = 'cover' | 'bridge' | 'ledger' | 'offer' | 'board' | 'postmark';
 
-/** Perforation-dot pager for the pamphlet's four pages. */
-function Pager({ page }: { page: number }) {
-  return (
-    <div className="tour-pager" aria-hidden="true">
-      {[0, 1, 2, 3].map((i) => (
-        <i key={i} className={i <= page ? 'on' : ''} />
-      ))}
-    </div>
-  );
-}
-
 /** Panel II's illustration: one deal, three fates — the whole idea in a table. */
 const SPECIMEN = [
   { who: 'You', contract: '4♠ by S =', score: 620, pct: 100, me: true },
@@ -123,12 +112,11 @@ export default function Tour() {
           <p className="tour-aside">{COPY.cover.aside}</p>
           <div className="tour-gate-actions">
             <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
-            <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-              {COPY.skip}
-            </button>
           </div>
         </div>
-        <Pager page={0} />
+        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
+          {COPY.skip}
+        </button>
         <div className="tour-scene">
           <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
           <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
@@ -151,11 +139,10 @@ export default function Tour() {
         </div>
         <div className="tour-gate-actions">
           <Button onClick={() => setStage('ledger')}>CONTINUE →</Button>
-          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.skip}
-          </button>
         </div>
-        <Pager page={1} />
+        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
+          {COPY.skip}
+        </button>
       </div>
     );
   }
@@ -187,11 +174,10 @@ export default function Tour() {
         <div className="tour-page-foot" />
         <div className="tour-gate-actions">
           <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
-          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.skip}
-          </button>
         </div>
-        <Pager page={2} />
+        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
+          {COPY.skip}
+        </button>
       </div>
     );
   }
@@ -206,11 +192,10 @@ export default function Tour() {
         <p className="tour-copy">{COPY.offerBody}</p>
         <div className="tour-offer-actions">
           <Button onClick={() => setStage('board')}>TAKE THE PRACTICE BOARD →</Button>
-          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            {COPY.skip}
-          </button>
         </div>
-        <Pager page={3} />
+        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
+          {COPY.skip}
+        </button>
       </div>
     );
   }
