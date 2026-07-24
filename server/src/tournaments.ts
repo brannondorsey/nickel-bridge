@@ -127,32 +127,55 @@ export interface Standing {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
 
+export const STANDINGS = {
+  /** A partial human player (< BOARDS_PER_TOURNAMENT done) whose most
+   * recently completed board in this tournament is older than this is
+   * presumed to have abandoned it and is dropped from visibleStandings()'s
+   * client-facing field — see its doc comment. Purely a display concern:
+   * standings() itself never filters on this. */
+  ABANDON_TTL_S: 7 * 86400,
+};
+
+interface PlayerAgg {
+  handle: string;
+  kind: 'human' | 'ai';
+  google: string;
+  pcts: number[];
+  /** unixepoch of this player's most recently completed board — display-only
+   * (visibleStandings()'s staleness filter); not part of the public Standing
+   * shape. */
+  lastDoneAt: number;
+}
+
 /**
- * Live standings from completed boards: each board is matchpointed across
- * EVERYONE who finished it — humans and the benchmark AI personas in one
- * field. House rows are real pairs here: they earn ranks, count toward the
- * pair count, and shape human pcts exactly like another human would (a
- * deliberate decision — the house is the yardstick, so it competes on the
- * scoresheet; ai-players.ts). The persona/human split survives only where
- * it must: Elo (eloParticipants below — personas never rate and never shape
- * human ratings) and placement (stmtCandidates).
- * A player's total is the average over their finished boards. Standings are
- * never "final" — they keep evolving as more friends play the same deals.
+ * The shared aggregation behind standings()/visibleStandings(): one pass over
+ * every done board, matchpointed per board across EVERYONE who finished it —
+ * humans and the benchmark AI personas in one field. House rows are real
+ * pairs here: they earn ranks, count toward the pair count, and shape human
+ * pcts exactly like another human would (a deliberate decision — the house is
+ * the yardstick, so it competes on the scoresheet; ai-players.ts). The
+ * persona/human split survives only where it must: Elo (eloParticipants below
+ * — personas never rate and never shape human ratings) and placement
+ * (stmtCandidates). A player's total is the average over their finished
+ * boards. Standings are never "final" — they keep evolving as more friends
+ * play the same deals.
  */
-export function standings(tournamentId: number): Standing[] {
+function aggregateStandings(tournamentId: number): { userId: number; agg: PlayerAgg }[] {
   const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & {
     user_handle: string;
     user_kind: 'human' | 'ai';
     user_google: string;
   })[];
-  const players = new Map<number, { handle: string; kind: 'human' | 'ai'; google: string; pcts: number[] }>();
+  const players = new Map<number, PlayerAgg>();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
     const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
     boardRows.forEach((r, i) => {
       const u =
-        players.get(r.user_id) ?? { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [] };
+        players.get(r.user_id) ??
+        { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [], lastDoneAt: 0 };
       u.pcts.push(mps[i].pct);
+      u.lastDoneAt = Math.max(u.lastDoneAt, r.updated_at);
       players.set(r.user_id, u);
     });
   }
@@ -160,16 +183,21 @@ export function standings(tournamentId: number): Standing[] {
   // humans first — a human is listed above a persona they tie with (they
   // share the same printed rank) — then personas strongest-first (aiTieRank),
   // so a tied trio reads Shark, Regular, Novice.
-  const list: Standing[] = [...players.entries()]
-    .sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google))
-    .map(([userId, u]): Standing => ({
-      userId,
-      handle: u.handle,
-      kind: u.kind,
-      boardsDone: u.pcts.length,
-      totalPct: avg(u.pcts),
-      complete: u.pcts.length >= BOARDS_PER_TOURNAMENT,
-    }));
+  return [...players.entries()].sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google)).map(([userId, agg]) => ({
+    userId,
+    agg,
+  }));
+}
+
+function toStandings(entries: { userId: number; agg: PlayerAgg }[]): Standing[] {
+  const list: Standing[] = entries.map(({ userId, agg }): Standing => ({
+    userId,
+    handle: agg.handle,
+    kind: agg.kind,
+    boardsDone: agg.pcts.length,
+    totalPct: avg(agg.pcts),
+    complete: agg.pcts.length >= BOARDS_PER_TOURNAMENT,
+  }));
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
   for (const s of list) {
     if (s.complete) {
@@ -179,6 +207,49 @@ export function standings(tournamentId: number): Standing[] {
     }
   }
   return list;
+}
+
+/**
+ * Every player with >= 1 scored board in this tournament, unfiltered — the
+ * canonical membership rule the rest of the app treats as authoritative:
+ * stats.ts's pctSeries (a player's own tournament history), rivalries()
+ * (explicitly documented as NOT gated on completeness, so two players who
+ * merely crossed paths mid-tournament still count as rivals), and
+ * fieldPercentiles() (the site-wide percentile pool) all depend on this
+ * exact contract and must keep calling standings() directly rather than
+ * visibleStandings() below — filtering here would silently drop a player's
+ * own history, a still-valid rivalry, or a percentile-pool member the moment
+ * they went quiet, which is normal in an evergreen app that never forces
+ * completion. See visibleStandings() for the client-facing field, which
+ * layers a display-only staleness filter on top of this same aggregation.
+ */
+export function standings(tournamentId: number): Standing[] {
+  return toStandings(aggregateStandings(tournamentId));
+}
+
+/**
+ * standings(), filtered for "The Field" panel on the tournament page: a
+ * partial human player (someone who started but hasn't finished all boards)
+ * who hasn't completed a board in over STANDINGS.ABANDON_TTL_S is presumed to
+ * have abandoned the tournament and is left out entirely — this is a display
+ * filter only: their board scores stay in the per-board matchpoint tables
+ * aggregateStandings() builds, so they still fairly affect every other player
+ * who played the same boards, exactly as duplicate scoring requires, and
+ * standings() (stats.ts's source of truth) never sees this filter at all. If
+ * a dropped player returns and finishes another board, they reappear
+ * immediately (the check is a live function of their last completion, not a
+ * stored flag). Benchmark AI personas ('kind' = 'ai') are exempt — they
+ * always finish a tournament within about a minute of creation in the
+ * common case (ai-players.ts), so a stalled house row would be a scheduler
+ * bug worth surfacing, not something to quietly hide.
+ */
+export function visibleStandings(tournamentId: number): Standing[] {
+  const now = Math.floor(Date.now() / 1000);
+  const entries = aggregateStandings(tournamentId).filter(
+    ({ agg }) =>
+      agg.kind === 'ai' || agg.pcts.length >= BOARDS_PER_TOURNAMENT || now - agg.lastDoneAt <= STANDINGS.ABANDON_TTL_S,
+  );
+  return toStandings(entries);
 }
 
 /**
