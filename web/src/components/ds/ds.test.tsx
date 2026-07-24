@@ -184,11 +184,11 @@ describe('AppHeader / ScreenHeader', () => {
 
   it('ScreenHeader fires onBack and shows title + caption', async () => {
     const onBack = vi.fn();
-    render(<ScreenHeader title="Tournament #12" caption="12 pairs · matchpoints" onBack={onBack} />);
+    render(<ScreenHeader title="Tournament #12" caption="12 players · matchpoints" onBack={onBack} />);
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(onBack).toHaveBeenCalledOnce();
     expect(screen.getByText('Tournament #12')).toBeInTheDocument();
-    expect(screen.getByText('12 pairs · matchpoints')).toBeInTheDocument();
+    expect(screen.getByText('12 players · matchpoints')).toBeInTheDocument();
   });
 });
 

@@ -38,16 +38,16 @@ describe('Home', () => {
     renderWithMe(<Lobby />, { me: meFixture });
     const row = (await screen.findByText('61%')).closest('a')!;
     expect(row).toHaveAttribute('href', '/t/11');
-    expect(within(row).getByText(/· 3 pairs/)).toBeInTheDocument();
+    expect(within(row).getByText(/· 3 players/)).toBeInTheDocument();
     expect(within(row).getByText('2ND')).toHaveClass('quiet');
   });
 
-  it('counts house (benchmark AI) rows as pairs and ranks around them', async () => {
+  it('counts house (benchmark AI) rows as players and ranks around them', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentCompleteWithHouse] });
     renderWithMe(<Lobby />, { me: meFixture });
-    // 3 humans + 1 house row → "4 pairs", matching Tournament.tsx's full count
+    // 3 humans + 1 house row → "4 players", matching Tournament.tsx's full count
     const row = (await screen.findByText('61%')).closest('a')!;
-    expect(within(row).getByText(/· 4 pairs/)).toBeInTheDocument();
+    expect(within(row).getByText(/· 4 players/)).toBeInTheDocument();
     // The Shark's rank 2 pushes Margaret to 3rd
     expect(within(row).getByText('3RD')).toBeInTheDocument();
   });
