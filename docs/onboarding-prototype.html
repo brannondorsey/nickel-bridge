@@ -1,0 +1,598 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nickel Bridge — First Crossing · Clickable Prototype</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poiret+One&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Besley:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Josefin+Sans:wght@400;600&display=swap');
+:root{
+  --ink:#141414; --paper:#FCFBF8; --panel:#FFFFFF;
+  --surface:#F1EFE9; --line:#D8D5CE; --line-quiet:#E4E1D8; --line-dashed:#B9B4A9;
+  --muted:#6E6A62; --verdigris:#6F8F68; --track:#EDEBE4;
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  --accent:#C22F21; --positive:#00775A;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#EAE7DF;color:var(--ink);font-family:'Crimson Pro',serif;font-size:16px;line-height:1.5}
+.label{font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+
+/* review chrome around the phone */
+.protohead{max-width:980px;margin:0 auto;padding:22px 16px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wordmark{font-family:'Poiret One',cursive;font-size:17px;letter-spacing:.14em}
+.jumps{max-width:980px;margin:6px auto 18px;padding:0 16px;display:flex;gap:6px;flex-wrap:wrap}
+.jump{font-family:Besley,serif;font-weight:600;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  border:1px solid var(--line-dashed);border-radius:3px;background:#fff;padding:4px 8px;color:var(--muted);cursor:pointer}
+.jump.on{border-color:var(--ink);color:var(--ink);background:var(--surface)}
+.stagewrap{display:flex;justify-content:center;padding:6px 12px 70px}
+
+/* the phone */
+.phone{width:392px;min-height:780px;background:var(--paper);border:1px solid var(--ink);
+  box-shadow:3px 3px 0 rgba(20,20,20,.12);position:relative;overflow:hidden;
+  display:flex;flex-direction:column;padding:20px 18px 0}
+.screen{display:none;flex:1;flex-direction:column;min-height:0}
+.screen.on{display:flex}
+.flexgrow{flex:1}
+
+/* shared pieces */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--ink);color:#fff;
+  font-family:Besley,serif;font-weight:700;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
+  border:1px solid var(--ink);border-radius:2px;padding:15px 18px;width:100%;text-align:center;cursor:pointer;user-select:none}
+.btn.secondary{background:transparent;color:var(--ink)}
+.btn.disabled{background:var(--line-quiet);border-color:var(--line-quiet);color:var(--line-dashed);cursor:default}
+.quietlink{font-family:Besley,serif;font-weight:600;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);text-align:center;text-decoration:underline;text-underline-offset:3px;cursor:pointer;user-select:none}
+.suit-s{color:var(--suit-s)} .suit-h{color:var(--suit-h)} .suit-d{color:var(--suit-d)} .suit-c{color:var(--suit-c)}
+.on-ink .suit-h,.on-ink .suit-d,.on-ink .suit-c,.on-ink .suit-s{color:#fff}
+.num{font-family:Besley,serif;font-variant-numeric:tabular-nums}
+.title{font-family:'Crimson Pro',serif;font-weight:600;font-size:24px;line-height:1.22;margin:10px 0 8px}
+.asideline{font-style:italic;color:var(--muted);font-size:14.5px;line-height:1.5}
+.hr-q{border:0;border-top:1px solid var(--line);margin:14px 0}
+
+.stamp{font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
+  border:2px solid currentColor;border-radius:50%/50%;padding:7px 14px 5px;display:inline-block;transform:rotate(-7deg);
+  -webkit-mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.55) 78%, rgba(0,0,0,.85));
+  mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.55) 78%, rgba(0,0,0,.85))}
+.stamp.red{color:var(--accent)}
+
+.booth{border:1px solid var(--ink);padding:4px}
+.booth-inner{border:1px solid var(--ink);padding:18px 16px}
+.tk-line{font-style:italic;font-size:20px;line-height:1.4;margin:8px 0 2px}
+
+.ticket{background:var(--panel);border:1px solid var(--ink);display:flex;box-shadow:3px 3px 0 rgba(20,20,20,.12)}
+.ticket .tside{border-right:1.5px dashed var(--line-dashed);display:flex;align-items:center;justify-content:center;padding:10px 7px}
+.ticket .admit{font-family:Besley,serif;font-weight:700;font-size:8.5px;letter-spacing:.3em;writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted)}
+.ticket .tmain{padding:14px 16px;flex:1}
+
+/* board chrome */
+.bhead{display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--ink);padding-bottom:9px;margin-bottom:10px;flex-wrap:wrap}
+.bhead .label{color:var(--ink)}
+.vulchip{font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.16em;border:1px solid var(--ink);border-radius:3px;padding:2px 7px}
+.narr{background:var(--surface);border:1px solid var(--line);padding:10px 12px;margin:0 0 10px}
+.narr .label{display:block;margin-bottom:2px}
+.narr p{margin:0;font-style:italic;font-size:14.5px;line-height:1.42}
+
+.hcp{background:var(--ink);color:#fff;font-family:Besley,serif;font-weight:800;font-size:10.5px;letter-spacing:.08em;border-radius:3px;padding:3.5px 7px;display:inline-block}
+.handrow{display:flex;align-items:center;gap:9px;margin:8px 0 5px}
+.fan{display:flex;gap:2.5px;align-items:flex-end;flex-wrap:wrap;min-height:64px}
+.fan .gap{width:6px}
+.pcard{width:39px;height:56px;background:#fff;border:1px solid #cfccc4;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);
+  font-family:Besley,serif;font-weight:800;font-size:13px;padding:3px 0 0 5px;line-height:1.02;cursor:default;user-select:none;
+  transition:transform .18s cubic-bezier(.2,.7,.2,1)}
+.pcard small{display:block;font-size:12px}
+.pcard.mini{width:33px;height:47px;font-size:11.5px}
+.pcard.mini small{font-size:10.5px}
+.pcard.live{cursor:pointer}
+.pcard.hint{outline:2px solid var(--ink);outline-offset:1px;animation:pulse 1.4s ease-in-out infinite}
+.pcard.sel{transform:translateY(-8px);outline:2px solid var(--ink);outline-offset:1px;animation:none}
+.pcard.dim{opacity:.38}
+@keyframes pulse{0%,100%{outline-offset:1px}50%{outline-offset:3.5px}}
+
+.bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:8px 0}
+.bid{border:1px solid var(--ink);border-radius:2px;background:#fff;font-family:Besley,serif;font-weight:700;font-size:13px;
+  padding:11px 0;text-align:center;cursor:pointer;user-select:none}
+.bid.dis{border-color:var(--line);color:var(--line-dashed);cursor:default}
+.bid.dis .suit-h,.bid.dis .suit-d,.bid.dis .suit-c,.bid.dis .suit-s{color:var(--line-dashed)}
+.bid.sel{background:var(--ink);color:#fff}
+.bid.sel span{color:#fff !important}
+.bid.hint{animation:pulse 1.4s ease-in-out infinite;outline:2px solid var(--ink);outline-offset:1px}
+.bid.sel.hint{animation:none;outline:none}
+.bid.wide{grid-column:span 2}
+
+.meaning{background:var(--surface);border:1px solid var(--line);padding:11px 12px;min-height:96px}
+.meaning .mhead{display:flex;align-items:baseline;gap:9px;margin-bottom:3px}
+.meaning .call{font-family:Besley,serif;font-weight:800;font-size:16px}
+.meaning .mtitle{font-weight:600;font-size:15px}
+.meaning .chips{display:flex;gap:6px;margin:6px 0 5px;flex-wrap:wrap}
+.meaning .chip{font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.14em;border:1px solid var(--ink);border-radius:3px;padding:2.5px 7px;background:#fff}
+.meaning p{margin:3px 0 0;font-size:13.5px;line-height:1.42}
+.meaning .placeholder{font-style:italic;color:var(--muted);font-size:14px;padding-top:24px;text-align:center}
+
+/* auction grid */
+.auction{border:1px solid var(--ink);background:#fff;margin:6px 0 10px}
+.auction table{width:100%;border-collapse:collapse}
+.auction th{font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em;color:var(--muted);border-bottom:1px solid var(--ink);padding:6px 0}
+.auction th.you{color:var(--ink)}
+.auction td{font-family:Besley,serif;font-weight:700;font-size:13.5px;text-align:center;padding:8px 0;border-bottom:1px solid var(--line-quiet)}
+.auction tr:last-child td{border-bottom:0}
+.auction td .tap{border-bottom:1.5px dotted var(--ink);cursor:pointer;padding-bottom:1px}
+.auction td .tap.hint{animation:pulse 1.4s ease-in-out infinite;outline:2px solid var(--ink);outline-offset:3px}
+.auction td .quietcall{color:var(--muted);font-weight:600}
+
+/* trick area */
+.trick{position:relative;height:196px;margin:4px 0 6px;border:1px solid var(--line-quiet);background:#fff}
+.trick .seatlab{position:absolute;font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.18em;color:var(--muted)}
+.trick .slot{position:absolute;width:39px;height:56px}
+.trick .n{top:10px;left:50%;transform:translateX(-50%)}
+.trick .s{bottom:10px;left:50%;transform:translateX(-50%)}
+.trick .w{left:52px;top:50%;transform:translateY(-50%)}
+.trick .e{right:52px;top:50%;transform:translateY(-50%)}
+.trick .labn{top:14px;left:calc(50% + 28px)}
+.trick .labs{bottom:14px;left:calc(50% + 28px)}
+.trick .labw{left:14px;top:calc(50% - 6px)}
+.trick .labe{right:14px;top:calc(50% - 6px)}
+.countline{display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 8px}
+.countline b{font-family:Besley,serif;font-size:12.5px}
+
+/* toast */
+.toastwrap{position:absolute;left:16px;right:16px;bottom:88px;z-index:4}
+.toast{background:var(--panel);border:1px solid var(--ink);box-shadow:3px 3px 0 rgba(20,20,20,.12);padding:13px 15px;
+  animation:rise .4s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.toast .stars{font-size:16px;letter-spacing:.18em}
+.toast .grade{font-family:Besley,serif;font-weight:800;font-size:11px;letter-spacing:.2em;margin-left:6px}
+.toast p{margin:5px 0 0;font-size:14px}
+
+/* ledger */
+.ledger{background:var(--panel);border:1px solid var(--ink)}
+.ledger .perf{border-bottom:1.5px dashed var(--line-dashed);padding:8px 12px}
+.lrow{display:flex;align-items:baseline;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line-quiet);font-size:14.5px}
+.lrow:last-child{border-bottom:0}
+.lrow .who{flex:1;font-weight:600}
+.lrow.you{background:var(--surface)}
+.lrow.housey .who{font-style:italic;font-weight:400;color:var(--muted)}
+.lrow .house{font-family:Besley,serif;font-weight:700;font-size:8px;letter-spacing:.16em;border:1px solid var(--line-dashed);border-radius:3px;padding:1.5px 5px;color:var(--muted)}
+
+/* postmark */
+.postmark{position:relative;width:150px;height:150px;margin:0 auto}
+.postmark .ring{position:absolute;inset:0;border:2.5px solid var(--ink);border-radius:50%;opacity:.85;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-9deg);
+  font-family:'Josefin Sans',sans-serif;letter-spacing:.2em;text-transform:uppercase;
+  -webkit-mask-image:radial-gradient(circle at 62% 30%, #000 52%, rgba(0,0,0,.5) 80%, rgba(0,0,0,.8));
+  mask-image:radial-gradient(circle at 62% 30%, #000 52%, rgba(0,0,0,.5) 80%, rgba(0,0,0,.8))}
+.postmark .ring b{font-size:11px;font-weight:600}
+.postmark .ring span{font-size:8.5px;margin-top:3px}
+.postmark svg{position:absolute;top:56px;left:-72px;opacity:.8}
+.pm-anim{animation:press .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes press{0%{transform:scale(1.6);opacity:0}70%{transform:scale(.97);opacity:1}100%{transform:scale(1)}}
+
+/* difficulty options */
+.opt{border:1px solid var(--ink);border-radius:2px;background:#fff;padding:12px 14px;display:flex;gap:12px;align-items:baseline;margin-bottom:9px;cursor:pointer;user-select:none}
+.opt .oname{font-family:Besley,serif;font-weight:700;font-size:11px;letter-spacing:.18em}
+.opt .odesc{font-size:13.5px;color:var(--muted);font-style:italic;flex:1;text-align:right}
+.opt.sel{background:var(--ink);color:#fff}
+.opt.sel .odesc{color:#d8d5ce}
+
+.river{margin:0 -18px;line-height:0}
+.claimbanner{border:1px solid var(--ink);background:var(--surface);padding:10px 12px;text-align:center;margin:10px 0}
+.receipt-pct{font-family:Besley,serif;font-weight:800;font-size:42px}
+footer.protofoot{max-width:980px;margin:0 auto;padding:0 16px 40px;color:var(--muted);font-size:14px;font-style:italic}
+</style>
+
+<div class="protohead">
+  <svg width="26" height="20" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"/><path d="M8 112 Q80 38 152 112" stroke-width="10"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"/></g></svg>
+  <span class="wordmark">NICKEL BRIDGE</span>
+  <span class="label">The First Crossing · clickable prototype · tap through, or jump:</span>
+</div>
+<div class="jumps" id="jumps"></div>
+<div class="stagewrap"><div class="phone" id="phone">
+
+  <!-- ══ 1 · THE GATE ══ -->
+  <div class="screen" id="scr-gate">
+    <div style="height:22px"></div>
+    <div class="booth"><div class="booth-inner">
+      <span class="label">AT THE GATE</span>
+      <div class="tk-line">“Evening, Margaret. First time across this bridge?”</div>
+    </div></div>
+    <div style="height:18px"></div>
+    <div class="btn" onclick="go('offer')">FIRST TIME →</div>
+    <div style="height:9px"></div>
+    <div class="btn secondary" onclick="go('gate2')">I KNOW THE WAY — LET ME THROUGH</div>
+    <p class="asideline" style="text-align:center;margin-top:12px">Either way, you’ll be at a table in under three minutes.</p>
+    <div class="flexgrow"></div>
+    <div class="river"><svg viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice" style="width:100%;height:140px"><g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"/><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"/></g><g stroke="#6F8F68" fill="none"><path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"/><path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"/><line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"/><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"/><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"/><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"/><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"/><line x1="40" y1="30" x2="40" y2="85" stroke-width="2"/><line x1="120" y1="30" x2="120" y2="85" stroke-width="2"/><line x1="200" y1="30" x2="200" y2="85" stroke-width="2"/><line x1="280" y1="30" x2="280" y2="85" stroke-width="2"/><line x1="360" y1="30" x2="360" y2="85" stroke-width="2"/><line x1="440" y1="30" x2="440" y2="85" stroke-width="2"/><line x1="520" y1="30" x2="520" y2="85" stroke-width="2"/><line x1="600" y1="30" x2="600" y2="85" stroke-width="2"/></g><rect x="0" y="178" width="640" height="62" fill="#5E4B33"/></svg></div>
+  </div>
+
+  <!-- ══ 2 · THE OFFER ══ -->
+  <div class="screen" id="scr-offer">
+    <div style="height:26px"></div>
+    <div class="ticket">
+      <div class="tside"><span class="admit">ADMIT ONE</span></div>
+      <div class="tmain">
+        <span class="label" style="color:var(--ink)">PRACTICE CROSSING</span>
+        <div style="font-family:Besley,serif;font-weight:800;font-size:32px;margin:3px 0 2px">BOARD №0</div>
+        <span class="asideline">Not scored. Not rated. Never spoken of.</span>
+      </div>
+    </div>
+    <div style="height:18px"></div>
+    <p style="margin:0 0 8px">Before your first real crossing, walk one deal with the tollkeeper. You’ll bid a hand, play a card or two, and learn to read the ledger.</p>
+    <p class="asideline">Two minutes, and you’ll know the whole shape of the game.</p>
+    <div class="flexgrow"></div>
+    <div class="btn" onclick="go('bid1')">TAKE THE PRACTICE BOARD →</div>
+    <div style="height:12px"></div>
+    <div class="quietlink" onclick="go('gate2')">Straight to the gate — I’ve played before</div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- ══ BOARD (JS-driven) ══ -->
+  <div class="screen" id="scr-board">
+    <div class="bhead">
+      <span class="label">№0 · PRACTICE</span>
+      <span class="label" style="margin-left:auto" id="bhead-mid">DEALER S</span>
+      <span class="vulchip" id="bhead-vul">NONE VUL</span>
+    </div>
+    <div class="narr"><span class="label">THE TOLLKEEPER</span><p id="narr-text"></p></div>
+    <div id="zone" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+    <div class="toastwrap" id="toastwrap" style="display:none"></div>
+  </div>
+
+  <!-- ══ POSTMARK ══ -->
+  <div class="screen" id="scr-postmark">
+    <div style="height:38px"></div>
+    <div class="postmark" id="pm">
+      <svg width="220" height="44" viewBox="0 0 220 44"><g stroke="#141414" stroke-width="2.2" fill="none" opacity=".75"><path d="M0 8 Q28 2 56 8 T112 8 T168 8 T224 8"/><path d="M0 22 Q28 16 56 22 T112 22 T168 22 T224 22"/><path d="M0 36 Q28 30 56 36 T112 36 T168 36 T224 36"/></g></svg>
+      <div class="ring"><b>FIRST CROSSING</b><span>NICKEL BRIDGE · №0</span><span>JUL 24 1926</span></div>
+    </div>
+    <div style="height:26px"></div>
+    <div style="text-align:center">
+      <div class="title" style="font-size:26px">That’s the whole game.</div>
+      <p style="max-width:30ch;margin:0 auto 10px">Bid with meaning. Play with care. Read the ledger. Everything else is practice — which is to say, everything else is the fun part.</p>
+      <p class="asideline">The tollkeeper keeps no record of practice boards.</p>
+    </div>
+    <div class="flexgrow"></div>
+    <div class="btn" onclick="go('gate2')">TO THE GATE →</div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- ══ GATE 2 · DIFFICULTY ══ -->
+  <div class="screen" id="scr-gate2">
+    <span class="label" style="color:var(--ink)">THE GATE</span>
+    <div class="title">How do you like<br>your opposition?</div>
+    <div style="height:4px"></div>
+    <div class="opt" data-diff="beginner" onclick="pickDiff(this)"><span class="oname">OBLIGING</span><span class="odesc">New to the game? They’ll play kindly.</span></div>
+    <div class="opt sel" data-diff="intermediate" onclick="pickDiff(this)"><span class="oname">FAIR</span><span class="odesc">They’ll make you work for it.</span></div>
+    <div class="opt" data-diff="expert" onclick="pickDiff(this)"><span class="oname">RUTHLESS</span><span class="odesc">Near-perfect play. Godspeed.</span></div>
+    <p class="asideline" style="margin-top:8px">Change it any time. Every player on a given board faces the same robots — fairness is the house rule.</p>
+    <div class="flexgrow"></div>
+    <div class="btn" onclick="go('end')">PLAY THE TOLL →</div>
+    <div style="height:12px"></div>
+    <div class="quietlink">The pamphlet stays at the gate, whenever you want it</div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- ══ END CARD (prototype only) ══ -->
+  <div class="screen" id="scr-end">
+    <div style="height:60px"></div>
+    <div style="text-align:center">
+      <span class="stamp red">END OF PROTOTYPE</span>
+      <div class="title" style="margin-top:22px">From here, production takes over.</div>
+      <p style="max-width:34ch;margin:0 auto">PLAY THE TOLL runs the real placement — “Finding a table…” — and seats you at board 1 of your first tournament, opposition set to your taste.</p>
+      <hr class="hr-q" style="max-width:120px">
+      <p class="asideline" style="max-width:36ch;margin:0 auto">A condensed pamphlet — “HOW TO CROSS” — remains reachable from the Glossary, with a “walk the practice crossing again” link at its foot.</p>
+    </div>
+    <div class="flexgrow"></div>
+    <div class="btn secondary" onclick="go('gate')">RESTART PROTOTYPE</div>
+    <div style="height:20px"></div>
+  </div>
+
+</div></div>
+
+<footer class="protofoot">Prototype notes: every interactive moment here maps to the production Board UI — the narrator ribbon is the only net-new gameplay component. Meanings shown are real SAYC meanings; the deal is illustrative and would be mined with tools/find_scenarios.mjs so the robot line is genuine. Night mode arrives free via tokens in production.</footer>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* tiny helpers                                                        */
+const $ = (s)=>document.querySelector(s);
+const SUITS = {S:['♠','suit-s'],H:['♥','suit-h'],D:['♦','suit-d'],C:['♣','suit-c']};
+function suitSpan(s){const[g,c]=SUITS[s];return `<span class="${c}">${g}</span>`}
+function callLabel(c){ if(c==='P')return'Pass'; if(c==='X')return'X'; if(c==='XX')return'XX';
+  return c[0]+ (c.slice(1)==='NT' ? 'NT' : suitSpan(c.slice(1))); }
+function cardHTML(rank,suit,cls='',id=''){return `<div class="pcard ${cls}" ${id?`id="${id}"`:''} data-card="${rank}${suit}">${rank}<small class="${SUITS[suit][1]}">${SUITS[suit][0]}</small></div>`}
+
+/* ------------------------------------------------------------------ */
+/* meanings (real SAYC copy, condensed to house voice)                 */
+const MEANINGS = {
+  '1C':{t:'Opening, one club',chips:['13–21 PTS','3+ ♣'],p:'The workhorse minor: enough to open, at least three clubs. Often just a place to start the conversation.'},
+  '1D':{t:'Opening, one diamond',chips:['13–21 PTS','3+ ♦'],p:'An opening hand with length in diamonds — at least three, usually four.'},
+  '1H':{t:'Opening, one heart',chips:['13–21 PTS','5+ ♥'],p:'A sound opening promising five or more hearts. Majors are where games live.'},
+  '1S':{t:'Opening, one spade',chips:['13–21 PTS','5+ ♠'],p:'A sound opening: enough strength to start the auction, and at least five spades promised to your partner.'},
+  '1NT':{t:'Opening, one notrump',chips:['15–17 HCP','BALANCED'],p:'A balanced hand and a narrow range — the most honest bid in the game. Partner knows almost exactly what you hold.'},
+  '2C':{t:'Strong two clubs',chips:['22+ PTS','ARTIFICIAL'],p:'Says nothing about clubs — it announces a rock. Partner must keep the auction alive.'},
+  '2D':{t:'Weak two diamonds',chips:['5–11 PTS','6 ♦'],p:'A nuisance bid: a decent six-card suit and not much else. Makes the opponents guess from higher up.'},
+  '2H':{t:'Weak two hearts',chips:['5–11 PTS','6 ♥'],p:'Six hearts, modest values — bid to take away the opponents’ room, not to reach game.'},
+  '2S':{t:'Weak two spades',chips:['5–11 PTS','6 ♠'],p:'Six spades, modest values. With your actual hand, far too little — you’re worth a real opening.'},
+  '2NT':{t:'Opening, two notrump',chips:['20–21 HCP','BALANCED'],p:'A balanced giant. Your hand is strong, but not this strong.'},
+  'P0':{t:'Pass',chips:[],p:'Nothing to say yet. But with this hand, you have plenty to say — passing here would hide an opening bid from your partner.'},
+  '3S*':{t:'Limit raise',chips:['10–12 PTS','3+ ♠'],p:'Partner likes spades and invites game: ten to twelve points in support. One notch below forcing — you may pass with a minimum.'},
+  '4S':{t:'Game, four spades',chips:['TO PLAY','10 TRICKS'],p:'Partner invited; with seventeen points you accept gladly. Ten tricks, spades trump — the classic major-suit game.'},
+  'P2':{t:'Pass (declining)',chips:[],p:'Letting partner’s invitation lapse. With a minimum opening that’s wise — with seventeen points it would be a small crime.'},
+  '3NT':{t:'Game, three notrump',chips:['TO PLAY','9 TRICKS'],p:'A fine game — but with nine spades between you, the suit game rates to play a trick better.'},
+  'NONE':{t:'',chips:[],p:'No standard SAYC meaning in this sequence — use your judgment.'},
+};
+function meaningHTML(call,key,extra){
+  const m = MEANINGS[key] || MEANINGS.NONE;
+  const head = m.t ? `<div class="mhead"><span class="call">${callLabel(call)}</span><span class="mtitle">${m.t}</span></div>` : `<div class="mhead"><span class="call">${callLabel(call)}</span></div>`;
+  const chips = m.chips.length?`<div class="chips">${m.chips.map(c=>`<span class="chip">${c.replace('♣',suitSpan('C')).replace('♦',suitSpan('D')).replace('♥',suitSpan('H')).replace('♠',suitSpan('S'))}</span>`).join('')}</div>`:'';
+  return `<div class="meaning">${head}${chips}<p>${m.p}</p>${extra?`<p class="asideline" style="margin-top:6px">${extra}</p>`:''}</div>`;
+}
+const MEANING_PLACEHOLDER = `<div class="meaning"><div class="placeholder">Tap a bid to see what it means — before you make it.</div></div>`;
+
+/* ------------------------------------------------------------------ */
+/* the deal                                                            */
+const SOUTH = [['K','S'],['Q','S'],['J','S'],['9','S'],['3','S'],['A','H'],['8','H'],['2','H'],['K','D'],['7','D'],['4','D'],['A','C'],['2','C']];
+const NORTH = [['A','S'],['7','S'],['5','S'],['2','S'],['6','H'],['4','H'],['Q','D'],['8','D'],['6','D'],['2','D'],['K','C'],['9','C'],['5','C']];
+function fanHTML(cards,{gone=[],live=false,hint=null,legal=null,mini=false}={}){
+  let out='<div class="fan">'; let prev=null;
+  for(const [r,s] of cards){
+    if(gone.includes(r+s)) continue;
+    if(prev && prev!==s) out+='<div class="gap"></div>';
+    let cls = mini?'mini':'';
+    if(live){ if(legal && !legal.includes(r+s)) cls+=' dim'; else {cls+=' live'; if(hint===r+s) cls+=' hint';} }
+    out+=cardHTML(r,s,cls); prev=s;
+  }
+  return out+'</div>';
+}
+
+/* ------------------------------------------------------------------ */
+/* board stage machine                                                 */
+let sel=null, played1=false;
+const Z = ()=>$('#zone');
+const NARR = (t)=>{$('#narr-text').innerHTML=t};
+
+const auctionRows = (n)=>{ /* n = calls made: show grid up to n */
+  const seq=[['S','1S','you'],['W','P',''],['N','3S*','tap'],['E','P',''],['S','4S','you'],['W','P',''],['N','P',''],['E','P','']];
+  let cells=[[null,null,'—','—']]; // row0: N,E blank-dash for pre-dealer
+  let rows=[['','','','']]; let idx=0;
+  const col={N:0,E:1,S:2,W:3};
+  let r=0;
+  rows[0]=['','','',''];
+  for(let i=0;i<n && i<seq.length;i++){
+    const [seat,call,kind]=seq[i];
+    if(seat==='S'&&i>0||false){}
+    if(i>0 && col[seat]===0) {rows.push(['','','','']); r++;}
+    if(i===0){rows[0][col.S]=fmtCall(call,kind);rows[0][0]='<span class="quietcall">—</span>';rows[0][1]='<span class="quietcall">—</span>';}
+    else rows[r][col[seat]]=fmtCall(call,kind);
+  }
+  let html='<div class="auction"><table><tr><th>N</th><th>E</th><th class="you">S · YOU</th><th>W</th></tr>';
+  for(const row of rows){html+='<tr>'+row.map(c=>`<td>${c||''}</td>`).join('')+'</tr>';}
+  return html+'</table></div>';
+};
+function fmtCall(call,kind){
+  const lab=callLabel(call==='3S*'?'3S':call);
+  if(kind==='tap') return `<span class="tap ${stage==='partner'?'hint':''}" onclick="tapPartner()">${lab}</span>`;
+  if(kind==='you') return `<b>${lab}</b>`;
+  return `<span class="quietcall">${lab}</span>`;
+}
+
+let stage='gate';
+const STAGES={
+/* -- your opening bid -- */
+bid1:{ setup(){
+  $('#bhead-mid').textContent='DEALER S';
+  NARR('Your hand, counted: seventeen points — more than enough to open. Tap 1♠ and see what it promises. Nothing is final until you confirm.');
+  Z().innerHTML = `
+    <div class="handrow"><span class="hcp">17 HCP</span><span class="label">YOUR HAND · SOUTH</span></div>
+    ${fanHTML(SOUTH)}
+    <div class="bidgrid" id="bids"></div>
+    <div id="mslot">${MEANING_PLACEHOLDER}</div>
+    <div class="flexgrow"></div>
+    <div class="btn disabled" id="confirm">SELECT A BID</div>
+    <div style="height:16px"></div>`;
+  const bids=[['1C'],['1D'],['1H'],['1S','hint'],['1NT'],['2C'],['2D'],['2H'],['2S'],['2NT']];
+  $('#bids').innerHTML = bids.map(([b,h])=>`<div class="bid ${h||''}" data-b="${b}" onclick="pickBid1('${b}')">${callLabel(b)}</div>`).join('')
+    + `<div class="bid wide" data-b="P0" onclick="pickBid1('P0')">PASS</div><div class="bid dis">X</div><div class="bid wide dis">XX</div>`;
+}},
+/* -- partner's reply -- */
+partner:{ setup(){
+  NARR('Marked and filed. Now — your partner speaks the same code. That 3♠ is underlined; tap it and see what it tells you.');
+  Z().innerHTML=`
+    ${auctionRows(4)}
+    <div id="mslot">${MEANING_PLACEHOLDER}</div>
+    <div class="handrow"><span class="hcp">17 HCP</span><span class="label">YOUR HAND · SOUTH</span></div>
+    ${fanHTML(SOUTH)}
+    <div class="flexgrow"></div>
+    <div class="btn disabled" id="pnext">TAP PARTNER’S 3♠</div>
+    <div style="height:16px"></div>`;
+}},
+/* -- your rebid -- */
+bid2:{ setup(){
+  NARR('An invitation, then. With seventeen you accept — tap 4♠. (Tap anything else first, if you’re curious. The meanings are always free.)');
+  Z().innerHTML=`
+    ${auctionRows(4)}
+    <div class="bidgrid" id="bids2"></div>
+    <div id="mslot">${MEANING_PLACEHOLDER}</div>
+    <div class="flexgrow"></div>
+    <div class="btn disabled" id="confirm2">SELECT A BID</div>
+    <div style="height:16px"></div>`;
+  const row3=[['3C','dis'],['3D','dis'],['3H','dis'],['3S','dis'],['3NT','']];
+  const row4=[['4C',''],['4D',''],['4H',''],['4S','hint'],['4NT','']];
+  $('#bids2').innerHTML=[...row3,...row4].map(([b,x])=>`<div class="bid ${x}" data-b="${b}" ${x!=='dis'?`onclick="pickBid2('${b}')"`:''}>${callLabel(b)}</div>`).join('')
+   + `<div class="bid wide" data-b="P2" onclick="pickBid2('P2')">PASS</div><div class="bid dis">X</div><div class="bid wide dis">XX</div>`;
+}},
+/* -- opening lead / dummy down -- */
+lead:{ setup(){
+  $('#bhead-mid').innerHTML='4<span class="suit-s">♠</span> BY S · <span class="num">0</span> TRICKS';
+  NARR('Three passes — the contract is yours: ten tricks, spades trump. West leads the ♥Q, and your partner lays their hand on the table. That’s dummy. Tonight, you play both hands.');
+  Z().innerHTML=`
+    <div class="handrow"><span class="hcp">9 HCP</span><span class="label">DUMMY · NORTH — YOURS TO PLAY</span></div>
+    ${fanHTML(NORTH,{mini:true})}
+    <div class="trick">
+      <span class="seatlab labn">N · DUMMY</span><span class="seatlab labs">S · YOU</span><span class="seatlab labw">W</span><span class="seatlab labe">E</span>
+      <div class="slot w">${cardHTML('Q','H')}</div>
+    </div>
+    <div class="countline"><b class="num">DECLARER 0 · DEFENSE 0</b><span class="label">TRICK 1 OF 13</span></div>
+    <div class="flexgrow"></div>
+    <div class="btn" onclick="go('trick1')">PLAY ON →</div>
+    <div style="height:14px"></div>`;
+}},
+/* -- trick 1: follow suit, win the ace -- */
+trick1:{ setup(){
+  NARR('Dummy played low; East followed. Follow suit if you can — hearts are led, and your ace is good <i>now</i>. Tap it once to select, again to play. Deliberate, always.');
+  Z().innerHTML=`
+    <div class="handrow"><span class="label">DUMMY · NORTH</span></div>
+    ${fanHTML(NORTH,{mini:true,gone:['4H']})}
+    <div class="trick">
+      <span class="seatlab labn">N · DUMMY</span><span class="seatlab labs">S · YOU</span><span class="seatlab labw">W</span><span class="seatlab labe">E</span>
+      <div class="slot w">${cardHTML('Q','H')}</div>
+      <div class="slot n">${cardHTML('4','H')}</div>
+      <div class="slot e">${cardHTML('3','H')}</div>
+      <div class="slot s" id="myslot"></div>
+    </div>
+    <div class="handrow"><span class="hcp">17 HCP</span><span class="label">YOUR HAND — YOUR TURN</span><span class="asideline" id="hintline">hearts only</span></div>
+    <div id="myfan">${fanHTML(SOUTH,{live:true,hint:'AH',legal:['AH','8H','2H']})}</div>
+    <div style="height:14px"></div>`;
+  wireCards(['AH','8H','2H'],'AH',()=>{
+    $('#myslot').innerHTML=cardHTML('A','H');
+    $('#myfan').innerHTML=fanHTML(SOUTH,{gone:['AH'],live:false});
+    $('#hintline').textContent='your ace takes the trick';
+    setTimeout(()=>go('trick2'),900);
+  });
+}},
+/* -- trick 2: draw trumps -- */
+trick2:{ setup(){
+  $('#bhead-mid').innerHTML='4<span class="suit-s">♠</span> BY S · <span class="num">1</span> TRICK';
+  NARR('Yours — one trick down, nine to go. Now pull their trumps before they steal a ruff: dummy’s ace can wait, the king brings them down all the same.');
+  Z().innerHTML=`
+    <div class="handrow"><span class="label">DUMMY · NORTH</span></div>
+    ${fanHTML(NORTH,{mini:true,gone:['4H']})}
+    <div class="trick">
+      <span class="seatlab labn">N · DUMMY</span><span class="seatlab labs">S · YOU</span><span class="seatlab labw">W</span><span class="seatlab labe">E</span>
+      <div class="slot s" id="myslot"></div>
+      <div class="slot w" id="wslot"></div>
+      <div class="slot n" id="nslot"></div>
+      <div class="slot e" id="eslot"></div>
+    </div>
+    <div class="countline"><b class="num">DECLARER 1 · DEFENSE 0</b><span class="label">TRICK 2 OF 13 · YOUR LEAD</span></div>
+    <div class="handrow"><span class="hcp">17 HCP</span><span class="label">YOUR HAND — YOUR LEAD</span><span class="asideline" id="hintline">any card; the K♠ is the one</span></div>
+    <div id="myfan">${fanHTML(SOUTH,{gone:['AH'],live:true,hint:'KS',legal:SOUTH.map(c=>c[0]+c[1]).filter(c=>c!=='AH')})}</div>
+    <div style="height:14px"></div>`;
+  wireCards(SOUTH.map(c=>c[0]+c[1]).filter(c=>c!=='AH'),'KS',()=>{
+    $('#myslot').innerHTML=cardHTML('K','S');
+    $('#myfan').innerHTML=fanHTML(SOUTH,{gone:['AH','KS'],live:false});
+    setTimeout(()=>{$('#wslot').innerHTML=cardHTML('4','S')},350);
+    setTimeout(()=>{$('#nslot').innerHTML=cardHTML('2','S')},700);
+    setTimeout(()=>{$('#eslot').innerHTML=cardHTML('6','S')},1050);
+    setTimeout(()=>go('claim'),1900);
+  });
+}},
+/* -- claim fast-forward -- */
+claim:{ setup(){
+  $('#bhead-mid').innerHTML='4<span class="suit-s">♠</span> BY S · <span class="num">2</span> TRICKS';
+  NARR('And there it is — the rest play themselves. When a hand is decided beyond doubt, the house claims it and fast-plays the tail. Watch.');
+  Z().innerHTML=`
+    <div class="claimbanner"><span class="stamp" style="font-size:9.5px">CLAIM</span>
+      <div style="font-weight:600;margin-top:6px">Declarer takes the rest</div>
+      <div class="asideline num" id="ffcount">fast-playing tricks 3–13…</div>
+    </div>
+    <div class="countline"><b class="num" id="livecount">DECLARER 2 · DEFENSE 0</b><span class="label" id="tno">TRICK 3 OF 13</span></div>
+    <div class="flexgrow"></div>
+    <div class="btn disabled" id="ffbtn">·&nbsp;&nbsp;·&nbsp;&nbsp;·</div>
+    <div style="height:16px"></div>`;
+  let dec=2, def=0, t=2; const DEF_WINS=[8,12,13];
+  const iv=setInterval(()=>{
+    t++; if(DEF_WINS.includes(t)) def++; else dec++;
+    $('#livecount').textContent=`DECLARER ${dec} · DEFENSE ${def}`;
+    $('#tno').textContent=`TRICK ${t} OF 13`;
+    if(t>=13){clearInterval(iv); $('#ffbtn').classList.remove('disabled'); $('#ffbtn').textContent='TO THE LEDGER →'; $('#ffbtn').onclick=()=>go('result'); $('#ffcount').textContent='ten tricks — made exactly.';}
+  },260);
+}},
+/* -- result + ledger -- */
+result:{ setup(){
+  $('#bhead-mid').innerHTML='RESULT';
+  NARR('You didn’t cross alone. Three of the house played this very deal before you — same cards, different choices. Your friends will land in this ledger the same way, whenever they play.');
+  Z().innerHTML=`
+    <div style="text-align:center;margin:2px 0 0">
+      <div style="font-family:Besley,serif;font-weight:800;font-size:24px">4${suitSpan('S')}= <span style="font-size:15px;font-weight:700">by S</span></div>
+      <div class="num" style="font-size:14px;margin-top:1px">+420 for N–S</div>
+      <div class="receipt-pct">67<span style="font-size:24px">%</span></div>
+      <span class="label">MATCHPOINTS · VS 3 OTHERS</span>
+    </div>
+    <div class="ledger" style="margin-top:10px">
+      <div class="perf"><span class="label" style="color:var(--ink)">THE FIELD · BOARD №0</span></div>
+      <div class="lrow housey"><span class="who">The Shark</span><span class="house">HOUSE</span><span class="num">4${suitSpan('S')}+1 · +450</span><b class="num">100%</b></div>
+      <div class="lrow you"><span class="who">You</span><span class="num">4${suitSpan('S')}= · +420</span><b class="num">67%</b></div>
+      <div class="lrow housey"><span class="who">The Regular</span><span class="house">HOUSE</span><span class="num">3${suitSpan('S')}= · +140</span><b class="num">33%</b></div>
+      <div class="lrow housey"><span class="who">The Novice</span><span class="house">HOUSE</span><span class="num">3${suitSpan('S')}−1 · −50</span><b class="num">0%</b></div>
+    </div>
+    <p class="asideline" style="margin:9px 0 0">Same deal, four results — the cards were never the difference. The Shark stole an overtrick somewhere; that’s matchpoints. Every trick is a horse race.</p>
+    <div class="flexgrow"></div>
+    <div class="btn" onclick="go('postmark')">ONE LAST THING →</div>
+    <div style="height:16px"></div>`;
+}},
+};
+
+/* interactions */
+function pickBid1(b){
+  if(stage!=='bid1')return;
+  document.querySelectorAll('#bids .bid').forEach(e=>e.classList.remove('sel'));
+  const el=document.querySelector(`#bids .bid[data-b="${b}"]`); if(el)el.classList.add('sel');
+  sel=b;
+  const good = b==='1S';
+  $('#mslot').innerHTML=meaningHTML(b==='P0'?'P':b, b, good?null:'A fine thought — but tonight, follow the tollkeeper: 1♠.');
+  const c=$('#confirm');
+  if(good){c.classList.remove('disabled'); c.innerHTML='BID 1'+suitSpan('S')+' →'; c.classList.add('on-ink'); c.onclick=confirmBid1;}
+  else {c.classList.add('disabled'); c.textContent='SELECT 1♠ TO CONTINUE'; c.onclick=null;}
+}
+function confirmBid1(){
+  showToast('★★★','EXCELLENT','1♠ — the AI’s choice too. Every call you make gets marked like this — kindly, and always with the reason.');
+  setTimeout(()=>{hideToast(); go('partner');},2600);
+}
+function tapPartner(){
+  if(stage!=='partner')return;
+  $('#mslot').innerHTML=meaningHTML('3S','3S*');
+  document.querySelectorAll('.auction .tap').forEach(e=>e.classList.remove('hint'));
+  const n=$('#pnext'); n.classList.remove('disabled'); n.textContent='YOUR CALL →'; n.onclick=()=>go('bid2');
+}
+function pickBid2(b){
+  if(stage!=='bid2')return;
+  document.querySelectorAll('#bids2 .bid').forEach(e=>e.classList.remove('sel'));
+  const el=document.querySelector(`#bids2 .bid[data-b="${b}"]`); if(el)el.classList.add('sel');
+  const good=b==='4S';
+  $('#mslot').innerHTML=meaningHTML(b==='P2'?'P':b, b, good?null:'Worth knowing — but the hand says 4♠.');
+  const c=$('#confirm2');
+  if(good){c.classList.remove('disabled'); c.innerHTML='BID 4'+suitSpan('S')+' →'; c.onclick=()=>{showToast('★★★','EXCELLENT','4♠ — the AI’s choice too. Partner invited; you had the goods.'); setTimeout(()=>{hideToast(); go('lead');},2400);};}
+  else {c.classList.add('disabled'); c.textContent='SELECT 4♠ TO CONTINUE'; c.onclick=null;}
+}
+function wireCards(legal,target,onPlay){
+  let selected=null;
+  document.querySelectorAll('#myfan .pcard.live').forEach(el=>{
+    el.onclick=()=>{
+      const c=el.dataset.card;
+      if(selected===c){ if(c===target){onPlay();} else {/* wrong card: nudge */ $('#hintline').textContent='a fair card — but tap the highlighted one tonight'; }
+        return; }
+      document.querySelectorAll('#myfan .pcard').forEach(e=>e.classList.remove('sel'));
+      el.classList.add('sel'); selected=c;
+      $('#hintline').textContent = (c===target)?'tap again to play':'selected — tap again to play (the highlighted card is the lesson)';
+    };
+  });
+}
+function showToast(stars,grade,text){
+  const w=$('#toastwrap'); w.style.display='block';
+  w.innerHTML=`<div class="toast"><span class="stars">${stars}</span><span class="grade">${grade}</span><p>${text}</p></div>`;
+}
+function hideToast(){$('#toastwrap').style.display='none';$('#toastwrap').innerHTML='';}
+
+function pickDiff(el){document.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));el.classList.add('sel');}
+
+/* navigation */
+const ORDER=[['gate','Gate'],['offer','Offer'],['bid1','Bid 1♠'],['partner','Partner'],['bid2','Bid 4♠'],['lead','Lead'],['trick1','Trick 1'],['trick2','Trick 2'],['claim','Claim'],['result','Ledger'],['postmark','Postmark'],['gate2','The Gate'],['end','End']];
+const BOARD_STAGES=Object.keys(STAGES);
+function go(s){
+  stage=s; hideToast();
+  document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));
+  if(BOARD_STAGES.includes(s)){ $('#scr-board').classList.add('on'); STAGES[s].setup(); }
+  else $('#scr-'+s).classList.add('on');
+  if(s==='postmark'){const pm=$('#pm');pm.classList.remove('pm-anim');void pm.offsetWidth;pm.classList.add('pm-anim');}
+  document.querySelectorAll('.jump').forEach(j=>j.classList.toggle('on',j.dataset.s===s));
+  window.scrollTo({top:0});
+}
+$('#jumps').innerHTML=ORDER.map(([s,l])=>`<button class="jump" data-s="${s}" onclick="go('${s}')">${l}</button>`).join('');
+go('gate');
+</script>

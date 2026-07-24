@@ -1,0 +1,518 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nickel Bridge — Onboarding Concepts</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poiret+One&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Besley:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Josefin+Sans:wght@400;600&display=swap');
+
+:root{
+  --ink:#141414; --paper:#FCFBF8; --panel:#FFFFFF;
+  --surface:#F1EFE9; --line:#D8D5CE; --line-quiet:#E4E1D8; --line-dashed:#B9B4A9;
+  --muted:#6E6A62; --verdigris:#6F8F68; --track:#EDEBE4;
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  --accent:#C22F21; --positive:#00775A;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Crimson Pro',serif;font-size:17px;line-height:1.55}
+.wrap{max-width:1480px;margin:0 auto;padding:40px 28px 90px}
+
+/* ---------- concept-board chrome ---------- */
+.label{font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.board-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.wordmark{font-family:'Poiret One',cursive;font-size:19px;letter-spacing:.14em}
+h1{font-family:'Crimson Pro',serif;font-weight:600;font-size:34px;margin:14px 0 6px}
+.lede{max-width:72ch;color:var(--ink)}
+.lede em, .aside{font-style:italic;color:var(--muted)}
+section.concept{margin-top:64px;border-top:1px solid var(--ink);padding-top:22px}
+.concept-kicker{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.concept-kicker h2{font-family:'Crimson Pro',serif;font-weight:600;font-size:26px;margin:2px 0 4px}
+.concept-note{max-width:78ch;margin:8px 0 26px}
+.frames{display:flex;gap:34px;overflow-x:auto;padding:6px 2px 22px;align-items:flex-start}
+.framecol{flex:0 0 auto;width:392px}
+.cap{margin-top:12px;padding-right:10px}
+.cap .label{display:block;margin-bottom:3px;color:var(--ink)}
+.cap p{margin:2px 0 0;font-size:14.5px;color:var(--muted)}
+
+/* ---------- the phone frame ---------- */
+.phone{width:392px;min-height:730px;background:var(--paper);border:1px solid var(--ink);
+  box-shadow:3px 3px 0 rgba(20,20,20,.12);position:relative;overflow:hidden;
+  display:flex;flex-direction:column;padding:22px 20px 0}
+.phone .flexgrow{flex:1}
+
+/* shared in-app pieces */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--ink);color:#fff;
+  font-family:Besley,serif;font-weight:700;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
+  border:1px solid var(--ink);border-radius:2px;padding:15px 20px;width:100%;text-align:center}
+.btn.secondary{background:transparent;color:var(--ink)}
+.quietlink{font-family:Besley,serif;font-weight:600;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);text-align:center;text-decoration:underline;text-underline-offset:3px}
+.hr-q{border:0;border-top:1px solid var(--line);margin:16px 0}
+.suit-s{color:var(--suit-s)} .suit-h{color:var(--suit-h)} .suit-d{color:var(--suit-d)} .suit-c{color:var(--suit-c)}
+.num{font-family:Besley,serif;font-variant-numeric:tabular-nums}
+.title{font-family:'Crimson Pro',serif;font-weight:600;font-size:24px;line-height:1.22;margin:10px 0 8px}
+.body-copy{font-size:16.5px;margin:0 0 10px}
+.asideline{font-style:italic;color:var(--muted);font-size:14.5px;line-height:1.5}
+
+/* pager dots as perforation */
+.pager{display:flex;gap:9px;justify-content:center;padding:14px 0 18px}
+.pager i{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink);display:block}
+.pager i.on{background:var(--ink)}
+.pager i.off{border-color:var(--line-dashed)}
+
+/* ink stamp */
+.stamp{font-family:'Josefin Sans',sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
+  border:2px solid currentColor;border-radius:50%/50%;padding:7px 14px 5px;display:inline-block;transform:rotate(-7deg);
+  -webkit-mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.55) 78%, rgba(0,0,0,.85));
+  mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.55) 78%, rgba(0,0,0,.85))}
+.stamp.red{color:var(--accent)}
+
+/* meaning panel (inset surface) */
+.meaning{background:var(--surface);border:1px solid var(--line);padding:13px 14px;border-radius:0}
+.meaning .mhead{display:flex;align-items:baseline;gap:9px;margin-bottom:4px}
+.meaning .call{font-family:Besley,serif;font-weight:800;font-size:17px}
+.meaning .mtitle{font-family:'Crimson Pro',serif;font-weight:600;font-size:16px}
+.meaning .chips{display:flex;gap:6px;margin:7px 0 6px}
+.meaning .chip{font-family:Besley,serif;font-weight:700;font-size:9.5px;letter-spacing:.14em;border:1px solid var(--ink);
+  border-radius:3px;padding:3px 7px;background:#fff}
+.meaning p{margin:4px 0 0;font-size:14.5px}
+
+/* ticket */
+.ticket{background:var(--panel);border:1px solid var(--ink);display:flex;box-shadow:3px 3px 0 rgba(20,20,20,.12)}
+.ticket .tside{border-right:1.5px dashed var(--line-dashed);display:flex;align-items:center;justify-content:center;padding:10px 7px}
+.ticket .tside .admit{font-family:Besley,serif;font-weight:700;font-size:8.5px;letter-spacing:.3em;writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted)}
+.ticket .tmain{padding:14px 16px;flex:1}
+
+/* board header strip */
+.bhead{display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--ink);padding-bottom:10px;margin-bottom:12px;flex-wrap:wrap}
+.bhead .label{color:var(--ink)}
+.vulchip{font-family:Besley,serif;font-weight:700;font-size:9px;letter-spacing:.16em;border:1px solid var(--ink);border-radius:3px;padding:2px 7px}
+
+/* narrator ribbon */
+.narr{background:var(--surface);border:1px solid var(--line);padding:11px 13px;margin:0 0 12px}
+.narr .label{display:block;margin-bottom:3px}
+.narr p{margin:0;font-style:italic;font-size:15px;line-height:1.45}
+
+/* mini playing cards */
+.fan{display:flex;gap:3px;align-items:flex-end;flex-wrap:wrap}
+.pcard{width:42px;height:60px;background:#fff;border:1px solid #cfccc4;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.14);
+  font-family:Besley,serif;font-weight:800;font-size:14px;padding:4px 0 0 6px;line-height:1.02}
+.pcard small{display:block;font-size:13px}
+.pcard.hi{outline:2px solid var(--ink);outline-offset:1px;transform:translateY(-7px)}
+.fan .gap{width:7px}
+.hcp{background:var(--ink);color:#fff;font-family:Besley,serif;font-weight:800;font-size:11px;letter-spacing:.08em;
+  border-radius:3px;padding:4px 8px;display:inline-block}
+
+/* bid grid mini */
+.bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.bid{border:1px solid var(--ink);border-radius:2px;background:#fff;font-family:Besley,serif;font-weight:700;font-size:13.5px;
+  padding:11px 0;text-align:center}
+.bid.dis{border-color:var(--line);color:var(--line-dashed)}
+.bid.sel{background:var(--ink);color:#fff}
+.bid.sel .suit-h,.bid.sel .suit-d,.bid.sel .suit-c{color:#fff}
+.bid.pulse{box-shadow:0 0 0 3px var(--paper), 0 0 0 4.5px var(--ink)}
+
+/* ledger / field table */
+.ledger{background:var(--panel);border:1px solid var(--ink)}
+.ledger .perf{border-bottom:1.5px dashed var(--line-dashed);padding:9px 13px}
+.lrow{display:flex;align-items:baseline;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line-quiet);font-size:15px}
+.lrow:last-child{border-bottom:0}
+.lrow .who{flex:1;font-weight:600}
+.lrow.you{background:var(--surface)}
+.lrow .house{font-family:Besley,serif;font-weight:700;font-size:8.5px;letter-spacing:.16em;border:1px solid var(--line-dashed);
+  border-radius:3px;padding:1.5px 5px;color:var(--muted)}
+.lrow.housey .who{font-style:italic;font-weight:400;color:var(--muted)}
+.pctbar{width:64px;height:7px;background:var(--track);position:relative;align-self:center}
+.pctbar i{position:absolute;inset:0;right:auto;background:var(--ink);display:block}
+
+/* postmark */
+.postmark{position:relative;width:150px;height:150px;margin:0 auto}
+.postmark .ring{position:absolute;inset:0;border:2.5px solid var(--ink);border-radius:50%;opacity:.85;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-9deg);
+  font-family:'Josefin Sans',sans-serif;letter-spacing:.2em;text-transform:uppercase;
+  -webkit-mask-image:radial-gradient(circle at 62% 30%, #000 52%, rgba(0,0,0,.5) 80%, rgba(0,0,0,.8));
+  mask-image:radial-gradient(circle at 62% 30%, #000 52%, rgba(0,0,0,.5) 80%, rgba(0,0,0,.8))}
+.postmark .ring b{font-size:11px;font-weight:600}
+.postmark .ring span{font-size:8.5px;margin-top:3px}
+.postmark svg{position:absolute;top:56px;left:-72px;opacity:.8}
+
+/* difficulty option tickets */
+.opt{border:1px solid var(--ink);border-radius:2px;background:#fff;padding:12px 14px;display:flex;gap:12px;align-items:baseline;margin-bottom:9px}
+.opt .oname{font-family:Besley,serif;font-weight:700;font-size:11px;letter-spacing:.18em}
+.opt .odesc{font-size:14px;color:var(--muted);font-style:italic;flex:1;text-align:right}
+.opt.sel{background:var(--ink);color:#fff}
+.opt.sel .odesc{color:#d8d5ce}
+
+/* river scene footer inside phones */
+.river{margin:0 -20px;line-height:0}
+.river svg{display:block;width:100%;height:auto}
+
+/* footer bridge mark */
+.footmark{display:flex;justify-content:center;padding:16px 0 18px}
+
+/* concept C booth frame (double ink frame = the table) */
+.booth{border:1px solid var(--ink);padding:4px}
+.booth-inner{border:1px solid var(--ink);padding:18px 16px}
+.tk-line{font-family:'Crimson Pro',serif;font-style:italic;font-size:20px;line-height:1.4;margin:8px 0 2px}
+
+/* span diagram */
+.crossers{margin:12px 0}
+.crosser{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-quiet);font-size:15px}
+.crosser:last-child{border-bottom:0}
+.crosser .cwho{font-weight:600;width:92px}
+.crosser .cwhen{font-style:italic;color:var(--muted);flex:1;font-size:14px}
+.mini-tickets{display:flex;gap:3px}
+.mini-tickets i{width:14px;height:18px;border:1px solid var(--ink);border-radius:1.5px;display:block;background:#fff;
+  font-style:normal;font-family:Besley,serif;font-weight:700;font-size:8.5px;text-align:center;line-height:17px}
+
+/* comparison table */
+table.compare{border-collapse:collapse;width:100%;margin-top:18px;background:var(--panel);border:1px solid var(--ink)}
+table.compare th{font-family:Besley,serif;font-weight:700;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  text-align:left;padding:11px 14px;border-bottom:1px solid var(--ink);color:var(--muted)}
+table.compare td{padding:12px 14px;border-bottom:1px solid var(--line-quiet);vertical-align:top;font-size:15.5px}
+table.compare tr:last-child td{border-bottom:0}
+table.compare td:first-child{font-weight:600;white-space:nowrap}
+.rec{background:var(--surface);border:1px solid var(--line);padding:20px 22px;margin-top:26px;max-width:900px}
+.rec .label{color:var(--ink)}
+@media (prefers-color-scheme: dark){ /* concept board is a document — keep it printed-paper in both themes */ }
+</style>
+
+<div class="wrap">
+  <div class="board-head">
+    <svg width="30" height="23" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"/><path d="M8 112 Q80 38 152 112" stroke-width="10"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"/></g></svg>
+    <span class="wordmark">NICKEL BRIDGE</span>
+    <span class="label">Onboarding · Concept Board · Three Directions</span>
+  </div>
+  <h1>The first crossing</h1>
+  <p class="lede">Today a newcomer goes splash → handle → <em>"The bridge is open."</em> — with no idea what a
+  crossing is, why everyone plays the same deals, or that the app teaches while you play. The tour has three
+  things to teach, in order of difficulty: <b>duplicate</b> (the same-deals ledger — the whole point, and the
+  least familiar idea), <b>the teaching loop</b> (bid meanings before you commit, grades after), and
+  <b>the philosophy</b> (a small unhurried club; one crossing at a time; judgment over luck).
+  Each concept below covers all three — they differ in <em>how the player receives them</em>: reading, playing, or conversing.</p>
+  <p class="lede aside">All frames at 390×844 reference, real house voice, design-system components only. Copy is proposed final, not lorem.</p>
+
+  <!-- ═══════════════════════ CONCEPT A ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept A</span><h2>The Crossing Pamphlet</h2><span class="aside">read it — a printed leaflet from the toll office</span></div>
+    <p class="concept-note">A five-panel swipe sequence styled as the pamphlet the tollkeeper hands you at the
+    gate. Pure exposition, but <em>set</em> like a period artifact: numbered panels, perforation-dot pager, an ink
+    stamp pressed on each panel as you pass. Ends by asking the one question the backend already supports but no
+    UI asks — your difficulty preference — so even the passive version pays its way. Cheapest to build; leaves a
+    permanent, revisitable artifact (the pamphlet stays reachable from the gate/glossary).</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="label" style="color:var(--ink)">TOLL DIVISION · RICHMOND</span>
+            <span class="stamp red" style="font-size:8.5px;padding:5px 10px 3px">EST. 1925</span>
+          </div>
+          <div class="flexgrow" style="display:flex;flex-direction:column;justify-content:center">
+            <div class="title" style="font-size:30px">So you've come to cross.</div>
+            <p class="asideline" style="font-size:16px">Notes for the first-time crosser.<br>Three minutes, well spent.</p>
+            <div style="height:26px"></div>
+            <div class="btn">READ THE PAMPHLET →</div>
+            <div style="height:14px"></div>
+            <div class="quietlink">I know the way — skip to the gate</div>
+          </div>
+          <div class="pager"><i class="on"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div>
+          <div class="river"><svg viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice" style="height:130px"><g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"/><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"/></g><g stroke="#6F8F68" fill="none"><path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"/><path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"/><line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"/><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"/><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"/><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"/><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"/><line x1="40" y1="30" x2="40" y2="85" stroke-width="2"/><line x1="120" y1="30" x2="120" y2="85" stroke-width="2"/><line x1="200" y1="30" x2="200" y2="85" stroke-width="2"/><line x1="280" y1="30" x2="280" y2="85" stroke-width="2"/><line x1="360" y1="30" x2="360" y2="85" stroke-width="2"/><line x1="440" y1="30" x2="440" y2="85" stroke-width="2"/><line x1="520" y1="30" x2="520" y2="85" stroke-width="2"/><line x1="600" y1="30" x2="600" y2="85" stroke-width="2"/></g><rect x="0" y="178" width="640" height="62" fill="#5E4B33"/></svg></div>
+        </div>
+        <div class="cap"><span class="label">A1 · Cover</span><p>Handed over right after the handle screen. The skip is honest and always present — but quiet.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <span class="label" style="color:var(--ink)">I · THE BRIDGE</span>
+          <div class="title">A small club,<br>one crossing at a time.</div>
+          <p class="body-copy">Nickel Bridge is a club for learning bridge by playing it. No timers, no strangers,
+          no lobby of a thousand tables. You sit South, always. Your partner is a robot of even temper; your
+          opponents, two more.</p>
+          <p class="body-copy">The people you're truly playing are your friends — who cross behind you, on the
+          very same cards.</p>
+          <hr class="hr-q">
+          <p class="asideline">Named for the 1925 toll bridge over the James River: a dime to cross, then a
+          nickel, now fifty cents. The name outlived the price.</p>
+          <div class="flexgrow"></div>
+          <div class="footmark"><svg width="150" height="22" viewBox="0 0 320 46"><g stroke="#6F8F68" fill="none"><line x1="0" y1="5" x2="320" y2="5" stroke-width="5"/><path d="M12 40 Q60 16 108 40 Q156 16 204 40 Q252 16 300 40" stroke-width="3.5"/><line x1="12" y1="5" x2="12" y2="40" stroke-width="3.5"/><line x1="108" y1="5" x2="108" y2="40" stroke-width="3.5"/><line x1="204" y1="5" x2="204" y2="40" stroke-width="3.5"/><line x1="300" y1="5" x2="300" y2="40" stroke-width="3.5"/><line x1="60" y1="5" x2="60" y2="28" stroke-width="2"/><line x1="156" y1="5" x2="156" y2="28" stroke-width="2"/><line x1="252" y1="5" x2="252" y2="28" stroke-width="2"/></g></svg></div>
+          <div class="pager"><i class="on"></i><i class="on"></i><i class="off"></i><i class="off"></i><i class="off"></i></div>
+          <div style="height:16px"></div>
+        </div>
+        <div class="cap"><span class="label">A2 · Panel I — philosophy</span><p>The club, the robots, the friends. Panels II–III (not shown) cover the toll (bidding + meanings + grades) and the crossing (trick play) in the same format.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <span class="label" style="color:var(--ink)">IV · THE LEDGER</span>
+          <div class="title">Everyone plays<br>the same deals.</div>
+          <div class="ledger" style="margin:8px 0 14px">
+            <div class="perf"><span class="label" style="color:var(--ink)">BOARD 3 · THE FIELD</span></div>
+            <div class="lrow you"><span class="who">You</span><span class="num">4<span class="suit-s">♠</span>= · +620</span><span class="pctbar"><i style="width:83%"></i></span><b class="num">83%</b></div>
+            <div class="lrow"><span class="who">Harold</span><span class="num">3<span class="suit-s">♠</span>+1 · +170</span><span class="pctbar"><i style="width:50%"></i></span><b class="num">50%</b></div>
+            <div class="lrow"><span class="who">Margaret</span><span class="num">4<span class="suit-s">♠</span>−1 · −100</span><span class="pctbar"><i style="width:17%"></i></span><b class="num">17%</b></div>
+          </div>
+          <p class="body-copy">Bad cards are no excuse here — Margaret holds the same ones, whenever she gets
+          around to them. You're scored on what you <i>did</i> with the deal, against everyone who held it.</p>
+          <p class="body-copy">That's duplicate: the luck is dealt out of the game, and judgment is what's left.</p>
+          <p class="asideline">Standings keep moving as friends cross behind you. A crossing is never quite finished.</p>
+          <div class="flexgrow"></div>
+          <div class="pager"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="off"></i></div>
+          <div style="height:16px"></div>
+        </div>
+        <div class="cap"><span class="label">A4 · Panel IV — duplicate</span><p>The hardest teach gets the diagram: one board, three lines, three fates. Same field-table component the result screen uses, so the lesson looks like the game.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <span class="label" style="color:var(--ink)">V · THE GATE</span>
+          <div class="title">How do you like<br>your opposition?</div>
+          <div style="height:6px"></div>
+          <div class="opt"><span class="oname">OBLIGING</span><span class="odesc">New to the game? They'll play kindly.</span></div>
+          <div class="opt sel"><span class="oname">FAIR</span><span class="odesc">They'll make you work for it.</span></div>
+          <div class="opt"><span class="oname">RUTHLESS</span><span class="odesc">Near-perfect play. Godspeed.</span></div>
+          <p class="asideline" style="margin-top:10px">Change it any time. Every player on a given board faces the
+          same robots — fairness is the house rule.</p>
+          <div class="flexgrow"></div>
+          <div class="btn">PLAY THE TOLL →</div>
+          <div style="height:12px"></div>
+          <div class="quietlink" style="margin-bottom:6px">The pamphlet stays at the gate, whenever you want it</div>
+          <div class="pager"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <div style="height:14px"></div>
+        </div>
+        <div class="cap"><span class="label">A5 · Panel V — the gate</span><p>The functional payoff: the difficulty preference (backend exists, no UI today) asked in-voice. Obliging/Fair/Ruthless → beginner/intermediate/expert.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ CONCEPT B ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept B</span><h2>Board №0 — A Practice Crossing</h2><span class="aside">play it — one guided deal in the real Board UI</span></div>
+    <p class="concept-note">The tour <em>is</em> a hand of bridge: a scripted, deterministic practice board played
+    through the real gameplay screen, with the tollkeeper narrating in a ribbon above the action. You genuinely
+    bid (meaning panel moment), get genuinely graded (toast moment), play a trick or two, and then the ledger
+    reveal teaches duplicate <em>where it actually lives</em> — the field table, pre-populated by the three house
+    personas who "crossed before you." Nothing scored, nothing rated. Ends with a FIRST CROSSING postmark.
+    Most build effort — but the scripted-replay machinery already exists (demo exhibits, <code>scenarios.ts</code>,
+    exhibit-kind tournaments excluded from Elo/stats/placement), so the hard part is largely written.</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone">
+          <div style="height:34px"></div>
+          <div class="ticket">
+            <div class="tside"><span class="admit">ADMIT ONE</span></div>
+            <div class="tmain">
+              <span class="label" style="color:var(--ink)">PRACTICE CROSSING</span>
+              <div style="font-family:Besley,serif;font-weight:800;font-size:34px;margin:4px 0 2px">BOARD №0</div>
+              <span class="asideline">Not scored. Not rated. Never spoken of.</span>
+            </div>
+          </div>
+          <div style="height:22px"></div>
+          <p class="body-copy">Before your first real crossing, walk one deal with the tollkeeper. You'll bid a
+          hand, play a card or two, and learn to read the ledger.</p>
+          <p class="asideline">Two minutes, and you'll know the whole shape of the game.</p>
+          <div class="flexgrow"></div>
+          <div class="btn">TAKE THE PRACTICE BOARD →</div>
+          <div style="height:14px"></div>
+          <div class="quietlink">Straight to the gate — I've played before</div>
+          <div style="height:22px"></div>
+        </div>
+        <div class="cap"><span class="label">B1 · The offer</span><p>Framed as a ticket, not a tutorial. The skip line self-selects experienced bridge players out.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="bhead"><span class="label">№0 · PRACTICE</span><span class="label" style="margin-left:auto">DEALER S</span><span class="vulchip">NONE VUL</span></div>
+          <div class="narr">
+            <span class="label">THE TOLLKEEPER</span>
+            <p>Your hand, counted: thirteen points — enough to open. Tap 1♠ and see what it promises. Nothing is
+            final until you confirm.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span class="hcp">13 HCP</span><span class="label">YOUR HAND · SOUTH</span>
+          </div>
+          <div class="fan" style="margin-bottom:14px">
+            <div class="pcard">K<small class="suit-s">♠</small></div><div class="pcard">Q<small class="suit-s">♠</small></div><div class="pcard">J<small class="suit-s">♠</small></div><div class="pcard">9<small class="suit-s">♠</small></div><div class="pcard">3<small class="suit-s">♠</small></div>
+            <div class="gap"></div>
+            <div class="pcard">A<small class="suit-h">♥</small></div><div class="pcard">8<small class="suit-h">♥</small></div><div class="pcard">2<small class="suit-h">♥</small></div>
+            <div class="gap"></div>
+            <div class="pcard">K<small class="suit-d">♦</small></div><div class="pcard">7<small class="suit-d">♦</small></div><div class="pcard">4<small class="suit-d">♦</small></div>
+            <div class="gap"></div>
+            <div class="pcard">6<small class="suit-c">♣</small></div><div class="pcard">2<small class="suit-c">♣</small></div>
+          </div>
+          <div class="bidgrid" style="margin-bottom:12px">
+            <div class="bid">1<span class="suit-c">♣</span></div><div class="bid">1<span class="suit-d">♦</span></div><div class="bid">1<span class="suit-h">♥</span></div><div class="bid pulse">1<span class="suit-s">♠</span></div><div class="bid">1NT</div>
+            <div class="bid">2<span class="suit-c">♣</span></div><div class="bid">2<span class="suit-d">♦</span></div><div class="bid">2<span class="suit-h">♥</span></div><div class="bid">2<span class="suit-s">♠</span></div><div class="bid dis">2NT</div>
+          </div>
+          <div class="meaning">
+            <div class="mhead"><span class="call">1<span class="suit-s">♠</span></span><span class="mtitle">Opening bid, one spade</span></div>
+            <div class="chips"><span class="chip">13–21 PTS</span><span class="chip">5+ <span class="suit-s">♠</span></span></div>
+            <p>A sound opening: enough strength to start the auction, and at least five spades promised to your partner.</p>
+          </div>
+          <div style="height:12px"></div>
+          <div class="btn">BID 1<span style="font-size:13px">♠</span> →</div>
+          <div style="height:18px"></div>
+        </div>
+        <div class="cap"><span class="label">B2 · Guided bidding</span><p>The real Board UI with one addition: the narrator ribbon. The two-step commit and meaning panel aren't described — they're used. The suggested bid pulses; the player is still free to tap around.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="bhead"><span class="label">№0 · PRACTICE</span><span class="label" style="margin-left:auto">RESULT</span></div>
+          <div class="narr">
+            <span class="label">THE TOLLKEEPER</span>
+            <p>You didn't cross alone. Three of the house played this very deal before you — same cards, different
+            choices. Your friends will land in this ledger the same way, whenever they play.</p>
+          </div>
+          <div style="text-align:center;margin:10px 0 4px">
+            <div style="font-family:Besley,serif;font-weight:800;font-size:26px">4<span class="suit-s">♠</span>= <span style="font-size:16px;font-weight:700">by S</span></div>
+            <div class="num" style="font-size:15px;margin-top:2px">+420 for N–S</div>
+          </div>
+          <div style="text-align:center;margin:6px 0 12px">
+            <span style="font-family:Besley,serif;font-weight:800;font-size:40px">67<span style="font-size:22px">%</span></span><br>
+            <span class="label">MATCHPOINTS · VS 3 OTHERS</span>
+          </div>
+          <div class="ledger">
+            <div class="perf"><span class="label" style="color:var(--ink)">THE FIELD · BOARD №0</span></div>
+            <div class="lrow housey"><span class="who">The Shark</span><span class="house">HOUSE</span><span class="num">4<span class="suit-s">♠</span>+1 · +450</span><b class="num">100%</b></div>
+            <div class="lrow you"><span class="who">You</span><span class="num">4<span class="suit-s">♠</span>= · +420</span><b class="num">67%</b></div>
+            <div class="lrow housey"><span class="who">The Regular</span><span class="house">HOUSE</span><span class="num">3<span class="suit-s">♠</span>+1 · +170</span><b class="num">33%</b></div>
+            <div class="lrow housey"><span class="who">The Novice</span><span class="house">HOUSE</span><span class="num">2<span class="suit-s">♠</span>+2 · +170</span><b class="num">33%</b></div>
+          </div>
+          <p class="asideline" style="margin-top:10px">Same deal, four results. The cards were never the difference.</p>
+          <div class="flexgrow"></div>
+          <div class="btn">ONE LAST THING →</div>
+          <div style="height:18px"></div>
+        </div>
+        <div class="cap"><span class="label">B3 · The ledger reveal</span><p>Duplicate taught at the exact surface where it lives, with the house personas as the pre-seeded field — beating The Shark is a real thing in this app, so the lesson is also a true introduction.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div style="height:40px"></div>
+          <div class="postmark">
+            <svg width="220" height="44" viewBox="0 0 220 44"><g stroke="#141414" stroke-width="2.2" fill="none" opacity=".75"><path d="M0 8 Q28 2 56 8 T112 8 T168 8 T224 8"/><path d="M0 22 Q28 16 56 22 T112 22 T168 22 T224 22"/><path d="M0 36 Q28 30 56 36 T112 36 T168 36 T224 36"/></g></svg>
+            <div class="ring"><b>FIRST CROSSING</b><span>NICKEL BRIDGE · №0</span><span>JUL 24 1926</span></div>
+          </div>
+          <div style="height:30px"></div>
+          <div style="text-align:center">
+            <div class="title" style="font-size:26px">That's the whole game.</div>
+            <p class="body-copy" style="max-width:30ch;margin:0 auto 10px">Bid with meaning. Play with care. Read
+            the ledger. Everything else is practice — which is to say, everything else is the fun part.</p>
+            <p class="asideline">The tollkeeper keeps no record of practice boards.</p>
+          </div>
+          <div class="flexgrow"></div>
+          <div class="btn">PLAY THE TOLL — FOR REAL →</div>
+          <div style="height:14px"></div>
+          <div class="quietlink">First, how should the robots play? · set opposition</div>
+          <div style="height:22px"></div>
+        </div>
+        <div class="cap"><span class="label">B4 · Postmark & gate</span><p>The completion moment borrows the result screen's postmark — earned, not decorative. Difficulty question slots in here (or as B3½) before the real first placement.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ CONCEPT C ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept C</span><h2>The Tollkeeper's Window</h2><span class="aside">converse — short exchanges at the booth, each with a small proof</span></div>
+    <p class="concept-note">You've pulled up to the booth window (the double-ink "table" frame) and the tollkeeper
+    talks to you — one idea per exchange, answered with a button. Each claim carries a small <em>interactive
+    proof</em> instead of a paragraph: a tap-a-bid-see-its-meaning demo, a four-crossings-one-ledger diagram,
+    the difficulty question as the toll itself. Warmer than A, far lighter than B; the conversation frame also
+    gives skipping a in-world shape ("I know the way").</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone">
+          <div style="height:26px"></div>
+          <div class="booth"><div class="booth-inner">
+            <span class="label">AT THE GATE</span>
+            <div class="tk-line">"Evening. First time across this bridge?"</div>
+          </div></div>
+          <div style="height:20px"></div>
+          <div class="btn">FIRST TIME →</div>
+          <div style="height:10px"></div>
+          <div class="btn secondary">I KNOW THE WAY — LET ME THROUGH</div>
+          <div class="flexgrow"></div>
+          <div class="river"><svg viewBox="0 0 640 240" preserveAspectRatio="xMidYMax slice" style="height:150px"><g stroke="#141414" fill="none"><line x1="0" y1="16" x2="640" y2="16" stroke-width="2.5"/><line x1="0" y1="30" x2="640" y2="30" stroke-width="7"/></g><g stroke="#6F8F68" fill="none"><path d="M-80 104 Q0 52 80 104 Q160 52 240 104 Q320 52 400 104 Q480 52 560 104 Q640 52 720 104" stroke-width="5"/><path d="M-80 96 Q0 45 80 96 Q160 45 240 96 Q320 45 400 96 Q480 45 560 96 Q640 45 720 96" stroke-width="2"/><line x1="0" y1="30" x2="0" y2="78" stroke-width="2.5"/><line x1="160" y1="30" x2="160" y2="78" stroke-width="2.5"/><line x1="320" y1="30" x2="320" y2="78" stroke-width="2.5"/><line x1="480" y1="30" x2="480" y2="78" stroke-width="2.5"/><line x1="640" y1="30" x2="640" y2="78" stroke-width="2.5"/></g><rect x="0" y="178" width="640" height="62" fill="#5E4B33"/></svg></div>
+        </div>
+        <div class="cap"><span class="label">C1 · The window</span><p>The skip is diegetic: regulars are waved through. "First time" commits you to only four short exchanges.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="booth"><div class="booth-inner">
+            <span class="label">THE LEDGER</span>
+            <div class="tk-line" style="font-size:18px">"Everyone crosses on the same four deals — whenever suits
+            them. The ledger compares only those who held your cards."</div>
+          </div></div>
+          <div class="crossers">
+            <div class="crosser"><span class="cwho">You</span><span class="cwhen">tonight</span><span class="mini-tickets"><i>1</i><i>2</i><i>3</i><i>4</i></span></div>
+            <div class="crosser"><span class="cwho">Margaret</span><span class="cwhen">Tuesday, late</span><span class="mini-tickets"><i>1</i><i>2</i><i>3</i><i>4</i></span></div>
+            <div class="crosser"><span class="cwho">Harold</span><span class="cwhen">Wednesday lunch</span><span class="mini-tickets"><i>1</i><i>2</i><i>3</i><i>4</i></span></div>
+            <div class="crosser"><span class="cwho">Ruth</span><span class="cwhen">sometime Sunday</span><span class="mini-tickets"><i>1</i><i>2</i><i>3</i><i>4</i></span></div>
+          </div>
+          <div style="text-align:center;margin:4px 0 8px">
+            <span class="label" style="color:var(--ink)">FOUR CROSSINGS · SAME CARDS · ONE LEDGER</span>
+          </div>
+          <p class="asideline" style="text-align:center">Whoever plays the cards best wins the board.<br>The deal itself is never the difference.</p>
+          <div class="flexgrow"></div>
+          <div class="btn">UNDERSTOOD →</div>
+          <div style="height:20px"></div>
+        </div>
+        <div class="cap"><span class="label">C2 · Duplicate, diagrammed</span><p>The same-deals idea as a schedule, not a rulebook: four friends, four different hours, identical board tickets, one ledger line.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="booth"><div class="booth-inner">
+            <span class="label">THE TOLL</span>
+            <div class="tk-line" style="font-size:18px">"A bid is a promise in code. Try one — tap it."</div>
+          </div></div>
+          <div style="height:14px"></div>
+          <div class="bidgrid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="bid sel">1NT</div><div class="bid">2<span class="suit-c">♣</span></div><div class="bid">2<span class="suit-h">♥</span></div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="meaning">
+            <div class="mhead"><span class="call">1NT</span><span class="mtitle">Opening, one notrump</span></div>
+            <div class="chips"><span class="chip">15–17 HCP</span><span class="chip">BALANCED</span></div>
+            <p>A balanced hand and a narrow point range — the most honest bid in the game. Partner knows almost
+            exactly what you hold.</p>
+          </div>
+          <p class="asideline" style="margin-top:12px">In play, every bid shows its meaning <i>before</i> you commit —
+          and the house grades your call after. ★★★ on a good night.</p>
+          <div class="flexgrow"></div>
+          <div class="btn">GOOD TO KNOW →</div>
+          <div style="height:20px"></div>
+        </div>
+        <div class="cap"><span class="label">C3 · A promise, tried</span><p>A three-bid sampler wired to real SAYC meanings. The last exchange (not shown) is the difficulty question — "How should the opposition play against you?" — then the gate opens.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ COMPARISON ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Weighing them</span><h2>Comparison & recommendation</h2></div>
+    <table class="compare">
+      <tr><th>Concept</th><th>Player receives it by</th><th>Time</th><th>Skip risk</th><th>Build cost</th><th>Sharpest edge / dullest edge</th></tr>
+      <tr><td>A · Pamphlet</td><td>Reading</td><td>~1½ min</td><td>High — it's still five screens of prose, however handsome</td><td>Low (client-only; one new page + the difficulty POST)</td><td>Leaves a beautiful, revisitable artifact / teaches <i>about</i> the game rather than the game</td></tr>
+      <tr><td>B · Board №0</td><td>Playing</td><td>~2–3 min</td><td>Low — it's a hand of cards, and the mechanics teach themselves</td><td>High-ish (a scripted practice board + narrator overlay), but the exhibit/replay machinery in <code>scenarios.ts</code> already does 80% of this</td><td>The only version people <i>thank</i> you for; duplicate taught in the field table itself / longest to build, needs care to keep the narrator from nagging</td></tr>
+      <tr><td>C · Tollkeeper</td><td>Conversing</td><td>~1 min</td><td>Medium — short, charming, but still exposition wearing a costume</td><td>Medium (client-only; small interactive proofs)</td><td>Best voice showcase; diegetic skip / the "proofs" are simulations, one step removed from the real UI</td></tr>
+    </table>
+    <div class="rec">
+      <span class="label">RECOMMENDATION</span>
+      <p style="margin:8px 0 0">"A tour worth taking" points at <b>B as the spine</b>: the only concept where the player
+      <i>does</i> the thing rather than being told about it, and the only one where duplicate — the app's whole
+      thesis — is taught inside the very component that embodies it. Wrap it in the best of the others:
+      <b>C's tollkeeper</b> as B's narrator voice (one character, met at the gate, who rides along on Board №0),
+      and <b>A's gate panel</b> as the closing screen — difficulty question, then PLAY THE TOLL. A condensed
+      pamphlet survives as the revisitable "HOW TO CROSS" reference reachable from the glossary, so the tour can
+      be short without being lossy. Build-wise the practice board rides on machinery that already exists
+      (exhibit-kind tournaments, scripted replays, house personas), and the whole flow needs a demo-mode exhibit
+      anyway per house rules.</p>
+    </div>
+  </section>
+</div>

@@ -105,7 +105,11 @@ docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
                 shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
-                difficulty-calibration-research.md — the research log behind today's values
+                difficulty-calibration-research.md — the research log behind today's values;
+                onboarding-design.md — the new-user onboarding ("first crossing") design
+                spec (not yet implemented), with its clickable prototype
+                onboarding-prototype.html and concept-exploration board
+                onboarding-concepts.html
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
                 design-system skill — see "Design system" below
 ```
