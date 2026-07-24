@@ -318,6 +318,10 @@ export const api = {
         /** rank movement since the previous rated tournament; null without a prior snapshot */
         movement: number | null;
       }[];
+      /** rated tournaments needed before a player shows up in `leaderboard` */
+      provisionalMin: number;
+      /** the signed-in user's own rated-tournament count, even if below provisionalMin */
+      yourRatedTournaments: number;
     }>('/api/leaderboard'),
 };
 

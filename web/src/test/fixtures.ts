@@ -491,3 +491,7 @@ export const leaderboardRows = [
   { id: 1, handle: 'Margaret', picture: null, elo: 1487, rated_tournaments: 10, played_tournaments: 12, movement: 3 },
   { id: 8, handle: 'Bob', picture: null, elo: 1466, rated_tournaments: 5, played_tournaments: 7, movement: null },
 ];
+
+// meFixture (id 1, Margaret) already has 10 rated tournaments — past the
+// provisional quota, so the "you'll join the field" note stays hidden by default.
+export const leaderboardResponse = { leaderboard: leaderboardRows, provisionalMin: 4, yourRatedTournaments: 10 };

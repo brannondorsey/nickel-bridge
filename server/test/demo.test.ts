@@ -12,6 +12,7 @@ const silentLog = { info() {}, error() {}, warn() {}, debug() {} } as unknown as
 freshDbEnv('demo');
 process.env.DEMO = '1';
 const app = await makeApp();
+const { db } = await import('../src/db.js');
 
 describe('demo mode', () => {
   const inspector = new TestClient(app, 'unused');
@@ -118,13 +119,15 @@ describe('demo mode', () => {
   }, 120_000);
 
   it('reset wipes the database and keeps the requester signed in', async () => {
-    const before = await inspector.get('/api/leaderboard');
-    expect(before.leaderboard.length).toBeGreaterThan(1); // Inspector + Visitor
+    // registered users, not the (now provisional-gated) leaderboard list —
+    // neither Inspector nor Visitor has completed enough rated tournaments to
+    // appear there, so this checks the underlying wipe directly.
+    const userCount = () => (db.prepare(`SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL`).get() as { n: number }).n;
+    expect(userCount()).toBeGreaterThan(1); // Inspector + Visitor
     await inspector.post('/api/demo/reset', { reseed: false });
     const me = await inspector.get('/api/me'); // works: fresh cookie from the reset response
     expect(me.user.handle).toBe('Inspector');
-    const after = await inspector.get('/api/leaderboard');
-    expect(after.leaderboard.length).toBe(1);
+    expect(userCount()).toBe(1);
     const { tournaments } = await inspector.get('/api/tournaments');
     expect(tournaments.length).toBe(0);
   });

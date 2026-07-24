@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { leaderboardRows, meFixture } from '../test/fixtures';
+import { leaderboardResponse, leaderboardRows, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Leaderboard from './Leaderboard';
 
@@ -19,7 +19,7 @@ describe('Rankings', () => {
   });
 
   it('renders the field with rank, handle, Elo and movement glyphs', async () => {
-    apiMock.leaderboard.mockResolvedValue({ leaderboard: leaderboardRows });
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
     renderWithMe(<Leaderboard />, { me: meFixture });
     expect(await screen.findByText('The field')).toBeInTheDocument();
     expect(screen.getByText('ALL-TIME · 4 PLAYERS')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('Rankings', () => {
   });
 
   it('highlights the signed-in player as "— you"', async () => {
-    apiMock.leaderboard.mockResolvedValue({ leaderboard: leaderboardRows });
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
     renderWithMe(<Leaderboard />, { me: meFixture });
     const you = await screen.findByText('Margaret — you');
     expect(you.closest('a')).toHaveClass('rank-row-you');
@@ -54,9 +54,22 @@ describe('Rankings', () => {
   });
 
   it('explains the rating system in the footer', async () => {
-    apiMock.leaderboard.mockResolvedValue({ leaderboard: leaderboardRows });
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
     renderWithMe(<Leaderboard />, { me: meFixture });
     expect(await screen.findByText(/Everyone starts at 1200/)).toBeInTheDocument();
+  });
+
+  it('omits the provisional note once the signed-in player has met the quota', async () => {
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    await screen.findByText('The field');
+    expect(screen.queryByText(/join the field/)).not.toBeInTheDocument();
+  });
+
+  it("shows the provisional note when the signed-in player hasn't met the quota", async () => {
+    apiMock.leaderboard.mockResolvedValue({ ...leaderboardResponse, yourRatedTournaments: 2 });
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    expect(await screen.findByText(/join the field once you've completed 4 crossings — 2 of 4 so far/)).toBeInTheDocument();
   });
 
   it('surfaces load failures in the error treatment', async () => {

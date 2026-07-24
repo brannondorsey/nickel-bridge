@@ -128,12 +128,13 @@ assert(
   'house rows rank once complete, like any other pair',
 );
 
-// continuous Elo: the completed tournament is rated immediately, no expiry
-let lb = (await alice.req('/api/leaderboard')).leaderboard;
-assert(
-  lb.filter((r) => r.rated_tournaments === 1).length === 2,
-  'both players rated immediately after completion',
-);
+// continuous Elo: the completed tournament is rated immediately, no expiry.
+// A single rated tournament is well under the leaderboard's provisional
+// display quota, so check each player's own count rather than the (gated)
+// public list.
+const aliceRated = (await alice.req('/api/leaderboard')).yourRatedTournaments;
+const bobRated = (await bob.req('/api/leaderboard')).yourRatedTournaments;
+assert(aliceRated === 1 && bobRated === 1, 'both players rated immediately after completion');
 
 // a third player still lands in the same tournament (grace window, then
 // popularity × recency scoring — tournaments never close)
@@ -146,8 +147,8 @@ for (let no = 1; no <= 4; no++) {
   // bid the cheapest bid once on board 1 so Carol's results differ from the others
   await playBoard(carol, c.tournamentId, no, no === 1);
 }
-lb = (await carol.req('/api/leaderboard')).leaderboard;
-assert(lb.filter((r) => r.rated_tournaments === 1).length === 3, 'Elo re-ranked to include the late finisher');
+const carolRated = (await carol.req('/api/leaderboard')).yourRatedTournaments;
+assert(carolRated === 1, 'Elo re-ranked to include the late finisher');
 const b1c = await carol.req(`/api/tournaments/${c.tournamentId}/boards/1`);
 assert(
   b1c.result.field.filter((f) => f.kind === 'human').length === 3,

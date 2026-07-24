@@ -1996,6 +1996,16 @@ a.board-row:hover {
 .rank-move.quiet {
   color: var(--muted);
 }
+.rank-provisional-note {
+  margin: 12px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--muted);
+}
 .rank-foot {
   margin: 12px 16px 0;
   background: var(--surface);

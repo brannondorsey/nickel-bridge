@@ -19,6 +19,7 @@ import {
   myEloDelta,
   myTournaments,
   placeUser,
+  PROVISIONAL_MIN_TOURNAMENTS,
   standings,
 } from './tournaments.js';
 
@@ -153,16 +154,25 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!user) return;
     const rows = db
       .prepare(
-        `SELECT u.id, u.handle, u.picture, u.elo,
-                (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
-                (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
-                  JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
-                  WHERE b.user_id = u.id) AS played_tournaments
-         FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human' ORDER BY u.elo DESC, u.handle`,
+        `SELECT id, handle, picture, elo, rated_tournaments, played_tournaments FROM (
+           SELECT u.id, u.handle, u.picture, u.elo,
+                  (SELECT COUNT(*) FROM elo_history h WHERE h.user_id = u.id) AS rated_tournaments,
+                  (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
+                    JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+                    WHERE b.user_id = u.id) AS played_tournaments
+           FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
+         ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all() as { id: number }[];
+      .all(PROVISIONAL_MIN_TOURNAMENTS) as { id: number }[];
     const movement = leaderboardMovement();
-    return reply.send({ leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })) });
+    const yourRatedTournaments = (
+      db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }
+    ).n;
+    return reply.send({
+      leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
+      provisionalMin: PROVISIONAL_MIN_TOURNAMENTS,
+      yourRatedTournaments,
+    });
   });
 
   app.get('/api/users/:id/stats', (req, reply) => {
