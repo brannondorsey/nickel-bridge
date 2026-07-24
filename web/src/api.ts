@@ -132,7 +132,7 @@ export interface BoardView {
 interface Standing {
   userId: number;
   handle: string;
-  /** 'ai' rows are the benchmark house players — they rank and count as pairs, but never rate */
+  /** 'ai' rows are the benchmark house players — they rank and count as players, but never rate */
   kind: 'human' | 'ai';
   boardsDone: number;
   totalPct: number | null;

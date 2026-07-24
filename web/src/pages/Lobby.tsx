@@ -122,14 +122,14 @@ export default function Lobby() {
                   {finished.map((t) => {
                     const mine = t.standings.find((s) => s.userId === me?.user?.id);
                     const when = t.myLastPlayedAt ?? t.createdAt;
-                    // House (benchmark AI) rows count as pairs — full field
+                    // House (benchmark AI) rows count as players — full field
                     // members, matching Tournament.tsx.
-                    const pairs = t.standings.length;
+                    const players = t.standings.length;
                     return (
                       <Link key={t.id} to={`/t/${t.id}`} className="tolls-row num">
                         <b className="tolls-no">{tourneyNo(t)}</b>
                         <span className="tolls-meta">
-                          {when ? shortDate(when) : '—'} · {pairs} {pairs === 1 ? 'pair' : 'pairs'}
+                          {when ? shortDate(when) : '—'} · {players} {players === 1 ? 'player' : 'players'}
                         </span>
                         <b className="tolls-pct">{mine?.totalPct != null ? `${mine.totalPct}%` : '—'}</b>
                         <span className={`tolls-rank ${mine?.rank === 1 ? 'positive' : 'quiet'}`}>
