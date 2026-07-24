@@ -194,6 +194,19 @@ export function standings(tournamentId: number): Standing[] {
 export const PROVISIONAL_MIN_TOURNAMENTS = 4;
 
 /**
+ * DEMO=1 override for the quota above (an off-by-default knob — app.ts only
+ * applies it when demo mode is enabled): the boot seeder (`demo-seed.ts`'s
+ * DEFAULT_PROFILE) plays each bot through at most 2 tournaments, well under
+ * the production quota, which would otherwise leave every preview's and the
+ * permanent demo app's leaderboard permanently empty — contradicting the
+ * seeder's own "leaderboard with rated players" ambient-data goal. A quota
+ * of 1 still exercises the real provisional-gating code path (the
+ * always-empty New Crosser persona stays excluded) without defeating the
+ * point of demoing a populated leaderboard.
+ */
+export const DEMO_PROVISIONAL_MIN_TOURNAMENTS = 1;
+
+/**
  * Human-only matchpoint averages — the Elo replay's input, DELIBERATELY not
  * the displayed standings(). House personas count in the displayed field but
  * are unrated, and they must not shape human ratings even indirectly:

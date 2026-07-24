@@ -63,6 +63,25 @@ describe('demo mode', () => {
     expect(stats.totals.boardsCompleted).toBeGreaterThan(0);
   }, 120_000);
 
+  it('DEMO=1 relaxes the leaderboard provisional quota to 1, not the production 4', async () => {
+    // The boot seeder's DEFAULT_PROFILE plays each bot through at most 2
+    // tournaments — well under the production quota (4) — so without this
+    // override every preview's and the demo app's leaderboard would render
+    // permanently empty. A 2-bot, 1-tournament seed here exercises the same
+    // gap cheaply instead of running the full (deploy-scale) profile.
+    const seeder = await import('../src/demo-seed.js');
+    await seeder.seedDemo(silentLog, {
+      bots: ['ProvisionalBotA', 'ProvisionalBotB'],
+      tournaments: [{ seed: 'demo-test-provisional', ageS: 86400, players: [0, 1] }],
+      exhibitFields: false,
+    });
+    const { leaderboard, provisionalMin } = await inspector.get('/api/leaderboard');
+    expect(provisionalMin).toBe(1);
+    const handles = (leaderboard as { handle: string }[]).map((r) => r.handle);
+    expect(handles).toContain('ProvisionalBotA');
+    expect(handles).toContain('ProvisionalBotB');
+  }, 120_000);
+
   it('the handle-collision exhibit prefill is guaranteed to 409', async () => {
     const { collisionHandle } = await inspector.get('/api/demo/scenarios');
     const visitor = new TestClient(app, 'Handle Collision Visitor');

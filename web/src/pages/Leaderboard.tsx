@@ -64,8 +64,9 @@ export default function Leaderboard() {
           </div>
           {stillProvisional ? (
             <div className="rank-provisional-note">
-              You'll join the field once you've completed {data!.provisionalMin} crossings — {data!.yourRatedTournaments}{' '}
-              of {data!.provisionalMin} so far.
+              You'll join the field once you've completed {data!.provisionalMin}{' '}
+              {data!.provisionalMin === 1 ? 'crossing' : 'crossings'} — {data!.yourRatedTournaments} of{' '}
+              {data!.provisionalMin} so far.
             </div>
           ) : null}
           {rows.length === 0 ? (

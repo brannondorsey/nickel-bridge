@@ -72,6 +72,12 @@ describe('Rankings', () => {
     expect(await screen.findByText(/join the field once you've completed 4 crossings — 2 of 4 so far/)).toBeInTheDocument();
   });
 
+  it('singularizes "crossing" for a 1-tournament quota (the DEMO=1 override)', async () => {
+    apiMock.leaderboard.mockResolvedValue({ ...leaderboardResponse, provisionalMin: 1, yourRatedTournaments: 0 });
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    expect(await screen.findByText(/join the field once you've completed 1 crossing — 0 of 1 so far/)).toBeInTheDocument();
+  });
+
   it('surfaces load failures in the error treatment', async () => {
     apiMock.leaderboard.mockRejectedValue(new Error('offline'));
     renderWithMe(<Leaderboard />, { me: meFixture });

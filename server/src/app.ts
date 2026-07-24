@@ -13,6 +13,7 @@ import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './
 import { playerStats } from './stats.js';
 import {
   boardDifficulty,
+  DEMO_PROVISIONAL_MIN_TOURNAMENTS,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
@@ -152,6 +153,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/leaderboard', (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
+    // DEMO=1 (previews + the permanent demo app) relaxes the quota so the
+    // boot seeder's ambient tournaments — at most 2 per bot, see
+    // DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment — still populate a
+    // visible leaderboard; off (the production quota applies) everywhere else.
+    const provisionalMin = process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
     const rows = db
       .prepare(
         `SELECT id, handle, picture, elo, rated_tournaments, played_tournaments FROM (
@@ -163,14 +169,14 @@ export async function buildApp(): Promise<FastifyInstance> {
            FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
          ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all(PROVISIONAL_MIN_TOURNAMENTS) as { id: number }[];
+      .all(provisionalMin) as { id: number }[];
     const movement = leaderboardMovement();
     const yourRatedTournaments = (
       db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }
     ).n;
     return reply.send({
       leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
-      provisionalMin: PROVISIONAL_MIN_TOURNAMENTS,
+      provisionalMin,
       yourRatedTournaments,
     });
   });
