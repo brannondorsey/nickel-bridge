@@ -127,6 +127,14 @@ export interface Standing {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
 
+export const STANDINGS = {
+  /** A partial player (< BOARDS_PER_TOURNAMENT done) whose most recently
+   * completed board in this tournament is older than this is presumed to
+   * have abandoned it and is dropped from the displayed field by
+   * standings() — see its doc comment. */
+  ABANDON_TTL_S: 7 * 86400,
+};
+
 /**
  * Live standings from completed boards: each board is matchpointed across
  * EVERYONE who finished it — humans and the benchmark AI personas in one
@@ -138,6 +146,14 @@ const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) 
  * human ratings) and placement (stmtCandidates).
  * A player's total is the average over their finished boards. Standings are
  * never "final" — they keep evolving as more friends play the same deals.
+ * A partial player (someone who started but hasn't finished all boards) who
+ * hasn't completed a board in over STANDINGS.ABANDON_TTL_S is presumed to
+ * have abandoned the tournament and is left out of the returned field
+ * entirely — this is a display filter only: their board scores stay in the
+ * per-board matchpoint tables above, so they still fairly affect every other
+ * player who played the same boards, exactly as duplicate scoring requires.
+ * If they return and finish another board, they reappear immediately (the
+ * check is a live function of their last completion, not a stored flag).
  */
 export function standings(tournamentId: number): Standing[] {
   const rows = stmtDoneBoards.all(tournamentId) as (BoardRow & {
@@ -145,22 +161,29 @@ export function standings(tournamentId: number): Standing[] {
     user_kind: 'human' | 'ai';
     user_google: string;
   })[];
-  const players = new Map<number, { handle: string; kind: 'human' | 'ai'; google: string; pcts: number[] }>();
+  const players = new Map<
+    number,
+    { handle: string; kind: 'human' | 'ai'; google: string; pcts: number[]; lastDoneAt: number }
+  >();
   for (let no = 1; no <= BOARDS_PER_TOURNAMENT; no++) {
     const boardRows = rows.filter((r) => r.board_no === no);
     const mps = matchpoints(boardRows.map((r) => r.score_ns ?? 0));
     boardRows.forEach((r, i) => {
       const u =
-        players.get(r.user_id) ?? { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [] };
+        players.get(r.user_id) ??
+        { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [], lastDoneAt: 0 };
       u.pcts.push(mps[i].pct);
+      u.lastDoneAt = Math.max(u.lastDoneAt, r.updated_at);
       players.set(r.user_id, u);
     });
   }
+  const now = Math.floor(Date.now() / 1000);
   // Construction order IS the tie order (the pct sort below is stable):
   // humans first — a human is listed above a persona they tie with (they
   // share the same printed rank) — then personas strongest-first (aiTieRank),
   // so a tied trio reads Shark, Regular, Novice.
   const list: Standing[] = [...players.entries()]
+    .filter(([, u]) => u.pcts.length >= BOARDS_PER_TOURNAMENT || now - u.lastDoneAt <= STANDINGS.ABANDON_TTL_S)
     .sort((a, b) => aiTieRank(a[1].google) - aiTieRank(b[1].google))
     .map(([userId, u]): Standing => ({
       userId,
