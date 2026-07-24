@@ -28,6 +28,7 @@ import { AuctionGrid } from '../components/game/AuctionGrid';
 import { BidBox } from '../components/game/BidBox';
 import { CallInspector } from '../components/game/CallInspector';
 import { CallText } from '../components/game/CallText';
+import { ClaimOverlay } from '../components/game/ClaimOverlay';
 import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
 import { DummyRail } from '../components/game/DummyRail';
@@ -37,7 +38,8 @@ import { MeaningPanel } from '../components/game/MeaningPanel';
 import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
-  CLAIM_MIN_DISPLAY_MS,
+  CLAIM_ANNOUNCE_HOLD_MS,
+  CLAIM_SPEEDUP_FACTOR,
   ClaimAnnouncement,
   StagedStep,
   captureFanOriginIfVisible,
@@ -69,12 +71,19 @@ export default function Board() {
   const [inspect, setInspect] = useState<AuctionEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // A claim's fast-forward, driven by runClaim below. Non-null exactly while
-  // the announcement banner should be showing. claimGenRef guards it the
-  // same way stagingRef guards applyBoard's per-card timers: bumping it
-  // invalidates any claim sequence in flight.
+  // A claim's fast-forward, driven by runClaim below. claimInfo is non-null
+  // for the whole sequence (announcement + fast-forward); claimAnnounceOpen
+  // is true only while the ClaimOverlay itself should be on screen — it
+  // closes (tap, Escape, or CLAIM_ANNOUNCE_HOLD_MS elapsing) before the
+  // fast-forward starts. claimGenRef guards the sequence the same way
+  // stagingRef guards applyBoard's per-card timers: bumping it invalidates
+  // any claim sequence in flight. claimSkipRef holds the current
+  // announcement's early-dismiss resolver, if one is waiting.
   const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
+  const [claimAnnounceOpen, setClaimAnnounceOpen] = useState(false);
   const claimGenRef = useRef(0);
+  const claimSkipRef = useRef<(() => void) | null>(null);
+  const skipClaimAnnouncement = useCallback(() => claimSkipRef.current?.(), []);
 
   // Vulnerability ink-wash pulse: flags a vulnerable board once, right as its
   // bidding phase is first seen, so vulnerability (which changes the stakes of
@@ -173,25 +182,17 @@ export default function Board() {
     [cancelStaging, scheduleSteps],
   );
 
-  // Bracket a claim's fast-forward with the announcement banner: it pops up
-  // right as the fast-forward starts and stays in place — the only
-  // indication a claim happened — for the whole burst, then clears when the
-  // real (state: 'done') `next` view hands off to the normal completion view.
-  //
-  // claimAnnouncement and stageClaimSteps both validate the same prev/next
-  // transition but aren't the same function, so stageClaimSteps is computed
-  // once, up front, and its non-emptiness gates whether the banner shows at
-  // all — never announce a claim animation this transition's data can't
-  // actually support (falls back to a plain, unanimated jump instead, same
-  // defensive posture as every other staging bail-out in this codebase).
-  //
-  // With motion on, the staged steps keep `board.state: 'playing'` (so
-  // PlayPhase, and the banner inside it, keep rendering) for as long as the
-  // fast-forward takes. Without it — reduced motion, or no WAAPI — there's
-  // nothing to stage and jumping `board` straight to the real (done) `next`
-  // synchronously would unmount PlayPhase before the banner is ever seen. So
-  // in that case we deliberately hold before applying `next`, same "always
-  // applies regardless of motion" reasoning as AUTO_PLAY_DELAY_MS.
+  // Bracket a claim in two beats: the ClaimOverlay holds the board for
+  // CLAIM_ANNOUNCE_HOLD_MS (tap/click/Escape dismisses early, via
+  // claimSkipRef/skipClaimAnnouncement above), THEN the fast-forward runs —
+  // at CLAIM_SPEEDUP_FACTOR pacing — before handing off to the real
+  // (state: 'done') `next` view. Splitting it this way (rather than the
+  // overlay popping up alongside cards already moving) is the whole point:
+  // the announcement can't be missed if nothing else on the board is
+  // changing while it's up. Applies whether or not motion is on — even
+  // without a fast-forward to animate afterward, the announcement still
+  // deserves its full, deliberate, dismissible read before jumping straight
+  // to the result, same "always applies" reasoning as AUTO_PLAY_DELAY_MS.
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
       const info = claimAnnouncement(prev, next);
@@ -200,26 +201,36 @@ export default function Board() {
         return;
       }
       const gen = ++claimGenRef.current;
-      if (motionOK()) {
-        const steps = stageClaimSteps(prev, next);
-        if (!steps.length) {
-          applyBoard(prev, next); // claimAnnouncement approved it but staging couldn't — same fallback
-          return;
+
+      setClaimInfo(info);
+      setClaimAnnounceOpen(true);
+      await new Promise<void>((resolve) => {
+        const timer = window.setTimeout(finish, CLAIM_ANNOUNCE_HOLD_MS);
+        function finish() {
+          window.clearTimeout(timer);
+          claimSkipRef.current = null;
+          resolve();
         }
-        setClaimInfo(info);
-        scheduleSteps(prev, steps);
-        const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
-        await sleep(totalMs);
-      } else {
-        setClaimInfo(info);
-        await sleep(CLAIM_MIN_DISPLAY_MS);
-      }
+        claimSkipRef.current = finish;
+      });
       if (claimGenRef.current !== gen) return;
+      setClaimAnnounceOpen(false);
+
+      if (motionOK()) {
+        const steps = stageClaimSteps(prev, next, CLAIM_SPEEDUP_FACTOR);
+        if (steps.length) {
+          scheduleSteps(prev, steps);
+          const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
+          await sleep(totalMs);
+          if (claimGenRef.current !== gen) return;
+        }
+      }
 
       setClaimInfo(null);
+      cancelStaging();
       setBoard(next);
     },
-    [applyBoard, scheduleSteps],
+    [applyBoard, cancelStaging, scheduleSteps],
   );
 
   const load = useCallback(() => {
@@ -233,6 +244,8 @@ export default function Board() {
     setError(null);
     setShowReceipt(false);
     setClaimInfo(null);
+    setClaimAnnounceOpen(false);
+    claimSkipRef.current = null;
     sawLiveRef.current = false;
     api
       .board(tournamentId, boardNo)
@@ -341,6 +354,8 @@ export default function Board() {
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           claimInfo={claimInfo}
+          claimAnnounceOpen={claimAnnounceOpen}
+          onSkipClaim={skipClaimAnnouncement}
         />
       ) : (
         <BiddingPhase
@@ -479,6 +494,8 @@ function PlayPhase({
   inspect,
   onInspect,
   claimInfo,
+  claimAnnounceOpen,
+  onSkipClaim,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -487,6 +504,8 @@ function PlayPhase({
   inspect: AuctionEntry | null;
   onInspect: (entry: AuctionEntry) => void;
   claimInfo: ClaimAnnouncement | null;
+  claimAnnounceOpen: boolean;
+  onSkipClaim: () => void;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -518,15 +537,7 @@ function PlayPhase({
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
         </Toast>
       ) : null}
-      {claimInfo ? (
-        <div className="claim-banner">
-          <div className="claim-banner-side">
-            {claimInfo.side === 'NS' ? 'N/S' : 'E/W'} CLAIM {claimInfo.tricks} REMAINING{' '}
-            {claimInfo.tricks === 1 ? 'TRICK' : 'TRICKS'}
-          </div>
-          <div className="claim-banner-sub">Laydown confirmed — the rest plays itself…</div>
-        </div>
-      ) : null}
+      {claimAnnounceOpen && claimInfo ? <ClaimOverlay info={claimInfo} onDismiss={onSkipClaim} /> : null}
       {board.dummyHand && !dummyOnSide ? (
         <>
           <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
@@ -573,7 +584,7 @@ function PlayPhase({
           Only {RANK_CHARS[cardRank(soleLegal)]}
           {SUIT_SYMBOLS[cardSuit(soleLegal)]} to play — playing automatically…
         </div>
-      ) : claimInfo ? null : board.myTurn ? ( // the banner above already covers it while a claim is in progress
+      ) : claimInfo ? null : board.myTurn ? ( // suppressed for the whole claim sequence, not just while the overlay is up
         <div className="board-hint">
           your turn{board.handToPlay === board.dummy ? ' — playing from dummy' : ''}
         </div>

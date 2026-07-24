@@ -191,18 +191,24 @@ either side is DD-confirmed to win 100% of the remaining tricks, it marks the bo
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
 untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
-needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); an
-announcement banner pops up right as the fast-forward starts and stays in place — the only
-indication a claim happened — while the remaining tricks play out through a separate
-`stageClaimSteps` staging function (kept apart from `stagePlaySteps`, which assumes at most one
-trick boundary per response — a claim can span many), reusing the same glide-in/collect
-machinery `stagePlaySteps` uses for ordinary play, before handing off to the normal completion
-view. Because the solve only runs at a decision point with more than one legal card, the trick
-already in progress when the client's last request went out can still finish for either side
-before the guaranteed run of claim tricks begins — `claimAnnouncement`/`stageClaimSteps` tally
-each newly-completed trick by its actual winner rather than assuming the whole batch belongs to
-the claiming side. See invariant 1 below — claims change what `advanceRobots` records for a
-human's untaken decisions, so they interact directly with the robot-trace fixture.
+needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); rather
+than starting the fast-forward the instant a claim is detected (easy to miss, since the old
+announcement banner popped up alongside cards already in motion), `Board.tsx`'s `runClaim` holds
+the board on a modal `ClaimOverlay` for `CLAIM_ANNOUNCE_HOLD_MS` — tap, click, or Escape
+dismisses early — before the remaining tricks play out through a separate `stageClaimSteps`
+staging function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
+response — a claim can span many), reusing the same glide-in/collect machinery `stagePlaySteps`
+uses for ordinary play but at `CLAIM_SPEEDUP_FACTOR` pacing (33% faster than the claim's already-
+compressed base gaps), before handing off to the normal completion view. The hold applies
+whether or not motion is on — without a fast-forward to animate afterward there's nothing to
+hold the announcement up *for*, but it still deserves its full, dismissible read before jumping
+straight to the result. Because the solve only runs at a decision point with more than one legal
+card, the trick already in progress when the client's last request went out can still finish for
+either side before the guaranteed run of claim tricks begins — `claimAnnouncement`/
+`stageClaimSteps` tally each newly-completed trick by its actual winner rather than assuming the
+whole batch belongs to the claiming side. See invariant 1 below — claims change what
+`advanceRobots` records for a human's untaken decisions, so they interact directly with the
+robot-trace fixture.
 
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
