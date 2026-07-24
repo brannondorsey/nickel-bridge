@@ -8,8 +8,9 @@ export function Dialog({open=true, title, onClose, children, footer, style}) {
       <div style={{position:'absolute', left:0, right:0, bottom:0, background:'#fff', borderTop:'2px solid var(--ink,#141414)', padding:'10px 16px 18px', ...style}}>
         <div style={{width:40, height:4, background:'var(--line,#D8D5CE)', borderRadius:2, margin:'0 auto 12px'}}/>
         <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
+          {/* title stays Besley (static label); the close is pressable, so it wears the action face */}
           <div style={{fontFamily:'Besley,serif', fontWeight:800, fontSize:19, color:'var(--ink,#141414)'}}>{title}</div>
-          <div onClick={onClose} style={{fontFamily:'Besley,serif', fontWeight:700, fontSize:16, color:'var(--muted,#6E6A62)', cursor:'pointer'}}>✕</div>
+          <div onClick={onClose} style={{fontFamily:"'Josefin Sans',sans-serif", fontWeight:600, fontSize:16, color:'var(--muted,#6E6A62)', cursor:'pointer'}}>✕</div>
         </div>
         <div style={{fontFamily:'"Crimson Pro",serif', color:'var(--ink,#141414)'}}>{children}</div>
         {footer}

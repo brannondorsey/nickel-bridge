@@ -129,7 +129,7 @@ export function SplashIntro({onDone, riverSrc='../../assets/bridge-river-scene.s
           <div style={{fontFamily:'"Poiret One",cursive', fontSize:32, letterSpacing:'.16em', color:'var(--ink)', animation:'nbWordIn .9s ease-out both'}}>NICKEL BRIDGE</div>
           <div style={{fontFamily:'Besley,serif', fontSize:10.5, letterSpacing:'.42em', color:'var(--ink)', marginTop:6, animation:'nbSubIn .6s ease-out .5s both'}}>DUPLICATE · SAYC</div>
         </div>
-        <div style={{width:280, background:'var(--ink)', color:'#fff', textAlign:'center', fontFamily:'Besley,serif', fontWeight:800, fontSize:15, letterSpacing:'.06em', padding:13, borderRadius:2, animation:'nbSubIn .6s ease-out .8s both'}}>PLAY THE TOLL →</div>
+        <div style={{width:280, background:'var(--ink)', color:'#fff', textAlign:'center', fontFamily:"'Josefin Sans',sans-serif", fontWeight:600, fontSize:12.5, letterSpacing:'.22em', padding:'14px 12px 11px', borderRadius:2, animation:'nbSubIn .6s ease-out .8s both'}}>PLAY THE TOLL →</div>
       </div>
       <div key={'b'+k} style={{position:'absolute', bottom:0, left:0, width:390, height:146, animation:'nbBridgeRise .9s cubic-bezier(.2,.7,.2,1) both, nbBridgeOut .6s ease-in 2.1s forwards'}}>
         <img src={riverSrc} width="390" height="146" style={{display:'block', objectFit:'cover', objectPosition:'bottom'}} alt=""/>
