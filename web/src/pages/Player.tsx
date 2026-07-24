@@ -290,7 +290,7 @@ export default function Player() {
                   text={
                     house
                       ? 'House player — a fixed skill level, in the field of every crossing'
-                      : `Learning since ${since}`
+                      : `Playing since ${since}`
                   }
                 />
               </div>
