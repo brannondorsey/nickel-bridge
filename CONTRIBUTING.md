@@ -385,11 +385,16 @@ module-level constants next to the functions that use them. Match that style.
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
 the suit triad, etc.); everything built on those via `var()` — including the semantic
 aliases and the ink-plate components (`FlipDigits`, `HcpBadge`, selected bid buttons,
-`.ds-btn.btn-primary`) — repaints automatically. Playing-card faces are mostly pinned
-regardless of theme (`--cardface-ink`/`-line`/`-suit-*` are hardcoded literals, never
-overridden) except for the paper color itself: `--cardface` is stark daylight white by
-default and warms to a lamplit cream in the night override, the same "printed paper
-under a lamp" idea applied to the card rather than held fixed against it. The
+`.ds-btn.btn-primary`) — repaints automatically. Playing-card faces are a fixed paper/ink
+plate by day (`--cardface`/`-ink`/`-line`/`-suit-*`, stark white with pinned dark ink), but
+night overrides the whole set to an "ink-plate negative" — dark stock (`#2b2620`), light
+ink/suits borrowed from the night `--ink`/`--suit-*` triad via `var()` — rather than just
+dimming the paper color, the same idea already applied to `.ds-btn.btn-primary` turned
+around: there, a light plate keeps dark (daytime) suit glyphs at night, so
+`--onprimary-suit-*` had to stop referencing `--cardface-suit-*` and spell out that daytime
+triad literally once `--cardface-suit-*` itself started flipping to light colors at night.
+Deliberately low luminance contrast against `--panel` — the card reads by its border and
+glyphs, not a bright rectangle, the opposite trade-off from the daytime card. The
 `BridgeMark` glyph/footer stays fully pinned (already `var(--verdigris)`, lifted to its
 night value like any other token). Default is `prefers-color-scheme`, no
 attribute set; the Stats page's Day/Night/Adaptive/System switch (`theme.ts`, `nb:theme`

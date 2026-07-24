@@ -60,10 +60,11 @@
   --onprimary-suit-c: #8fe3a1;
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
   --ticket-shadow: 3px 3px 0 rgba(20, 20, 20, 0.12);
-  /* card-face tokens — the ink/line/suit structure is pinned identical in every theme
-     (see PlayingCard usage below); only --cardface itself (the paper color) shifts with
-     ambient light, same as --paper: stark daylight white here, warmed to lamplit cream
-     in the night override below. */
+  /* card-face tokens — day is a fixed paper/ink plate (PlayingCard usage below); night
+     overrides the whole set to an "ink-plate negative" (dark stock, light ink/suits,
+     borrowing the night --ink/--suit-* triad) rather than just dimming this paper color
+     — see [data-theme="night"] below for why and the --onprimary-suit-* gotcha it has
+     to route around. */
   --cardface: #ffffff;
   --cardface-ink: #141414;
   --cardface-line: #b9b4a9;
@@ -76,10 +77,8 @@
 /* ---- night theme — token swap only, never per-component dark styles.
    Everything below is a straight override of the base tokens above; the semantic
    aliases (--text-body, --border-*, --surface-page, etc.) reference them via var()
-   and update automatically. --cardface-ink/-line/-suit-* are pinned literals, not
-   overridden here — only --cardface itself gets a night value (see above). Keep the
-   [data-theme="night"] block and its @media twin below in sync — same values, two
-   activation paths. ---- */
+   and update automatically. Keep the [data-theme="night"] block and its @media twin
+   below in sync — same values, two activation paths. ---- */
 [data-theme='night'] {
   --ink: #ece7dc;
   --paper: #171512;
@@ -99,19 +98,31 @@
   --accent: #df8069;
   --positive: #55b896;
   --negative: #df8069;
-  /* the primary plate inverts to a lamplight plate with ink text, so the suit
-     glyphs on it invert too — back to the daytime (cardface) triad. */
+  /* the primary plate inverts to a lamplight plate with ink text, so the suit glyphs on
+     it invert too — back to the daytime (pinned :root) triad, spelled out literally
+     rather than via --cardface-suit-* now that those tokens themselves flip to a dark
+     card face below (an "ink-plate negative": literally the same idea as this button,
+     applied to the card instead of held fixed against it). */
   --btn-primary-bg: #ece7dc;
   --btn-primary-fg: #171512;
-  --onprimary-suit-s: var(--cardface-suit-s);
-  --onprimary-suit-h: var(--cardface-suit-h);
-  --onprimary-suit-d: var(--cardface-suit-d);
-  --onprimary-suit-c: var(--cardface-suit-c);
+  --onprimary-suit-s: #141414;
+  --onprimary-suit-h: #c22f21;
+  --onprimary-suit-d: #9e6a00;
+  --onprimary-suit-c: #00775a;
   --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
   --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
-  /* cards read as paper under a lamp at night — warmed off the daylight white, ink/line/
-     suit structure unchanged. */
-  --cardface: #f6f2e9;
+  /* ink-plate negative: a dark card stock lit like the plate above, borrowing this
+     block's own --ink/--suit-* rather than pinning separate literals, so it stays in
+     sync if the night triad ever moves. Lower-contrast against --panel by design (the
+     card reads by its border + glyphs, not a bright rectangle) — see the "Night Card
+     Stock" comparison this was chosen from. */
+  --cardface: #2b2620;
+  --cardface-line: #4d453a;
+  --cardface-ink: var(--ink);
+  --cardface-suit-s: var(--suit-s);
+  --cardface-suit-h: var(--suit-h);
+  --cardface-suit-d: var(--suit-d);
+  --cardface-suit-c: var(--suit-c);
 }
 /* 'system' preference: no data-theme attribute, so the OS setting decides. Scoped to
    :not([data-theme]) so an explicit Day/Night override (which always sets the
@@ -138,13 +149,19 @@
     --negative: #df8069;
     --btn-primary-bg: #ece7dc;
     --btn-primary-fg: #171512;
-    --onprimary-suit-s: var(--cardface-suit-s);
-    --onprimary-suit-h: var(--cardface-suit-h);
-    --onprimary-suit-d: var(--cardface-suit-d);
-    --onprimary-suit-c: var(--cardface-suit-c);
+    --onprimary-suit-s: #141414;
+    --onprimary-suit-h: #c22f21;
+    --onprimary-suit-d: #9e6a00;
+    --onprimary-suit-c: #00775a;
     --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
     --ticket-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
-    --cardface: #f6f2e9;
+    --cardface: #2b2620;
+    --cardface-line: #4d453a;
+    --cardface-ink: var(--ink);
+    --cardface-suit-s: var(--suit-s);
+    --cardface-suit-h: var(--suit-h);
+    --cardface-suit-d: var(--suit-d);
+    --cardface-suit-c: var(--suit-c);
   }
 }
 /* light-on-dark serif renders heavier; night-only smoothing, never as a compensating
