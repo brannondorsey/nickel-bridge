@@ -33,17 +33,29 @@ export const AUTO_PLAY_DELAY_MS = 250;
 // A claim's fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+
 // STAMP_MS since a claim can span many tricks — the glide/collect beats
 // themselves (GLIDE_MS/COLLECT_MS) are untouched, only the gaps between
-// them compress. The announcement banner (Board.tsx) pops up right as the
-// fast-forward starts and stays in place for the whole burst — no separate
-// hold beat or terminal stamp needed.
+// them compress (and compress further still under CLAIM_SPEEDUP_FACTOR,
+// see below). No separate hold beat or terminal stamp needed.
 const CLAIM_GAP_MS = 130;
 export const CLAIM_TRICK_GAP_MS = 110;
 
-// Without motion (reduced-motion, or no WAAPI) there's no fast-forward to
-// hold the banner up for, so Board.tsx displays it for at least this long
-// before jumping straight to the result — same "always applies" reasoning
-// as AUTO_PLAY_DELAY_MS.
-export const CLAIM_MIN_DISPLAY_MS = 1200;
+// Board.tsx no longer starts the fast-forward the instant a claim is
+// detected: the announcement (ClaimOverlay) holds the board for this long —
+// tap/click/Escape dismisses early — so the "N/S CLAIM n REMAINING TRICKS"
+// news can't be missed the way it could when it merely popped up alongside
+// cards already in motion. Applies uniformly whether or not motion is on:
+// without WAAPI (reduced-motion, or no support) there's no fast-forward to
+// animate afterward, but the announcement still deserves its full, deliberate
+// read before Board.tsx jumps straight to the result.
+export const CLAIM_ANNOUNCE_HOLD_MS = 2000;
+
+// Once the announcement is dismissed, the fast-forward itself runs 33%
+// faster than its base pacing above: scaling every gap's duration by 3/4
+// raises speed by 4/3 (⅓ = 33.3%), so this is applied directly to
+// stageClaimSteps' computed delays rather than approximated. Only the gaps
+// scale — GLIDE_MS/COLLECT_MS (TrickArea's own WAAPI durations) are shared
+// with ordinary play and stay untouched, same reasoning as the base pacing
+// above.
+export const CLAIM_SPEEDUP_FACTOR = 0.75;
 
 export interface StagedStep {
   /** delay in ms after the previous step (0 = apply immediately) */
@@ -324,11 +336,14 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
  * Unlike stagePlaySteps, this does NOT end with the real `next` view — every
  * step keeps `state: 'playing'` so the board only flips to 'done' (and the
  * receipt takes over) once the whole fast-forward has played out. Board.tsx
- * owns that final hand-off, along with the announcement banner it keeps
- * visible for the duration, since those are plain timed UI state, not
- * board-view snapshots.
+ * owns that final hand-off, along with the announcement overlay it shows
+ * beforehand, since those are plain timed UI state, not board-view
+ * snapshots.
+ *
+ * `speedFactor` scales every computed gap (default 1 = base pacing); Board.tsx
+ * passes CLAIM_SPEEDUP_FACTOR once the announcement has been dismissed.
  */
-export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] {
+export function stageClaimSteps(prev: BoardView, next: BoardView, speedFactor = 1): StagedStep[] {
   if (prev.state !== 'playing' || next.state !== 'done' || !next.claimed || !next.playHistory) return [];
   if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
 
@@ -378,7 +393,8 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
     const toPlay = ti === 0 ? trick.slice(prevTrick.length) : trick;
     toPlay.forEach((play, i) => {
       played += 1;
-      const delayBefore = ti === 0 && i === 0 ? 0 : i === 0 ? CLAIM_TRICK_GAP_MS : CLAIM_GAP_MS;
+      const baseDelay = ti === 0 && i === 0 ? 0 : i === 0 ? CLAIM_TRICK_GAP_MS : CLAIM_GAP_MS;
+      const delayBefore = Math.round(baseDelay * speedFactor);
       steps.push({
         delayBefore,
         view: lockedView(next, {
@@ -398,7 +414,7 @@ export function stageClaimSteps(prev: BoardView, next: BoardView): StagedStep[] 
     if (winner % 2 === declParity) declCount += 1;
     else defCount += 1;
     steps.push({
-      delayBefore: CLAIM_GAP_MS,
+      delayBefore: Math.round(CLAIM_GAP_MS * speedFactor),
       view: lockedView(next, {
         currentTrick: [],
         completedTricks: doneCount,

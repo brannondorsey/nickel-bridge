@@ -184,9 +184,17 @@ for (const tier of ['beginner', 'intermediate', 'expert']) {
   console.log(`  ${personas[tier].handle} played board ${BOARD_NO}`);
 }
 
-// Recapture the final view — the field now includes the house rows.
-const finalBoard = game.loadBoard(run.t, userId, BOARD_NO, false);
-const final = game.boardView(run.t, finalBoard, 1200);
+// Recapture the final view on the SAME in-memory board captureRun used —
+// boardResult() queries the field fresh from the DB on every call (so the
+// just-added house rows show up regardless), but `claimed` is an in-memory-
+// only flag on the GameBoard (server/src/game.ts's `b.claimed` has no
+// persisted column — see game.ts:275/500), so reloading fresh via
+// loadBoard() here would silently lose it. That's exactly what happened
+// before this fix: the tour's captured tail IS a genuine server-side claim
+// (this deal reaches 100% early), but the shipped view carried no `claimed`
+// flag, so Tour.tsx's stagePlaySteps bailed on the multi-trick jump and fell
+// back to a flat cut straight to the ledger instead of animating the claim.
+const final = game.boardView(run.t, run.b, 1200);
 console.log(`  field: ${final.result.field.map((f) => `${f.handle} ${f.contract} ${f.scoreNS} → ${f.pct}%`).join(' · ')}`);
 
 if (has('write')) {

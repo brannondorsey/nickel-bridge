@@ -14,7 +14,7 @@ import type { TourBoard } from './board0';
  * The line being narrated (all of it the model's own choice — every grade
  * toast honestly reads "the robot's choice too"):
  *   S 1NT · W pass · N 2♥ (Jacoby transfer — artificial) · E pass ·
- *   S 2♠ · W pass · N 3NT (choice of games) · E pass · S 4♠ · all pass.
+ *   S 2♠ · W pass · N 3NT (choice of game) · E pass · S 4♠ · all pass.
  *   W leads the ♥3; dummy's singleton ♥10 holds trick 1; trick 2 starts
  *   trumps from the table; the tail self-plays to 4♠ made exactly, +420.
  */
@@ -44,8 +44,9 @@ export const COPY = {
     no: 'I · THE BRIDGE',
     title: 'A small club, one crossing at a time.',
     body1:
-      'Nickel Bridge is a club for learning bridge by playing it. No timers, no strangers, no lobby of a thousand tables. You sit South, always. Your partner is a robot of even temper; your opponents, two more.',
-    body2: 'The people you’re truly playing are your friends — who cross behind you, on the very same cards.',
+      'Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more.',
+    body2:
+      'The people you’re truly playing came before you, and will come after — each one meeting these same cards alone, in their own hour.',
     aside:
       'Named for the 1925 toll bridge over the James River: a dime to cross, then a nickel, now fifty cents. The name outlived the price.',
   },
@@ -86,19 +87,19 @@ export const COPY = {
 export const STEPS: StepGuidance[] = [
   {
     // 1NT (call 7)
-    say: 'Your hand, counted: fifteen points, evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
+    say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
     offScript: 'Each of these has its meaning — that’s the point of the box. Tonight, though: 1NT, the honest one.',
     expect: 7,
   },
   {
     // 2♠ (call 11), after partner's Jacoby transfer
-    say: 'Marked and filed — every call you make gets graded like that. Now: partner’s 2♥ is a code word, not a heart in sight. Tap it in the auction and read it. It orders you to say 2♠ — obey.',
+    say: 'Marked and filed — every call you make gets graded like that. Now, partner’s 2♥ is a code word. Tap it in the auction and read it. It orders you to say 2♠ — obey.',
     offScript: 'Partner gave an order in code. 2♠ — the transfer must be obeyed.',
     expect: 11,
   },
   {
-    // 4♠ (call 21), over partner's choice-of-games 3NT
-    say: 'Partner shows five spades and offers a choice of games. You hold three spades — eight trumps between you. Take the suit game: 4♠.',
+    // 4♠ (call 21), over partner's choice-of-game 3NT
+    say: 'Partner shows five spades and offers a choice of game. You hold three spades — eight trumps between you. Take the bid to game: 4♠.',
     offScript: 'Playable, perhaps — but with eight trumps between you, the spade game rates best. 4♠.',
     expect: 21,
   },
@@ -109,7 +110,7 @@ export const STEPS: StepGuidance[] = [
   },
   {
     // S follows with the ♥4 (card 15) — the two-step tap
-    say: 'Dummy’s ten is already winning the trick — East couldn’t beat it. Spend nothing: tap your ♥4 to select it, then tap again to play. Deliberate, always.',
+    say: 'Dummy’s ten is already winning the trick — East couldn’t beat it. Spend nothing: tap your ♥4 to select it, then tap again to play.',
     offScript: 'It would win, but the ten already has the trick. The ♥4 keeps your honors for later.',
     expect: 15,
   },

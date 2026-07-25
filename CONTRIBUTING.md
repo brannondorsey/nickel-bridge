@@ -206,18 +206,24 @@ either side is DD-confirmed to win 100% of the remaining tricks, it marks the bo
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
 untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
-needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); an
-announcement banner pops up right as the fast-forward starts and stays in place — the only
-indication a claim happened — while the remaining tricks play out through a separate
-`stageClaimSteps` staging function (kept apart from `stagePlaySteps`, which assumes at most one
-trick boundary per response — a claim can span many), reusing the same glide-in/collect
-machinery `stagePlaySteps` uses for ordinary play, before handing off to the normal completion
-view. Because the solve only runs at a decision point with more than one legal card, the trick
-already in progress when the client's last request went out can still finish for either side
-before the guaranteed run of claim tricks begins — `claimAnnouncement`/`stageClaimSteps` tally
-each newly-completed trick by its actual winner rather than assuming the whole batch belongs to
-the claiming side. See invariant 1 below — claims change what `advanceRobots` records for a
-human's untaken decisions, so they interact directly with the robot-trace fixture.
+needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); rather
+than starting the fast-forward the instant a claim is detected (easy to miss, since the old
+announcement banner popped up alongside cards already in motion), `Board.tsx`'s `runClaim` holds
+the board on a modal `ClaimOverlay` for `CLAIM_ANNOUNCE_HOLD_MS` — tap, click, or Escape
+dismisses early — before the remaining tricks play out through a separate `stageClaimSteps`
+staging function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
+response — a claim can span many), reusing the same glide-in/collect machinery `stagePlaySteps`
+uses for ordinary play but at `CLAIM_SPEEDUP_FACTOR` pacing (33% faster than the claim's already-
+compressed base gaps), before handing off to the normal completion view. The hold applies
+whether or not motion is on — without a fast-forward to animate afterward there's nothing to
+hold the announcement up *for*, but it still deserves its full, dismissible read before jumping
+straight to the result. Because the solve only runs at a decision point with more than one legal
+card, the trick already in progress when the client's last request went out can still finish for
+either side before the guaranteed run of claim tricks begins — `claimAnnouncement`/
+`stageClaimSteps` tally each newly-completed trick by its actual winner rather than assuming the
+whole batch belongs to the claiming side. See invariant 1 below — claims change what
+`advanceRobots` records for a human's untaken decisions, so they interact directly with the
+robot-trace fixture.
 
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
@@ -387,15 +393,15 @@ the recipe with the tool, label it from the tester's point of view) — the drif
 keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
 **The first crossing (onboarding):** a new account gets the toll office's pamphlet before
-the app — a cover ("So you've come to cross."), the philosophy panel (I · THE BRIDGE), and
-duplicate as a specimen ledger (II · THE LEDGER), perforation-dot pager, honest skip on
-every page — then the tollkeeper's practice board. `users.onboarded_at` NULL makes
-`App.tsx` render `pages/Tour.tsx` in place of the routes, but only when the session
-*arrived* at the main app (`/`, captured once at mount): a deep-link arrival goes straight
-to its destination and meets the tour on a later home arrival instead, and navigating home
-mid-session never springs it. `POST /api/me/onboarded` (write-once, stamped on finishing
-*or* skipping) ends the gate; existing accounts were grandfathered as onboarded by the
-migration, demo mode suppresses the automatic gate like the splash, and `/tour` stays
+the app — a cover ("Welcome to the bridge."), the philosophy panel (I · THE BRIDGE), and
+duplicate as a specimen ledger (II · THE LEDGER), a quiet "skip the tutorial" fine-print
+link at the foot of every page — then the tollkeeper's practice board. `users.onboarded_at`
+NULL makes `App.tsx` render `pages/Tour.tsx` in place of the routes, but only when the
+session *arrived* at the main app (`/`, captured once at mount): a deep-link arrival goes
+straight to its destination and meets the tour on a later home arrival instead, and
+navigating home mid-session never springs it. `POST /api/me/onboarded` (write-once, stamped
+on finishing *or* skipping) ends the gate; existing accounts were grandfathered as onboarded
+by the migration, demo mode suppresses the automatic gate like the splash, and `/tour` stays
 routed for replays — the Glossary files it as a ledger term (the 'First crossing' easter
 egg, aliased "app tour", whose sheet links there via terms.ts's `action` field) and demo's
 Exhibit Hall row points there too. The tour's practice board (`web/src/onboarding/`) is **not a server
@@ -403,14 +409,22 @@ board**: `tools/gen_tour_board.mjs` drives the real engine offline — model-arg
 calls (so every grade toast honestly reads "the robot's choice too"), DD card play, real
 SAYC meanings on every legal call, and the three benchmark personas genuinely playing the
 same deal at their tiers for the field — and captures every decision-point `boardView`
-into `board0.json` (lazy-loaded). `Tour.tsx` replays those views through Board.tsx's
-exported `BiddingPhase`/`PlayPhase` (the literal board UI, plus the tollkeeper narration
-ribbon and an optional `hint` pulse threaded through BidBox/HandFan), staging robot bursts
-with the same `stagePlaySteps` the live board uses; off-script selections show their real
-meanings but only the scripted line commits, and the tail past the curated steps
-self-plays. Narration lives in `onboarding/script.ts`, hand-curated against the capture —
-`onboarding/tour.test.tsx` is the drift guard that forces re-curation if the capture is
-regenerated onto a different line.
+into `board0.json` (lazy-loaded). Because the capture is driven by the SAME in-memory
+`GameBoard` throughout, it also correctly preserves a genuine claim if this deal's contract
+resolves early (`b.claimed` has no persisted DB column — a naive reload after the
+persona-play step would silently lose it and turn the tail into an unanimated cut straight
+to the ledger, which is exactly the bug that shipped before this was fixed; see the tool's
+doc comment). `Tour.tsx` replays those views through Board.tsx's exported
+`BiddingPhase`/`PlayPhase` (the literal board UI, plus the tollkeeper narration ribbon and
+an optional `hint` pulse threaded through BidBox/HandFan), staging ordinary robot bursts
+with the same `stagePlaySteps` the live board uses and a captured claim tail with the same
+`ClaimOverlay` + `stageClaimSteps` fast-forward `Board.tsx` uses (see "Auto-play and claims"
+above); off-script selections show their real meanings but only the scripted line commits,
+and the tail past the curated steps self-plays — a forced-but-guided step (one with real
+narration to read) gets a full `GUIDED_FORCED_DELAY_MS` beat rather than the live board's
+near-instant auto-play delay. Narration lives in `onboarding/script.ts`, hand-curated
+against the capture — `onboarding/tour.test.tsx` is the drift guard that forces re-curation
+if the capture is regenerated onto a different line.
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
@@ -428,11 +442,16 @@ module-level constants next to the functions that use them. Match that style.
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
 the suit triad, etc.); everything built on those via `var()` — including the semantic
 aliases and the ink-plate components (`FlipDigits`, `HcpBadge`, selected bid buttons,
-`.ds-btn.btn-primary`) — repaints automatically. Playing-card faces are mostly pinned
-regardless of theme (`--cardface-ink`/`-line`/`-suit-*` are hardcoded literals, never
-overridden) except for the paper color itself: `--cardface` is stark daylight white by
-default and warms to a lamplit cream in the night override, the same "printed paper
-under a lamp" idea applied to the card rather than held fixed against it. The
+`.ds-btn.btn-primary`) — repaints automatically. Playing-card faces are a fixed paper/ink
+plate by day (`--cardface`/`-ink`/`-line`/`-suit-*`, stark white with pinned dark ink), but
+night overrides the whole set to an "ink-plate negative" — dark stock (`#2b2620`), light
+ink/suits borrowed from the night `--ink`/`--suit-*` triad via `var()` — rather than just
+dimming the paper color, the same idea already applied to `.ds-btn.btn-primary` turned
+around: there, a light plate keeps dark (daytime) suit glyphs at night, so
+`--onprimary-suit-*` had to stop referencing `--cardface-suit-*` and spell out that daytime
+triad literally once `--cardface-suit-*` itself started flipping to light colors at night.
+Deliberately low luminance contrast against `--panel` — the card reads by its border and
+glyphs, not a bright rectangle, the opposite trade-off from the daytime card. The
 `BridgeMark` glyph/footer stays fully pinned (already `var(--verdigris)`, lifted to its
 night value like any other token). Default is `prefers-color-scheme`, no
 attribute set; the Stats page's Day/Night/Adaptive/System switch (`theme.ts`, `nb:theme`

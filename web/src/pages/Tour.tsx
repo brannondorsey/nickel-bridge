@@ -20,9 +20,18 @@ import { CallText } from '../components/game/CallText';
 import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
+import {
+  CLAIM_ANNOUNCE_HOLD_MS,
+  CLAIM_SPEEDUP_FACTOR,
+  ClaimAnnouncement,
+  StagedStep,
+  claimAnnouncement,
+  motionOK,
+  stageClaimSteps,
+  stagePlaySteps,
+} from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { SuitText } from '../components/game/SuitText';
-import { AUTO_PLAY_DELAY_MS, motionOK, stagePlaySteps } from '../components/game/playAnim';
 import { postmarkDate, signedScore, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
 import { COPY, guidanceFor } from '../onboarding/script';
@@ -51,6 +60,18 @@ import { BiddingPhase, PlayPhase } from './Board';
  * null; it is also routed at /tour for revisits (and for demo-mode testers,
  * for whom the automatic gate is suppressed like the splash).
  */
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// A forced-but-guided decision (right now, only the dummy's forced opening-
+// lead follow) still carries a full narration line worth reading — the
+// live board's AUTO_PLAY_DELAY_MS (250ms, tuned for a trivial single-legal-
+// card tap with nothing to read) blew right past it. Give guided steps a
+// real beat before they self-advance.
+const GUIDED_FORCED_DELAY_MS = 2600;
+// The self-playing tail (steps with no curated guidance) — brief, since
+// there's no narration line to read, just the fastForward copy repeating.
+const AUTO_STEP_DELAY_MS = 420;
 
 type Stage = 'cover' | 'bridge' | 'ledger' | 'offer' | 'board' | 'postmark';
 
@@ -193,7 +214,7 @@ export default function Tour() {
         <h1 className="tour-title">{COPY.offerTitle}</h1>
         <p className="tour-copy">{COPY.offerBody}</p>
         <div className="tour-offer-actions">
-          <Button onClick={() => setStage('board')}>TAKE THE PRACTICE BOARD →</Button>
+          <Button onClick={() => setStage('board')}>PRACTICE →</Button>
         </div>
         <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
           {COPY.skip}
@@ -251,7 +272,11 @@ function Tollkeeper({ text }: { text: string }) {
  * scripted action (off-script selections show their real meaning plus a
  * gentle redirect), auto decisions self-play the tail. Transitions between
  * captured views reuse stagePlaySteps, so robot cards glide/collect exactly
- * as on a live board — auto-run transitions play at claim-fast-forward pace.
+ * as on a live board — auto-run transitions play sped up. This deal's
+ * contract is decided early enough that the capture's tail IS a genuine
+ * server-side claim (see gen_tour_board.mjs), so the last transition uses
+ * the same ClaimOverlay + stageClaimSteps fast-forward the live board does,
+ * instead of the flat cut a multi-trick jump would otherwise fall back to.
  */
 function PracticeBoard({ onDone }: { onDone: () => void }) {
   const [data, setData] = useState<TourBoard | null>(null);
@@ -280,33 +305,108 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
   }, []);
 
   // Staged-transition timers, mirroring Board.tsx's scheduleSteps (with a
-  // speed factor for the self-playing tail). Cancelled on unmount.
+  // speed factor for the self-playing tail).
   const timersRef = useRef<number[]>([]);
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
   }, []);
-  useEffect(() => clearTimers, [clearTimers]);
 
-  const applyTransition = useCallback(
-    (prev: BoardView, next: BoardView, speed: number) => {
+  // Claim state, mirroring Board.tsx's runClaim: the captured tail can BE a
+  // genuine server-side claim (this deal's contract is 100% decided early —
+  // see gen_tour_board.mjs's doc comment on why the capture must preserve
+  // that). stagePlaySteps only ever stages a single trick boundary, so a
+  // multi-trick claim jump needs the same announcement + sped-up
+  // fast-forward the live board uses, or it falls back to an unanimated cut
+  // straight to the ledger. claimGenRef invalidates an in-flight sequence
+  // the same way it does in Board.tsx (a fresher commit, or unmount).
+  const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
+  const [claimAnnounceOpen, setClaimAnnounceOpen] = useState(false);
+  const claimGenRef = useRef(0);
+  const claimSkipRef = useRef<(() => void) | null>(null);
+  const skipClaimAnnouncement = useCallback(() => claimSkipRef.current?.(), []);
+
+  useEffect(
+    () => () => {
       clearTimers();
-      const steps = motionOK() ? stagePlaySteps(prev, next) : [];
-      if (!steps.length) {
-        // bidding→bidding (or reduced motion): land after a beat, as if the
-        // robots took a moment to reply
-        const id = window.setTimeout(() => setView(next), motionOK() ? 500 : 0);
-        timersRef.current.push(id);
-        return;
-      }
+      claimGenRef.current++;
+      claimSkipRef.current = null;
+    },
+    [clearTimers],
+  );
+
+  // Schedules already-computed steps on timers; returns the total duration
+  // so runClaim (below) can await it, same split Board.tsx's scheduleSteps
+  // enables for its own runClaim.
+  const scheduleSteps = useCallback(
+    (steps: StagedStep[], speed = 1) => {
+      clearTimers();
       let at = 0;
       for (const step of steps) {
         at += Math.max(step.delayBefore * speed, step.delayBefore > 0 ? 60 : 0);
         const id = window.setTimeout(() => setView(step.view), at);
         timersRef.current.push(id);
       }
+      return at;
     },
     [clearTimers],
+  );
+
+  const applyTransition = useCallback(
+    (prev: BoardView, next: BoardView, speed: number) => {
+      const steps = motionOK() ? stagePlaySteps(prev, next) : [];
+      if (!steps.length) {
+        // bidding→bidding (or reduced motion): land after a beat, as if the
+        // robots took a moment to reply
+        clearTimers();
+        const id = window.setTimeout(() => setView(next), motionOK() ? 500 : 0);
+        timersRef.current.push(id);
+        return;
+      }
+      scheduleSteps(steps, speed);
+    },
+    [clearTimers, scheduleSteps],
+  );
+
+  // Bracket a claim the same two ways Board.tsx does: an unmissable,
+  // dismissible announcement (tap/click/Escape via ClaimOverlay, rendered by
+  // the shared PlayPhase below), THEN the sped-up fast-forward, before
+  // handing off to the real (done) `next` view.
+  const runClaim = useCallback(
+    async (prev: BoardView, next: BoardView) => {
+      const info = claimAnnouncement(prev, next);
+      if (!info) {
+        applyTransition(prev, next, 0.35); // data didn't line up — fall back to a plain cut
+        return;
+      }
+      const gen = ++claimGenRef.current;
+      setClaimInfo(info);
+      setClaimAnnounceOpen(true);
+      await new Promise<void>((resolve) => {
+        const timer = window.setTimeout(finish, CLAIM_ANNOUNCE_HOLD_MS);
+        function finish() {
+          window.clearTimeout(timer);
+          claimSkipRef.current = null;
+          resolve();
+        }
+        claimSkipRef.current = finish;
+      });
+      if (claimGenRef.current !== gen) return;
+      setClaimAnnounceOpen(false);
+
+      if (motionOK()) {
+        const steps = stageClaimSteps(prev, next, CLAIM_SPEEDUP_FACTOR);
+        if (steps.length) {
+          const totalMs = scheduleSteps(steps);
+          await sleep(totalMs);
+          if (claimGenRef.current !== gen) return;
+        }
+      }
+      setClaimInfo(null);
+      clearTimers();
+      setView(next);
+    },
+    [applyTransition, scheduleSteps, clearTimers],
   );
 
   const idxRef = useRef(idx);
@@ -326,20 +426,29 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
       setOffScript(null);
       setInspect(null);
       setIdx(i + 1);
-      applyTransition(step.view, next, auto ? 0.35 : 1);
+      if (next.claimed && step.view.state === 'playing') {
+        runClaim(step.view, next);
+      } else {
+        applyTransition(step.view, next, auto ? 0.35 : 1);
+      }
     },
-    [data, applyTransition],
+    [data, applyTransition, runClaim],
   );
 
   // Self-playing decisions: the scripted tail (guidance `auto`), plus any
-  // forced single-card turn — same treatment as Board.tsx's auto-play.
+  // forced single-card turn — same treatment as Board.tsx's auto-play. A
+  // guided-but-forced decision (right now, only the dummy's forced opening-
+  // lead follow) still has a full narration line worth reading, so it gets
+  // GUIDED_FORCED_DELAY_MS instead of the live board's near-instant
+  // auto-play delay — that line was disappearing before a player could
+  // read it.
   const step = data?.steps[idx];
   const guidance = data ? guidanceFor(idx, data) : null;
   useEffect(() => {
     if (!data || !step || view !== step.view) return;
     const forced = step.kind === 'card' && step.view.legalCards?.length === 1;
     if (!guidance?.auto && !forced) return;
-    const delay = !motionOK() ? 0 : forced && !guidance?.auto ? AUTO_PLAY_DELAY_MS : 420;
+    const delay = !motionOK() ? 0 : guidance?.auto ? AUTO_STEP_DELAY_MS : GUIDED_FORCED_DELAY_MS;
     const id = window.setTimeout(() => commit(Boolean(guidance?.auto)), delay);
     return () => clearTimeout(id);
   }, [data, step, view, guidance, commit]);
@@ -420,7 +529,9 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
           onSelectCard={onSelectCard}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
-          claimInfo={null}
+          claimInfo={claimInfo}
+          claimAnnounceOpen={claimAnnounceOpen}
+          onSkipClaim={skipClaimAnnouncement}
           hint={guided && !forced && step?.kind === 'card' && selectedCard === null ? step.action : null}
         />
       ) : (

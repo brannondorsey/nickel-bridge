@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { claimAnnouncement, stageClaimSteps } from '../components/game/playAnim';
 import Tour from '../pages/Tour';
 import { meFreshCrosser } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
@@ -59,6 +60,23 @@ describe('first-crossing script ↔ capture drift guard', () => {
     // the tail past the curated steps self-plays
     expect(guidanceFor(STEPS.length, data).auto).toBe(true);
   });
+
+  it('the captured tail is a genuine claim the tour can animate, not a flat cut to the ledger', () => {
+    // Regression guard for the bug this capture fixed: gen_tour_board.mjs
+    // used to reload the board fresh from the DB before recapturing `final`
+    // (to pick up the persona field rows), which silently lost the
+    // in-memory-only `claimed` flag (server/src/game.ts's b.claimed has no
+    // persisted column) — Tour.tsx's stagePlaySteps can't stage a
+    // multi-trick jump, so it fell back to an unanimated cut straight to
+    // the ledger instead of the claim announcement + fast-forward.
+    expect(data.final.claimed).toBe(true);
+    const last = data.steps[data.steps.length - 1];
+    expect(last.view.state).toBe('playing');
+    // the exact two inputs Tour.tsx's runClaim needs to actually animate it
+    const info = claimAnnouncement(last.view, data.final);
+    expect(info).not.toBeNull();
+    expect(stageClaimSteps(last.view, data.final).length).toBeGreaterThan(0);
+  });
 });
 
 describe('the first crossing (Tour)', () => {
@@ -86,7 +104,7 @@ describe('the first crossing (Tour)', () => {
     expect(screen.getByText('Margaret')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
     // III · THE PRACTICE — the board №0 offer
-    expect(screen.getByRole('button', { name: /take the practice board/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /practice/i })).toBeInTheDocument();
   });
 
   it(
@@ -101,11 +119,12 @@ describe('the first crossing (Tour)', () => {
       await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
       await user.click(await screen.findByRole('button', { name: /continue/i }));
       await user.click(await screen.findByRole('button', { name: /continue/i }));
-      await user.click(await screen.findByRole('button', { name: /take the practice board/i }));
+      await user.click(await screen.findByRole('button', { name: /practice/i }));
 
       // decision 0 — the real bid box, meanings before commit
       const nt = await screen.findByRole('button', { name: '1NT' });
       expect(container.querySelector('.bidbox')).toBeTruthy();
+      expect(screen.getByText(/fifteen high card points \(HCP\)/)).toBeInTheDocument();
       // exploring off-script shows the real meaning; committing it is redirected
       await user.click(screen.getByRole('button', { name: '2♣' }));
       expect(container.querySelector('.meaning-panel')).toBeTruthy();
@@ -129,14 +148,18 @@ describe('the first crossing (Tour)', () => {
       await user.click(screen.getByRole('button', { name: 'Bid 2♠' }));
 
       // decision 2 — accept the spade game
-      await screen.findByText(/choice of games/);
+      await screen.findByText(/choice of game\b/);
       await user.click(screen.getByRole('button', { name: '4♠' }));
       await user.click(screen.getByRole('button', { name: 'Bid 4♠' }));
 
-      // play: dummy comes down; the forced ♥10 self-plays (real auto-play path)
+      // play: dummy comes down; the forced ♥10 self-plays, but only after a
+      // real beat to read the narration (GUIDED_FORCED_DELAY_MS — this line
+      // used to vanish in ~250ms, too fast to read)
       await screen.findByText(/lays their hand on the table/);
-      // decision 4 — two-step tap on the ♥4 (card 15)
+      // decision 4 — two-step tap on the ♥4 (card 15); "Deliberate, always"
+      // was dropped from this line per review
       await screen.findByText(/Dummy’s ten is already winning/);
+      expect(screen.queryByText(/Deliberate, always/)).not.toBeInTheDocument();
       const heart4 = () => container.querySelector('[data-card="15"]') as HTMLElement;
       await waitFor(() => expect(heart4()).toBeTruthy());
       await user.click(heart4());
@@ -148,7 +171,14 @@ describe('the first crossing (Tour)', () => {
       await user.click(spade2());
       await user.click(spade2());
 
-      // the tail self-plays to the real receipt…
+      // the tail self-plays through ordinary tricks, then hits this deal's
+      // genuine claim — the same ClaimOverlay the live board uses (tap to
+      // dismiss early), not a silent cut straight to the ledger
+      const claimOverlay = await screen.findByRole('dialog', { name: /claim/i }, { timeout: 15000 });
+      expect(claimOverlay).toHaveTextContent(/CLAIM/);
+      await user.click(claimOverlay);
+
+      // the tail finishes to the real receipt…
       await user.click(await screen.findByRole('button', { name: /see the field/i }, { timeout: 15000 }));
       // …and the ledger reveal: the genuine house field
       expect(await screen.findByText('The Shark')).toBeInTheDocument();

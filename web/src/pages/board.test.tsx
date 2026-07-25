@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, TrickCard } from '../api';
-import { AUTO_PLAY_DELAY_MS, CLAIM_MIN_DISPLAY_MS } from '../components/game/playAnim';
+import { AUTO_PLAY_DELAY_MS, CLAIM_ANNOUNCE_HOLD_MS } from '../components/game/playAnim';
 import {
   bid2H,
   boardBidding,
@@ -350,7 +350,11 @@ describe('Board — auto-play', () => {
 });
 
 describe('Board — claims', () => {
-  it('pops the announcement banner right as the fast-forward starts, keeps it in place, then hands off cleanly', async () => {
+  // Shared fixture builder: North (NS) wins every one of the "claimed" tricks
+  // below on the ace of clubs — unlike placeholderTrick (used only for the
+  // already-accounted-for history entries these tests slice off), these
+  // ones' winners actually back the declarerTricks/defenderTricks tallies.
+  const buildClaimed = (): BoardView => {
     const soleCard = boardPlaying.legalCards![1]; // Q♠ — completes the trick in progress
     const fullTrick: TrickCard[] = [...boardPlaying.currentTrick!, { seat: 2, card: soleCard }];
     const placeholderTrick: TrickCard[] = [
@@ -359,17 +363,13 @@ describe('Board — claims', () => {
       { seat: 2, card: 31 },
       { seat: 3, card: 32 },
     ];
-    // North (NS) wins every one of these on the ace of clubs — unlike
-    // placeholderTrick (used only for the already-accounted-for history
-    // entries this test slices off), these ones' winners actually back the
-    // declarerTricks/defenderTricks tallies below.
     const claimTrick: TrickCard[] = [
       { seat: 0, card: 39 + 12 }, // North: A♣
       { seat: 1, card: 39 + 1 },
       { seat: 2, card: 39 + 2 },
       { seat: 3, card: 39 + 3 },
     ];
-    const claimed: BoardView = {
+    return {
       ...boardPlaying,
       contract: { level: 4, strain: 3, declarer: 2 }, // spades trump, South declares
       state: 'done',
@@ -390,16 +390,19 @@ describe('Board — claims', () => {
       result: boardDone.result,
       allHands: boardDone.allHands,
     };
+  };
+
+  it('shows the claim announcement immediately, holds the board for CLAIM_ANNOUNCE_HOLD_MS, then hands off cleanly', async () => {
     apiMock.board.mockResolvedValue(boardPlaying);
-    apiMock.playCard.mockResolvedValue({ board: claimed });
+    apiMock.playCard.mockResolvedValue({ board: buildClaimed() });
 
     // jsdom has no WAAPI, so motionOK() is always false here — the same
-    // path a reduced-motion user hits — which is exactly the path that used
-    // to unmount the banner instantly (see CLAIM_MIN_DISPLAY_MS). Fake
-    // timers make that fixed, deterministic hold precisely steppable.
-    // userEvent's own internal pointer-event machinery doesn't interleave
-    // with fake timers reliably, so the two taps use the lower-level
-    // fireEvent instead.
+    // path a reduced-motion user hits, and the announcement hold applies
+    // regardless (see CLAIM_ANNOUNCE_HOLD_MS's doc comment). Fake timers
+    // make that fixed, deterministic hold precisely steppable. userEvent's
+    // own internal pointer-event machinery doesn't interleave with fake
+    // timers reliably, so the two taps use the lower-level fireEvent
+    // instead.
     vi.useFakeTimers();
     try {
       renderBoard();
@@ -408,26 +411,54 @@ describe('Board — claims', () => {
       fireEvent.click(queen);
       fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
 
-      // pops up right as the claim is detected — no artificial hold first.
-      // Two zero-length advances: React 19 resolves the playCard mock's
-      // promise chain over two microtask-queue drains, not one.
+      // pops up right as the claim is detected — no delay before the
+      // announcement itself appears. Two zero-length advances: React 19
+      // resolves the playCard mock's promise chain over two
+      // microtask-queue drains, not one.
       await vi.advanceTimersByTimeAsync(0);
       await vi.advanceTimersByTimeAsync(0);
-      expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('N/S CLAIM')).toBeInTheDocument();
+      expect(screen.getByText('9 REMAINING TRICKS')).toBeInTheDocument();
       expect(screen.getByText(/Laydown confirmed/)).toBeInTheDocument();
 
-      // ...and, unlike a one-shot toast, stays in place — still up, and the
-      // board hasn't jumped to the result yet, partway through the hold
-      await vi.advanceTimersByTimeAsync(CLAIM_MIN_DISPLAY_MS / 2);
-      expect(screen.getByText('N/S CLAIM 9 REMAINING TRICKS')).toBeInTheDocument();
+      // ...and stays up — still showing, board hasn't jumped to the result
+      // yet, partway through the hold
+      await vi.advanceTimersByTimeAsync(CLAIM_ANNOUNCE_HOLD_MS / 2);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.queryByText('SCORED')).not.toBeInTheDocument();
 
-      // ...then clears cleanly on hand-off to the normal completion view,
-      // with no separate terminal stamp
-      await vi.advanceTimersByTimeAsync(CLAIM_MIN_DISPLAY_MS);
+      // ...then clears cleanly on hand-off to the normal completion view
+      // once the hold elapses, with no separate terminal stamp
+      await vi.advanceTimersByTimeAsync(CLAIM_ANNOUNCE_HOLD_MS);
       await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
-      expect(screen.queryByText('N/S CLAIM 9 REMAINING TRICKS')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.queryByText('TOLLS CLAIMED')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets the player tap through the claim announcement before the hold elapses', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: buildClaimed() });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      // tap dismisses well before CLAIM_ANNOUNCE_HOLD_MS would elapse on its own
+      fireEvent.click(screen.getByRole('dialog'));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
