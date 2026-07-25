@@ -2576,20 +2576,51 @@ a.stat-tile:hover {
 .tourney-page .tourney-boards {
   margin: 16px 16px 0;
   display: grid;
-  grid-template-columns: 18px 1fr auto auto;
-  gap: 7px 12px;
+  grid-template-columns: 18px 1fr auto auto 9px;
+  gap: 2px 12px;
   font-size: 13.5px;
   align-items: center;
 }
 .tourney-page .tourney-boards .perf-panel-heading {
   grid-column: 1 / -1;
 }
-/* display: contents lets each line's cells join the panel's single grid
-   above instead of forming their own grid — otherwise each row sizes its
-   "auto" score/pct columns from its own content and the pct bars drift
-   out of alignment depending on how wide the neighboring score is. */
+/* Each line is a link into its board, but its cells still belong to the
+   panel's single grid via subgrid — otherwise every row would size its own
+   "auto" score/pct columns and the pct bars would drift out of alignment
+   depending on how wide the neighboring score is. */
 .tourney-board-line {
-  display: contents;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  /* bleed the tap target toward the panel edges without crossing the
+     perforation, so the pressed row reads as a full ledger line */
+  margin: 0 -8px;
+  padding: 5px 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.tourney-board-line:active {
+  background: var(--surface);
+}
+@media (hover: hover) {
+  .tourney-board-line:hover {
+    background: var(--surface);
+  }
+}
+.tourney-board-open {
+  font-family: var(--font-label);
+  color: var(--muted);
+  text-align: right;
+  line-height: 1;
+}
+.tourney-boards-hint {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 .tourney-board-no {
   font-family: var(--font-label);

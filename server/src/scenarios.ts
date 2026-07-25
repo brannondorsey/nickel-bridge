@@ -212,7 +212,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'tournament-complete',
     label: 'A tournament, paid in full',
     description:
-      'Board 4 of 4, one card left. Play it and the receipt prints — then, because it’s the last board, TOURNAMENT SUMMARY unlocks: match percentage, rank, and every board’s toll at once. (No rating line: exhibits never rate, same as any unrated tournament — not a bug.)',
+      'Board 4 of 4, one card left. Play it and the receipt prints — then, because it’s the last board, TOURNAMENT SUMMARY unlocks: match percentage, rank, every board’s toll, and the final field, all on one page. Each ledger line taps back into that board. (No rating line: exhibits never rate, same as any unrated tournament — not a bug.)',
     category: 'results',
     seed: 'finale-1',
     boardNo: 4,
