@@ -68,7 +68,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 // live board's AUTO_PLAY_DELAY_MS (250ms, tuned for a trivial single-legal-
 // card tap with nothing to read) blew right past it. Give guided steps a
 // real beat before they self-advance.
-const GUIDED_FORCED_DELAY_MS = 3400;
+const GUIDED_FORCED_DELAY_MS = 6000;
 // The self-playing tail (steps with no curated guidance) — brief, since
 // there's no narration line to read, just the fastForward copy repeating.
 const AUTO_STEP_DELAY_MS = 420;
@@ -93,7 +93,12 @@ export default function Tour() {
   const [busy, setBusy] = useState(false);
 
   // Skipping and finishing both stamp the visit server-side (idempotent,
-  // write-once — replays never move it).
+  // write-once — replays never move it). `finally` resets `busy` on every
+  // path: a thrown setOnboarded (session hiccup, transient network failure)
+  // is swallowed so the gate never traps anyone, but without resetting busy
+  // here every skip/continue control on the page — all `disabled={busy}` —
+  // would stay wedged for the rest of the session, since a failed call never
+  // flips onboardedAt and App.tsx keeps rendering this same Tour instance.
   const skip = async () => {
     if (busy) return;
     setBusy(true);
@@ -101,6 +106,8 @@ export default function Tour() {
       await api.setOnboarded();
     } catch {
       /* the gate must never trap anyone — proceed regardless */
+    } finally {
+      setBusy(false);
     }
     if (routed) navigate('/');
     refresh();
@@ -118,6 +125,8 @@ export default function Tour() {
       // placement failed (offline?) — fall back to the lobby rather than trap
       navigate('/');
       refresh();
+    } finally {
+      setBusy(false);
     }
   };
 

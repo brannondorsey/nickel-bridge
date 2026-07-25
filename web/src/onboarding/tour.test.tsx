@@ -90,6 +90,29 @@ describe('the first crossing (Tour)', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
+  it('a failed setOnboarded never wedges "skip the tutorial" — busy always resets (PR #87 review)', async () => {
+    // A thrown setOnboarded (session hiccup, transient network failure) is
+    // swallowed so the gate never traps anyone — but if a stale build never
+    // reset `busy` in a finally, App.tsx would keep rendering this same Tour
+    // instance (onboardedAt never flipped) with every disabled={busy}
+    // control wedged for the rest of the session. Cover both failure and
+    // the subsequent successful retry.
+    apiMock.setOnboarded.mockRejectedValueOnce(new Error('network hiccup'));
+    const user = userEvent.setup();
+    const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
+    const skipBtn = await screen.findByRole('button', { name: /skip the tutorial/i });
+    await user.click(skipBtn);
+    await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalledTimes(1));
+    // the failed call still calls refresh() (App.tsx re-renders the same
+    // un-onboarded Tour) — the skip control must not be stuck disabled
+    await waitFor(() => expect(skipBtn).toBeEnabled());
+
+    apiMock.setOnboarded.mockResolvedValueOnce({ ok: true });
+    await user.click(skipBtn);
+    await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
   it('reads the pamphlet: philosophy panel, then duplicate as a specimen ledger', async () => {
     const user = userEvent.setup();
     renderWithMe(<Tour />, { me: meFreshCrosser });
