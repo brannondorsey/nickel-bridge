@@ -396,8 +396,9 @@ to its destination and meets the tour on a later home arrival instead, and navig
 mid-session never springs it. `POST /api/me/onboarded` (write-once, stamped on finishing
 *or* skipping) ends the gate; existing accounts were grandfathered as onboarded by the
 migration, demo mode suppresses the automatic gate like the splash, and `/tour` stays
-routed for replays — the Glossary's APP TOUR row and demo's Exhibit Hall row both point
-there. The tour's practice board (`web/src/onboarding/`) is **not a server
+routed for replays — the Glossary files it as a ledger term (the 'First crossing' easter
+egg, aliased "app tour", whose sheet links there via terms.ts's `action` field) and demo's
+Exhibit Hall row points there too. The tour's practice board (`web/src/onboarding/`) is **not a server
 board**: `tools/gen_tour_board.mjs` drives the real engine offline — model-argmax human
 calls (so every grade toast honestly reads "the robot's choice too"), DD card play, real
 SAYC meanings on every legal call, and the three benchmark personas genuinely playing the

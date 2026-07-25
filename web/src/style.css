@@ -3429,25 +3429,15 @@ a.stat-tile:hover {
   margin: 14px 0 2px;
 }
 
-/* The Glossary's APP TOUR row: the tour's permanent re-entry (pages/Tour.tsx
-   stays routed at /tour; the onboarding stamp is write-once, so replays are
-   free). Sits at the ledger's foot, above the attribution. */
-.gloss-tour {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 12px 14px;
-  margin: 18px 0 0;
-}
-.gloss-tour-copy {
-  margin: 4px 0 8px;
-  font-style: italic;
-  font-size: 14px;
-  color: var(--muted);
-}
-.gloss-tour-link {
+/* A term sheet's action link (terms.ts `action` — the ledger's easter-egg
+   terms, currently only First crossing → /tour). */
+.gloss-action {
+  display: inline-block;
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
+  margin-top: 12px;
+  padding: 4px 0;
 }
 
 /* The quiet skip: fine print at each pamphlet page's foot — always in the

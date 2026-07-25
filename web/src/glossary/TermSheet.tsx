@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Dialog } from '../components/ds/Dialog';
 import { GlossaryProse } from '../components/game/GlossaryProse';
 import { SuitText } from '../components/game/SuitText';
@@ -61,6 +62,13 @@ export function TermSheet({
             </button>
           ))}
         </div>
+      ) : null}
+      {term.action ? (
+        // navigating away drops the ?term= param, so the sheet closes itself;
+        // browser back returns here with the sheet still open
+        <Link to={term.action.to} className="label-caps gloss-action">
+          {term.action.label}
+        </Link>
       ) : null}
       <Attribution />
     </Dialog>

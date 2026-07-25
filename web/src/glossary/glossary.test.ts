@@ -39,8 +39,12 @@ describe('glossary core data', () => {
     }
   });
 
-  it('covers the whole curated sheet', () => {
-    expect(TERMS.length).toBe(124);
+  it('covers the whole curated sheet (plus the First crossing easter egg)', () => {
+    expect(TERMS.length).toBe(125);
+    // the ledger's one non-bridge entry: the app tour, filed as a term
+    const egg = TERMS.find((t) => t.slug === 'first-crossing');
+    expect(egg?.action?.to).toBe('/tour');
+    expect(egg?.linkify).toBe(false); // never auto-linked in game prose
   });
 
   it('never lets two terms claim the same linkable name/alias', () => {

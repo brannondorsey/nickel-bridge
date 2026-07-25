@@ -30,16 +30,22 @@ function renderGlossary(route = '/glossary') {
 }
 
 describe('Glossary page', () => {
-  it('carries the APP TOUR re-entry at the ledger foot', () => {
+  it('files the app tour as a ledger term (the easter egg): searchable, sheet links to /tour', async () => {
+    const user = userEvent.setup();
     renderGlossary();
-    const replay = screen.getByRole('link', { name: /replay the tour/i });
-    expect(replay).toHaveAttribute('href', '/tour');
+    // found under its aliases, like any other term
+    await user.type(screen.getByPlaceholderText(/search/i), 'app tour');
+    const row = screen.getByRole('button', { name: /First crossing/ });
+    await user.click(row);
+    const sheet = await screen.findByRole('dialog');
+    expect(sheet).toHaveTextContent(/practice board №0/);
+    expect(within(sheet).getByRole('link', { name: /walk it again/i })).toHaveAttribute('href', '/tour');
   });
 
   it('renders the A–Z core ledger with letter heads and theme badges', () => {
     renderGlossary();
     expect(screen.getByText('The Glossary')).toBeInTheDocument();
-    expect(screen.getByText('124 CORE TERMS')).toBeInTheDocument();
+    expect(screen.getByText('125 CORE TERMS')).toBeInTheDocument();
     // the digit bucket leads, then letters
     const letters = screen.getAllByText(/^[#A-Z]$/, { selector: '.gloss-letter' }).map((el) => el.textContent);
     expect(letters[0]).toBe('#');

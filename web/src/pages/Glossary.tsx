@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Loading } from '../components/ds/Loading';
 import { SuitText } from '../components/game/SuitText';
@@ -168,15 +168,6 @@ export default function Glossary() {
             </button>
           ))}
         </div>
-      </div>
-      <div className="gloss-tour">
-        <div className="label-caps">APP TOUR</div>
-        <p className="gloss-tour-copy">
-          Walk the first crossing again — the toll office’s pamphlet and practice board №0.
-        </p>
-        <Link to="/tour" className="label-caps gloss-tour-link">
-          REPLAY THE TOUR →
-        </Link>
       </div>
       <Attribution full />
     </div>
