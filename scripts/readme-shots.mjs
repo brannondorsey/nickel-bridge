@@ -21,7 +21,7 @@
  * for retina, except the desktop one.
  */
 import { chromium } from 'playwright';
-import { PASS, auctionState } from '../packages/core/dist/index.js';
+import { BID_OFFSET, auctionState } from '../packages/core/dist/index.js';
 import { Bidder, loadPolicyModel } from '../packages/ai/dist/index.js';
 
 const base = process.argv[2] ?? 'http://localhost:3997';
@@ -104,16 +104,17 @@ await page.waitForSelector('.home-cta');
 
 const { tournamentId: tid } = await api.post('/api/play');
 
-// The featured board: the first one whose auction actually asks something of
-// you — a board where the model's own choice is Pass makes for a dull meaning
-// panel, so drive that one out of the way and look at the next.
+// The featured board: the first one where the model's own choice is a contract
+// bid. Pass makes for a dull meaning panel, and Double/Redouble live in the bid
+// box's separate .callrow rather than the grid the shot clicks through — so
+// both are reasons to drive that board out of the way and look at the next.
 let featured = 0;
-let best = PASS;
+let best = 0;
 for (let no = 1; no <= 4; no++) {
   const view = await api.get(`/api/tournaments/${tid}/boards/${no}`);
   if (view.state !== 'bidding' || !view.myTurn) continue;
   best = preferredCall(view);
-  if (best !== PASS) {
+  if (best >= BID_OFFSET) {
     featured = no;
     break;
   }
@@ -129,7 +130,8 @@ if (!featured) {
 await page.goto(`${base}/t/${tid}/b/${featured}`);
 await page.waitForSelector('.bidbox', { timeout: 30000 });
 if (best >= 23) await page.click('.bidbox-fold'); // levels 5–7 sit below the fold
-await page.locator('.bidbox .grid button.bid').nth(best - 3).click();
+// .grid holds the 35 contract bids in call order, so call → button is direct.
+await page.locator('.bidbox .grid button.bid').nth(best - BID_OFFSET).click();
 await page.waitForSelector('.meaning-panel .mtitle');
 await page.waitForTimeout(400);
 await shot('01-bidding-meaning');
@@ -149,11 +151,13 @@ await page.waitForTimeout(2600); // robots follow; the trick stages in card by c
 await shot('03-card-play');
 
 // 04 — the toll receipt, printing off the last card of the board
+// One card left in hand means one legal card, which is exactly what Board.tsx's
+// auto-play effect fires on: it plays itself after AUTO_PLAY_DELAY_MS with no
+// tap. Don't race it — a manual click here would cancel the timer if it landed
+// first and throw at a vanished button if it didn't. Just watch the transition.
 const last = await drive(tid, featured, (v) => v.state === 'playing' && v.myTurn && v.hand.length === 1);
 await page.goto(`${base}/t/${tid}/b/${featured}`);
 if (last.state !== 'done') {
-  await page.waitForSelector('.handfan.interactive .cardbtn:enabled', { timeout: 30000 });
-  await playCard(page.locator('.handfan.interactive .cardbtn:enabled').first());
   // A claim can fire on the way out (the robots proving the rest is theirs) —
   // dismiss the announcement and let the fast-forward run.
   await page.waitForSelector('.claim-overlay, .receipt-panel, .result', { timeout: 60000 });
