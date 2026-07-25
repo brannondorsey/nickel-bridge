@@ -2731,52 +2731,107 @@ a.stat-tile:hover {
   margin: 0;
 }
 
-/* ---- claim: announcement banner ---- */
+/* ---- claim: announcement overlay ---- */
 
-/* A declarative "wire," not a hint — Besley tracked caps like a button or
-   label, not italic Crimson, because it states a fact that just became
-   true rather than suggesting an action. Same toast shape (dashed
-   perforation, ticket shadow) the app already uses to interrupt play with
-   news (flip-note, GradeToast). Pops in right as the fast-forward starts and
-   stays put for the whole burst — the only indication a claim happened, no
-   separate terminal stamp. */
-.claim-banner {
-  margin: 10px 16px 0;
+/* A modal ticket over a dimmed board — deliberately unmissable, unlike the
+   old in-flow banner it replaces (which popped up alongside cards already
+   in motion and was easy to scan past). Holds the board for
+   CLAIM_ANNOUNCE_HOLD_MS; tap/click/Escape (ClaimOverlay.tsx) skips ahead to
+   the sped-up fast-forward. Same scrim treatment as the Dialog sheet
+   (.sheet-scrim) for a consistent "something needs your attention" language
+   app-wide; same ticket shape (dashed perforation, ticket shadow) the app
+   already uses to interrupt play with news (flip-note, GradeToast), just at
+   hero scale. */
+.claim-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 20, 20, 0.34);
+  cursor: pointer;
+}
+.claim-ticket {
+  position: relative;
   background: var(--panel);
   border: 1.5px solid var(--ink);
   box-shadow: var(--ticket-shadow);
-  padding: 12px 16px;
+  padding: 22px 24px 18px 30px;
   text-align: center;
-  position: relative;
+  max-width: 300px;
+  cursor: default;
 }
-.claim-banner::before {
+.claim-ticket::before {
   content: '';
   position: absolute;
-  left: 7px;
+  left: 9px;
   top: 0;
   bottom: 0;
   border-left: 1.5px dashed var(--ink);
 }
-.claim-banner-side {
+.claim-eyebrow {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--verdigris);
+  margin-bottom: 6px;
+}
+.claim-headline {
   font-family: var(--font-label);
   font-weight: 800;
-  font-size: 15.5px;
-  letter-spacing: 0.05em;
+  font-size: 22px;
+  letter-spacing: 0.02em;
   color: var(--ink);
 }
-.claim-banner-sub {
-  margin-top: 4px;
+.claim-subhead {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.claim-aside {
+  margin-top: 8px;
   font-style: italic;
   font-size: 12.5px;
   color: var(--muted);
 }
+.claim-countdown {
+  margin-top: 12px;
+  height: 2px;
+  background: var(--line-quiet);
+  overflow: hidden;
+}
+.claim-countdown span {
+  display: block;
+  height: 100%;
+  background: var(--verdigris);
+  transform-origin: left;
+}
+.claim-hint {
+  margin-top: 8px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
 @media (prefers-reduced-motion: no-preference) {
-  .claim-banner {
+  .claim-ticket {
     opacity: 0;
-    animation: claim-banner-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+    animation: claim-ticket-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .claim-countdown span {
+    animation-name: claim-countdown;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
   }
 }
-@keyframes claim-banner-in {
+@keyframes claim-ticket-in {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -2784,6 +2839,14 @@ a.stat-tile:hover {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+@keyframes claim-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
   }
 }
 .board-actions {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
+  CLAIM_SPEEDUP_FACTOR,
   CLAIM_TRICK_GAP_MS,
   GLIDE_MS,
   HOLD_MS,
@@ -410,6 +411,15 @@ describe('stageClaimSteps', () => {
   it('bails to [] when the in-progress trick does not match playHistory', () => {
     const mismatched: BoardView = { ...claimPrev, currentTrick: [{ seat: 2, card: H(0) }] };
     expect(stageClaimSteps(mismatched, claimNext)).toEqual([]);
+  });
+
+  it('scales every gap by speedFactor, leaving the first card (delayBefore 0) untouched', () => {
+    const steps = stageClaimSteps(claimPrev, claimNext, CLAIM_SPEEDUP_FACTOR);
+    expect(steps[0].delayBefore).toBe(0); // 0 * factor is still 0
+    expect(steps[5].delayBefore).toBe(Math.round(CLAIM_TRICK_GAP_MS * CLAIM_SPEEDUP_FACTOR));
+    // default (no speedFactor arg) matches the base, un-sped-up pacing
+    const base = stageClaimSteps(claimPrev, claimNext);
+    expect(base[5].delayBefore).toBe(CLAIM_TRICK_GAP_MS);
   });
 });
 
