@@ -96,7 +96,8 @@ describe('the first crossing (Tour)', () => {
     await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
     // I · THE BRIDGE — the club philosophy and the naming story
     expect(screen.getByText(/robot of even temper/)).toBeInTheDocument();
-    expect(screen.getByText(/name outlived the price/)).toBeInTheDocument();
+    expect(screen.getByText(/at their own pace/)).toBeInTheDocument();
+    expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
     // II · THE LEDGER — one deal, three fates
     expect(screen.getByText(/luck is dealt out of the game/)).toBeInTheDocument();
