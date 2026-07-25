@@ -68,7 +68,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 // live board's AUTO_PLAY_DELAY_MS (250ms, tuned for a trivial single-legal-
 // card tap with nothing to read) blew right past it. Give guided steps a
 // real beat before they self-advance.
-const GUIDED_FORCED_DELAY_MS = 2600;
+const GUIDED_FORCED_DELAY_MS = 3400;
 // The self-playing tail (steps with no curated guidance) — brief, since
 // there's no narration line to read, just the fastForward copy repeating.
 const AUTO_STEP_DELAY_MS = 420;
@@ -453,6 +453,27 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
     return () => clearTimeout(id);
   }, [data, step, view, guidance, commit]);
 
+  // The ribbon narrates what's ALREADY true on screen — but idx (and thus
+  // `guidance` above) advances the instant a call/card commits, synchronously,
+  // while the corresponding view can take a staged glide/hold (or a claim
+  // fast-forward) to visually catch up. Switching the caption immediately
+  // used to describe events — "West leads, and partner lays their hand on
+  // the table" — before the board had shown any of it (still displaying the
+  // completed auction, dummy not yet down), which read as rushed even though
+  // the line itself stayed up for a while. displayIdx lags idx until `view`
+  // actually settles onto that step's own view (or the final view), keeping
+  // the PREVIOUS caption up for the whole transition instead.
+  const [displayIdx, setDisplayIdx] = useState(0);
+  useEffect(() => {
+    if (!data || !view) return;
+    if (view === data.final) {
+      setDisplayIdx(data.steps.length);
+      return;
+    }
+    if (data.steps[idx]?.view === view) setDisplayIdx(idx);
+  }, [data, view, idx]);
+  const displayGuidance = data ? guidanceFor(displayIdx, data) : null;
+
   if (error) {
     return (
       <div className="board-page">
@@ -508,7 +529,7 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
     ? resultView === 'receipt'
       ? COPY.receiptSay
       : COPY.fieldSay
-    : (offScript ?? guidance?.say ?? COPY.fastForward);
+    : (offScript ?? displayGuidance?.say ?? COPY.fastForward);
 
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>

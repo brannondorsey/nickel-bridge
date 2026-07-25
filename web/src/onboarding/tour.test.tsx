@@ -155,18 +155,21 @@ describe('the first crossing (Tour)', () => {
 
       // play: dummy comes down; the forced ♥10 self-plays, but only after a
       // real beat to read the narration (GUIDED_FORCED_DELAY_MS — this line
-      // used to vanish in ~250ms, too fast to read)
-      await screen.findByText(/lays their hand on the table/);
+      // used to vanish in ~250ms, too fast to read). The caption itself
+      // only appears once the auction→play transition actually settles
+      // (displayIdx lags idx) rather than the instant 4♠ commits, so it
+      // never describes dummy coming down before dummy is actually down.
+      await screen.findByText(/lays their hand on the table/, {}, { timeout: 5000 });
       // decision 4 — two-step tap on the ♥4 (card 15); "Deliberate, always"
       // was dropped from this line per review
-      await screen.findByText(/Dummy’s ten is already winning/);
+      await screen.findByText(/Dummy’s ten is already winning/, {}, { timeout: 5000 });
       expect(screen.queryByText(/Deliberate, always/)).not.toBeInTheDocument();
       const heart4 = () => container.querySelector('[data-card="15"]') as HTMLElement;
       await waitFor(() => expect(heart4()).toBeTruthy());
       await user.click(heart4());
       await user.click(heart4()); // second tap plays
       // decision 5 — lead trumps from dummy (card 0)
-      await screen.findByText(/the table leads/i);
+      await screen.findByText(/the table leads/i, {}, { timeout: 5000 });
       const spade2 = () => container.querySelector('[data-card="0"]') as HTMLElement;
       await waitFor(() => expect(spade2()).toBeTruthy());
       await user.click(spade2());
