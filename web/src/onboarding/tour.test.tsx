@@ -4,10 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { claimAnnouncement, stageClaimSteps } from '../components/game/playAnim';
 import Tour from '../pages/Tour';
 import { meFreshCrosser } from '../test/fixtures';
+import { GlossaryProvider } from '../glossary/GlossaryContext';
 import { apiMock, renderWithMe } from '../test/utils';
 import board0 from './board0.json';
 import type { TourBoard } from './board0';
-import { COPY, STEPS, guidanceFor } from './script';
+import { segmentProse } from '../glossary/linkify';
+import { TERM_BY_SLUG } from '../glossary/terms';
+import { COPY, STEPS, TOUR_LINKS, guidanceFor } from './script';
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -118,12 +121,14 @@ describe('the first crossing (Tour)', () => {
     renderWithMe(<Tour />, { me: meFreshCrosser });
     await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
     // I · THE BRIDGE — the club philosophy and the naming story
-    expect(screen.getByText(/robot of even temper/)).toBeInTheDocument();
+    // "robot" is a glossary link now, so the sentence is split across elements
+    expect(screen.getByRole('button', { name: 'robot' })).toBeInTheDocument();
+    expect(screen.getByText(/of even temper/)).toBeInTheDocument();
     expect(screen.getByText(/at their own pace/)).toBeInTheDocument();
     expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
     // II · THE LEDGER — one deal, three fates
-    expect(screen.getByText(/luck is dealt out of the game/)).toBeInTheDocument();
+    expect(screen.getByText(/the luck is dealt out of the/)).toBeInTheDocument();
     expect(screen.getByText('Harold')).toBeInTheDocument();
     expect(screen.getByText('Margaret')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
@@ -148,7 +153,8 @@ describe('the first crossing (Tour)', () => {
       // decision 0 — the real bid box, meanings before commit
       const nt = await screen.findByRole('button', { name: '1NT' });
       expect(container.querySelector('.bidbox')).toBeTruthy();
-      expect(screen.getByText(/fifteen high card points \(HCP\)/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'high card points' })).toBeInTheDocument();
+      expect(screen.getByText(/\(HCP\), evenly spread/)).toBeInTheDocument();
       // exploring off-script shows the real meaning; committing it is redirected
       await user.click(screen.getByRole('button', { name: '2♣' }));
       expect(container.querySelector('.meaning-panel')).toBeTruthy();
@@ -172,7 +178,10 @@ describe('the first crossing (Tour)', () => {
       await user.click(screen.getByRole('button', { name: 'Bid 2♠' }));
 
       // decision 2 — accept the spade game
-      await screen.findByText(/choice of game\b/);
+      await screen.findByText(/Partner shows five spades and offers a choice of/);
+      // the narration ribbon links its terms too — "trumps" is one of the
+      // words TOUR_LINKS re-links for a first-timer (linkify:false sitewide)
+      expect(screen.getByRole('button', { name: 'trumps' })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: '4♠' }));
       await user.click(screen.getByRole('button', { name: 'Bid 4♠' }));
 
@@ -185,14 +194,14 @@ describe('the first crossing (Tour)', () => {
       await screen.findByText(/lays their hand on the table/, {}, { timeout: 5000 });
       // decision 4 — two-step tap on the ♥4 (card 15); "Deliberate, always"
       // was dropped from this line per review
-      await screen.findByText(/Dummy’s ten is already winning/, {}, { timeout: 5000 });
+      await screen.findByText(/ten is already winning the/, {}, { timeout: 5000 });
       expect(screen.queryByText(/Deliberate, always/)).not.toBeInTheDocument();
       const heart4 = () => container.querySelector('[data-card="15"]') as HTMLElement;
       await waitFor(() => expect(heart4()).toBeTruthy());
       await user.click(heart4());
       await user.click(heart4()); // second tap plays
       // decision 5 — lead trumps from dummy (card 0)
-      await screen.findByText(/the table leads/i, {}, { timeout: 5000 });
+      await screen.findByText(/Time to pull their/, {}, { timeout: 5000 });
       const spade2 = () => container.querySelector('[data-card="0"]') as HTMLElement;
       await waitFor(() => expect(spade2()).toBeTruthy());
       await user.click(spade2());
@@ -222,4 +231,54 @@ describe('the first crossing (Tour)', () => {
       await waitFor(() => expect(refresh).toHaveBeenCalled());
     },
   );
+});
+
+describe('the tour’s glossary links', () => {
+  const slugsIn = (text: string) =>
+    segmentProse(text, TOUR_LINKS)
+      .filter((s) => s.slug)
+      .map((s) => s.slug);
+
+  it('every dial in TOUR_LINKS is doing real work', () => {
+    // a forced slug that doesn't exist, or isn't linkify:false sitewide, is
+    // dead weight in the policy — and a stale one hides a broken link
+    for (const slug of TOUR_LINKS.force ?? []) {
+      const term = TERM_BY_SLUG.get(slug);
+      expect(term, `forced slug ${slug} is not a core term`).toBeDefined();
+      expect(term!.linkify, `forcing ${slug} is redundant — it already links`).toBe(false);
+    }
+    for (const slug of TOUR_LINKS.skip ?? []) expect(TERM_BY_SLUG.get(slug), slug).toBeDefined();
+  });
+
+  it('teaches the common words gameplay prose deliberately leaves unlinked', () => {
+    expect(slugsIn(STEPS[2].say)).toContain('trump'); // "eight trumps between you"
+    expect(slugsIn(STEPS[4].say)).toEqual(['dummy', 'trick']);
+    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge', 'game']);
+    // and none of it leaks into the sitewide policy the rest of the app reads
+    expect(segmentProse(STEPS[2].say).filter((s) => s.slug)).toHaveLength(0);
+  });
+
+  it('never links a term in the wrong sense: splitting matchpoints is a tie, not a suit break', () => {
+    expect(slugsIn(COPY.fieldSay)).toContain('matchpoints');
+    expect(slugsIn(COPY.fieldSay)).not.toContain('break');
+  });
+
+  it('links the pamphlet’s body copy, and opens the sheet on a tap', async () => {
+    const user = userEvent.setup();
+    renderWithMe(
+      <GlossaryProvider>
+        <Tour />
+      </GlossaryProvider>,
+      { me: meFreshCrosser },
+    );
+    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+    await user.click(screen.getByRole('button', { name: 'duplicate' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Duplicate bridge');
+  });
+
+  it('leaves display type alone — no dotted underlines through the headlines', () => {
+    const { container } = renderWithMe(<Tour />, { me: meFreshCrosser });
+    expect(container.querySelector('.tour-cover-title .gloss-link')).toBeNull();
+  });
 });

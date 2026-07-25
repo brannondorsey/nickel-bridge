@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import deep from './deep.json';
-import { segmentProse } from './linkify';
+import { type LinkPolicy, segmentProse } from './linkify';
 import { filterCore, filterDeep, groupByLetter, letterOf } from './search';
 import { TERMS, TERM_BY_SLUG, THEMES } from './terms';
 
@@ -95,7 +95,7 @@ describe('glossary deep reference (generated)', () => {
 });
 
 describe('segmentProse (the linkifier)', () => {
-  const linksOf = (text: string, omit?: string) => segmentProse(text, omit).filter((s) => s.slug);
+  const linksOf = (text: string, policy?: LinkPolicy) => segmentProse(text, policy).filter((s) => s.slug);
 
   it('links a known term and leaves surrounding text intact', () => {
     const segs = segmentProse('Take the finesse now.');
@@ -136,7 +136,21 @@ describe('segmentProse (the linkifier)', () => {
   });
 
   it('omit suppresses self-linking on a term sheet', () => {
-    expect(linksOf('The finesse wins.', 'finesse')).toHaveLength(0);
+    expect(linksOf('The finesse wins.', { omit: 'finesse' })).toHaveLength(0);
+  });
+
+  it('force re-links a linkify:false term for a teaching surface, and only there', () => {
+    const text = 'Eight trumps between you, and the trick is yours.';
+    expect(linksOf(text)).toHaveLength(0);
+    expect(linksOf(text, { force: ['trump', 'trick'] }).map((s) => s.slug)).toEqual(['trump', 'trick']);
+    // the forced matcher is cached separately — the sitewide one is unchanged
+    expect(linksOf(text)).toHaveLength(0);
+  });
+
+  it('skip drops a term the matcher reads in the wrong sense for this copy', () => {
+    const text = 'You split the matchpoints.';
+    expect(linksOf(text).map((s) => s.slug)).toEqual(['break', 'matchpoints']);
+    expect(linksOf(text, { skip: ['break'] }).map((s) => s.slug)).toEqual(['matchpoints']);
   });
 
   it('is case-insensitive', () => {

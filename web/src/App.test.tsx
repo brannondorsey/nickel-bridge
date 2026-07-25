@@ -73,6 +73,17 @@ describe('App — authenticated', () => {
     expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
   });
 
+  it('the gate-rendered tour gets its own glossary provider — term sheets open mid-tour', async () => {
+    // The tour renders in place of the routes (and so outside the provider
+    // that wraps them), but its narration links terms like any other prose.
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/');
+    await screen.findByText(/Welcome to the bridge/);
+    await userEvent.click(screen.getByRole('button', { name: /read the pamphlet/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'robot' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Robot partner');
+  });
+
   it('never springs the tour on a deep-link arrival — the destination renders instead', async () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/glossary'); // a shared link goes where it points; the tour waits for a home arrival

@@ -124,7 +124,15 @@ export default function App() {
           // for the shared Inspector the same way it suppresses the splash;
           // it stays replayable at /tour (Glossary's APP TOUR row, demo's
           // gallery row).
-          <Tour />
+          //
+          // Its own provider: the tour renders in place of the routes, but its
+          // narration links terms like anything else, and a term sheet is the
+          // one thing a first-timer needs most. The sheet lives in the URL as
+          // ?term=, which leaves the path alone — so opening one never trips
+          // the arrival gate or unmounts the tour mid-deal.
+          <GlossaryProvider>
+            <Tour />
+          </GlossaryProvider>
         ) : me?.user ? (
           <GlossaryProvider>
             <Routes>

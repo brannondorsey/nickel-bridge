@@ -1,3 +1,4 @@
+import type { LinkPolicy } from '../glossary/linkify';
 import type { TourBoard } from './board0';
 
 /**
@@ -18,6 +19,29 @@ import type { TourBoard } from './board0';
  *   W leads the ♥3; dummy's singleton ♥10 holds trick 1; trick 2 starts
  *   trumps from the table; the tail self-plays to 4♠ made exactly, +420.
  */
+
+/**
+ * How the tour links to the glossary. Every line below renders through
+ * GlossaryProse (pages/Tour.tsx's TourProse), so the copy stays plain strings
+ * and the matcher decides — but the tour is a teaching surface, not gameplay
+ * prose, and it needs a different dial than the sitewide one:
+ *
+ * - `force` re-links the handful of words terms.ts marks `linkify: false`
+ *   because they'd be a link farm in bid copy. In this pamphlet each appears
+ *   about once, to someone who has never seen it before — "eight trumps
+ *   between you" and "a choice of game" are precisely the sentences a first
+ *   crossing should be able to look up.
+ * - `skip` drops a match that reads in the wrong sense here: "you split the
+ *   matchpoints" is a tie, not a suit Break (terms.ts aliases "split").
+ *
+ * Everything else the tour teaches — dummy, HCP, the auction, the Jacoby
+ * transfer, duplicate, matchpoints, honors — the sitewide matcher already
+ * links on its own.
+ */
+export const TOUR_LINKS: LinkPolicy = {
+  force: ['deal', 'game', 'lead', 'trick', 'trump'],
+  skip: ['break'],
+};
 
 export interface StepGuidance {
   /** the ribbon line while this decision waits */

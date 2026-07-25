@@ -118,7 +118,7 @@ docs            design-brief.md — requirements spec for the visual redesign;
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
                 difficulty-calibration-research.md — the research log behind today's values;
                 onboarding-design.md — the new-user onboarding ("first crossing") design
-                spec (not yet implemented), with its clickable prototype
+                spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
@@ -424,7 +424,13 @@ and the tail past the curated steps self-plays — a forced-but-guided step (one
 narration to read) gets a full `GUIDED_FORCED_DELAY_MS` beat rather than the live board's
 near-instant auto-play delay. Narration lives in `onboarding/script.ts`, hand-curated
 against the capture — `onboarding/tour.test.tsx` is the drift guard that forces re-curation
-if the capture is regenerated onto a different line.
+if the capture is regenerated onto a different line. Every line of the tour's own voice
+(pamphlet body copy and the tollkeeper's ribbon, but not its display type) renders through
+`GlossaryProse` under `script.ts`'s `TOUR_LINKS` policy, so the words a first-timer is
+meeting for the first time open the term sheet — which means the gate-rendered tour needs
+its own `GlossaryProvider` in `App.tsx`, since it renders in place of the routes the app-wide
+one wraps (a sheet lives in `?term=`, leaving the path alone, so opening one never disturbs
+the arrival gate).
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
@@ -486,8 +492,13 @@ back/swipe unwinds nested related-term taps one sheet at a time while ✕/scrim/
 pops the whole chain in one `navigate(-depth)` (a cold load arriving with `?term=` set
 just strips the param with a replace). Linkifier noise is tuned in data, not code:
 `linkify: false` in terms.ts keeps ultra-common words (bid, pass, game…) unlinked, and
-`segmentProse` links only the first occurrence per block —
-`web/src/glossary/glossary.test.ts` guards the data invariants (unique slugs, resolvable
+`segmentProse` links only the first occurrence per block. That sitewide flag is calibrated
+for *gameplay* prose; a teaching surface can pass `segmentProse`/`GlossaryProse` a
+`LinkPolicy` instead — `force` re-links a few of those common words, `skip` drops one the
+matcher reads in the wrong sense, `omit` is the existing self-link guard — which is how the
+first-crossing tour links "trumps"/"trick"/"game" (`TOUR_LINKS` in `onboarding/script.ts`)
+without turning bid copy into a link farm. `web/src/glossary/glossary.test.ts` guards the
+data invariants (unique slugs, resolvable
 relateds, core/deep disjointness). The bottom TabBar is the "turnstile" nav pattern:
 tabs share the width while they fit, and only overflow into the horizontal scroll (right
 fade + chevron, active tab auto-centers) once the gates outgrow it — so future gates fit

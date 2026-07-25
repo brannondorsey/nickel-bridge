@@ -19,6 +19,7 @@ import { CallInspector } from '../components/game/CallInspector';
 import { CallText } from '../components/game/CallText';
 import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
+import { GlossaryProse } from '../components/game/GlossaryProse';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import {
   CLAIM_ANNOUNCE_HOLD_MS,
@@ -31,10 +32,9 @@ import {
   stagePlaySteps,
 } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
-import { SuitText } from '../components/game/SuitText';
 import { postmarkDate, signedScore, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
-import { COPY, guidanceFor } from '../onboarding/script';
+import { COPY, TOUR_LINKS, guidanceFor } from '../onboarding/script';
 import { BiddingPhase, PlayPhase } from './Board';
 
 /**
@@ -62,6 +62,23 @@ import { BiddingPhase, PlayPhase } from './Board';
  */
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Every line of the tour's own voice — pamphlet body copy and the tollkeeper's
+ * narration — under the tour's glossary link policy (onboarding/script.ts's
+ * TOUR_LINKS). A first crossing is where the words get met for the first time,
+ * so the one screen in the app that says "dummy", "trumps" and "matchpoints"
+ * to someone who has never seen them had better be able to define them.
+ *
+ * Display type is deliberately excluded: panel titles and the postmark heading
+ * stay plain, since a dotted underline through a Poiret One headline reads as
+ * damage rather than an invitation. Everything the board itself renders (bid
+ * meanings, the grade toast, the receipt) already links on its own — it is the
+ * real gameplay surface, under the sitewide policy.
+ */
+function TourProse({ text }: { text: string }) {
+  return <GlossaryProse text={text} {...TOUR_LINKS} />;
+}
 
 // A forced-but-guided decision (right now, only the dummy's forced opening-
 // lead follow) still carries a full narration line worth reading — the
@@ -141,7 +158,9 @@ export default function Tour() {
         </div>
         <div className="tour-cover-main">
           <h1 className="tour-cover-title">{COPY.cover.title}</h1>
-          <p className="tour-aside">{COPY.cover.aside}</p>
+          <p className="tour-aside">
+            <TourProse text={COPY.cover.aside} />
+          </p>
           <div className="tour-gate-actions">
             <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
           </div>
@@ -162,10 +181,16 @@ export default function Tour() {
       <div className="tour-page">
         <span className="label-caps tour-page-no">{COPY.bridgePanel.no}</span>
         <h1 className="tour-title">{COPY.bridgePanel.title}</h1>
-        <p className="tour-copy">{COPY.bridgePanel.body1}</p>
-        <p className="tour-copy">{COPY.bridgePanel.body2}</p>
+        <p className="tour-copy">
+          <TourProse text={COPY.bridgePanel.body1} />
+        </p>
+        <p className="tour-copy">
+          <TourProse text={COPY.bridgePanel.body2} />
+        </p>
         <hr className="tour-rule" />
-        <p className="tour-aside">{COPY.bridgePanel.aside}</p>
+        <p className="tour-aside">
+          <TourProse text={COPY.bridgePanel.aside} />
+        </p>
         <div className="tour-page-foot">
           <BridgeMark variant="footer" width={150} />
         </div>
@@ -201,8 +226,12 @@ export default function Tour() {
             </tbody>
           </table>
         </PerforatedPanel>
-        <p className="tour-copy">{COPY.ledgerPanel.body1}</p>
-        <p className="tour-copy">{COPY.ledgerPanel.body2}</p>
+        <p className="tour-copy">
+          <TourProse text={COPY.ledgerPanel.body1} />
+        </p>
+        <p className="tour-copy">
+          <TourProse text={COPY.ledgerPanel.body2} />
+        </p>
         <div className="tour-page-foot" />
         <div className="tour-gate-actions">
           <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
@@ -221,7 +250,9 @@ export default function Tour() {
         <div style={{ height: 18 }} />
         <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
         <h1 className="tour-title">{COPY.offerTitle}</h1>
-        <p className="tour-copy">{COPY.offerBody}</p>
+        <p className="tour-copy">
+          <TourProse text={COPY.offerBody} />
+        </p>
         <div className="tour-offer-actions">
           <Button onClick={() => setStage('board')}>PRACTICE →</Button>
         </div>
@@ -239,8 +270,12 @@ export default function Tour() {
           <Postmark size={128} arcTop="NICKEL BRIDGE" arcBottom="FIRST CROSSING" line1="№0" line2={postmarkDate(Date.now() / 1000)} />
         </div>
         <h1 className="tour-title">{COPY.doneTitle}</h1>
-        <p className="tour-copy">{COPY.doneBody}</p>
-        <p className="tour-aside">{COPY.doneAside}</p>
+        <p className="tour-copy">
+          <TourProse text={COPY.doneBody} />
+        </p>
+        <p className="tour-aside">
+          <TourProse text={COPY.doneAside} />
+        </p>
         <div className="tour-offer-actions">
           <Button onClick={playTheToll} busy={busy} busyLabel="FINDING A TABLE…">
             PLAY THE TOLL →
@@ -270,7 +305,7 @@ function Tollkeeper({ text }: { text: string }) {
     <div className="tour-narr" role="status">
       <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
       <p>
-        <SuitText text={text} />
+        <TourProse text={text} />
       </p>
     </div>
   );
