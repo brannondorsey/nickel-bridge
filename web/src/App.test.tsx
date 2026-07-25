@@ -63,14 +63,21 @@ describe('App — authenticated', () => {
     expect(await screen.findByPlaceholderText('Handle')).toBeInTheDocument();
   });
 
-  it('meets a not-yet-onboarded user at the pamphlet cover instead of the routes (and the splash)', async () => {
+  it('meets a not-yet-onboarded user arriving at home with the pamphlet cover (no splash, no routes)', async () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
-    renderApp('/leaderboard'); // even a deep link waits at the gate; the URL survives the tour
+    renderApp('/');
     expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
     // the visit still stamps, so no splash replays the moment the tour ends
     expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
+  });
+
+  it('never springs the tour on a deep-link arrival — the destination renders instead', async () => {
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/glossary'); // a shared link goes where it points; the tour waits for a home arrival
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
   });
 
   it('demo mode suppresses the automatic tour like the splash (the /tour route stays reachable)', async () => {

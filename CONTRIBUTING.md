@@ -390,12 +390,14 @@ keeps existing exhibits honest, but only this rule keeps the gallery covering ne
 the app — a cover ("So you've come to cross."), the philosophy panel (I · THE BRIDGE), and
 duplicate as a specimen ledger (II · THE LEDGER), perforation-dot pager, honest skip on
 every page — then the tollkeeper's practice board. `users.onboarded_at` NULL makes
-`App.tsx` render `pages/Tour.tsx` in place of the routes
-(the URL is untouched, so deep links resume after), until `POST /api/me/onboarded`
-(write-once, stamped on finishing *or* skipping) flips it; existing accounts were
-grandfathered as onboarded by the migration, demo mode suppresses the automatic gate like
-the splash (testers use the `/tour` route via its Exhibit Hall row), and `/tour` stays
-routed for revisits. The tour's practice board (`web/src/onboarding/`) is **not a server
+`App.tsx` render `pages/Tour.tsx` in place of the routes, but only when the session
+*arrived* at the main app (`/`, captured once at mount): a deep-link arrival goes straight
+to its destination and meets the tour on a later home arrival instead, and navigating home
+mid-session never springs it. `POST /api/me/onboarded` (write-once, stamped on finishing
+*or* skipping) ends the gate; existing accounts were grandfathered as onboarded by the
+migration, demo mode suppresses the automatic gate like the splash, and `/tour` stays
+routed for replays — the Glossary's APP TOUR row and demo's Exhibit Hall row both point
+there. The tour's practice board (`web/src/onboarding/`) is **not a server
 board**: `tools/gen_tour_board.mjs` drives the real engine offline — model-argmax human
 calls (so every grade toast honestly reads "the robot's choice too"), DD card play, real
 SAYC meanings on every legal call, and the three benchmark personas genuinely playing the

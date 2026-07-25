@@ -91,6 +91,11 @@ export default function App() {
   const authed = Boolean(me?.user?.handle);
   const demo = Boolean(me?.demo);
   const onboarded = me?.user?.onboardedAt != null;
+  // The automatic tour fires only on ARRIVAL at the main app: someone opening
+  // a shared deep link (a tournament, a profile) goes straight to it, and
+  // meets the tour whenever they next open the app at home instead. Captured
+  // once at mount — navigating home mid-session must never spring a tutorial.
+  const [tourOnArrival] = useState(pathname === '/');
   useEffect(() => {
     if (!authed) return;
     if (!demo && onboarded && splashOnReturn()) setSplash(true);
@@ -112,12 +117,13 @@ export default function App() {
       <div className="shell">
         {me?.user && !me.user.handle ? (
           <CreateHandle />
-        ) : me?.user && !onboarded && !demo ? (
-          // First crossing: new accounts meet the tollkeeper before the app.
-          // Renders in place of the routes (the URL is untouched, so a deep
-          // link resumes normally once the tour completes or is skipped).
-          // Demo mode suppresses it for the shared Inspector the same way it
-          // suppresses the splash; testers open it from /tour instead.
+        ) : me?.user && !onboarded && !demo && tourOnArrival ? (
+          // First crossing: new accounts arriving at the main app meet the
+          // toll office before it (deep-link arrivals skip straight to their
+          // destination — see tourOnArrival above). Demo mode suppresses it
+          // for the shared Inspector the same way it suppresses the splash;
+          // it stays replayable at /tour (Glossary's APP TOUR row, demo's
+          // gallery row).
           <Tour />
         ) : me?.user ? (
           <GlossaryProvider>

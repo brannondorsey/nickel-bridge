@@ -30,6 +30,12 @@ function renderGlossary(route = '/glossary') {
 }
 
 describe('Glossary page', () => {
+  it('carries the APP TOUR re-entry at the ledger foot', () => {
+    renderGlossary();
+    const replay = screen.getByRole('link', { name: /replay the tour/i });
+    expect(replay).toHaveAttribute('href', '/tour');
+  });
+
   it('renders the A–Z core ledger with letter heads and theme badges', () => {
     renderGlossary();
     expect(screen.getByText('The Glossary')).toBeInTheDocument();

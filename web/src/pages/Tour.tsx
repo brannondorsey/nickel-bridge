@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
 import riverSceneNight from '../assets/bridge-river-scene-night.svg';
@@ -64,13 +64,15 @@ const SPECIMEN = [
 export default function Tour() {
   const { me, refresh } = useMe();
   const navigate = useNavigate();
-  const revisit = me?.user?.onboardedAt != null; // routed /tour visit, not the gate
+  // Mounted at the /tour route (a Glossary or Exhibit Hall replay) vs.
+  // rendered by App's arrival gate in place of the routes. The gate unmounts
+  // on refresh(); a routed visit has to navigate out itself.
+  const routed = useLocation().pathname === '/tour';
   const [stage, setStage] = useState<Stage>('cover');
   const [busy, setBusy] = useState(false);
 
-  // Skipping and finishing both stamp the visit server-side (idempotent).
-  // A first-timer's App gate unmounts this component once `me` refreshes;
-  // a revisitor navigates out explicitly instead.
+  // Skipping and finishing both stamp the visit server-side (idempotent,
+  // write-once — replays never move it).
   const skip = async () => {
     if (busy) return;
     setBusy(true);
@@ -79,8 +81,8 @@ export default function Tour() {
     } catch {
       /* the gate must never trap anyone — proceed regardless */
     }
-    if (revisit) navigate('/');
-    else refresh();
+    if (routed) navigate('/');
+    refresh();
   };
 
   const playTheToll = async () => {
