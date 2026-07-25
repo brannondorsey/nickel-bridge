@@ -8,6 +8,49 @@ partner against two robot opponents (like ACBL/BBO robot duplicates). Results ar
 matchpointed against your friends' results on identical deals, so the competition is about
 judgment, not card luck.
 
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/01-bidding-meaning.png" alt="The bidding screen with 1NT selected and its SAYC meaning — 15–17 HCP, balanced — shown above the hand"></td>
+    <td width="33%"><img src="docs/screenshots/02-grade-toast.png" alt="The same auction after confirming: an Excellent three-star grade toast stamped over the board"></td>
+    <td width="33%"><img src="docs/screenshots/03-card-play.png" alt="Card play at 1NT by South: dummy fanned across the top, a trick on the felt, your hand below"></td>
+  </tr>
+  <tr>
+    <td><b>Read the bid before you make it.</b> Tap any call for its SAYC meaning — yours or a robot's.</td>
+    <td><b>Then find out how it played.</b> Every call is graded against the AI's own policy.</td>
+    <td><b>Play it out against double-dummy robots.</b> Same robots, same deals, for everyone.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-toll-receipt.png" alt="The toll receipt for a board: DOWN ONE, 100 vulnerable, TOLL REFUSED, under a REFUSED postmark"></td>
+    <td><img src="docs/screenshots/06-tournament-result.png" alt="Tournament summary: a TOLL PAID postmark, 44% matchpoints, 3rd of 6 players, and all four boards"></td>
+    <td><img src="docs/screenshots/10-night-play.png" alt="The same board in night mode: dark ink-plate cards, partner declaring, the board flipped to North"></td>
+  </tr>
+  <tr>
+    <td><b>The toll, itemized.</b> Every score printed line by line — overtricks, insult and all.</td>
+    <td><b>Four deals, one crossing.</b> Matchpoints and rank against everyone who played them.</td>
+    <td><b>Night mode.</b> The whole ink-on-paper palette, negative.</td>
+  </tr>
+</table>
+
+**Click around it yourself:** [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo)
+signs you in as a guest with a seeded field behind you and a gallery of prepared boards —
+no account, nothing to install.
+
+<details>
+<summary>More screens — the field, stats, the glossary, desktop</summary>
+
+| | |
+| --- | --- |
+| <img width="300" src="docs/screenshots/05-board-result.png" alt="Board result: 83.3% matchpoints, the field's contracts side by side, all four hands, and your bidding graded"> | <img width="300" src="docs/screenshots/08-stats.png" alt="Stats page: Nickel rating, toll log heatmap, matchpoint and bid-accuracy sparklines, grade distribution"> |
+| **Every board reviewed** — the field's results on the same deal, all four hands, and your bidding graded. | **Your record** — rating, matchpoint and bidding-accuracy trends, contracts made, rivalries. |
+| <img width="300" src="docs/screenshots/07-rankings.png" alt="Rankings: the all-time Elo ladder with movement arrows"> | <img width="300" src="docs/screenshots/09-glossary-sheet.png" alt="The glossary ledger with the term sheet for Finesse open over it"> |
+| **Rankings** — Elo from head-to-head results, re-ranked live. | **The Glossary** — every term tappable, in prose and on its own screen. |
+
+<img width="640" src="docs/screenshots/11-desktop-home.png" alt="The app on a desktop viewport: a centered phone-width column with the tournament ledger">
+
+**On desktop** the phone column just centers itself — same app, no separate layout.
+
+</details>
+
 ## Learning features
 
 - **Bid meanings before you bid** — tap any bid in the bidding box and a panel explains its
@@ -126,7 +169,6 @@ The whole app is one container: Node + SQLite + the AI. Backup = copy one file
 | --- | --- | --- |
 | **Fly.io** (hands-off, CI-automated) | ~$2–3/mo | see below |
 | **Any VPS** (Hetzner/DO…) | ~$4–5/mo | `cp .env.example .env`, fill it in, `docker compose up -d --build` (Caddy handles HTTPS) |
-| **Oracle Cloud Always-Free VM** | $0 | same docker-compose on their free ARM VM |
 
 ### Fly.io: automated preview + production deploys
 

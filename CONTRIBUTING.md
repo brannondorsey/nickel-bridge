@@ -100,12 +100,17 @@ tools           offline Python weight conversion + golden-fixture generation;
                 for "should we change tier X or Y" questions — see
                 docs/difficulty-tuning-guide.md for how these fit together
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
+                (design-review sweep of every screen → docs/images-redesign/),
+                readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
+                plays an ordinary tournament on a DEMO=1 instance, see that dir's README)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
                 shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
-                difficulty-calibration-research.md — the research log behind today's values
+                difficulty-calibration-research.md — the research log behind today's values;
+                screenshots/ + images-redesign/ + images/ — the README shots, the design-review
+                sweep, and the pre-redesign "before" (each dir has a README)
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
                 design-system skill — see "Design system" below
 ```

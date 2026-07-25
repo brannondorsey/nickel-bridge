@@ -1,4 +1,4 @@
-# Self-hosting on any VPS (or an Oracle Cloud Always-Free VM for $0):
+# Self-hosting on any VPS (Hetzner, DigitalOcean, a box under your desk…):
 #
 #   1. cp .env.example .env   # fill in Google OAuth credentials + your domain
 #   2. docker compose up -d --build
