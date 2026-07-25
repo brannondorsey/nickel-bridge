@@ -100,7 +100,32 @@ describe('Tournament result', () => {
     expect(screen.getByText((_, el) => el?.textContent === '3NT+1 by N')).toBeInTheDocument();
     expect(screen.getByText('−100')).toBeInTheDocument();
 
+    // the final field rides along on the same page — no second route for it
+    expect(screen.getByText('THE FIELD — FINAL')).toBeInTheDocument();
+    const you = screen.getByText('You').closest('.tourney-field-row')! as HTMLElement;
+    expect(you.className).toContain('tourney-field-you');
+    expect(within(you).getByText('61%')).toBeInTheDocument();
+    expect(screen.getByText('Alice').closest('a')).toHaveAttribute('href', '/players/7');
+
     expect(screen.getByRole('link', { name: /back to the bridge/i })).toHaveAttribute('href', '/');
+  });
+
+  it('makes every board-by-board line a link back into that board', async () => {
+    apiMock.tournament.mockResolvedValue(tournamentComplete);
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    // the ledger IS the review sheet: each scored line opens its own board
+    const line = (await screen.findByText((_, el) => el?.textContent === '4♠ by S')).closest('a')!;
+    expect(line).toHaveClass('tourney-board-line');
+    expect(line).toHaveAttribute('href', '/t/11/b/1');
+    expect(within(line).getByText('+620')).toBeInTheDocument();
+
+    const lines = document.querySelectorAll('a.tourney-board-line');
+    expect(lines).toHaveLength(4);
+    expect(lines[3]).toHaveAttribute('href', '/t/11/b/4');
+
+    // and the old toggle to a separate review page is gone
+    expect(screen.queryByRole('button', { name: /review the boards/i })).not.toBeInTheDocument();
   });
 
   it('falls back gracefully without a rank or rating change', async () => {
@@ -114,28 +139,12 @@ describe('Tournament result', () => {
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
   });
 
-  it('toggles between the result and the reviewable sheet via /review, replacing history', async () => {
-    apiMock.tournament.mockResolvedValue(tournamentComplete);
-    renderWithMe(<Tournament />, { me: meFixture });
-    await userEvent.click(await screen.findByRole('button', { name: /review the boards/i }));
-    // now the sheet: all four boards scored and linked
-    expect(screen.getByText((_, el) => el?.textContent === '4♠ by S · +620').closest('a')).toHaveAttribute(
-      'href',
-      '/t/11/b/1',
-    );
-    expect(screen.getAllByText('SCORED')).toHaveLength(4);
-    // and back
-    await userEvent.click(screen.getByRole('button', { name: /back to the summary/i }));
-    expect(await screen.findByText('TOLL PAID')).toBeInTheDocument();
-  });
-
-  it('returns to the review sheet, not the summary, when navigating back out of a board', async () => {
-    // Regression test: the sheet/summary toggle used to be untracked local
-    // state, so drilling into a board from the review sheet (a real pushed
-    // route) and then navigating back would remount Tournament fresh and
-    // fall back to the postmarked summary instead of the sheet you came
-    // from. Reviewing is now derived from the URL (/t/:tid vs
-    // /t/:tid/review) so it survives the round trip.
+  it('lands back on the one result page when navigating back out of a reviewed board', async () => {
+    // Regression test: the finished tournament used to live on two routes
+    // (/t/:tid and a /t/:tid/review sheet) showing the same four boards
+    // twice, so which face you came back to was a real question. There is
+    // one face now — drill into a board from the ledger, come back, same
+    // postmarked page.
     apiMock.tournament.mockResolvedValue(tournamentComplete);
     function BoardStub() {
       const navigate = useNavigate();
@@ -150,19 +159,17 @@ describe('Tournament result', () => {
         <MemoryRouter initialEntries={['/t/11']}>
           <Routes>
             <Route path="/t/:tid" element={<Tournament />} />
-            <Route path="/t/:tid/review" element={<Tournament />} />
             <Route path="/t/:tid/b/:no" element={<BoardStub />} />
           </Routes>
         </MemoryRouter>
       </MeContext.Provider>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: /review the boards/i }));
-    const scored = (await screen.findByText((_, el) => el?.textContent === '4♠ by S · +620')).closest('a')!;
-    await userEvent.click(scored);
+    const line = (await screen.findByText((_, el) => el?.textContent === '4♠ by S')).closest('a')!;
+    await userEvent.click(line);
     await userEvent.click(await screen.findByRole('button', { name: /go back/i }));
 
-    expect(await screen.findAllByText('SCORED')).toHaveLength(4);
-    expect(screen.queryByText('TOLL PAID')).not.toBeInTheDocument();
+    expect(await screen.findByText('TOLL PAID')).toBeInTheDocument();
+    expect(screen.getByText('BOARD BY BOARD')).toBeInTheDocument();
   });
 });

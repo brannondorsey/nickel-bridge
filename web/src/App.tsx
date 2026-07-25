@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Me, api } from './api';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
@@ -116,7 +116,7 @@ export default function App() {
               <Route path="/glossary" element={<Glossary />} />
               <Route path="/glossary/:slug" element={<Glossary />} />
               <Route path="/t/:tid" element={<Tournament />} />
-              <Route path="/t/:tid/review" element={<Tournament />} />
+              <Route path="/t/:tid/review" element={<TournamentReviewRedirect />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="*" element={<NotFound />} />
@@ -130,4 +130,16 @@ export default function App() {
       </div>
     </MeContext.Provider>
   );
+}
+
+/**
+ * /t/:tid/review used to be the second face of a finished tournament — the
+ * board sheet you toggled to from the postmarked result. The result page now
+ * carries its own tappable board-by-board ledger, so the route survives only
+ * to forward anything still pointing at it (bookmarks, an old back-stack
+ * entry) onto the one page that shows all of it.
+ */
+function TournamentReviewRedirect() {
+  const { tid } = useParams();
+  return <Navigate to={`/t/${tid}`} replace />;
 }
