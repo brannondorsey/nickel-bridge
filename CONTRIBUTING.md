@@ -422,9 +422,19 @@ with the same `stagePlaySteps` the live board uses and a captured claim tail wit
 above); off-script selections show their real meanings but only the scripted line commits,
 and the tail past the curated steps self-plays — a forced-but-guided step (one with real
 narration to read) gets a full `GUIDED_FORCED_DELAY_MS` beat rather than the live board's
-near-instant auto-play delay. Narration lives in `onboarding/script.ts`, hand-curated
+near-instant auto-play delay. That beat is *reading* time, so unlike the tail's pacing it
+survives `prefers-reduced-motion` (asking for less movement isn't asking to be taught
+faster) — the same split applies to the tollkeeper ribbon, where only the ink-wash overlay
+remounts per line so the `role="status"` region itself stays put for assistive tech.
+Because the tour renders in place of the routes, two things that are plain links on a live
+board have to be re-pointed: `ScoreReceipt`'s "Back to lobby" takes an `onLeave` override
+(wired to the tour's skip, which stamps the gate), and the capture's views are renumbered
+to board №0 in `loadTourBoard` so the receipt's "THE TOLL — BOARD n" heading agrees with
+the №0 chrome around it (the capture itself runs on board 3, dealer South, and stays
+exactly as the engine emitted it). Narration lives in `onboarding/script.ts`, hand-curated
 against the capture — `onboarding/tour.test.tsx` is the drift guard that forces re-curation
-if the capture is regenerated onto a different line. Every line of the tour's own voice
+if the capture is regenerated onto a different line (including the field outcomes
+`COPY.fieldSay` names by hand). Every line of the tour's own voice
 (pamphlet body copy and the tollkeeper's ribbon, but not its display type) renders through
 `GlossaryProse` under `script.ts`'s `TOUR_LINKS` policy, so the words a first-timer is
 meeting for the first time open the term sheet — which means the gate-rendered tour needs

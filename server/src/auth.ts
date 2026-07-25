@@ -216,6 +216,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     if (!result.ok) return reply.code(400).send({ error: result.error });
     if (stmtHandleTaken.get(result.key, user.id)) return reply.code(409).send({ error: 'handle already taken' });
     stmtSetHandle.run(result.handle, result.key, user.id);
-    return reply.send({ user: { id: user.id, handle: result.handle, picture: user.picture, elo: user.elo } });
+    return reply.send({
+      user: { id: user.id, handle: result.handle, picture: user.picture, elo: user.elo, onboardedAt: user.onboarded_at },
+    });
   });
 }

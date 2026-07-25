@@ -5,9 +5,9 @@ import type { TourBoard } from './board0';
  * The tollkeeper's script — the hand-curated narration overlay for the
  * captured practice board (board0.json, seed "crossing-43"). Curated the
  * same way demo scenario copy is: the capture is machine-generated, the
- * words are written against it by hand, and script.test.ts pins the two
- * together (expected actions, guided/auto split) so a regenerated capture
- * fails loudly here instead of narrating the wrong deal.
+ * words are written against it by hand, and tour.test.tsx pins the two
+ * together (expected actions, and the field outcomes fieldSay names) so a
+ * regenerated capture fails loudly here instead of narrating the wrong deal.
  *
  * Voice rules (.claude/skills/nickel-bridge-design): warm, second person,
  * period-inflected; suit glyphs render through SuitText; no emoji.
@@ -94,7 +94,7 @@ export const COPY = {
   receiptSay:
     'Scored and itemized — every crossing prints a receipt like this. Read where the toll came from, then see who else was on the bridge.',
   fieldSay:
-    'You didn’t cross alone: the house played this very deal before you — same cards, same robots. The Shark landed your exact line, so you split the matchpoints. The Novice held your cards too, and went two down. That’s duplicate: the deal is never the difference.',
+    'You didn’t cross alone: the house played this very deal before you — same cards, same robots. The Shark and The Regular both landed your exact line, so the three of you split the matchpoints. The Novice held your cards too, and went two down. That’s duplicate: the deal is never the difference.',
 
   doneTitle: 'That’s the whole game.',
   doneBody:

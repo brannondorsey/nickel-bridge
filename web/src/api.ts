@@ -7,7 +7,7 @@ export interface Me {
     picture: string | null;
     elo: number;
     /** unix seconds when the first-crossing tour was completed or skipped; null = show it */
-    onboardedAt?: number | null;
+    onboardedAt: number | null;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;

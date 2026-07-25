@@ -27,10 +27,25 @@ export interface TourStep {
 
 export interface TourBoard {
   seed: string;
+  /** the board the capture actually ran on — see TOUR_BOARD_NO below */
   boardNo: number;
   steps: TourStep[];
   final: BoardView;
 }
+
+/**
+ * The tour calls it board №0, but the capture had to run on a real board of a
+ * real tournament — board 3, the one this dealing scheme starts with South
+ * (gen_tour_board.mjs). The tour's own chrome says №0 everywhere, and so must
+ * the shared components that read `view.boardNo`: without this, the receipt
+ * panel between them announced "THE TOLL — BOARD 3". Renumbered on load rather
+ * than patched into the generated capture, which stays exactly what the engine
+ * emitted — and applied to EVERY view including `final`, since TrickArea keys
+ * its animation off (tournamentId, boardNo) and would treat a mismatched pair
+ * as a different board.
+ */
+const TOUR_BOARD_NO = 0;
+const renumber = (view: BoardView): BoardView => ({ ...view, boardNo: TOUR_BOARD_NO });
 
 let cache: Promise<TourBoard> | null = null;
 
@@ -40,6 +55,11 @@ export function loadTourBoard(): Promise<TourBoard> {
   if (!cache) {
     cache = import('./board0.json')
       .then((m) => m.default as unknown as TourBoard)
+      .then((d) => ({
+        ...d,
+        steps: d.steps.map((s) => ({ ...s, view: renumber(s.view) })),
+        final: renumber(d.final),
+      }))
       .catch((err) => {
         cache = null; // don't memoize a failed chunk fetch — see glossary/deep.ts
         throw err;

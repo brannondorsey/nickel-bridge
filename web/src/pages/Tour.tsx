@@ -84,7 +84,9 @@ function TourProse({ text }: { text: string }) {
 // lead follow) still carries a full narration line worth reading — the
 // live board's AUTO_PLAY_DELAY_MS (250ms, tuned for a trivial single-legal-
 // card tap with nothing to read) blew right past it. Give guided steps a
-// real beat before they self-advance.
+// real beat before they self-advance. This one is a READING beat, not an
+// animation, so reduced motion doesn't shorten it (see the delay below):
+// asking for less movement isn't asking to be taught faster.
 const GUIDED_FORCED_DELAY_MS = 6000;
 // The self-playing tail (steps with no curated guidance) — brief, since
 // there's no narration line to read, just the fastForward copy repeating.
@@ -130,16 +132,23 @@ export default function Tour() {
     refresh();
   };
 
+  // Deliberately NOT catching setOnboarded separately: a failed stamp leaves
+  // the gate closed, so navigating to a freshly-placed board would show the
+  // tour at a board URL until the next reload. Let it fall into the catch
+  // below and land back at the pamphlet's own exit instead.
   const playTheToll = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await api.setOnboarded().catch(() => {});
+      await api.setOnboarded();
       const { tournamentId, boardNo } = await api.play();
       navigate(`/t/${tournamentId}/b/${boardNo}`);
       refresh();
     } catch {
-      // placement failed (offline?) — fall back to the lobby rather than trap
+      // stamp or placement failed (offline?) — fall back to the lobby rather
+      // than trap. If it was the stamp, the gate is still closed and this
+      // lands back on the postmark, where PLAY THE TOLL can simply be tapped
+      // again; if it was placement, the stamp took and the lobby renders.
       navigate('/');
       refresh();
     } finally {
@@ -288,7 +297,12 @@ export default function Tour() {
     );
   }
 
-  return <PracticeBoard onDone={() => setStage('postmark')} />;
+  // onLeave: the practice board's receipt carries the shared "Back to lobby"
+  // secondary action, which is an ordinary <Link to="/"> on a live board — but
+  // the tour renders in place of the routes, so it would change the URL and
+  // leave the tester staring at the same receipt. Route it through skip(),
+  // which is what leaving actually means here.
+  return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} />;
 }
 
 /**
@@ -296,13 +310,17 @@ export default function Tour() {
  * at the top of the viewport so the narration stays readable from any scroll
  * position (play and result phases scroll the document; content passes
  * underneath rather than being covered), with a run-in label to keep the
- * band shallow. Keyed by its text: a line change remounts it, replaying the
- * brief ink-wash pulse (same "don't miss this" idea as the vulnerability
- * chip's one-time pulse; stilled under reduced motion).
+ * band shallow. A line change replays a brief ink-wash pulse (same "don't
+ * miss this" idea as the vulnerability chip's one-time pulse; stilled under
+ * reduced motion) by remounting the wash overlay — and ONLY the overlay. The
+ * `role="status"` element itself has to outlive the change: assistive tech
+ * announces mutations inside a live region it is already watching, and a
+ * region swapped out for a fresh, already-populated one is routinely missed.
  */
 function Tollkeeper({ text }: { text: string }) {
   return (
     <div className="tour-narr" role="status">
+      <span key={text} className="tour-narr-wash" aria-hidden="true" />
       <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
       <p>
         <TourProse text={text} />
@@ -322,7 +340,7 @@ function Tollkeeper({ text }: { text: string }) {
  * the same ClaimOverlay + stageClaimSteps fast-forward the live board does,
  * instead of the flat cut a multi-trick jump would otherwise fall back to.
  */
-function PracticeBoard({ onDone }: { onDone: () => void }) {
+function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () => void }) {
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -492,7 +510,9 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
     if (!data || !step || view !== step.view) return;
     const forced = step.kind === 'card' && step.view.legalCards?.length === 1;
     if (!guidance?.auto && !forced) return;
-    const delay = !motionOK() ? 0 : guidance?.auto ? AUTO_STEP_DELAY_MS : GUIDED_FORCED_DELAY_MS;
+    // The tail's pacing is animation, so reduced motion drops it to 0; the
+    // guided beat is reading time and survives either way.
+    const delay = guidance?.auto ? (motionOK() ? AUTO_STEP_DELAY_MS : 0) : GUIDED_FORCED_DELAY_MS;
     const id = window.setTimeout(() => commit(Boolean(guidance?.auto)), delay);
     return () => clearTimeout(id);
   }, [data, step, view, guidance, commit]);
@@ -578,11 +598,10 @@ function PracticeBoard({ onDone }: { onDone: () => void }) {
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <TourHead view={view} />
-      {/* keyed by its line so a narration change remounts the ribbon and replays its wash */}
-      <Tollkeeper key={narration} text={narration} />
+      <Tollkeeper text={narration} />
       {done ? (
         resultView === 'receipt' ? (
-          <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} />
+          <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} onLeave={onLeave} />
         ) : (
           <TourResult board={data.final} onReceipt={() => setResultView('receipt')} onDone={onDone} />
         )

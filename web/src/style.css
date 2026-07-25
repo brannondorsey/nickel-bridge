@@ -3672,11 +3672,12 @@ a.stat-tile:hover {
   font-size: 14px;
   line-height: 1.42;
 }
-/* A fresh line presses a quick ink wash over the band (remount via key —
-   see Tour.tsx). Ink-based so it reads in both themes; double-beat like the
-   vulnerability chip's pulse. */
-.tour-narr::after {
-  content: '';
+/* A fresh line presses a quick ink wash over the band. Its own element rather
+   than a ::after on the band, because only the wash remounts on a line change
+   (via key — see Tour.tsx); the band is the live region and has to stay put.
+   Ink-based so it reads in both themes; double-beat like the vulnerability
+   chip's pulse. */
+.tour-narr-wash {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -3684,7 +3685,7 @@ a.stat-tile:hover {
   opacity: 0;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .tour-narr::after {
+  .tour-narr-wash {
     animation: nbNarrWash 0.45s ease-out 2;
   }
 }

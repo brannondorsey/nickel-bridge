@@ -7,7 +7,7 @@ import { meFreshCrosser } from '../test/fixtures';
 import { GlossaryProvider } from '../glossary/GlossaryContext';
 import { apiMock, renderWithMe } from '../test/utils';
 import board0 from './board0.json';
-import type { TourBoard } from './board0';
+import { type TourBoard, loadTourBoard } from './board0';
 import { segmentProse } from '../glossary/linkify';
 import { TERM_BY_SLUG } from '../glossary/terms';
 import { COPY, STEPS, TOUR_LINKS, guidanceFor } from './script';
@@ -62,6 +62,38 @@ describe('first-crossing script ↔ capture drift guard', () => {
     expect(data.final.result!.scoreNS).toBeGreaterThan(0);
     // the tail past the curated steps self-plays
     expect(guidanceFor(STEPS.length, data).auto).toBe(true);
+  });
+
+  it('renumbers every view to board №0 on load', async () => {
+    // The capture had to run on a real board (3 — dealer South). The tour's
+    // own chrome says №0, and so must the shared components that read
+    // view.boardNo: the receipt panel used to announce "THE TOLL — BOARD 3"
+    // between two №0 headings (PR #87 review).
+    expect(data.final.boardNo).toBe(3); // the raw capture is left alone
+    const loaded = await loadTourBoard();
+    expect(loaded.final.boardNo).toBe(0);
+    // uniform, or TrickArea's (tournamentId, boardNo) identity check would
+    // read the final view as a different board and skip the last animation
+    expect(loaded.steps.map((s) => s.view.boardNo)).toEqual(loaded.steps.map(() => 0));
+  });
+
+  it('the field narration names outcomes the ledger actually shows', () => {
+    // COPY.fieldSay is the one line that makes factual claims about the OTHER
+    // rows ("The Shark and The Regular both landed your exact line… The Novice
+    // …went two down"). Nothing else in this guard would notice a regenerated
+    // capture that reshuffled the house, leaving the tollkeeper confidently
+    // narrating a table that isn't on screen.
+    const field = data.final.result!.field;
+    const row = (handle: string) => field.find((f) => f.handle === handle)!;
+    const me = field.find((f) => f.isMe)!;
+    for (const tied of ['The Shark', 'The Regular']) {
+      expect(row(tied), tied).toBeDefined();
+      expect(row(tied).scoreNS, `${tied} shares your score`).toBe(me.scoreNS);
+      expect(row(tied).pct, `${tied} splits the matchpoints with you`).toBe(me.pct);
+    }
+    expect(row('The Novice').contract, 'the Novice goes two down').toMatch(/−2$/);
+    expect(COPY.fieldSay).toContain('The Shark and The Regular');
+    expect(COPY.fieldSay).toContain('went two down');
   });
 
   it('the captured tail is a genuine claim the tour can animate, not a flat cut to the ledger', () => {
@@ -138,7 +170,7 @@ describe('the first crossing (Tour)', () => {
 
   it(
     'walks board №0 through the real board UI to the ledger and postmark',
-    { timeout: 20000 },
+    { timeout: 30000 },
     async () => {
       apiMock.setOnboarded.mockResolvedValue({ ok: true });
       const user = userEvent.setup();
@@ -192,9 +224,16 @@ describe('the first crossing (Tour)', () => {
       // (displayIdx lags idx) rather than the instant 4♠ commits, so it
       // never describes dummy coming down before dummy is actually down.
       await screen.findByText(/lays their hand on the table/, {}, { timeout: 5000 });
+      // jsdom reports no motion support, so this whole walk takes the
+      // REDUCED-MOTION path — which is exactly where the beat used to
+      // collapse to 0ms (PR #87 review). The line that teaches dummy must
+      // still be on screen a second later; only the tail's pacing is motion.
+      await new Promise((r) => setTimeout(r, 1000));
+      expect(screen.getByText(/lays their hand on the table/)).toBeInTheDocument();
       // decision 4 — two-step tap on the ♥4 (card 15); "Deliberate, always"
-      // was dropped from this line per review
-      await screen.findByText(/ten is already winning the/, {}, { timeout: 5000 });
+      // was dropped from this line per review. Arrives after the full
+      // GUIDED_FORCED_DELAY_MS beat, so this waits longer than the 6s.
+      await screen.findByText(/ten is already winning the/, {}, { timeout: 9000 });
       expect(screen.queryByText(/Deliberate, always/)).not.toBeInTheDocument();
       const heart4 = () => container.querySelector('[data-card="15"]') as HTMLElement;
       await waitFor(() => expect(heart4()).toBeTruthy());
@@ -215,7 +254,12 @@ describe('the first crossing (Tour)', () => {
       await user.click(claimOverlay);
 
       // the tail finishes to the real receipt…
-      await user.click(await screen.findByRole('button', { name: /see the field/i }, { timeout: 15000 }));
+      await screen.findByRole('button', { name: /see the field/i }, { timeout: 15000 });
+      // …whose "Back to lobby" is the tour's own exit, not the live board's
+      // <Link to="/"> (which would change the URL and leave the newcomer on
+      // this very screen, since the tour renders in place of the routes)
+      expect(screen.getByRole('button', { name: /back to lobby/i })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /see the field/i }));
       // …and the ledger reveal: the genuine house field
       expect(await screen.findByText('The Shark')).toBeInTheDocument();
       expect(screen.getAllByText('HOUSE')).toHaveLength(3);
