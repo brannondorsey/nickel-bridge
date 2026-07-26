@@ -77,7 +77,7 @@ export const COPY = {
     body1:
       'Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more.',
     body2:
-      'The people you’re truly playing came before you, and will come after — each one meeting these same cards at their own pace.',
+      'The people you’re truly playing came before you, and will come after — each one meeting your same cards at their own pace.',
     aside: 'Named for the 1925 toll bridge over the James River: a dime to cross, then a nickel, now fifty cents.',
   },
   ledgerPanel: {
