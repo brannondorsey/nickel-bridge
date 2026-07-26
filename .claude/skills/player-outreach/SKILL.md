@@ -76,7 +76,7 @@ The script assigns each player a cohort. Two get email:
 
 | Cohort | Rule | The question |
 | --- | --- | --- |
-| `friction` | Finished 1–15 boards, all on a single day, never returned | Why did you stop? |
+| `friction` | Finished 1–15 boards, all on a single day, never returned — and quiet for at least `--cooldown-days` (default 3) | Why did you stop? |
 | `retained` | 16+ boards, **or** played on 2+ separate days, **or** on the leaderboard | What's keeping you here? |
 
 `retained` is tested first, because the two definitions overlap — someone with 5 boards across 3
@@ -87,6 +87,13 @@ so it wins, which leaves `friction` as the clean complement: tried it once and n
 the game to report on, and "why did you stop?" to someone who never started reads as a misfire.
 They're a real and interesting funnel problem — worth telling the user the count — but a
 different question needing a different email.
+
+Players the script marks `too_recent` are also held. The friction email asserts something about
+its reader — that they left — and saying that to someone who played yesterday is both wrong and
+faintly insulting: they haven't churned, they just haven't played *today*. They aren't dropped,
+only deferred, and by the next run they've either come back (landing in `retained`) or genuinely
+gone quiet. Report how many were held; if the user wants them anyway, re-run with
+`--cooldown-days 0`.
 
 Before drafting, scan the batch by eye for rows that shouldn't be written to at all: obvious
 throwaway or role addresses, junk display names, anything that looks like a test account. The

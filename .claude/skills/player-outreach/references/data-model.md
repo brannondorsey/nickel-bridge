@@ -65,6 +65,8 @@ finished it. They read as `never_played` by completed-board count while still ha
 | `days_seen` | Distinct UTC dates with board activity — the return-visit signal. |
 | `first_seen` / `last_seen` | First and most recent board activity, as UTC dates. |
 | `signed_up` | `users.created_at`. Compare with `first_seen` to spot signup-without-play. |
+| `quiet_days` | Whole days between `last_seen` and today. `null` if they never played. |
+| `too_recent` | A `friction` player still inside the cooldown — held, not dropped, because "you stopped playing" isn't yet a true thing to say to them. |
 | `elo` | Current rating. `1200` exactly usually means "never rated", not "average player". |
 | `excluded` | Operator/opt-out account. Counted in the roster, skipped when drafting. |
 

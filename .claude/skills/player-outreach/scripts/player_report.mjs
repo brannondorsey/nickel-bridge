@@ -196,18 +196,48 @@ async function fetchRows(machine) {
 const RETAINED_BOARDS = 16; // ≈ the 4 rated tournaments the leaderboard needs
 const RETAINED_DAYS = 2;
 
+/**
+ * How long someone has to be quiet before "you stopped playing" is a fair thing
+ * to say to them. Below this they get `too_recent`, because the friction email
+ * asserts something about the reader — that they left — and asserting it to
+ * someone who played yesterday is both wrong and slightly insulting: they
+ * haven't churned, they just haven't played *today*. They aren't dropped, only
+ * held for a later run, by which point they've either come back (and belong in
+ * `retained`) or genuinely gone quiet.
+ *
+ * Three days is deliberately short. This is a young, low-stakes game where a
+ * session is a few minutes; a fortnight of silence would be a stronger churn
+ * signal but would also delay every useful answer past the point where the
+ * player still remembers what annoyed them, which is the whole asset here.
+ */
+const COOLDOWN_DAYS = Number(argValue('--cooldown-days') ?? 3);
+
 function cohortOf(p) {
   if (p.boards_done === 0) return 'never_played';
   if (p.boards_done >= RETAINED_BOARDS || p.days_seen >= RETAINED_DAYS || p.on_leaderboard) return 'retained';
   return 'friction';
 }
 
+/** Whole days between two YYYY-MM-DD strings, or null if either is missing. */
+function daysBetween(from, to) {
+  if (!from || !to) return null;
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
 const machine = await wake(await resolveMachine());
 const { today, rows } = await fetchRows(machine);
 
 const players = rows.map((r) => {
-  const p = { ...r, on_leaderboard: r.rated_tournaments >= 4, excluded: EXCLUDE.has((r.email ?? '').toLowerCase()) };
-  return { ...p, cohort: cohortOf(p) };
+  const quiet_days = daysBetween(r.last_seen, today);
+  const p = {
+    ...r,
+    quiet_days,
+    on_leaderboard: r.rated_tournaments >= 4,
+    excluded: EXCLUDE.has((r.email ?? '').toLowerCase()),
+  };
+  const cohort = cohortOf(p);
+  // Only `friction` is held: it's the one email that tells the reader they left.
+  return { ...p, cohort, too_recent: cohort === 'friction' && quiet_days !== null && quiet_days < COOLDOWN_DAYS };
 });
 
 // Cohort totals count only mailable rows, since the totals exist to answer
@@ -217,13 +247,18 @@ const report = {
   generated_on: today,
   app: APP,
   machine: machine.id,
+  cooldown_days: COOLDOWN_DAYS,
   totals: {
     players: players.length,
     excluded: players.filter((p) => p.excluded).length,
     retained: byCohort('retained').length,
-    friction: byCohort('friction').length,
+    friction: byCohort('friction').filter((p) => !p.too_recent).length,
+    friction_held: byCohort('friction').filter((p) => p.too_recent).length,
     never_played: byCohort('never_played').length,
     on_leaderboard: players.filter((p) => p.on_leaderboard).length,
+    // Opened a board and abandoned it mid-hand — a sharper failure than
+    // "signed up and never played", and invisible in the cohort counts.
+    abandoned_mid_board: players.filter((p) => p.boards_started > p.boards_done).length,
   },
   players,
 };
@@ -254,7 +289,8 @@ if (!JSON_OUT && !CSV_OUT) {
   console.error(
     `${report.generated_on}  ${t.players} players — ` +
       `${t.retained} retained, ${t.friction} friction, ${t.never_played} never played ` +
-      `(${t.on_leaderboard} on leaderboard)`,
+      `(${t.on_leaderboard} on leaderboard, ${t.abandoned_mid_board} abandoned a hand mid-play)` +
+      (t.friction_held ? `\n  ${t.friction_held} friction held as too recent — override with --cooldown-days 0` : ''),
   );
   if (JSON_OUT) console.error(`json → ${JSON_OUT}`);
   if (CSV_OUT) console.error(`csv  → ${CSV_OUT}`);
