@@ -8,6 +8,10 @@ partner against two robot opponents (like ACBL/BBO robot duplicates). Results ar
 matchpointed against your friends' results on identical deals, so the competition is about
 judgment, not card luck.
 
+### ▸ [Play it at bridge.brannon.online](https://bridge.brannon.online)
+
+Free, no app to install — sign in with Google and you're at the table.
+
 <table>
   <tr>
     <td width="33%"><img src="docs/screenshots/01-bidding-meaning.png" alt="The bidding screen with 1NT selected and its SAYC meaning — 15–17 HCP, balanced — shown above the hand"></td>
@@ -31,9 +35,9 @@ judgment, not card luck.
   </tr>
 </table>
 
-**Click around it yourself:** [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo)
-signs you in as a guest with a seeded field behind you and a gallery of prepared boards —
-no account, nothing to install.
+**Rather not sign in yet?** [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo)
+drops you in as a guest with a seeded field behind you and a gallery of prepared boards to
+click through — no account at all.
 
 <details>
 <summary>More screens — the field, stats, the glossary, the first-crossing tour, desktop</summary>
