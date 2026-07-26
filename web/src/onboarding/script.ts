@@ -130,7 +130,8 @@ export const STEPS: StepGuidance[] = [
     // 1NT (call 7). "the game" here means bridge itself, not the scoring
     // term — see `skip` below.
     say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
-    offScript: 'Each of these has its meaning — that’s the point of the box. This once, though: 1NT, the honest one.',
+    offScript:
+      'Each of these has its meaning — that’s the point of the box. Read as many as you like, then bid 1NT: the honest one.',
     expect: 7,
     skip: ['game'],
   },
