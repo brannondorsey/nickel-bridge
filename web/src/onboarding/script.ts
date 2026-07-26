@@ -78,7 +78,7 @@ export const COPY = {
     title: 'Everyone plays the same deals.',
     body1:
       'Bad cards are no excuse here — Margaret holds the same ones as you, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
-    body2: 'That’s duplicate: the luck is dealt out of the game, and judgment is what’s left.',
+    body2: 'That’s duplicate: the luck is dealt out of it, and judgment is what’s left.',
   },
 
   offerNo: 'III · THE PRACTICE',
@@ -110,7 +110,7 @@ export const COPY = {
 export const STEPS: StepGuidance[] = [
   {
     // 1NT (call 7)
-    say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
+    say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in bridge — tap 1NT and read what it promises. Nothing is final until you confirm.',
     offScript: 'Each of these has its meaning — that’s the point of the box. Tonight, though: 1NT, the honest one.',
     expect: 7,
   },

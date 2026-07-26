@@ -160,7 +160,7 @@ describe('the first crossing (Tour)', () => {
     expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
     // II · THE LEDGER — one deal, three fates
-    expect(screen.getByText(/the luck is dealt out of the/)).toBeInTheDocument();
+    expect(screen.getByText(/the luck is dealt out of it/)).toBeInTheDocument();
     expect(screen.getByText('Harold')).toBeInTheDocument();
     expect(screen.getByText('Margaret')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
@@ -297,7 +297,7 @@ describe('the tour’s glossary links', () => {
   it('teaches the common words gameplay prose deliberately leaves unlinked', () => {
     expect(slugsIn(STEPS[2].say)).toContain('trump'); // "eight trumps between you"
     expect(slugsIn(STEPS[4].say)).toEqual(['dummy', 'trick']);
-    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge', 'game']);
+    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge']);
     // and none of it leaks into the sitewide policy the rest of the app reads
     expect(segmentProse(STEPS[2].say).filter((s) => s.slug)).toHaveLength(0);
   });
