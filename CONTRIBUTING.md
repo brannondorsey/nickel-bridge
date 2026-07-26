@@ -122,7 +122,9 @@ docs            design-brief.md — requirements spec for the visual redesign;
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
-                design-system skill — see "Design system" below
+                design-system skill — see "Design system" below; and
+                skills/player-outreach/, the operator skill that reads the production
+                roster and drafts the weekly player emails — see "Player outreach" below
 ```
 
 ## Development workflow
@@ -580,6 +582,26 @@ requirements spec it grew from). The skill's JSX components are prototyping refe
 imports: production equivalents live in `web/src/components/ds/`, and styles get ported into
 `web/src/style.css`. Note the skill's demo HTML uses Google-hosted fonts via `@import`;
 production self-hosts the same faces via `@fontsource`.
+
+## Player outreach
+
+`.claude/skills/player-outreach/` is operator tooling, not part of the build — it lives in
+a skill rather than `tools/` because it needs `FLY_API_TOKEN` and touches production. Its
+`scripts/player_report.mjs` is the **only** supported way to read the live player roster:
+there is no analytics stack and no admin API, so it execs a read-only (`readonly: true`)
+SQLite query on the production machine via the Fly Machines API and emits a roster CSV/JSON
+with each player bucketed into `retained` / `friction` / `never_played`. The skill then
+drafts the weekly outreach emails through the Gmail connector — which can only *draft*,
+never send, so a human reads every word first.
+
+Two things to know before touching it. **`boards_done` is not the leaderboard test**: the
+leaderboard gates on `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a
+tournament only rates a player who finished all four of its boards in a field of 2+ humans
+— so 16 finished boards spread across half-played tournaments still means no leaderboard
+row. `references/data-model.md` in the skill explains the gap. And **this repo is public**,
+so roster output (real names and email addresses) must never be written into the working
+tree, committed, or published to an Artifact — the skill writes to the session scratchpad,
+and Gmail's sent mail, not a file in here, is what records who has already been contacted.
 
 ## Code style
 
