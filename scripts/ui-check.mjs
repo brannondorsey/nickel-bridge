@@ -108,7 +108,14 @@ async function finishBoard(no) {
     }
   }
 }
-for (let no = 1; no <= 4; no++) await finishBoard(no);
+await finishBoard(1);
+
+// 10b — the live tournament sheet: board 1 scored, 2 live, 3/4 sealed
+await page.goto(`${base}/t/${tid}`);
+await page.waitForSelector('.tourney-sheet');
+await shot('10b-tournament-sheet');
+
+for (let no = 2; no <= 4; no++) await finishBoard(no);
 
 // 11 — board result (full page: hero, field, deal diagram, bidding recap)
 await page.goto(`${base}/t/${tid}/b/1`);
@@ -123,13 +130,10 @@ await shot('11b-toll-receipt', true);
 await page.click('text=SEE THE FIELD');
 await page.waitForSelector('.fieldtable');
 
-// 12/13 — tournament result + reviewable sheet
+// 12 — tournament result: hero, the tappable board-by-board ledger, final field
 await page.goto(`${base}/t/${tid}`);
 await page.waitForSelector('.tourney-result-hero');
-await shot('12-tournament-result');
-await page.click('text=Review the boards');
-await page.waitForSelector('.tourney-sheet');
-await shot('13-tournament-sheet');
+await shot('12-tournament-result', true);
 
 // 14 — rankings
 await page.goto(base);

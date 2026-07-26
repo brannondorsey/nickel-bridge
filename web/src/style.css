@@ -2576,20 +2576,51 @@ a.stat-tile:hover {
 .tourney-page .tourney-boards {
   margin: 16px 16px 0;
   display: grid;
-  grid-template-columns: 18px 1fr auto auto;
-  gap: 7px 12px;
+  grid-template-columns: 18px 1fr auto auto 9px;
+  gap: 2px 12px;
   font-size: 13.5px;
   align-items: center;
 }
 .tourney-page .tourney-boards .perf-panel-heading {
   grid-column: 1 / -1;
 }
-/* display: contents lets each line's cells join the panel's single grid
-   above instead of forming their own grid — otherwise each row sizes its
-   "auto" score/pct columns from its own content and the pct bars drift
-   out of alignment depending on how wide the neighboring score is. */
+/* Each line is a link into its board, but its cells still belong to the
+   panel's single grid via subgrid — otherwise every row would size its own
+   "auto" score/pct columns and the pct bars would drift out of alignment
+   depending on how wide the neighboring score is. */
 .tourney-board-line {
-  display: contents;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  /* bleed the tap target toward the panel edges without crossing the
+     perforation, so the pressed row reads as a full ledger line */
+  margin: 0 -8px;
+  padding: 5px 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.tourney-board-line:active {
+  background: var(--surface);
+}
+@media (hover: hover) {
+  .tourney-board-line:hover {
+    background: var(--surface);
+  }
+}
+.tourney-board-open {
+  font-family: var(--font-label);
+  color: var(--muted);
+  text-align: right;
+  line-height: 1;
+}
+.tourney-boards-hint {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 .tourney-board-no {
   font-family: var(--font-label);
@@ -3423,4 +3454,307 @@ a.stat-tile:hover {
   padding: 3px 8px;
   border-radius: var(--radius-chip);
   cursor: pointer;
+}
+
+/* ---- The first crossing (pages/Tour.tsx + web/src/onboarding) ---- */
+
+/* The pamphlet cover ("So you've come to cross.") over the river scene */
+.tour-gate {
+  position: relative;
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--paper);
+  padding: 24px 24px 170px;
+}
+.tour-cover-head {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tour-cover-head .label-caps {
+  color: var(--ink);
+}
+.tour-cover-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.18;
+  margin: 0;
+}
+.tour-cover-main .tour-aside {
+  text-align: left;
+  margin: 10px 0 0;
+}
+/* center the cover's content while the quiet skip settles at the page foot,
+   just above the river scene — fine print, apart from the real action */
+.tour-cover-main {
+  margin: auto 0;
+}
+
+/* Inner pamphlet panels (I · THE BRIDGE, II · THE LEDGER) */
+.tour-page {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 24px 12px;
+}
+.tour-page-no {
+  color: var(--ink);
+}
+.tour-page .tour-title {
+  text-align: left;
+  margin: 12px 0 0;
+}
+.tour-page .tour-copy {
+  text-align: left;
+  max-width: none;
+  margin: 12px 0 0;
+  font-size: 16px;
+}
+.tour-page .tour-aside {
+  text-align: left;
+  margin: 12px 0 0;
+}
+.tour-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 16px 0 0;
+  width: 100%;
+}
+.tour-page-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding: 18px 0 6px;
+}
+.tour-specimen {
+  margin: 14px 0 2px;
+}
+
+/* A term sheet's action link (terms.ts `action` — the ledger's easter-egg
+   terms, currently only First crossing → /tour). */
+.gloss-action {
+  display: inline-block;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-top: 12px;
+  padding: 4px 0;
+}
+
+/* The quiet skip: fine print at each pamphlet page's foot — always in the
+   same place, never competing with the page's one real action. */
+.tour-skip {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  align-self: center;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 14px 18px;
+}
+
+.tour-gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.tour-aside {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  margin: 4px 0 0;
+}
+.tour-scene {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+.tour-scene img {
+  display: block;
+  width: 100%;
+  height: 146px;
+  object-fit: cover;
+  object-position: bottom;
+}
+/* same static day/night asset swap as .splash-bridge (see its comment) */
+.tour-scene img.night-scene {
+  display: none;
+}
+[data-theme='night'] .tour-scene img.day-scene {
+  display: none;
+}
+[data-theme='night'] .tour-scene img.night-scene {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .tour-scene img.day-scene {
+    display: none;
+  }
+  html:not([data-theme]) .tour-scene img.night-scene {
+    display: block;
+  }
+}
+
+/* Offer + postmark interstitials share the auth-screen posture */
+.tour-offer,
+.tour-postmark {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.tour-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  margin: 26px 0 0;
+}
+.tour-copy {
+  max-width: 320px;
+  margin: 10px 0 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.tour-offer .tour-aside,
+.tour-postmark .tour-aside {
+  margin-top: 10px;
+}
+.tour-offer-actions {
+  width: min(300px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+.tour-quietlink {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px;
+}
+.tour-postmark-stamp {
+  animation: nbPostmarkPress 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-postmark-stamp {
+    animation: none;
+  }
+}
+@keyframes nbPostmarkPress {
+  0% {
+    transform: scale(1.55) rotate(-3deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(0.97) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The tollkeeper's ribbon: a shallow inset-surface band pinned to the top of
+   the viewport, so narration reads from any scroll position — the play and
+   result phases scroll underneath it. Full-bleed while stuck so nothing
+   ghosts past its edges; a fresh line replays the ink-wash (remount via key,
+   see Tour.tsx). */
+.tour-narr {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-inset, var(--surface));
+  border-bottom: 1px solid var(--line);
+  padding: 9px 16px 10px;
+}
+.tour-narr .tour-narr-who {
+  display: block;
+  margin-bottom: 2px;
+}
+.tour-narr p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.42;
+}
+/* A fresh line presses a quick ink wash over the band. Its own element rather
+   than a ::after on the band, because only the wash remounts on a line change
+   (via key — see Tour.tsx); the band is the live region and has to stay put.
+   Ink-based so it reads in both themes; double-beat like the vulnerability
+   chip's pulse. */
+.tour-narr-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tour-narr-wash {
+    animation: nbNarrWash 0.45s ease-out 2;
+  }
+}
+@keyframes nbNarrWash {
+  0% {
+    opacity: 0.16;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The tollkeeper's suggestion: a breathing outline on the one suggested
+   control. Redundant with the ribbon's words — motion is never the only
+   signal — and still under reduced motion. */
+.bid.bid-hint,
+.cardbtn.card-hint {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bid.bid-hint,
+  .cardbtn.card-hint {
+    animation: nbHintBreathe 1.4s ease-in-out infinite;
+  }
+}
+@keyframes nbHintBreathe {
+  0%,
+  100% {
+    outline-offset: 1px;
+  }
+  50% {
+    outline-offset: 4px;
+  }
+}
+
+/* Board №0 has no lobby to go back to mid-tour: the receipt's secondary
+   action (Board's "Back to lobby") stays hidden inside the tour shell. */
+.tour-board .receipt .board-actions .ds-btn-secondary {
+  display: none;
 }

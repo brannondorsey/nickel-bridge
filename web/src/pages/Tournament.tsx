@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMe } from '../App';
 import { SEAT_SHORT, TournamentInfo, api, boardConditions } from '../api';
 import { ScreenHeader } from '../components/ds/AppHeader';
@@ -16,25 +16,24 @@ import { ordinal, postmarkDate, signedScore, tournamentNo, vulLabel } from '../f
 const TOTAL_BOARDS = 4;
 
 /**
- * One page, two faces, both real URLs: /t/:tid (scoresheet — all four
- * boards as tickets, scored / live / sealed, over the live field) and
- * /t/:tid/review (the same sheet, reachable only once complete, for
- * revisiting boards after the postmarked result). Once my four boards are
- * done, /t/:tid itself shows the postmarked result instead of the sheet;
- * "Review the boards" / "Back to the summary" swap between the two routes
- * with history replace, so the toggle itself never grows the back-stack —
- * but because each face has its own URL, drilling into a board (a real
- * pushed route) and hitting back correctly lands back on whichever face you
- * came from, instead of losing the toggle to a fresh-mount default.
+ * One page, one URL (/t/:tid), two states of the same crossing. While the
+ * tournament is live it's the scoresheet: four boards as tickets (scored /
+ * live / sealed) over the running field. Once my four boards are done the
+ * sheet is replaced by the postmarked receipt — hero result, the
+ * board-by-board ledger, then the final field — and the ledger lines are
+ * themselves the way back into a board. A finished tournament used to split
+ * across two routes (/t/:tid and a /t/:tid/review sheet) that showed the
+ * same four boards twice with a toggle between them; there is nothing on
+ * the review sheet the receipt can't carry, so the second face is gone and
+ * /t/:tid/review now just redirects here (old links, bookmarks, and the
+ * browser's back-stack all still land somewhere real).
  */
 export default function Tournament() {
   const { tid } = useParams();
   const { me } = useMe();
   const navigate = useNavigate();
-  const location = useLocation();
   const [t, setT] = useState<TournamentInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const reviewing = location.pathname.endsWith('/review');
 
   useEffect(() => {
     api
@@ -68,7 +67,41 @@ export default function Tournament() {
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
   const complete = myDone === TOTAL_BOARDS;
 
-  if (complete && !reviewing) {
+  // The field reads the same live or final — one panel, two headings.
+  const field = (
+    <PerforatedPanel
+      heading={complete ? 'THE FIELD — FINAL' : myDone > 0 ? `THE FIELD — AFTER BOARD ${myDone}` : 'THE FIELD'}
+      className="tourney-field num"
+    >
+      {t.standings.length === 0 ? (
+        <div className="empty-note">No one has played a board yet.</div>
+      ) : (
+        t.standings.map((s, i) => {
+          const you = s.userId === me?.user?.id;
+          const house = s.kind === 'ai';
+          // rank is set once a row is complete; until then fall back to the
+          // row's current position in the pct-sorted field
+          const rankLabel = s.rank ?? i + 1;
+          return (
+            <div
+              key={s.userId}
+              className={`tourney-field-row ${you ? 'tourney-field-you' : ''}${house ? ' tourney-field-house' : ''}`}
+            >
+              <b className="tourney-field-rank">{rankLabel}</b>
+              <span className="tourney-field-name">
+                <Link to={`/players/${s.userId}`}>{you ? 'You' : s.handle}</Link>
+                {house ? <span className="house-tag">HOUSE</span> : null}
+                {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
+              </span>
+              <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>
+            </div>
+          );
+        })
+      )}
+    </PerforatedPanel>
+  );
+
+  if (complete) {
     const num = tournamentNo(t.name, t.id);
     const when = t.myLastPlayedAt ?? t.createdAt;
     const delta = t.myEloDelta ? t.myEloDelta.after - t.myEloDelta.before : null;
@@ -97,9 +130,12 @@ export default function Tournament() {
             </div>
           ) : null}
         </div>
+        {/* The ledger doubles as the review sheet: every line is the board
+            it scores, so revisiting one is a tap on the receipt rather than
+            a detour through a second copy of the same four boards. */}
         <PerforatedPanel heading="BOARD BY BOARD" className="tourney-boards num">
           {(t.myBoards ?? []).map((b) => (
-            <div key={b.no} className="tourney-board-line">
+            <Link key={b.no} to={`/t/${t.id}/b/${b.no}`} className="tourney-board-line">
               <b className="tourney-board-no">{b.no}</b>
               <ContractLabel label={b.contractLabel ?? 'Passed out'} />
               <span className="tourney-board-score">{b.scoreNS !== null ? signedScore(b.scoreNS) : '—'}</span>
@@ -112,14 +148,16 @@ export default function Tournament() {
                   '—'
                 )}
               </span>
-            </div>
+              <span className="tourney-board-open" aria-hidden="true">
+                ›
+              </span>
+            </Link>
           ))}
+          <div className="tourney-boards-hint">Tap a board to look back over the play.</div>
         </PerforatedPanel>
+        {field}
         <div className="tourney-actions">
           <Button to="/">BACK TO THE BRIDGE →</Button>
-          <Button variant="secondary" onClick={() => navigate(`/t/${t.id}/review`, { replace: true })}>
-            Review the boards
-          </Button>
         </div>
       </div>
     );
@@ -173,46 +211,11 @@ export default function Tournament() {
     <div className="tourney-page">
       <ScreenHeader title={t.name} caption={`${players} ${playersWord} · matchpoints`} onBack={() => navigate('/')} />
       <div className="tourney-sheet">{rows}</div>
-      <PerforatedPanel
-        heading={myDone > 0 ? `THE FIELD — AFTER BOARD ${myDone}` : 'THE FIELD'}
-        className="tourney-field num"
-      >
-        {t.standings.length === 0 ? (
-          <div className="empty-note">No one has played a board yet.</div>
-        ) : (
-          t.standings.map((s, i) => {
-            const you = s.userId === me?.user?.id;
-            const house = s.kind === 'ai';
-            // rank is set once a row is complete; until then fall back to the
-            // row's current position in the pct-sorted field
-            const rankLabel = s.rank ?? i + 1;
-            return (
-              <div
-                key={s.userId}
-                className={`tourney-field-row ${you ? 'tourney-field-you' : ''}${house ? ' tourney-field-house' : ''}`}
-              >
-                <b className="tourney-field-rank">{rankLabel}</b>
-                <span className="tourney-field-name">
-                  <Link to={`/players/${s.userId}`}>{you ? 'You' : s.handle}</Link>
-                  {house ? <span className="house-tag">HOUSE</span> : null}
-                  {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
-                </span>
-                <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>
-              </div>
-            );
-          })
-        )}
-      </PerforatedPanel>
+      {field}
       <div className="tourney-actions">
-        {complete ? (
-          <Button variant="secondary" onClick={() => navigate(`/t/${t.id}`, { replace: true })}>
-            Back to the summary
-          </Button>
-        ) : (
-          <Button to={`/t/${t.id}/b/${liveNo}`}>
-            {myDone === 0 ? 'PLAY BOARD 1 →' : `CONTINUE BOARD ${liveNo} →`}
-          </Button>
-        )}
+        <Button to={`/t/${t.id}/b/${liveNo}`}>
+          {myDone === 0 ? 'PLAY BOARD 1 →' : `CONTINUE BOARD ${liveNo} →`}
+        </Button>
       </div>
     </div>
   );

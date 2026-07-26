@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
-import { meFixture, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
+import { meFixture, meFreshCrosser, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
 import { apiMock } from './test/utils';
 
 vi.mock('./api', async (importOriginal) => ({
@@ -61,6 +61,42 @@ describe('App — authenticated', () => {
     apiMock.me.mockResolvedValue(meNoHandle);
     renderApp();
     expect(await screen.findByPlaceholderText('Handle')).toBeInTheDocument();
+  });
+
+  it('meets a not-yet-onboarded user arriving at home with the pamphlet cover (no splash, no routes)', async () => {
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/');
+    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+    expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
+    // the visit still stamps, so no splash replays the moment the tour ends
+    expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
+  });
+
+  it('the gate-rendered tour gets its own glossary provider — term sheets open mid-tour', async () => {
+    // The tour renders in place of the routes (and so outside the provider
+    // that wraps them), but its narration links terms like any other prose.
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/');
+    await screen.findByText(/Welcome to the bridge/);
+    await userEvent.click(screen.getByRole('button', { name: /read the pamphlet/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'robot' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Robot partner');
+  });
+
+  it('never springs the tour on a deep-link arrival — the destination renders instead', async () => {
+    apiMock.me.mockResolvedValue(meFreshCrosser);
+    renderApp('/glossary'); // a shared link goes where it points; the tour waits for a home arrival
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+  });
+
+  it('demo mode suppresses the automatic tour like the splash (the /tour route stays reachable)', async () => {
+    apiMock.me.mockResolvedValue({ ...meFreshCrosser, demo: true });
+    apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+    renderApp();
+    expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
   });
 
   it('shows Home with bottom tabs for a recent visitor, no splash', async () => {

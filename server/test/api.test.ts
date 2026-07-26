@@ -78,6 +78,20 @@ describe('auth', () => {
     const after = await eve.get('/api/me');
     expect(after.user).toBeNull();
   });
+
+  it('first-crossing onboarding stamp: null for new accounts, write-once via POST', async () => {
+    const nora = new TestClient(app, 'Nora');
+    await nora.login();
+    expect((await nora.get('/api/me')).user.onboardedAt).toBeNull();
+
+    await nora.post('/api/me/onboarded');
+    const stamped = (await nora.get('/api/me')).user.onboardedAt;
+    expect(typeof stamped).toBe('number');
+
+    // idempotent: re-walking the tour from /tour never moves the stamp
+    await nora.post('/api/me/onboarded');
+    expect((await nora.get('/api/me')).user.onboardedAt).toBe(stamped);
+  });
 });
 
 describe('handle (first-login username)', () => {
