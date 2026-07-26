@@ -245,29 +245,60 @@ export function roster(opts: RosterOptions = {}): RosterReport {
       on_leaderboard,
       quiet_days,
       excluded: excluded.has((r.email ?? '').toLowerCase()) || excluded.has((r.handle ?? '').toLowerCase()),
-      // Only `friction` is held: it is the one message that tells its reader
-      // they left, which isn't yet true of someone who played yesterday.
-      too_recent: cohort === 'friction' && quiet_days !== null && quiet_days < cooldownDays,
+      // Held while the claim would still be false. Both of these cohorts are
+      // written to with a message that tells its reader they left, and that
+      // isn't yet true of someone who played an hour ago. `abandoned_first`
+      // needs the guard at least as much as `friction` does: an abandoned
+      // board is only "abandoned" in retrospect, so without a cooldown a
+      // player who opened their first board a minute ago and is sitting on
+      // the bid box right now reads as `never_bid` — and would be told they
+      // walked away while they are mid-hand.
+      //
+      // They share one cooldown deliberately. The semantics are identical
+      // ("don't say they left until they have been gone a while") and a
+      // second constant would drift. There is a real tension for
+      // `abandoned_first` — its whole value is reaching people while they
+      // still remember what confused them — so an operator who wants speed
+      // over certainty passes a smaller `cooldown_days`.
+      too_recent:
+        (cohort === 'friction' || cohort === 'abandoned_first') && quiet_days !== null && quiet_days < cooldownDays,
     };
   });
 
-  const inCohort = (c: Cohort) => players.filter((p) => p.cohort === c && !p.excluded);
+  /**
+   * Every derived total is computed over the non-excluded population. That is
+   * the whole point of `excluded`: operator and opt-out accounts stay in
+   * `players` so the roster is complete, but they must not skew any aggregate
+   * — the operator plays their own game constantly and would otherwise sit at
+   * the top of the leaderboard count and carry stale unfinished boards.
+   *
+   * `players` and `excluded` are the two deliberate exceptions, since those
+   * describe the whole population rather than a slice of it.
+   */
+  const mailable = players.filter((p) => !p.excluded);
+  const inCohort = (c: Cohort) => mailable.filter((p) => p.cohort === c);
+  const abandoned = inCohort('abandoned_first');
   return {
     generated_on: today,
     cooldown_days: cooldownDays,
     totals: {
       players: players.length,
-      excluded: players.filter((p) => p.excluded).length,
+      excluded: players.length - mailable.length,
       retained: inCohort('retained').length,
+      // `*_held` splits are batch counts — who to write to *this* run. The
+      // diagnostic breakdowns below describe the cohort as a whole, held rows
+      // included, because a player being too recent to email doesn't make
+      // them less a part of the funnel you're trying to understand.
       friction: inCohort('friction').filter((p) => !p.too_recent).length,
       friction_held: inCohort('friction').filter((p) => p.too_recent).length,
-      abandoned_first: inCohort('abandoned_first').length,
-      abandoned_in_auction: inCohort('abandoned_first').filter((p) => p.stopped_at === 'auction').length,
-      abandoned_in_play: inCohort('abandoned_first').filter((p) => p.stopped_at === 'play').length,
-      never_bid: inCohort('abandoned_first').filter((p) => p.human_calls === 0).length,
+      abandoned_first: abandoned.filter((p) => !p.too_recent).length,
+      abandoned_first_held: abandoned.filter((p) => p.too_recent).length,
+      abandoned_in_auction: abandoned.filter((p) => p.stopped_at === 'auction').length,
+      abandoned_in_play: abandoned.filter((p) => p.stopped_at === 'play').length,
+      never_bid: abandoned.filter((p) => p.human_calls === 0).length,
       never_played: inCohort('never_played').length,
-      on_leaderboard: players.filter((p) => p.on_leaderboard).length,
-      abandoned_mid_board: players.filter((p) => p.boards_started > p.boards_done).length,
+      on_leaderboard: mailable.filter((p) => p.on_leaderboard).length,
+      abandoned_mid_board: mailable.filter((p) => p.boards_started > p.boards_done).length,
     },
     players,
   };
@@ -298,12 +329,31 @@ export function rosterCsv(report: RosterReport): string {
   return [header, ...rows].join('\n') + '\n';
 }
 
+/**
+ * Fastify's default query parser turns a repeated key into an array, so
+ * `?exclude=a&exclude=b` arrives as `['a', 'b']` rather than a string. Callers
+ * reach that shape by accident all the time — a script appending one param per
+ * item instead of joining with commas — so accept both spellings rather than
+ * throwing a 500 at someone who wrote a perfectly reasonable query string.
+ */
+function queryList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap((v) => String(v).split(','));
+  if (typeof value === 'string') return value.split(',');
+  return [];
+}
+
+/** Last value wins for a repeated scalar; anything unparseable falls back. */
+function queryNumber(value: unknown): number | undefined {
+  const raw = Array.isArray(value) ? value[value.length - 1] : value;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 function parseOptions(req: FastifyRequest): RosterOptions {
-  const q = req.query as Record<string, string | undefined>;
-  const raw = Number(q.cooldown_days);
+  const q = req.query as Record<string, unknown>;
   return {
-    cooldownDays: Number.isFinite(raw) && raw >= 0 ? raw : undefined,
-    exclude: [...(process.env.ADMIN_EXCLUDE_EMAILS ?? '').split(','), ...(q.exclude ?? '').split(',')],
+    cooldownDays: queryNumber(q.cooldown_days),
+    exclude: [...queryList(process.env.ADMIN_EXCLUDE_EMAILS), ...queryList(q.exclude)],
   };
 }
 

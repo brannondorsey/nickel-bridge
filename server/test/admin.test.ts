@@ -168,6 +168,56 @@ describe('admin roster content', () => {
     expect(none.totals.friction).toBe(held.totals.friction_held);
   });
 
+  it('accepts a repeated exclude param instead of 500ing on it', async () => {
+    // Fastify's default parser makes a repeated key an array, which a caller
+    // reaches by appending one param per item rather than joining on commas.
+    const res = await get('/api/admin/players.json?exclude=finisher&exclude=quitter', auth());
+    expect(res.statusCode).toBe(200);
+    const excluded = res.json().players.filter((p: { excluded: boolean }) => p.excluded);
+    expect(excluded.map((p: { handle: string }) => p.handle).sort()).toEqual(['finisher', 'quitter']);
+  });
+
+  it('survives a repeated cooldown_days param', async () => {
+    const res = await get('/api/admin/players.json?cooldown_days=0&cooldown_days=5', auth());
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cooldown_days).toBe(5); // last value wins
+  });
+
+  it('keeps excluded accounts out of every derived total, not just the cohorts', async () => {
+    // The operator's own account is the archetypal exclusion: it plays
+    // constantly, so leaving it in the funnel numbers while removing it from
+    // the cohort numbers makes the totals object quietly self-contradictory.
+    const all = (await get('/api/admin/players.json', auth())).json();
+    const onBoard = all.players.find((p: { on_leaderboard: boolean }) => p.on_leaderboard)
+      ?? all.players.find((p: { boards_started: number; boards_done: number }) => p.boards_started > p.boards_done);
+    const after = (await get(`/api/admin/players.json?exclude=${onBoard.handle}`, auth())).json();
+
+    expect(after.totals.players).toBe(all.totals.players); // still in the roster
+    if (onBoard.on_leaderboard) expect(after.totals.on_leaderboard).toBe(all.totals.on_leaderboard - 1);
+    if (onBoard.boards_started > onBoard.boards_done) {
+      expect(after.totals.abandoned_mid_board).toBe(all.totals.abandoned_mid_board - 1);
+    }
+  });
+
+  it('holds a just-opened first board rather than calling the player churned', async () => {
+    // `quitter` opened a board moments ago and has not bid. Without a
+    // cooldown that reads as "walked away without bidding" — which would be
+    // asserted to someone who may still be sitting on the bid box.
+    const held = (await get('/api/admin/players.json?cooldown_days=3', auth())).json();
+    const quitter = held.players.find((p: { handle: string }) => p.handle === 'quitter');
+    expect(quitter.cohort).toBe('abandoned_first');
+    expect(quitter.too_recent).toBe(true);
+    expect(held.totals.abandoned_first).toBe(0);
+    expect(held.totals.abandoned_first_held).toBeGreaterThan(0);
+    // Still counted in the funnel breakdown — too recent to email is not the
+    // same as absent from the problem you're measuring.
+    expect(held.totals.abandoned_in_auction).toBeGreaterThan(0);
+
+    const now = (await get('/api/admin/players.json?cooldown_days=0', auth())).json();
+    expect(now.players.find((p: { handle: string }) => p.handle === 'quitter').too_recent).toBe(false);
+    expect(now.totals.abandoned_first).toBeGreaterThan(0);
+  });
+
   it('agrees between the CSV and JSON representations', async () => {
     const report = (await get('/api/admin/players.json', auth())).json();
     const rows = parseCsv((await get('/api/admin/players.csv', auth())).body);

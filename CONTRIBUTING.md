@@ -602,6 +602,13 @@ worth knowing before building on it:
 Accounts with no email are included on purpose: Google always supplies one in production, and a
 roster that silently omits players to suit one consumer can't be trusted for counting.
 
+`too_recent` marks a `friction` or `abandoned_first` player who has been quiet for fewer than
+`cooldown_days` (default 3). Both cohorts get written to with a message that tells its reader
+they left, and that isn't yet true of someone who played an hour ago — without the guard, a
+player who opened their first board a minute ago and is still sitting on the bid box reads as
+`never_bid`. Every derived total is computed over the non-excluded population; `players` and
+`excluded` are the only two that describe everyone.
+
 **Security.** The endpoint hands out every player's name and email, so `ADMIN_TOKEN` is a
 production credential: rotate it like one, and never put it in a URL where it lands in logs.
 The route 404s rather than 401s when unconfigured (an endpoint that announces itself is an
