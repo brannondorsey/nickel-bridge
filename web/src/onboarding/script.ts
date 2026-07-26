@@ -77,7 +77,7 @@ export const COPY = {
     no: 'II · THE LEDGER',
     title: 'Everyone plays the same deals.',
     body1:
-      'Bad cards are no excuse here — Margaret holds the same ones, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
+      'Bad cards are no excuse here — Margaret holds the same ones as you, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
     body2: 'That’s duplicate: the luck is dealt out of the game, and judgment is what’s left.',
   },
 
