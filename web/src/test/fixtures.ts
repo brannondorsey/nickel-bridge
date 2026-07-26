@@ -20,13 +20,17 @@ import { makeBid } from '../api';
 // ---- users ----
 
 export const meFixture: Me = {
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487 },
+  // onboardedAt set: the established player — App gates a null stamp into the
+  // first-crossing tour (see meFreshCrosser).
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, onboardedAt: 1700000000 },
   devAuth: true,
   googleAuth: true,
 };
 
 export const meNoHandle: Me = { ...meFixture, user: { ...meFixture.user!, handle: null } };
 export const meLoggedOut: Me = { user: null, devAuth: true, googleAuth: true };
+/** Handle chosen, tour not yet taken — App shows the first crossing. */
+export const meFreshCrosser: Me = { ...meFixture, user: { ...meFixture.user!, onboardedAt: null } };
 
 // ---- hands (S = the human's hand from the design prototype: 12 HCP) ----
 

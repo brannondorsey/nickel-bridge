@@ -1,8 +1,10 @@
 import { APIRequestContext, Page, expect, request, test } from '@playwright/test';
 
 /**
- * Dev sign-in on the splash, claim a handle, tap through the first-visit
- * splash intro — lands on Home ("Good …, {name}").
+ * Dev sign-in on the splash, claim a handle, skip the first-crossing tour at
+ * its gate — lands on Home ("Good …, {name}"). (A fresh account meets the
+ * tollkeeper instead of the splash; the tour's own flow is covered by the
+ * web unit suite, so the smoke tests take the "skip the tutorial" door.)
  */
 async function signInAndOnboard(page: Page, name: string) {
   await page.goto('/');
@@ -10,11 +12,25 @@ async function signInAndOnboard(page: Page, name: string) {
   await page.getByRole('button', { name: /dev sign-in/i }).click();
   await page.fill('input[placeholder="Handle"]', name);
   await page.getByRole('button', { name: /continue/i }).click();
-  // the first authenticated visit plays the splash intro — tap skips it
+  await page.getByRole('button', { name: /skip the tutorial/i }).click();
+  // a returning visitor may still get the splash intro — tap skips it
   const splash = page.getByTestId('splash');
   await splash.waitFor({ timeout: 10_000 }).catch(() => {});
   if (await splash.isVisible().catch(() => false)) await splash.click();
   await expect(page.getByText(new RegExp(`Good (morning|afternoon|evening), ${name.split(' ')[0]}`))).toBeVisible();
+}
+
+/**
+ * A laydown claim can fire the instant a card is submitted (advanceRobots
+ * resolves the rest of the board server-side), popping the modal
+ * ClaimOverlay — which then intercepts any click still landing on the table
+ * underneath it. Dismiss it (tap anywhere, same as a real user) before every
+ * card interaction below, since which deal (and whether it claims early)
+ * varies run to run.
+ */
+async function dismissClaimIfPresent(page: Page) {
+  const overlay = page.locator('.claim-overlay');
+  if (await overlay.isVisible().catch(() => false)) await overlay.click();
 }
 
 /** Fast, UI-free board completion via direct API calls (same shape as scripts/e2e.mjs). */
@@ -106,11 +122,25 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
       .evaluate((el) => el.classList.contains('interactive'));
     const clickedFan = () => (clickedIsLast ? page.locator('.handfan').last() : page.locator('.handfan').first());
     const before = await clickedFan().locator('.cardbtn').count();
-    // tap once to select (visible left sliver), then tap the raised card to play
-    await clickedFan().locator('.cardbtn:enabled').first().click({ position: { x: 6, y: 30 } });
-    const selected = page.locator('.handfan .cardbtn.selected');
-    await expect(selected).toBeVisible();
-    await selected.click({ position: { x: 6, y: 30 } });
+    // Tap once to select (visible left sliver), then tap the raised card to
+    // play. A laydown claim can fire mid-sequence on this deal and take over
+    // remaining decisions automatically (including this one, or the auto-play
+    // timer for a forced single-legal-card turn can race ahead of the manual
+    // tap) — dismiss any overlay before each step and tolerate the card
+    // having already been played out from under us either way; the poll
+    // below is the real assertion regardless of which path shrank the fan.
+    await dismissClaimIfPresent(page);
+    await clickedFan()
+      .locator('.cardbtn:enabled')
+      .first()
+      .click({ position: { x: 6, y: 30 } })
+      .catch(() => {});
+    await dismissClaimIfPresent(page);
+    await page
+      .locator('.handfan .cardbtn.selected')
+      .click({ position: { x: 6, y: 30 } })
+      .catch(() => {});
+    await dismissClaimIfPresent(page);
     await expect
       .poll(async () => clickedFan().locator('.cardbtn').count(), { timeout: 15_000 })
       .toBeLessThan(before);

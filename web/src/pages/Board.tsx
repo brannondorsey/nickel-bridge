@@ -418,7 +418,10 @@ function SeatLine({ label, hcp, active = false }: { label: string; hcp?: number;
   );
 }
 
-function BiddingPhase({
+/** Exported for the first-crossing tour (pages/Tour.tsx), which replays a
+ * captured practice board through these exact phases — same components, same
+ * classes, same behavior — with scripted transitions instead of API calls. */
+export function BiddingPhase({
   board,
   lastEval,
   selectedCall,
@@ -427,6 +430,7 @@ function BiddingPhase({
   busy,
   inspect,
   onInspect,
+  hint = null,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -436,6 +440,8 @@ function BiddingPhase({
   busy: boolean;
   inspect: AuctionEntry | null;
   onInspect: (entry: AuctionEntry) => void;
+  /** tour only: pulse this call in the bid box */
+  hint?: number | null;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -477,6 +483,7 @@ function BiddingPhase({
             onSelect={onSelectCall}
             onConfirm={onConfirm}
             busy={busy}
+            hint={hint}
           />
         ) : (
           <div className="notice">Robots are thinking…</div>
@@ -486,7 +493,8 @@ function BiddingPhase({
   );
 }
 
-function PlayPhase({
+/** Exported for the first-crossing tour — see BiddingPhase above. */
+export function PlayPhase({
   board,
   lastEval,
   selectedCard,
@@ -496,6 +504,7 @@ function PlayPhase({
   claimInfo,
   claimAnnounceOpen,
   onSkipClaim,
+  hint = null,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -506,6 +515,8 @@ function PlayPhase({
   claimInfo: ClaimAnnouncement | null;
   claimAnnounceOpen: boolean;
   onSkipClaim: () => void;
+  /** tour only: pulse this card in whichever fan holds it */
+  hint?: number | null;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -547,6 +558,7 @@ function PlayPhase({
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
               selected={selectedCard ?? soleLegal}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
+              hint={canPlayFrom(board.dummy) ? hint : null}
             />
           </div>
         </>
@@ -570,6 +582,7 @@ function PlayPhase({
           legal={canPlayFrom(playingSeat) ? board.legalCards : []}
           selected={selectedCard ?? soleLegal}
           onSelect={canPlayFrom(playingSeat) ? onSelectCard : undefined}
+          hint={canPlayFrom(playingSeat) ? hint : null}
         />
       </div>
       <SeatLine label={bottomLabel} hcp={board.hcp} active={canPlayFrom(playingSeat)} />

@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
+import Tour from './pages/Tour';
 import Tournament from './pages/Tournament';
 import { splashOnReturn, stampVisit } from './splash';
 import { applyThemePref, readThemePref } from './theme';
@@ -83,14 +84,23 @@ export default function App() {
   // today's, or the splash would never show again. Demo mode (PR previews)
   // suppresses the splash itself — testers only see it by opening its
   // exhibit on the /scenarios gallery — but still stamps the visit, so the
-  // record stays correct if the same origin ever leaves demo mode.
+  // record stays correct if the same origin ever leaves demo mode. A
+  // not-yet-onboarded user gets the first-crossing tour instead of the
+  // splash (it IS their first-visit moment); the visit still stamps, so no
+  // splash replays right after the tour either.
   const authed = Boolean(me?.user?.handle);
   const demo = Boolean(me?.demo);
+  const onboarded = me?.user?.onboardedAt != null;
+  // The automatic tour fires only on ARRIVAL at the main app: someone opening
+  // a shared deep link (a tournament, a profile) goes straight to it, and
+  // meets the tour whenever they next open the app at home instead. Captured
+  // once at mount — navigating home mid-session must never spring a tutorial.
+  const [tourOnArrival] = useState(pathname === '/');
   useEffect(() => {
     if (!authed) return;
-    if (!demo && splashOnReturn()) setSplash(true);
+    if (!demo && onboarded && splashOnReturn()) setSplash(true);
     stampVisit();
-  }, [authed, demo]);
+  }, [authed, demo, onboarded]);
 
   if (!loaded) {
     return (
@@ -107,6 +117,22 @@ export default function App() {
       <div className="shell">
         {me?.user && !me.user.handle ? (
           <CreateHandle />
+        ) : me?.user && !onboarded && !demo && tourOnArrival ? (
+          // First crossing: new accounts arriving at the main app meet the
+          // toll office before it (deep-link arrivals skip straight to their
+          // destination — see tourOnArrival above). Demo mode suppresses it
+          // for the shared Inspector the same way it suppresses the splash;
+          // it stays replayable at /tour (Glossary's APP TOUR row, demo's
+          // gallery row).
+          //
+          // Its own provider: the tour renders in place of the routes, but its
+          // narration links terms like anything else, and a term sheet is the
+          // one thing a first-timer needs most. The sheet lives in the URL as
+          // ?term=, which leaves the path alone — so opening one never trips
+          // the arrival gate or unmounts the tour mid-deal.
+          <GlossaryProvider>
+            <Tour />
+          </GlossaryProvider>
         ) : me?.user ? (
           <GlossaryProvider>
             <Routes>
@@ -118,6 +144,7 @@ export default function App() {
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/review" element={<TournamentReviewRedirect />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
+              <Route path="/tour" element={<Tour />} />
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

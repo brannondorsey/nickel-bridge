@@ -46,6 +46,9 @@ export interface GlossaryTerm {
   related?: string[];
   /** opt out of auto-linking in prose (still searchable/openable) */
   linkify?: false;
+  /** in-app destination rendered as a link on the entry sheet — the ledger's
+   * easter-egg terms (currently only the First crossing → /tour) */
+  action?: { to: string; label: string };
 }
 
 /** A–Z by term (digit-led terms first, under the '#' letter group). */
@@ -449,6 +452,17 @@ export const TERMS: GlossaryTerm[] = [
     themes: ['cardplay'],
     aliases: ['hook', 'finessing'],
     related: ['tenace', 'eight-ever-nine-never'],
+  },
+  {
+    // The ledger's one easter egg: not a bridge term at all, but this house's
+    // own — the onboarding tour, filed where a curious member will find it.
+    slug: 'first-crossing',
+    term: 'First crossing',
+    def: 'Every member’s first walk over the bridge: the toll office’s pamphlet, then practice board №0 with the tollkeeper. Nothing scored, nothing rated — and the ledger keeps no record of practice boards.',
+    themes: ['table'],
+    aliases: ['app tour', 'tour', 'tutorial', 'onboarding', 'practice board'],
+    linkify: false,
+    action: { to: '/tour', label: 'WALK IT AGAIN →' },
   },
   {
     slug: 'fit',

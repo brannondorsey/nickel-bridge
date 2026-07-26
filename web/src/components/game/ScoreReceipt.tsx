@@ -15,8 +15,21 @@ import { GlossaryProse } from './GlossaryProse';
  * per beat (pure CSS, stilled under prefers-reduced-motion), then the
  * postmark cancels the total — TOLL PAID when the human's side collected,
  * TOLL REFUSED when it went down; no postmark when the robots declared.
+ *
+ * `onLeave` overrides the secondary action's plain <Link to="/">: the
+ * first-crossing tour renders in place of the routes, so a link to the lobby
+ * changes the URL and nothing else — leaving it has to go through the tour's
+ * own exit (which stamps the onboarding gate) instead.
  */
-export function ScoreReceipt({ board, onContinue }: { board: BoardView; onContinue: () => void }) {
+export function ScoreReceipt({
+  board,
+  onContinue,
+  onLeave,
+}: {
+  board: BoardView;
+  onContinue: () => void;
+  onLeave?: () => void;
+}) {
   const r = board.result!;
   const bd = r.breakdown;
   const declarerNS = board.declarer !== undefined && board.declarer % 2 === 0;
@@ -81,9 +94,15 @@ export function ScoreReceipt({ board, onContinue }: { board: BoardView; onContin
 
       <div className="board-actions">
         <Button onClick={onContinue}>SEE THE FIELD →</Button>
-        <Button variant="secondary" to="/">
-          Back to lobby
-        </Button>
+        {onLeave ? (
+          <Button variant="secondary" onClick={onLeave}>
+            Back to lobby
+          </Button>
+        ) : (
+          <Button variant="secondary" to="/">
+            Back to lobby
+          </Button>
+        )}
       </div>
     </div>
   );
