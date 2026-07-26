@@ -52,6 +52,13 @@ export interface StepGuidance {
   auto?: boolean;
   /** guard-test pin: the capture's action at this index must equal this */
   expect?: number;
+  /**
+   * Extra terms TOUR_LINKS should NOT link in this step's `say`/`offScript`
+   * — for a word that's force-linked sitewide in the tour but is used here
+   * in its everyday sense rather than the glossary one (see step 0: "the
+   * most honest bid in the game" isn't the scoring term).
+   */
+  skip?: readonly string[];
 }
 
 export const COPY = {
@@ -78,7 +85,9 @@ export const COPY = {
     title: 'Everyone plays the same deals.',
     body1:
       'Bad cards are no excuse here — Margaret holds the same ones as you, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
-    body2: 'That’s duplicate: the luck is dealt out of it, and judgment is what’s left.',
+    // "the game" here means bridge itself, not the scoring term — kept
+    // unlinked via the TourProse `skip` override at its call site.
+    body2: 'That’s duplicate: the luck is dealt out of the game, and judgment is what’s left.',
   },
 
   offerNo: 'III · THE PRACTICE',
@@ -109,10 +118,12 @@ export const COPY = {
  */
 export const STEPS: StepGuidance[] = [
   {
-    // 1NT (call 7)
-    say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in bridge — tap 1NT and read what it promises. Nothing is final until you confirm.',
+    // 1NT (call 7). "the game" here means bridge itself, not the scoring
+    // term — see `skip` below.
+    say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
     offScript: 'Each of these has its meaning — that’s the point of the box. Tonight, though: 1NT, the honest one.',
     expect: 7,
+    skip: ['game'],
   },
   {
     // 2♠ (call 11), after partner's Jacoby transfer

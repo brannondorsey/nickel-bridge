@@ -160,7 +160,10 @@ describe('the first crossing (Tour)', () => {
     expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
     // II · THE LEDGER — one deal, three fates
-    expect(screen.getByText(/the luck is dealt out of it/)).toBeInTheDocument();
+    expect(screen.getByText(/the luck is dealt out of the/)).toBeInTheDocument();
+    // "game" appears here in its everyday sense, not the scoring term — the
+    // ledger panel's TourProse call opts it out of TOUR_LINKS' sitewide force
+    expect(screen.queryByRole('button', { name: 'game' })).not.toBeInTheDocument();
     expect(screen.getByText('Harold')).toBeInTheDocument();
     expect(screen.getByText('Margaret')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /continue/i }));
@@ -187,6 +190,11 @@ describe('the first crossing (Tour)', () => {
       expect(container.querySelector('.bidbox')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'high card points' })).toBeInTheDocument();
       expect(screen.getByText(/\(HCP\), evenly spread/)).toBeInTheDocument();
+      // "the most honest bid in the game" — everyday sense, not the scoring
+      // term, so step 0's `skip` keeps it plain here (unlike step 2's "a
+      // choice of game", which is)
+      expect(screen.getByText(/the most honest bid in the game/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'game' })).not.toBeInTheDocument();
       // exploring off-script shows the real meaning; committing it is redirected
       await user.click(screen.getByRole('button', { name: '2♣' }));
       expect(container.querySelector('.meaning-panel')).toBeTruthy();
@@ -297,7 +305,7 @@ describe('the tour’s glossary links', () => {
   it('teaches the common words gameplay prose deliberately leaves unlinked', () => {
     expect(slugsIn(STEPS[2].say)).toContain('trump'); // "eight trumps between you"
     expect(slugsIn(STEPS[4].say)).toEqual(['dummy', 'trick']);
-    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge']);
+    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge', 'game']);
     // and none of it leaks into the sitewide policy the rest of the app reads
     expect(segmentProse(STEPS[2].say).filter((s) => s.slug)).toHaveLength(0);
   });
@@ -305,6 +313,23 @@ describe('the tour’s glossary links', () => {
   it('never links a term in the wrong sense: splitting matchpoints is a tie, not a suit break', () => {
     expect(slugsIn(COPY.fieldSay)).toContain('matchpoints');
     expect(slugsIn(COPY.fieldSay)).not.toContain('break');
+  });
+
+  it('never links "game" in its everyday sense — only Board.tsx\'s per-instance skip catches this, bare TOUR_LINKS can\'t', () => {
+    // "the most honest bid in the game" means bridge itself, not the scoring
+    // term — bare TOUR_LINKS still links it (that's the whole reason step 0
+    // carries its own `skip`, applied at Tollkeeper's TourProse call site)
+    expect(slugsIn(STEPS[0].say)).toContain('game');
+    expect(STEPS[0].skip).toContain('game');
+    const stepZeroPolicy = { ...TOUR_LINKS, skip: [...(TOUR_LINKS.skip ?? []), ...(STEPS[0].skip ?? [])] };
+    expect(
+      segmentProse(STEPS[0].say, stepZeroPolicy)
+        .filter((s) => s.slug)
+        .map((s) => s.slug),
+    ).not.toContain('game');
+    // step 2's "a choice of game" is the real scoring term and stays linked
+    expect(STEPS[2].skip).toBeUndefined();
+    expect(slugsIn(STEPS[2].say)).toContain('game');
   });
 
   it('links the pamphlet’s body copy, and opens the sheet on a tap', async () => {

@@ -76,8 +76,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * meanings, the grade toast, the receipt) already links on its own — it is the
  * real gameplay surface, under the sitewide policy.
  */
-function TourProse({ text }: { text: string }) {
-  return <GlossaryProse text={text} {...TOUR_LINKS} />;
+function TourProse({ text, skip }: { text: string; skip?: readonly string[] }) {
+  return <GlossaryProse text={text} {...TOUR_LINKS} skip={[...(TOUR_LINKS.skip ?? []), ...(skip ?? [])]} />;
 }
 
 // A forced-but-guided decision (right now, only the dummy's forced opening-
@@ -239,7 +239,8 @@ export default function Tour() {
           <TourProse text={COPY.ledgerPanel.body1} />
         </p>
         <p className="tour-copy">
-          <TourProse text={COPY.ledgerPanel.body2} />
+          {/* "the game" here means bridge itself, not the scoring term */}
+          <TourProse text={COPY.ledgerPanel.body2} skip={['game']} />
         </p>
         <div className="tour-page-foot" />
         <div className="tour-gate-actions">
@@ -317,13 +318,13 @@ export default function Tour() {
  * announces mutations inside a live region it is already watching, and a
  * region swapped out for a fresh, already-populated one is routinely missed.
  */
-function Tollkeeper({ text }: { text: string }) {
+function Tollkeeper({ text, skip }: { text: string; skip?: readonly string[] }) {
   return (
     <div className="tour-narr" role="status">
       <span key={text} className="tour-narr-wash" aria-hidden="true" />
       <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
       <p>
-        <TourProse text={text} />
+        <TourProse text={text} skip={skip} />
       </p>
     </div>
   );
@@ -598,7 +599,7 @@ function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () =>
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <TourHead view={view} />
-      <Tollkeeper text={narration} />
+      <Tollkeeper text={narration} skip={displayGuidance?.skip} />
       {done ? (
         resultView === 'receipt' ? (
           <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} onLeave={onLeave} />
