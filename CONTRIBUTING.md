@@ -62,7 +62,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
                 AI personas), demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 demo mode,
-                on PR previews + the permanent demo app — see "Demo mode" below)
+                on PR previews + the permanent demo app — see "Demo mode" below),
+                admin.ts (ADMIN_TOKEN-gated player roster export — see "Admin
+                roster export" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
@@ -175,6 +177,8 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never on the production app** (previews + the demo app are deliberate exceptions) |
 | `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |
+| `ADMIN_TOKEN` | off | bearer secret for `GET /api/admin/players.{csv,json}` (`admin.ts`). Unset ⇒ those routes 404; shorter than 24 chars ⇒ they stay disabled and log an error at boot. **Deliberately safe to set in production** — unlike the two flags above — see "Admin roster export" |
+| `ADMIN_EXCLUDE_EMAILS` | — | comma-separated addresses/handles the export marks `excluded` (operator + opt-outs); rows stay in the roster, just flagged (`admin.ts`) |
 | `DB_PATH` | `./data/bridge.db` | SQLite file; dir auto-created (`db.ts`) |
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `AI_PLAYERS` | on | `0` disables the benchmark AI personas' background play + boot sweep (`ai-players.ts`) — set by the server test harness (`server/test/helpers.ts`) so suites exercising `placeUser` don't play 12 bot boards per placement |
@@ -563,7 +567,49 @@ without a hamburger.
    the former is unauthenticated login, the latter hands out sessions and can wipe the
    database. CI's `deploy-production` job refuses to deploy if either secret exists on the
    production app. PR previews and the permanent demo app (`nickel-bridge-demo`) are separate
-   apps with their own throwaway databases where both flags are intentional.
+   apps with their own throwaway databases where both flags are intentional. This is **not** a
+   general rule about sensitive env vars: `ADMIN_TOKEN` (see "Admin roster export") is designed
+   to be set in production, because a strong secret is its safety property. These two are
+   different because they grant unauthenticated access outright, which no secret can rescue.
+
+## Admin roster export
+
+`server/src/admin.ts` serves the player roster over HTTP so operator tooling doesn't need a
+remote shell on the production machine. There is no analytics stack and no admin UI, and the
+alternative — running SQLite queries over the Fly Machines API's `exec` — means handing out
+remote code execution for what is really a read of a few aggregate columns.
+
+```
+GET /api/admin/players.csv     Authorization: Bearer $ADMIN_TOKEN
+GET /api/admin/players.json    ?cooldown_days=3&exclude=someone@example.com,handle
+```
+
+Both return every `kind = 'human'` account with its board counts and a `cohort` of
+`retained` / `friction` / `abandoned_first` / `never_played`. Two things about the data are
+worth knowing before building on it:
+
+- **`boards_done` is not the leaderboard test.** The leaderboard gates on
+  `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a tournament only rates a player
+  who finished all four of its boards in a field of 2+ humans (`eloParticipants`) — so 16
+  finished boards spread over half-played tournaments still means no leaderboard row.
+  `on_leaderboard` is the honest flag.
+- **`abandoned_first` carries `stopped_at` and `human_calls`**, derived from the abandoned
+  board's `calls`/`plays` arrays plus core's seat rules (seats `0=N 1=E 2=S 3=W`, human always
+  South, `dealer = (boardNo - 1) % 4`, seat `(dealer + i) % 4` on call `i`). `human_calls === 0`
+  means they reached the bid box and bid nothing. Keep it derived from those rules rather than
+  re-guessed — it ends up asserted to a real person in outreach.
+
+Accounts with no email are included on purpose: Google always supplies one in production, and a
+roster that silently omits players to suit one consumer can't be trusted for counting.
+
+**Security.** The endpoint hands out every player's name and email, so `ADMIN_TOKEN` is a
+production credential: rotate it like one, and never put it in a URL where it lands in logs.
+The route 404s rather than 401s when unconfigured (an endpoint that announces itself is an
+invitation), refuses to run behind a token under 24 characters, compares with `timingSafeEqual`,
+and sends `Cache-Control: no-store`. CSV cells beginning `=`/`+`/`-`/`@` are quote-prefixed —
+display names are user-controlled and would otherwise execute as formulas on open. Unlike
+`DEV_AUTH`/`DEMO` (invariant 5), this one is *meant* to be set in production; the safety
+property is the strength of the secret, not its absence.
 
 ## Design system
 

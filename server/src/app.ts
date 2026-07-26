@@ -5,6 +5,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerAdminRoutes } from './admin.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { db } from './db.js';
@@ -36,6 +37,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
   registerDemoRoutes(app); // no-op unless DEMO=1 (preview deployments only)
+  registerAdminRoutes(app); // 404s unless ADMIN_TOKEN is set to a long-enough secret
 
   // Liveness check for Fly's http_service health checks — no auth, no DB touch.
   app.get('/health', (req, reply) => reply.send({ ok: true }));
