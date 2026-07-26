@@ -133,7 +133,7 @@ export const STEPS: StepGuidance[] = [
   },
   {
     // 4♠ (call 21), over partner's choice-of-game 3NT
-    say: 'Partner shows five spades and offers a choice of game. You hold three spades — eight trumps between you. Take the bid to game: 4♠.',
+    say: 'Partner shows five spades and offers a choice of game. You hold three spades — eight trumps between you. Take the game to spades: 4♠.',
     offScript: 'Playable, perhaps — but with eight trumps between you, the spade game rates best. 4♠.',
     expect: 21,
   },
