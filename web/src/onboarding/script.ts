@@ -98,7 +98,7 @@ export const COPY = {
 
   doneTitle: 'That’s the whole game.',
   doneBody:
-    'Bid with meaning. Play with care. Read the ledger. From here it counts: four deals a crossing, your friends on the same cards, one ledger between you.',
+    'Bid with meaning. Play with care. Read the ledger. From here it counts: four deals a crossing, everyone on the same cards, one ledger between you.',
   doneAside: 'The tollkeeper keeps no record of practice boards.',
 } as const;
 
