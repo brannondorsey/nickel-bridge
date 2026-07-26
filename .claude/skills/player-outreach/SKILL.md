@@ -32,10 +32,11 @@ The goal of the emails is **replies, not impressions**. Everything below is in s
 
 ```bash
 node .claude/skills/player-outreach/scripts/player_report.mjs \
-  --json "$SCRATCHPAD/report.json" --csv "$SCRATCHPAD/roster.csv"
+  --json "$SCRATCH/report.json" --csv "$SCRATCH/roster.csv"
 ```
 
-Write outputs to the session scratchpad. **Never write them into the repo** — it is public, and
+`$SCRATCH` is the session scratchpad directory named in your system prompt — an absolute path
+outside the repo. **Never write these outputs into the repo** — it is public, and
 these files are real people's names and email addresses. Never put roster data in an Artifact or
 any other shareable surface. If the user wants the CSV, hand it over with `SendUserFile`.
 
@@ -54,11 +55,16 @@ data. Gmail's sent mail is the source of truth, and it has the advantage of reco
 actually *sent* rather than what was merely drafted:
 
 ```
-search_threads: in:sent (subject:"Nickel Bridge" OR subject:"nickel bridge")
+search_threads: in:sent subject:"nickel bridge"
 ```
 
 Collect every recipient address from those threads, plus anything already sitting in
 `list_drafts`, and subtract that set from the roster. Whoever remains is this week's batch.
+
+This is why **every subject line must contain the words "Nickel Bridge"** — rewrite subjects
+however you like otherwise, but that phrase is load-bearing. It's what makes next week's run
+able to see this week's, and a clever subject that drops it quietly re-enrolls that person in
+the next batch.
 
 If that search returns nothing on a first run, say so plainly rather than assuming — an empty
 result and a broken query look identical, and the cost of guessing wrong is double-emailing
@@ -176,6 +182,13 @@ Whatever you've got, even one line.
 You cannot send, and shouldn't want to. Report back with a table of who's in each cohort and
 why, the counts including the `never_played` group, anything you skipped and your reason, and a
 note that the drafts are in Gmail awaiting review.
+
+Two things are worth calling out in that report even though they generate no email, because
+they're the sharpest signals in the data and they're invisible if you only count cohorts:
+players whose `boards_started` exceeds `boards_done` **abandoned a hand mid-play**, which is a
+much more specific failure than "signed up and never played"; and the ratio of players who ever
+returned on a second day is the number the retained cohort is really made of. Report the funnel,
+not just the batch.
 
 Tell the user plainly that nothing has been sent. If they later ask you to "send them", say that
 the connector only drafts — they send from Gmail.
