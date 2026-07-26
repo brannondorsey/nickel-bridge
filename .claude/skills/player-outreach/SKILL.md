@@ -2,8 +2,8 @@
 name: player-outreach
 description: >
   Generate the Nickel Bridge player roster from the production database and draft the weekly
-  player-outreach emails — one set asking churned players what went wrong, one set asking
-  retained players what's working, both probing whether a dedicated domain would help. Use this
+  player-outreach emails — asking churned players what went wrong, retained players what's
+  working, and first-board casualties what stopped them. Use this
   skill whenever the user asks about Nickel Bridge players, users, signups, retention, churn,
   cohorts, "who's playing", player emails or a player CSV, or wants to email/contact/survey
   players or "do the weekly outreach" — even if they don't name this skill or mention email.
@@ -78,15 +78,29 @@ The script assigns each player a cohort. Two get email:
 | --- | --- | --- |
 | `friction` | Finished 1–15 boards, all on a single day, never returned — and quiet for at least `--cooldown-days` (default 3) | Why did you stop? |
 | `retained` | 16+ boards, **or** played on 2+ separate days, **or** on the leaderboard | What's keeping you here? |
+| `abandoned_first` | Never finished a single board, but opened one and walked away mid-board | Would you be willing to say what you hit? |
 
 `retained` is tested first, because the two definitions overlap — someone with 5 boards across 3
 days matches both. Coming back on a second day is the stronger statement about their experience,
 so it wins, which leaves `friction` as the clean complement: tried it once and never returned.
 
-`never_played` (signed up, zero completed boards) gets **no email**. They have no experience of
-the game to report on, and "why did you stop?" to someone who never started reads as a misfire.
-They're a real and interesting funnel problem — worth telling the user the count — but a
-different question needing a different email.
+`never_played` — signed up and never so much as opened a board — gets **no email**. They have no
+experience of the game to report on, and "why did you stop?" to someone who never started reads
+as a misfire. Report the count; it's a marketing-channel question, not a product one.
+
+`abandoned_first` is carved out of that group and is the one worth the most care. These people
+were dealt a hand and left mid-board, which makes them the sharpest signal on the roster: they
+saw the actual product and it lost them within minutes. The script says exactly where, from the
+board's own `calls`/`plays`:
+
+- `stopped_at` — `auction` (never played a card) or `play` (cards were on the table).
+- `human_calls` — how many bids *they* made. **Zero is the finding**: they reached their first
+  decision and made none.
+
+Name that in the email. "You didn't get far into the bidding" proves a human looked at their
+account rather than adding them to a list, and it's the whole reason this cohort replies at all.
+Check `stopped_at` before writing the clause — telling someone they left during the bidding when
+they actually played eleven cards destroys exactly the credibility the specificity was buying.
 
 Players the script marks `too_recent` are also held. The friction email asserts something about
 its reader — that they left — and saying that to someone who played yesterday is both wrong and
@@ -120,7 +134,8 @@ What makes these work:
   85 boards in a single day is a different email from 18 boards across 3 weeks; one board and
   gone is different again. If a player's row has nothing striking, plain and honest beats
   manufactured enthusiasm.
-- **One question.** Plus the domain question, which is small and easy and can ride along.
+- **One question.** Plus the domain question in the `friction` and `retained` mails, where it's
+  small enough to ride along. It stays out of `abandoned_first` — see that template.
 - **A cheap out.** "One line is plenty" gets more replies than an open-ended ask.
 - **No tracking, no images, no unsubscribe boilerplate.** It's a personal email, so let it be one.
 
@@ -184,7 +199,36 @@ Whatever you've got, even one line.
 — Brannon
 ```
 
-## Step 5 — Hand off for review
+**`abandoned_first`** — subject: `Nickel Bridge — can I ask you something?`
+
+```
+Hi {first},
+
+I'm Brannon — I made Nickel Bridge. You tried it on the 23rd and didn't
+get far into the bidding before you left, which I'd bet is my fault
+rather than yours.
+
+Would you be up for telling me what you hit? A sentence is plenty.
+You've seen it with completely fresh eyes, which I can't do anymore,
+and that makes your take more useful to me than almost anything else.
+
+Totally fine to ignore this.
+
+— Brannon
+```
+
+For `stopped_at: 'play'`, swap the first clause to "got a few cards into the hand before you
+left" and leave the rest.
+
+This one is deliberately built differently from the other two, and the differences are the
+point. **The ask is permission, not a questionnaire** — "would you be up for telling me?" opens
+a conversation, where a list of options to pick from makes a stranger feel processed, which is
+fatal for people who owe you nothing and gave you ninety seconds. **The fault is claimed
+up front**, because the reason people don't answer "what went wrong?" is that they suspect the
+answer is that they were too slow to understand it; saying it's your fault first removes that.
+**And there's no domain question** — asking someone who never completed a bid whether a
+different URL would have helped is absurd, since finding the site plainly wasn't their problem.
+Keep it to five lines. The brevity is doing work: it signals that a reply can be short too.
 
 You cannot send, and shouldn't want to. Report back with a table of who's in each cohort and
 why, the counts including the `never_played` group, anything you skipped and your reason, and a

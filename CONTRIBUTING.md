@@ -590,9 +590,15 @@ a skill rather than `tools/` because it needs `FLY_API_TOKEN` and touches produc
 `scripts/player_report.mjs` is the **only** supported way to read the live player roster:
 there is no analytics stack and no admin API, so it execs a read-only (`readonly: true`)
 SQLite query on the production machine via the Fly Machines API and emits a roster CSV/JSON
-with each player bucketed into `retained` / `friction` / `never_played`. The skill then
-drafts the weekly outreach emails through the Gmail connector — which can only *draft*,
-never send, so a human reads every word first.
+with each player bucketed into `retained` / `friction` / `abandoned_first` / `never_played`.
+The skill then drafts the weekly outreach emails through the Gmail connector — which can only
+*draft*, never send, so a human reads every word first.
+
+`abandoned_first` (opened a board, never finished one) carries `stopped_at` and `human_calls`,
+derived from the board's `calls`/`plays` arrays plus core's seat rules — seats `0=N 1=E 2=S
+3=W` with the human always South, `dealer = (boardNo - 1) % 4`, seat `(dealer + i) % 4` on call
+`i`. That yields "left without ever bidding", which the outreach states to a real person, so
+keep it derived from those rules rather than re-guessed.
 
 Two things to know before touching it. **`boards_done` is not the leaderboard test**: the
 leaderboard gates on `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a

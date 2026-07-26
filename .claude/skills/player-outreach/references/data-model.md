@@ -50,9 +50,28 @@ The script therefore reports both, plus `on_leaderboard` as the honest flag, and
 cohort accepts *any* of the three signals (16+ boards, 2+ days, or on the leaderboard) so that
 nobody who clearly stuck around gets asked why they left.
 
-Also note `boards_started` vs `boards_done`: several accounts have opened a board and never
-finished it. They read as `never_played` by completed-board count while still having a
-`last_seen` date, which is correct — they saw the game, they just never completed a hand.
+## Where an abandoned board stopped
+
+`boards_started` exceeding `boards_done` means an abandoned board. Those players are worth
+separating from people who merely signed up, which is what the `abandoned_first` cohort does —
+and the board row says exactly where they gave up, since `calls` and `plays` are JSON arrays
+whose lengths are the auction and play progress.
+
+Turning a call count into "did *they* ever bid" needs the seat maths, which comes from
+`packages/core` rather than from bridge folklore:
+
+- Seats are `0=N 1=E 2=S 3=W` and **the human always sits South (2)** (`types.ts`).
+- `boardConditions` sets `dealer = (boardNo - 1) % 4`.
+- `auctionState` puts seat `(dealer + i) % 4` on call `i`.
+
+So South's first turn is at index `(2 - dealer + 4) % 4`, and every fourth call after that —
+which is how `human_calls` is derived. On board 1 the dealer is North, so a board with exactly
+two calls on it means the robots bid twice, the human's turn arrived, and they left without
+bidding at all.
+
+This is worth deriving carefully rather than eyeballing, because it ends up asserted to a real
+person in an email, and "you left without making a single bid" is only a good line while it's
+true. Note the bidding seat never flips: the North-hand flip in `game.ts` is a card-play concern.
 
 ## Column reference
 
@@ -65,6 +84,9 @@ finished it. They read as `never_played` by completed-board count while still ha
 | `days_seen` | Distinct UTC dates with board activity — the return-visit signal. |
 | `first_seen` / `last_seen` | First and most recent board activity, as UTC dates. |
 | `signed_up` | `users.created_at`. Compare with `first_seen` to spot signup-without-play. |
+| `ab_board` | Board number of the unfinished board they walked away from (most recently touched), or `null`. |
+| `stopped_at` | `auction` (never played a card) or `play` (cards were down) on that board. |
+| `human_calls` | How many bids *they* made on it. `0` means they reached their first decision and made none. |
 | `quiet_days` | Whole days between `last_seen` and today. `null` if they never played. |
 | `too_recent` | A `friction` player still inside the cooldown — held, not dropped, because "you stopped playing" isn't yet a true thing to say to them. |
 | `elo` | Current rating. `1200` exactly usually means "never rated", not "average player". |

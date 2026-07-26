@@ -116,7 +116,19 @@ const SQL = `
     (SELECT date(MAX(b.updated_at), 'unixepoch') FROM boards b
       WHERE b.user_id = u.id)                           AS last_seen,
     (SELECT date(MIN(b.updated_at), 'unixepoch') FROM boards b
-      WHERE b.user_id = u.id)                           AS first_seen
+      WHERE b.user_id = u.id)                           AS first_seen,
+    -- The board they walked away from (most recently touched unfinished one).
+    -- calls/plays are JSON arrays, so their lengths say exactly how far the
+    -- board got before they left — see stopPoint() below.
+    (SELECT b.board_no FROM boards b
+      WHERE b.user_id = u.id AND b.state != 'done'
+      ORDER BY b.updated_at DESC LIMIT 1)               AS ab_board,
+    (SELECT json_array_length(b.calls) FROM boards b
+      WHERE b.user_id = u.id AND b.state != 'done'
+      ORDER BY b.updated_at DESC LIMIT 1)               AS ab_calls,
+    (SELECT json_array_length(b.plays) FROM boards b
+      WHERE b.user_id = u.id AND b.state != 'done'
+      ORDER BY b.updated_at DESC LIMIT 1)               AS ab_plays
   FROM users u
   WHERE u.kind = 'human' AND u.email IS NOT NULL
   ORDER BY u.id
@@ -213,9 +225,33 @@ const RETAINED_DAYS = 2;
 const COOLDOWN_DAYS = Number(argValue('--cooldown-days') ?? 3);
 
 function cohortOf(p) {
-  if (p.boards_done === 0) return 'never_played';
+  if (p.boards_done === 0) return p.ab_board === null ? 'never_played' : 'abandoned_first';
   if (p.boards_done >= RETAINED_BOARDS || p.days_seen >= RETAINED_DAYS || p.on_leaderboard) return 'retained';
   return 'friction';
+}
+
+/**
+ * Where an abandoned board actually stopped, and whether the player ever bid.
+ *
+ * The seat maths is not folklore — it's `packages/core`: seats are 0=N 1=E 2=S
+ * 3=W, the human always sits South (2), `boardConditions` sets
+ * `dealer = (boardNo - 1) % 4`, and `auctionState` puts seat
+ * `(dealer + i) % 4` on call `i`. So South's first turn is at index
+ * `(2 - dealer + 4) % 4`, and every 4th call after that.
+ *
+ * This matters because it's the difference between "you left during the
+ * bidding" and "you left without ever making a bid" — the second is a far
+ * sharper statement, and it's the kind of thing that must be derived rather
+ * than guessed, since it ends up asserted to a real person in an email.
+ * Bidding seats never flip; the North-hand flip in game.ts is a card-play
+ * concern only.
+ */
+function stopPoint(p) {
+  if (p.ab_board === null) return { stopped_at: null, human_calls: null };
+  const dealer = (p.ab_board - 1) % 4;
+  const firstTurn = (2 - dealer + 4) % 4;
+  const human_calls = p.ab_calls > firstTurn ? Math.ceil((p.ab_calls - firstTurn) / 4) : 0;
+  return { stopped_at: p.ab_plays > 0 ? 'play' : 'auction', human_calls };
 }
 
 /** Whole days between two YYYY-MM-DD strings, or null if either is missing. */
@@ -237,7 +273,12 @@ const players = rows.map((r) => {
   };
   const cohort = cohortOf(p);
   // Only `friction` is held: it's the one email that tells the reader they left.
-  return { ...p, cohort, too_recent: cohort === 'friction' && quiet_days !== null && quiet_days < COOLDOWN_DAYS };
+  return {
+    ...p,
+    ...stopPoint(p),
+    cohort,
+    too_recent: cohort === 'friction' && quiet_days !== null && quiet_days < COOLDOWN_DAYS,
+  };
 });
 
 // Cohort totals count only mailable rows, since the totals exist to answer
@@ -254,10 +295,17 @@ const report = {
     retained: byCohort('retained').length,
     friction: byCohort('friction').filter((p) => !p.too_recent).length,
     friction_held: byCohort('friction').filter((p) => p.too_recent).length,
+    abandoned_first: byCohort('abandoned_first').length,
+    // Of those, the two very different failures: lost in the bidding vs. lost
+    // once cards were on the table. `never_bid` is the sharpest number here —
+    // they reached their first decision and made none.
+    abandoned_in_auction: byCohort('abandoned_first').filter((p) => p.stopped_at === 'auction').length,
+    abandoned_in_play: byCohort('abandoned_first').filter((p) => p.stopped_at === 'play').length,
+    never_bid: byCohort('abandoned_first').filter((p) => p.human_calls === 0).length,
     never_played: byCohort('never_played').length,
     on_leaderboard: players.filter((p) => p.on_leaderboard).length,
-    // Opened a board and abandoned it mid-hand — a sharper failure than
-    // "signed up and never played", and invisible in the cohort counts.
+    // Any player with an unfinished board, including established ones who
+    // dropped a later board — a different problem from the first-board wall.
     abandoned_mid_board: players.filter((p) => p.boards_started > p.boards_done).length,
   },
   players,
@@ -271,8 +319,9 @@ if (JSON_OUT) {
 if (CSV_OUT) {
   const { writeFileSync } = await import('node:fs');
   const cols = [
-    'id', 'email', 'name', 'handle', 'cohort', 'excluded', 'boards_done', 'boards_started',
-    'days_seen', 'last_seen', 'first_seen', 'signed_up', 'rated_tournaments', 'on_leaderboard',
+    'id', 'email', 'name', 'handle', 'cohort', 'excluded', 'too_recent', 'boards_done',
+    'boards_started', 'stopped_at', 'human_calls', 'ab_board', 'days_seen', 'quiet_days',
+    'last_seen', 'first_seen', 'signed_up', 'rated_tournaments', 'on_leaderboard',
     'tournaments_touched', 'elo',
   ];
   const esc = (v) => {
@@ -287,9 +336,11 @@ if (!JSON_OUT && !CSV_OUT) {
 } else {
   const t = report.totals;
   console.error(
-    `${report.generated_on}  ${t.players} players — ` +
-      `${t.retained} retained, ${t.friction} friction, ${t.never_played} never played ` +
-      `(${t.on_leaderboard} on leaderboard, ${t.abandoned_mid_board} abandoned a hand mid-play)` +
+    `${report.generated_on}  ${t.players} players — ${t.retained} retained, ${t.friction} friction, ` +
+      `${t.abandoned_first} abandoned first board, ${t.never_played} never played ` +
+      `(${t.on_leaderboard} on leaderboard)\n` +
+      `  first board: ${t.abandoned_in_auction} lost in the auction ` +
+      `(${t.never_bid} without ever bidding), ${t.abandoned_in_play} lost in card play` +
       (t.friction_held ? `\n  ${t.friction_held} friction held as too recent — override with --cooldown-days 0` : ''),
   );
   if (JSON_OUT) console.error(`json → ${JSON_OUT}`);
