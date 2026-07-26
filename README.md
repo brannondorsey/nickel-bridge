@@ -21,12 +21,12 @@ judgment, not card luck.
   </tr>
   <tr>
     <td><img src="docs/screenshots/04-toll-receipt.png" alt="The toll receipt for a board: DOWN ONE, 100 vulnerable, TOLL REFUSED, under a REFUSED postmark"></td>
-    <td><img src="docs/screenshots/06-tournament-result.png" alt="Tournament summary: a TOLL PAID postmark, 44% matchpoints, 3rd of 6 players, and all four boards"></td>
+    <td><img src="docs/screenshots/06-tournament-result.png" alt="Tournament summary: a TOLL PAID postmark, 40.6% matchpoints, 3rd of 5 players, all four boards, and the final field"></td>
     <td><img src="docs/screenshots/10-night-play.png" alt="The same board in night mode: dark ink-plate cards, partner declaring, the board flipped to North"></td>
   </tr>
   <tr>
     <td><b>The toll, itemized.</b> Every score printed line by line — overtricks, insult and all.</td>
-    <td><b>Four deals, one crossing.</b> Matchpoints and rank against everyone who played them.</td>
+    <td><b>Four deals, one crossing.</b> Board by board, then where you finished against the field.</td>
     <td><b>Night mode.</b> The whole ink-on-paper palette, negative.</td>
   </tr>
 </table>
@@ -36,18 +36,16 @@ signs you in as a guest with a seeded field behind you and a gallery of prepared
 no account, nothing to install.
 
 <details>
-<summary>More screens — the field, stats, the glossary, desktop</summary>
+<summary>More screens — the field, stats, the glossary, the first-crossing tour, desktop</summary>
 
 | | |
 | --- | --- |
-| <img width="300" src="docs/screenshots/05-board-result.png" alt="Board result: 83.3% matchpoints, the field's contracts side by side, all four hands, and your bidding graded"> | <img width="300" src="docs/screenshots/08-stats.png" alt="Stats page: Nickel rating, toll log heatmap, matchpoint and bid-accuracy sparklines, grade distribution"> |
+| <img width="300" src="docs/screenshots/05-board-result.png" alt="Board result: 75% matchpoints, the field's contracts side by side, all four hands, and your bidding graded"> | <img width="300" src="docs/screenshots/08-stats.png" alt="Stats page: Nickel rating, toll log heatmap, matchpoint and bid-accuracy sparklines, grade distribution"> |
 | **Every board reviewed** — the field's results on the same deal, all four hands, and your bidding graded. | **Your record** — rating, matchpoint and bidding-accuracy trends, contracts made, rivalries. |
 | <img width="300" src="docs/screenshots/07-rankings.png" alt="Rankings: the all-time Elo ladder with movement arrows"> | <img width="300" src="docs/screenshots/09-glossary-sheet.png" alt="The glossary ledger with the term sheet for Finesse open over it"> |
 | **Rankings** — Elo from head-to-head results, re-ranked live. | **The Glossary** — every term tappable, in prose and on its own screen. |
-
-<img width="640" src="docs/screenshots/11-desktop-home.png" alt="The app on a desktop viewport: a centered phone-width column with the tournament ledger">
-
-**On desktop** the phone column just centers itself — same app, no separate layout.
+| <img width="300" src="docs/screenshots/11-tour.png" alt="The first-crossing tour's cover: Welcome to the bridge, over an illustrated toll bridge"> | <img width="300" src="docs/screenshots/12-desktop-home.png" alt="The app on a desktop viewport: a centered phone-width column with the tournament ledger"> |
+| **The first crossing** — a three-minute pamphlet and a practice deal, before your first real one. | **On desktop** the phone column just centers itself — same app, no separate layout. |
 
 </details>
 

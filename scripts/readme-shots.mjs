@@ -72,6 +72,33 @@ async function playCard(locator) {
 }
 
 /**
+ * Wait out the robots' replies after your card: the staged animation runs, the
+ * trick fills in, and the fan comes back live on your turn. Shooting on a fixed
+ * timer instead lands on whatever beat it lands on — often "Robots are
+ * thinking…" over a half-empty table.
+ */
+async function settleToYourTurn() {
+  await page.waitForSelector('.handfan.interactive .cardbtn:enabled', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(600);
+}
+
+/**
+ * The benchmark AI personas ("the house") play every ai_field tournament in the
+ * background, on demand — so a sweep that races straight to the result screen
+ * can arrive before any of them has finished, and shoot THE FIELD as a table of
+ * one. Wait them out (they're scheduled human-first, so this is seconds, not
+ * minutes) rather than shipping a screenshot that makes the app look empty.
+ */
+async function waitForField(rowSelector, minRows = 2, tries = 40) {
+  for (let i = 0; i < tries; i++) {
+    if ((await page.locator(rowSelector).count()) >= minRows) return;
+    await page.waitForTimeout(2000);
+    await page.reload();
+    await page.waitForSelector(rowSelector.split(' ')[0], { timeout: 30000 }).catch(() => {});
+  }
+}
+
+/**
  * Drive a board through the API until `stop` says to hand back to the UI —
  * pass to end auctions, play the first legal card otherwise.
  */
@@ -142,13 +169,29 @@ await page.waitForSelector('.grade-toast', { timeout: 30000 });
 await page.waitForTimeout(500);
 await shot('02-grade-toast');
 
-// 03 — card play: dummy tabled, a trick on the felt
-await drive(tid, featured, (v) => v.state === 'playing' && v.myTurn);
+// 03 — card play: dummy tabled, a trick on the felt. Stop on a turn with a real
+// choice: a single legal card auto-plays itself (AUTO_PLAY_DELAY_MS) and the fan
+// is gone before the tap lands.
+await drive(tid, featured, (v) => v.state === 'playing' && v.myTurn && v.legalCards?.length > 1);
 await page.goto(`${base}/t/${tid}/b/${featured}`);
 await page.waitForSelector('.handfan.interactive .cardbtn:enabled', { timeout: 30000 });
 await playCard(page.locator('.handfan.interactive .cardbtn:enabled').nth(2));
-await page.waitForTimeout(2600); // robots follow; the trick stages in card by card
+await settleToYourTurn(); // the robots answer, the trick stages in card by card
 await shot('03-card-play');
+
+// 10 — the same position in night mode. Shot here, off a board already known to
+// be mid-trick on your turn, rather than from a second placement: which seat is
+// on lead and whether the playable cards are in your fan or tabled in dummy's
+// rail is luck of the deal, and a shot that has to gamble on it is a shot that
+// intermittently fails.
+await page.evaluate(() => localStorage.setItem('nb:theme', 'night'));
+await page.reload();
+await page.waitForSelector('.handfan .cardbtn', { timeout: 30000 });
+await page.waitForTimeout(800);
+await shot('10-night-play');
+await page.evaluate(() => localStorage.removeItem('nb:theme'));
+await page.reload();
+await page.waitForSelector('.handfan .cardbtn', { timeout: 30000 });
 
 // 04 — the toll receipt, printing off the last card of the board
 // One card left in hand means one legal card, which is exactly what Board.tsx's
@@ -178,6 +221,7 @@ await shot('04-toll-receipt');
 // 05 — the board result behind it: the field, the deal, the auction recap
 await page.click('text=SEE THE FIELD');
 await page.waitForSelector('.fieldtable');
+await waitForField('.fieldtable-name');
 await page.waitForTimeout(600);
 await shot('05-board-result', true);
 
@@ -185,6 +229,7 @@ await shot('05-board-result', true);
 for (let no = 1; no <= 4; no++) await drive(tid, no);
 await page.goto(`${base}/t/${tid}`);
 await page.waitForSelector('.tourney-result-hero', { timeout: 30000 });
+await waitForField('.tourney-field-name'); // the final standings want the house in them too
 await page.waitForTimeout(1200);
 await shot('06-tournament-result');
 
@@ -219,23 +264,19 @@ await page.waitForTimeout(600);
 await shot('09-glossary-sheet');
 await page.click('[aria-label="Close"]');
 
-// 10 — night mode, mid-play on a second board
-const { tournamentId: tid2 } = await api.post('/api/play');
-await drive(tid2, 1, (v) => v.state === 'playing' && v.myTurn);
-await page.evaluate(() => localStorage.setItem('nb:theme', 'night'));
-await page.goto(`${base}/t/${tid2}/b/1`);
-await page.waitForSelector('.handfan.interactive .cardbtn:enabled', { timeout: 30000 });
-await playCard(page.locator('.handfan.interactive .cardbtn:enabled').nth(2));
-await page.waitForTimeout(2600);
-await shot('10-night-play');
+// 11 — the first-crossing tour, the actual cold open for a new account. Demo
+// mode suppresses the automatic one (App.tsx), but it stays replayable here.
+await page.goto(`${base}/tour`);
+await page.waitForSelector('.tour-gate, .tour-page');
+await page.waitForTimeout(1400); // the cover's scene animates in
+await shot('11-tour');
 
-// 11 — the desktop shell, back in daylight
-await page.evaluate(() => localStorage.removeItem('nb:theme'));
+// 12 — the desktop shell, back in daylight
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.goto(base);
 await page.waitForSelector('.home-cta');
 await page.waitForTimeout(600);
-await shot('11-desktop-home');
+await shot('12-desktop-home');
 
 await browser.close();
 console.log('readme shots complete');

@@ -20,7 +20,9 @@ node scripts/readme-shots.mjs http://localhost:3997 docs/screenshots
 ```
 
 Placement resumes an unfinished tournament, so each run wants a player with no history:
-start from a fresh `DB_PATH`, or pass `SHOT_HANDLE=<new name>`.
+start from a fresh `DB_PATH`, or pass `SHOT_HANDLE=<new name>`. The sweep waits for the
+benchmark AI personas to finish the board before shooting anything that shows THE FIELD —
+they play in the background, and a sweep that races them shoots a field of one.
 
 | File | Screen | State |
 | --- | --- | --- |
@@ -29,12 +31,13 @@ start from a fresh `DB_PATH`, or pass `SHOT_HANDLE=<new name>`.
 | `03-card-play.png` | Board / Card play | Declaring: dummy tabled, a trick on the felt |
 | `04-toll-receipt.png` | Board / Result | The toll receipt, printed off the board's last card |
 | `05-board-result.png` | Board / Result | Matchpoints, the field, the deal, your bidding (full page) |
-| `06-tournament-result.png` | Tournament result | TOLL PAID postmark, board by board |
+| `06-tournament-result.png` | Tournament result | TOLL PAID postmark, board by board, the final field |
 | `07-rankings.png` | Rankings | The all-time Elo ladder |
 | `08-stats.png` | Stats | Populated: toll log, sparklines, grades (tall frame) |
 | `09-glossary-sheet.png` | Glossary | The ledger with a term sheet open over it |
-| `10-night-play.png` | Board / Card play | Night mode, partner declaring (the board flipped) |
-| `11-desktop-home.png` | Home | Desktop viewport — the centered phone column |
+| `10-night-play.png` | Board / Card play | The same position as `03`, in night mode |
+| `11-tour.png` | Tour | The first-crossing tour's cover (`/tour`) |
+| `12-desktop-home.png` | Home | Desktop viewport — the centered phone column |
 
 Related sweeps: [`../images-redesign/`](../images-redesign/README.md) is the design-review
 walk of *every* screen ([`scripts/ui-check.mjs`](../../scripts/ui-check.mjs));
