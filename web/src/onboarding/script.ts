@@ -12,6 +12,15 @@ import type { TourBoard } from './board0';
  * Voice rules (.claude/skills/nickel-bridge-design): warm, second person,
  * period-inflected; suit glyphs render through SuitText; no emoji.
  *
+ * And one rule this screen has that the rest of the app doesn't: **no
+ * time-of-day words**. The club's evening-lamplight register is tempting —
+ * the copy was written in it, and the whole tour read "tonight" — but a
+ * first crossing is walked at whatever hour the account is made, and the
+ * ledger has no idea which. "On this crossing", "this time", "this once"
+ * carry the same sense of a one-off, guided occasion and stay true at nine
+ * in the morning. (Home's "Good morning/afternoon/evening" is the one place
+ * that may name the hour: it actually checks the clock.)
+ *
  * The line being narrated (all of it the model's own choice — every grade
  * toast honestly reads "the robot's choice too"):
  *   S 1NT · W pass · N 2♥ (Jacoby transfer — artificial) · E pass ·
@@ -95,10 +104,10 @@ export const COPY = {
   offerBody:
     'Before your first real crossing, walk one deal with the tollkeeper. You’ll bid a hand, play a card or two, and learn to read the ledger.',
 
-  offScriptCall: 'A fine thought — and its meaning is right there. But tonight, follow the tollkeeper.',
-  offScriptCard: 'A fair card — but take the marked one tonight. The meanings of your own experiments come later.',
+  offScriptCall: 'A fine thought — and its meaning is right there. But on this crossing, follow the tollkeeper.',
+  offScriptCard: 'A fair card — but take the marked one this time. The meanings of your own experiments come later.',
   fastForward:
-    'That’s the whole idea — the rest of tonight’s tricks play themselves. Watch the meter; the house knows when to spend an honor and when to keep one.',
+    'That’s the whole idea — the rest of the hand plays itself. Watch the meter; the house knows when to spend an honor and when to keep one.',
 
   receiptSay:
     'Scored and itemized — every crossing prints a receipt like this. Read where the toll came from, then see who else was on the bridge.',
@@ -121,7 +130,7 @@ export const STEPS: StepGuidance[] = [
     // 1NT (call 7). "the game" here means bridge itself, not the scoring
     // term — see `skip` below.
     say: 'Your hand, counted: fifteen high card points (HCP), evenly spread. That’s the most honest bid in the game — tap 1NT and read what it promises. Nothing is final until you confirm.',
-    offScript: 'Each of these has its meaning — that’s the point of the box. Tonight, though: 1NT, the honest one.',
+    offScript: 'Each of these has its meaning — that’s the point of the box. This once, though: 1NT, the honest one.',
     expect: 7,
     skip: ['game'],
   },
@@ -139,7 +148,7 @@ export const STEPS: StepGuidance[] = [
   },
   {
     // dummy's forced ♥10 (card 21) — auto-plays; the ribbon explains dummy
-    say: 'West leads, and partner lays their hand on the table. That’s dummy — yours to play tonight. One heart up there, so it plays itself.',
+    say: 'West leads, and partner lays their hand on the table. That’s dummy — yours to play too. One heart up there, so it plays itself.',
     expect: 21,
   },
   {

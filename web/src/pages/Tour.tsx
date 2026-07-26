@@ -52,8 +52,8 @@ import { BiddingPhase, PlayPhase } from './Board';
  * player is using the real gameplay surface, with one addition: the
  * tollkeeper's narration ribbon. Off-script actions show their real meanings
  * (exploring is free) but only the scripted line commits, so the replay
- * stays deterministic. The tail of the hand self-plays ("the rest play
- * themselves tonight"), and duplicate is taught by the genuine field table:
+ * stays deterministic. The tail of the hand self-plays ("the rest of the
+ * hand plays itself"), and duplicate is taught by the genuine field table:
  * the three house personas really played this deal at their tiers.
  *
  * App.tsx mounts this in place of the routes while me.user.onboardedAt is

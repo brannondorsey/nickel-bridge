@@ -19,6 +19,11 @@ Three deliberate deltas from the spec below, all by product decision during impl
    bridge.") plus panels I · THE BRIDGE and II · THE LEDGER precede the practice-board
    offer, replacing the booth-gate screen — the philosophy copy carried the concept
    exploration and now leads the shipped flow.
+5. **No time-of-day words in the shipped copy.** The ribbon lines sketched below say
+   "tonight" (③a, ③e, ③f) and the tour shipped that way; a first crossing is walked at
+   whatever hour the account is made, so the toll office can't know it's evening. Re-curate
+   with "on this crossing" / "this time" / "this once" — `onboarding/tour.test.tsx` fails on
+   a clock word, and `onboarding/script.ts` records the rule.
 
 The rest of this document is the original spec, kept as the design record. It was
 developed from a three-concept exploration (`onboarding-concepts.html` — pamphlet /

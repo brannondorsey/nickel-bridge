@@ -64,6 +64,20 @@ describe('first-crossing script ↔ capture drift guard', () => {
     expect(guidanceFor(STEPS.length, data).auto).toBe(true);
   });
 
+  it('never names a time of day — a first crossing is walked at any hour', () => {
+    // The club's evening register invites "tonight", and the script shipped
+    // full of it; to an account made at nine in the morning it reads as a lie.
+    // Home's "Good morning/afternoon/evening" is the one surface allowed to
+    // name the hour, because it actually checks the clock.
+    const strings = (v: unknown): string[] =>
+      typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : [];
+    const lines = [...strings(COPY), ...STEPS.flatMap((s) => [s.say, s.offScript ?? ''])];
+    expect(lines.length).toBeGreaterThan(10); // the walker found the copy
+    for (const line of lines) {
+      expect(line, line).not.toMatch(/\b(tonight|this evening|evening|morning|afternoon|midnight|today|tomorrow)\b/i);
+    }
+  });
+
   it('renumbers every view to board №0 on load', async () => {
     // The capture had to run on a real board (3 — dealer South). The tour's
     // own chrome says №0, and so must the shared components that read
