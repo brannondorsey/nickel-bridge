@@ -5,7 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#fcfbf8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      seo:start — everything between these two markers is the SITE-WIDE
+      discoverability block, and web/scripts/prerender-glossary.mjs replaces the
+      whole span wholesale when it prerenders a glossary page. Keep the markers
+      exactly as they are, and keep anything page-independent (charset,
+      viewport, icon, the theme script) OUTSIDE them.
+
+      This is the SPA shell, served for EVERY route that isn't a prerendered
+      file, so everything in here has to be true of the site as a whole rather
+      than of one page. Two consequences worth keeping:
+
+      - No <link rel="canonical">. A static canonical pointing at the site root
+        would tell crawlers that /glossary/finesse "is really" the home page and
+        actively suppress the very pages we want indexed. Prerendered glossary
+        pages (web/scripts/prerender-glossary.mjs) carry their own correct
+        self-canonical instead; everything else self-canonicalizes by default.
+      - The description is plain and keyword-bearing on purpose. It is never
+        rendered to a visitor — the on-screen splash keeps its own voice — so it
+        can say what the app is without touching the experience.
+
+      The demo app and PR previews serve this same shell; they're kept out of
+      the index by an X-Robots-Tag header + robots.txt, not by anything here
+      (see the noindex block in server/src/app.ts).
+    -->
     <title>Nickel Bridge — learn &amp; play duplicate bridge</title>
+    <meta
+      name="description"
+      content="Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nickel Bridge" />
+    <meta property="og:title" content="Nickel Bridge — learn &amp; play duplicate bridge" />
+    <meta
+      property="og:description"
+      content="Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open."
+    />
+    <meta property="og:url" content="https://bridge.brannon.online/" />
+    <meta property="og:image" content="https://bridge.brannon.online/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Nickel Bridge — duplicate · SAYC" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nickel Bridge — learn &amp; play duplicate bridge" />
+    <meta
+      name="twitter:description"
+      content="Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open."
+    />
+    <meta name="twitter:image" content="https://bridge.brannon.online/og-image.png" />
+    <!--
+      Structured data for the app itself. Describes the site rather than any one
+      route, which is what makes it safe on a shell served for every path; the
+      prerendered glossary pages replace it with their own DefinedTerm node.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Nickel Bridge",
+        "url": "https://bridge.brannon.online/",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any (modern web browser)",
+        "description": "Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open.",
+        "image": "https://bridge.brannon.online/og-image.png",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <!-- seo:end -->
     <!--
       Night mode: apply the persisted theme.ts preference before first paint, so
       there's no light-mode flash for a Night/Adaptive/System-into-dark-OS visitor.

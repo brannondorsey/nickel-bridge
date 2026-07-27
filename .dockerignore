@@ -5,5 +5,14 @@ data
 *.db
 .git
 .env
+
+# Offline tooling the image never runs: fixture/weight generation, calibration
+# sweeps, the e2e and screenshot drivers, the share-card renderer. Note these
+# two patterns are ANCHORED AT THE CONTEXT ROOT — unlike the `**/` ones above
+# they exclude only the top-level directories, so web/scripts/ (which holds the
+# glossary prerender that `npm run build` actually runs) is deliberately
+# unaffected. Anything the build needs must live inside a workspace for exactly
+# that reason: a build step under tools/ passes every local check and then
+# fails only in CI's docker job.
 scripts
 tools
