@@ -3,6 +3,20 @@ name: PR preview teardown
 # Destroys the per-PR Fly.io preview app (and its attached volume) created by the
 # deploy-preview job in ci.yml, so preview cost never outlives the PR. Runs independently
 # of CI health — a closed PR should be torn down even if it never had a green CI run.
+#
+# Why this is a watch loop rather than one `flyctl apps destroy`: deploy-preview sits
+# behind `needs: [test, e2e, docker]`, so when a PR is merged there is routinely still a
+# preview deploy in flight, minutes away from calling `flyctl apps create`. Teardown would
+# run first, find nothing, exit green — and then CI would create the app, orphaning it
+# forever. That is exactly how nickel-bridge-pr-89, -92 and -94 survived their merges in
+# July 2026: each app's volume was created 24-100s AFTER its own teardown run had already
+# logged `Could not find App`, and the `|| true` turned that into a green check.
+#
+# So: cancel the run that would re-create it, then destroy and keep watching until the app
+# has stayed gone, and fail loudly if it has not. ci.yml re-checks the PR state immediately
+# before creating the app, which closes the same window from the other side; neither guard
+# alone is airtight, because the PR can always close in the gap between check and create.
+
 on:
   pull_request:
     types: [closed]
@@ -10,8 +24,54 @@ on:
 jobs:
   destroy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write # to cancel the in-flight CI run that would re-create the app
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      APP: nickel-bridge-pr-${{ github.event.pull_request.number }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl apps destroy "nickel-bridge-pr-${{ github.event.pull_request.number }}" --yes || true
+
+      - name: Cancel any CI run still able to re-create the preview
+        run: |
+          # Best-effort: a job already inside `flyctl apps create` finishes that command
+          # before it notices the cancellation, which is what the watch loop below covers.
+          gh run list --repo "$GITHUB_REPOSITORY" --branch "$BRANCH" --workflow ci.yml \
+              --limit 20 --json databaseId,status \
+              --jq '.[] | select(.status != "completed") | .databaseId' \
+            | while read -r id; do
+                echo "cancelling in-flight CI run $id"
+                gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+              done
+
+      - name: Destroy the preview app, and confirm it stays destroyed
+        run: |
+          exists() {
+            flyctl apps list --json | jq -e --arg a "$APP" 'any(.[]; .Name == $a)' >/dev/null
+          }
+
+          # Three consecutive absent polls, 30s apart, before believing it. The observed
+          # re-create lag was 24-100s, so a single check right after the destroy proves
+          # nothing at all.
+          absent=0
+          for attempt in $(seq 1 12); do
+            if exists; then
+              echo "attempt $attempt: $APP exists — destroying"
+              flyctl apps destroy "$APP" --yes || true
+              absent=0
+            else
+              absent=$((absent + 1))
+              echo "attempt $attempt: $APP absent ($absent/3 consecutive)"
+              [ "$absent" -ge 3 ] && break
+            fi
+            sleep 30
+          done
+
+          if exists; then
+            echo "::error::$APP still exists after teardown — it bills a volume until destroyed by hand"
+            exit 1
+          fi
+          echo "$APP is gone."
