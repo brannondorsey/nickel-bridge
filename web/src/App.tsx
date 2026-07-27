@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { Me, api } from './api';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
+import { SignInBar } from './components/ds/SignInBar';
 import { TabBar } from './components/ds/TabBar';
 import { GlossaryProvider } from './glossary/GlossaryContext';
 import Board from './pages/Board';
@@ -38,9 +39,25 @@ function inTabScope(pathname: string): boolean {
     pathname === '/' ||
     pathname === '/leaderboard' ||
     pathname.startsWith('/players/') ||
-    pathname === '/glossary' ||
-    pathname.startsWith('/glossary/')
+    isGlossaryPath(pathname)
   );
+}
+
+/**
+ * The glossary is the one part of the app that reads without an account.
+ *
+ * It's static reference data (web/src/glossary/) with no board state, no
+ * standings and nothing user-scoped, so there is nothing to gate — and it is
+ * the app's front door from search: ~900 bridge terms, each a page someone
+ * might land on from a query like "what is a squeeze in bridge". Requiring a
+ * sign-in to read them means search engines see a login screen and index
+ * nothing, which is why these two routes sit outside the auth branch below.
+ * The build also prerenders them to static HTML for crawlers that don't run JS
+ * (tools/gen_glossary_static.mjs); this gate is what makes those pages honest
+ * when a real visitor follows one in.
+ */
+function isGlossaryPath(pathname: string): boolean {
+  return pathname === '/glossary' || pathname.startsWith('/glossary/');
 }
 
 export default function App() {
@@ -150,6 +167,20 @@ export default function App() {
             </Routes>
             {showTabs ? <TabBar myId={me.user.id} pathname={pathname} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}
+          </GlossaryProvider>
+        ) : isGlossaryPath(pathname) ? (
+          // Signed out, but on a public route: render the glossary itself
+          // rather than the login splash (see isGlossaryPath). Its own
+          // provider, for the same reason the tour needs one — this branch
+          // renders in place of the authed <Routes>, which is what the
+          // app-wide provider wraps. SignInBar takes the TabBar's slot, since
+          // every tab but this one leads somewhere that needs an account.
+          <GlossaryProvider>
+            <Routes>
+              <Route path="/glossary" element={<Glossary />} />
+              <Route path="/glossary/:slug" element={<Glossary />} />
+            </Routes>
+            <SignInBar />
           </GlossaryProvider>
         ) : (
           <Login />

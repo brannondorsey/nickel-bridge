@@ -84,7 +84,12 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 GlossaryContext.tsx the app-wide term-sheet provider, TermSheet.tsx the
                 sheet itself, Attribution.tsx the shared CC BY-SA credit block — see
                 "The glossary" below),
-                components/ds/ (design-system pieces) + components/game/ (auction, bid box,
+                index.html (the SPA shell — holds the site-wide SEO block between its
+                seo:start/seo:end markers, which the glossary prerender replaces per
+                page, plus the pre-paint night-mode script),
+                public/ (favicon.svg + og-image.png, the checked-in social share card),
+                components/ds/ (design-system pieces, incl. SignInBar — the logged-out
+                glossary's bottom bar, standing in for the TabBar) + components/game/ (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
                 GlossaryProse.tsx — SuitText + tappable glossary terms),
                 src/test/ (fixtures + apiMock pattern),
@@ -103,6 +108,10 @@ tools           offline Python weight conversion + golden-fixture generation;
                 gen_tour_board.mjs mines + captures the onboarding practice board
                 (web/src/onboarding/board0.json) by driving the real engine offline —
                 see "The first crossing" below;
+                gen_glossary_static.mjs is the odd one out — a BUILD STEP, not an
+                offline generator: web's `build` script runs it after `vite build` to
+                prerender the glossary into web/dist/glossary-static/ + sitemap.xml,
+                see "Discoverability" below;
                 calibrate_k.mjs sweeps sampled-DD K values (plus --bid-topn/--forget-window)
                 against true-DD reference play; calibrate_stats.mjs is the same sweeps with
                 standard error; calibrate_stack.mjs measures the combined bid+play effect for
@@ -113,7 +122,9 @@ tools           offline Python weight conversion + golden-fixture generation;
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
-                plays an ordinary tournament on a DEMO=1 instance, see that dir's README)
+                plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
+                og-image.mjs (regenerates the checked-in social share card
+                web/public/og-image.png — offline, no running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
@@ -180,7 +191,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | Var | Default | Purpose (where it's read) |
 | --- | --- | --- |
 | `PORT` | `3000` | listen port (`server/src/index.ts`) |
-| `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`) |
+| `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`), `Sitemap:` line in `robots.txt` (`app.ts` — validated as an absolute http(s) URL there, because Vite defines a `BASE_URL` of its own that Vitest puts on `process.env` as `/`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never on the production app** (previews + the demo app are deliberate exceptions) |
 | `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |
@@ -522,6 +533,44 @@ relateds, core/deep disjointness). The bottom TabBar is the "turnstile" nav patt
 tabs share the width while they fit, and only overflow into the horizontal scroll (right
 fade + chevron, active tab auto-centers) once the gates outgrow it — so future gates fit
 without a hamburger.
+
+**Discoverability: the glossary is the front door from search.** Everything else in the
+app needs an account, so a crawler saw exactly one URL — a login splash carrying ~20 words
+of deliberately cryptic copy. Three pieces changed that, and they only make sense together:
+
+- **The routes are public.** `isGlossaryPath` in `App.tsx` renders `/glossary` and
+  `/glossary/:slug` for a signed-out visitor instead of `<Login />`, with `ds/SignInBar`
+  in the TabBar's slot (every other tab needs an account). Nothing is un-gated but static
+  reference data — no board state, no standings, nothing user-scoped. `TermSheet` hides a
+  term's `action` link when signed out, since those point at gated screens (`/tour`).
+- **They're prerendered.** The app is client-rendered, so a crawler that doesn't run JS
+  (Bing, DuckDuckGo, most social and LLM crawlers) still saw an empty `#root`.
+  `tools/gen_glossary_static.mjs` runs after `vite build` and emits one static page per
+  core term into `web/dist/glossary-static/`, each a copy of the built `index.html` with
+  the `seo:start`/`seo:end` head span swapped and `#root` filled. The module script is
+  copied through untouched, so a human following a search result still boots the ordinary
+  SPA over it (React clears `#root` on mount — the markup is a fallback, never a second
+  copy of the UI to maintain). `app.ts` serves those files ahead of the SPA fallback, by
+  membership in a `Set` of emitted filenames rather than by joining the raw slug onto a
+  path. Deep-reference entries deliberately get no page of their own: they're close
+  paraphrases of Wikipedia's glossary, so indexable prose for them would be thin,
+  duplicative content competing with the source we adapted.
+- **Throwaway origins stay out of the index.** The demo app and every PR preview serve a
+  byte-identical build from their own hostnames, so without this the index fills with
+  duplicates that outrank production and hand searchers a database that gets wiped.
+  `DEMO=1` or `DEV_AUTH=1` (invariant 5 forbids either in production) flips `robots.txt`
+  to disallow-all *and* adds `X-Robots-Tag: noindex, nofollow` to every response — the
+  header is the one that matters, since a preview link posted in a PR is inbound-link
+  enough to get a URL indexed without ever being fetched.
+
+Two things to keep in mind when editing. `web/index.html` must keep its `seo:start`/
+`seo:end` markers and its `<div id="root"></div>` exactly as they are — the prerender
+throws if either goes missing, so a rename fails the build rather than silently shipping
+125 pages of generic metadata. And the shell deliberately carries **no**
+`<link rel="canonical">`: it's served for every unprerendered route, so a static canonical
+would tell crawlers that every deep link "is really" the home page. Prerendered pages
+carry their own correct self-canonical; everything else self-canonicalizes by default.
+Adding a new public route means adding it to the sitemap in `gen_glossary_static.mjs`.
 
 ## Invariants — do not break
 

@@ -984,6 +984,24 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
 }
 
+/* ---- SignInBar (takes the TabBar's slot for logged-out glossary readers) ---- */
+.signinbar {
+  border-top: 1px solid var(--ink);
+  background: var(--paper);
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px 14px;
+}
+.signinbar-note {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13.5px;
+  color: var(--muted);
+  text-align: center;
+  margin: 0 0 10px;
+}
+
 /* ---- Sparkline ---- */
 .sparkline-plot {
   position: relative;

@@ -49,6 +49,32 @@ describe('App — logged out', () => {
     await screen.findByRole('link', { name: /play the toll/i });
     expect(screen.queryByRole('button', { name: /skip intro/i })).not.toBeInTheDocument();
   });
+
+  // The glossary is the app's search-engine front door: a crawler (or a person
+  // following a search result) must reach the terms themselves, not a login
+  // splash. See isGlossaryPath in App.tsx.
+  it('reads the glossary without an account, with a sign-in bar for chrome', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/glossary');
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /play the toll/i })).toHaveAttribute('href', '/');
+    // the TabBar's other gates all need an account, so it isn't rendered
+    expect(screen.queryByRole('link', { name: 'RANKINGS' })).not.toBeInTheDocument();
+  });
+
+  it('opens a /glossary/:slug deep link straight onto its term sheet', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/glossary/finesse');
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/finesse/i);
+  });
+
+  it('still gates everything that is not the glossary', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/leaderboard');
+    await screen.findByRole('link', { name: /play the toll/i });
+    expect(screen.queryByText('The Glossary')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/dev/i)).toBeInTheDocument();
+  });
 });
 
 describe('App — authenticated', () => {
