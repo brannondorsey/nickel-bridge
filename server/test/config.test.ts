@@ -61,4 +61,14 @@ describe('assertPublicOrigin', () => {
     expect(() => assertPublicOrigin(log)).not.toThrow();
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('NOT be marked Secure'));
   });
+
+  // Deliberate, and pinned here because it's the one case where "invalid" and
+  // "absent" could each be argued: an empty value is what tooling forwards for
+  // an unset one, so it takes the warn path rather than the throw path.
+  it('treats an explicitly empty BASE_URL as absent rather than broken', () => {
+    process.env.BASE_URL = '';
+    const log = { warn: vi.fn() };
+    expect(() => assertPublicOrigin(log)).not.toThrow();
+    expect(log.warn).toHaveBeenCalled();
+  });
 });

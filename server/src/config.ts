@@ -78,6 +78,14 @@ type Logger = { warn: (msg: string) => void };
  */
 export function assertPublicOrigin(log: Logger): void {
   const raw = process.env.BASE_URL;
+  // An EMPTY BASE_URL counts as absent, not as broken — it warns, it doesn't
+  // throw. `BASE_URL=` and an unset BASE_URL are the same thing to most shell
+  // and container tooling (`docker run -e BASE_URL` forwards an empty value
+  // when the host doesn't set one), and the throw below is aimed at values
+  // that are clearly a typo or a collapsed template — `https://`, `/`,
+  // `ftp://…` — rather than at "nothing was configured here". Same reasoning
+  // as warning rather than throwing on unset: neither case should take down a
+  // deployment that is running today.
   if (raw && parsePublicOrigin(raw) === null) {
     throw new Error(
       `BASE_URL is set to ${JSON.stringify(raw)}, which is not an absolute http(s) URL. ` +
