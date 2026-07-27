@@ -11,7 +11,7 @@ import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
-import { playerStats } from './stats.js';
+import { playerStats, profileKind } from './stats.js';
 import {
   boardDifficulty,
   DEMO_PROVISIONAL_MIN_TOURNAMENTS,
@@ -186,19 +186,43 @@ export async function buildApp(): Promise<FastifyInstance> {
     const yourRatedTournaments = user
       ? (db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }).n
       : null;
+    // The house, alongside the ladder rather than on it. The personas never
+    // rate (see ai-players.ts), so they have nothing to sort by and can't be
+    // ranked — but "how do I stack up against The Shark" is the question the
+    // ladder makes people ask, and their profiles are the only ones a visitor
+    // without an account can open. This is where those get found.
+    const house = db
+      .prepare(`SELECT id, handle, picture FROM users WHERE kind = 'ai' AND handle IS NOT NULL ORDER BY id`)
+      .all() as { id: number; handle: string; picture: string | null }[];
     return reply.send({
       leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
+      house,
       provisionalMin,
       yourRatedTournaments,
     });
   });
 
-  // Public, like the leaderboard: playerStats() takes no viewer, and every
-  // board query inside it joins tournaments on kind = 'standard', so exhibit
-  // and scenario boards can't leak out through it either.
+  /**
+   * Public for the house, gated for everyone else.
+   *
+   * The benchmark personas' profiles are calibration content — synthetic
+   * players, no person behind them — so a visitor can read one without an
+   * account and see what a real record looks like. A human's profile is a
+   * different thing: handle, avatar, account age, a day-by-day activity
+   * heatmap, rivalries, every tournament they've played. Served anonymously,
+   * that turns a sequential id walk into a roster dump, and this app has no
+   * rate limiting to slow one down.
+   *
+   * The 401 is deliberately uniform — an unknown id answers the same as a real
+   * person's — so an anonymous walk can't even map which accounts exist. A
+   * signed-in caller still gets the honest 404, and the whole
+   * requireUserWithHandle behaviour it had before this route went public.
+   */
   app.get('/api/users/:id/stats', (req, reply) => {
     const id = Number((req.params as { id: string }).id);
-    const stats = Number.isInteger(id) ? playerStats(id) : null;
+    const kind = Number.isInteger(id) ? profileKind(id) : null;
+    if (kind !== 'ai' && !requireUserWithHandle(req, reply)) return;
+    const stats = kind ? playerStats(id) : null;
     if (!stats) return reply.code(404).send({ error: 'not found' });
     return reply.send(stats);
   });

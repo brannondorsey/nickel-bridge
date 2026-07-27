@@ -3777,6 +3777,36 @@ a.stat-tile:hover {
   display: none;
 }
 
+/* The house panel on Rankings: two columns, not the ladder's four — personas
+   have no rank and no rating to show, only a door into their record. */
+.rank-house {
+  margin: 14px 16px 0;
+}
+.rank-row-house {
+  grid-template-columns: 1fr auto;
+}
+.rank-row-house .rank-name {
+  font-style: italic;
+  color: var(--muted);
+}
+.rank-house-cue {
+  color: var(--muted);
+}
+
+/* The signed-out stand-in for a person's profile (pages/Player.tsx). */
+.stats-gated {
+  margin: 24px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 18px 16px 20px;
+  text-align: center;
+}
+.stats-gated-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 /* ---- Landing (pages/Login.tsx — what a visitor without an account gets) ----
 
    The splash hero is untouched: it's still `.splash`, still 100dvh, and

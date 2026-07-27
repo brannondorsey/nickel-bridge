@@ -216,9 +216,11 @@ describe('benchmark AI players', () => {
     const app = await makeApp();
     const alice = new TestClient(app, 'Alice');
     await alice.login();
-    const { leaderboard } = await alice.get('/api/leaderboard');
+    const { leaderboard, house } = await alice.get('/api/leaderboard');
     const aiIds = new Set(Object.values(ensureAiPlayers()).map((u) => u.id));
     expect(leaderboard.some((r: { id: number }) => aiIds.has(r.id))).toBe(false);
+    // …but beside it, so their (publicly readable) profiles are findable at all
+    expect(new Set((house as { id: number }[]).map((h) => h.id))).toEqual(aiIds);
 
     // Alice hasn't played a tournament yet in this test, so she's below the
     // leaderboard's provisional quota and won't be in the list — get her id
@@ -237,6 +239,17 @@ describe('benchmark AI players', () => {
     const personaStats = await alice.get(`/api/users/${expert.id}/stats`);
     expect(personaStats.user.kind).toBe('ai');
     expect(personaStats.user.handle).toBe(expert.handle);
+
+    // …and open means open: no session at all. This is the exception that
+    // makes the profile route reachable without an account — a persona is
+    // nobody's record, so there is nothing to protect, and it's the one
+    // populated profile a visitor can read before signing up. Every human
+    // profile refuses the same caller (server/test/stats.test.ts).
+    const anon = new TestClient(app, 'AnonLurker');
+    const open = await anon.raw('GET', `/api/users/${expert.id}/stats`);
+    expect(open.statusCode).toBe(200);
+    expect(JSON.parse(open.body)).toEqual(personaStats);
+    expect((await anon.raw('GET', `/api/users/${aliceId}/stats`)).statusCode).toBe(401);
   });
 
   it('breaks display ties human-first, then strongest persona first', async () => {

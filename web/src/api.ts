@@ -332,6 +332,13 @@ export const api = {
         /** rank movement since the previous rated tournament; null without a prior snapshot */
         movement: number | null;
       }[];
+      /**
+       * The benchmark house personas — beside the ladder, never on it (they
+       * don't rate, so there's nothing to rank them by). Their profiles are
+       * the only ones readable without an account, so this is how a
+       * signed-out visitor finds one.
+       */
+      house: { id: number; handle: string; picture: string | null }[];
       /** rated tournaments needed before a player shows up in `leaderboard` */
       provisionalMin: number;
       /**

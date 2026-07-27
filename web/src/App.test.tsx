@@ -5,7 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { TOUR_DONE_KEY, stampTourDone } from './onboarding/tourDone';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
-import { meFixture, meFreshCrosser, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
+import {
+  leaderboardResponse,
+  leaderboardRows,
+  meFixture,
+  meFreshCrosser,
+  meLoggedOut,
+  meNoHandle,
+  playerStatsFull,
+} from './test/fixtures';
 import { apiMock } from './test/utils';
 
 vi.mock('./api', async (importOriginal) => ({
@@ -96,26 +104,42 @@ describe('App — logged out', () => {
 
   it('reads the rankings without an account, with a sign-in bar for chrome', async () => {
     apiMock.me.mockResolvedValue(meLoggedOut);
-    apiMock.leaderboard.mockResolvedValue({
-      leaderboard: [{ id: 7, handle: 'Margaret', picture: null, elo: 1512, rated_tournaments: 6, played_tournaments: 6, movement: 1 }],
-      provisionalMin: 4,
-      yourRatedTournaments: null,
-    });
+    apiMock.leaderboard.mockResolvedValue({ ...leaderboardResponse, yourRatedTournaments: null });
     renderApp('/leaderboard');
-    expect(await screen.findByText('Margaret')).toBeInTheDocument();
+    expect(await screen.findByText(leaderboardRows[0].handle)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /play the toll/i })).toHaveAttribute('href', '/');
     // no "you", and no provisional note — there is no you to be provisional about
     expect(screen.queryByText(/you'll join the field/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/— you/)).not.toBeInTheDocument();
+    // human rows don't link: every one of them would land on the same sign-in
+    // wall, so a whole page of them would be a page of dead ends
+    expect(screen.queryByRole('link', { name: new RegExp(leaderboardRows[0].handle) })).not.toBeInTheDocument();
+    // the house is the exception, and the only profile a visitor can open
+    expect(screen.getByRole('link', { name: /The Shark/ })).toHaveAttribute('href', '/players/903');
   });
 
-  it('reads a player profile without an account, minus the owner-only controls', async () => {
+  // The house personas are synthetic — nobody's record — so their profiles are
+  // the one populated one a visitor can read before signing up.
+  it('reads a house profile without an account, minus the owner-only controls', async () => {
     apiMock.me.mockResolvedValue(meLoggedOut);
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderApp(`/players/${playerStatsFull.user.id}`);
     expect(await screen.findByText(playerStatsFull.user.handle)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /appearance/i })).not.toBeInTheDocument();
+  });
+
+  // A real person's is gated. The server's 401 is uniform — an unknown id
+  // answers identically — so the client cannot and must not claim "not found".
+  it('invites rather than errors on a profile it is not allowed to read', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    apiMock.playerStats.mockRejectedValue(new Error('not signed in'));
+    renderApp('/players/47');
+    expect(await screen.findByText(/record is for members of the club/i)).toBeInTheDocument();
+    expect(screen.queryByText(/player not found/i)).not.toBeInTheDocument();
+    // the SignInBar at the foot is the ask; a second one in the panel would be
+    // the same request twice on one screen
+    expect(screen.getAllByRole('link', { name: /play the toll/i })).toHaveLength(1);
   });
 
   it('walks the practice deal without an account', async () => {

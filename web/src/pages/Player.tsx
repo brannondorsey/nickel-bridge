@@ -202,11 +202,30 @@ export default function Player() {
       .catch(() => setError('Player not found.'));
   }, [id]);
 
+  // Signed out, a person's record needs an account and the house personas'
+  // don't (server/src/app.ts) — and the 401 is deliberately uniform there, so
+  // the client genuinely cannot tell "someone you'd need to sign in to see"
+  // from "nobody". Say the true thing for both rather than "Player not found",
+  // which would be a guess.
+  //
+  // Explanation only, no CTA: SignInBar is already at the foot of every public
+  // screen (App.tsx's wantsSignInBar), and a second PLAY THE TOLL here would
+  // be the same ask twice — indistinguishable to a screen reader, and to
+  // anything looking one up by name.
   if (error) {
     return (
       <div className="stats-page">
         <AppHeader context="STATS" />
-        <div className="notice-error">{error}</div>
+        {me?.user ? (
+          <div className="notice-error">{error}</div>
+        ) : (
+          <div className="stats-gated">
+            <p className="stats-gated-note">
+              A player's record is for members of the club. The house players keep no secrets, though — read one of
+              theirs from the rankings below.
+            </p>
+          </div>
+        )}
         <div className="stats-footer">
           <Button variant="secondary" to="/leaderboard">
             Back to the rankings

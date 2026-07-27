@@ -47,10 +47,26 @@ describe('Rankings', () => {
 
   it('treats zero movement like no movement', async () => {
     apiMock.leaderboard.mockResolvedValue({
+      ...leaderboardResponse,
       leaderboard: [{ ...leaderboardRows[0], movement: 0 }],
     });
     renderWithMe(<Leaderboard />, { me: meFixture });
     expect(await screen.findByText('—')).toHaveClass('quiet');
+  });
+
+  // The personas never rate, so they can't be ranked — but their profiles are
+  // the only ones a signed-out visitor can open, and this panel is where they
+  // get found. Signed in it's simply useful: "how do I stack up against the
+  // house" is the question the ladder makes people ask.
+  it('lists the house beside the ladder, never on it', async () => {
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    await screen.findByText('The field');
+    const shark = screen.getByText('The Shark').closest('a')!;
+    expect(shark).toHaveAttribute('href', '/players/903');
+    // beside, not on: no rank number, and it isn't one of the ranked rows
+    expect(within(shark).queryByText('1')).not.toBeInTheDocument();
+    expect(shark).not.toHaveClass('rank-row-you');
   });
 
   it('explains the rating system in the footer', async () => {

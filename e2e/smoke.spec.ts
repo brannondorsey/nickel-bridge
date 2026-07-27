@@ -296,7 +296,17 @@ test('a visitor with no account can read the pitch and walk the practice deal', 
   await expect(page.locator('.rank-head')).toBeVisible();
   await expect(page.locator('.signinbar')).toBeVisible();
 
-  await page.goBack();
+  // …and the one profile a visitor can open: a house persona. Real players'
+  // records need an account, which is why the ladder's own rows don't link
+  // here and this panel does.
+  await page.locator('.rank-house .rank-row-house').first().click();
+  await expect(page).toHaveURL(/\/players\/\d+$/);
+  await expect(page.locator('.player-hero')).toBeVisible();
+  await expect(page.locator('.house-tag').first()).toBeVisible();
+  // owner-only controls stay off someone else's profile, signed out most of all
+  await expect(page.getByRole('button', { name: /sign out/i })).toHaveCount(0);
+
+  await page.goto('/');
   await page.getByRole('link', { name: /walk a practice deal/i }).click();
   await expect(page).toHaveURL(/\/tour$/);
 

@@ -34,19 +34,29 @@ describe('player stats', () => {
     expect((await alice.raw('GET', '/api/users/abc/stats')).statusCode).toBe(404);
   });
 
-  // Profiles read without an account (App.tsx's isPublicPath): a visitor who
-  // hasn't signed up can look at the house personas' records, and at anyone
-  // else's, before deciding whether to. Nothing here is scoped to the viewer,
-  // so the anonymous payload has to be the identical object.
-  it('serves the same profile to a caller with no session at all', async () => {
+  // A person's record needs an account: handle, avatar, account age, a
+  // day-by-day activity heatmap, rivalries, every tournament played. Served
+  // anonymously, a sequential id walk is a roster dump, and there's no rate
+  // limiting in this app to slow one down.
+  //
+  // The 401 has to be UNIFORM — a real person's id and an id nobody has must
+  // answer identically — or the walk still maps which accounts exist even
+  // though it can't read them.
+  it('refuses a human profile to a caller with no session, indistinguishably from an unknown id', async () => {
     const anon = new TestClient(app, 'Anon');
-    const id = await userId(alice);
-    const res = await anon.raw('GET', `/api/users/${id}/stats`);
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual(await alice.get(`/api/users/${id}/stats`));
-    // still an honest 404 for a id nobody has
-    expect((await anon.raw('GET', '/api/users/999999/stats')).statusCode).toBe(404);
+    const real = await anon.raw('GET', `/api/users/${await userId(alice)}/stats`);
+    const nobody = await anon.raw('GET', '/api/users/999999/stats');
+    expect(real.statusCode).toBe(401);
+    expect(nobody.statusCode).toBe(401);
+    expect(real.body).toEqual(nobody.body);
+    // and nothing of hers leaked in the refusal
+    expect(real.body).not.toContain('Alice');
   });
+
+  // (The house personas are the exception to that refusal — they're the reason
+  // the route is reachable without an account at all. Covered in
+  // ai-players.test.ts, which is the suite that has personas: freshDbEnv sets
+  // AI_PLAYERS=0 here.)
 
   it('404s on a signed-in user who never claimed a handle, instead of leaking a blank-name profile', async () => {
     const ghost = new TestClient(app, 'StatsGhost');

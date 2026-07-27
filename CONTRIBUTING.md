@@ -577,17 +577,33 @@ decide — and the pieces only make sense together.
   onboarding for whoever signs in on that browser next). The suppression flag is
   write-once for the session and never flipped back: clearing it when the stamp lands
   would re-open the gate for the render or two before the refreshed `me` arrives.
-- **Two API routes are public**, resolved with `optionalUser` (`auth.ts`) rather than
-  `requireUserWithHandle`: `GET /api/leaderboard` and `GET /api/users/:id/stats`.
-  `playerStats()` takes no viewer, and every board query inside it joins
-  `tournaments.kind = 'standard'`, so exhibit boards can't leak out. The leaderboard's one
-  viewer-dependent field, `yourRatedTournaments`, returns **`null`** and not `0` — the
-  client prints a "x of N crossings so far" note off it, which would be a lie told to
-  somebody with no record. Note also that `app.ts`'s interactive-request hook now gates on
-  `hasSession`, not the `/api/` prefix: without that, a scraper polling the public
-  leaderboard would park the AI personas' background play indefinitely.
-  **A per-user "hide my profile from anonymous traffic" setting is the agreed escape hatch
-  if this exposure becomes a problem; it does not exist yet.**
+- **The leaderboard is public**, resolved with `optionalUser` (`auth.ts`) rather than
+  `requireUserWithHandle`. Its one viewer-dependent field, `yourRatedTournaments`, returns
+  **`null`** and not `0` — the client prints a "x of N crossings so far" note off it, which
+  would be a lie told to somebody with no record. Signed out, the ladder's rows don't link:
+  every one would lead to the same sign-in wall (see the next point), and a page of those
+  is a page of dead ends.
+- **Profiles are public for the HOUSE only.** `GET /api/users/:id/stats` serves an
+  anonymous caller when `users.kind = 'ai'` and refuses otherwise. The personas are
+  synthetic — nobody's record, and the one populated profile a visitor can read before
+  signing up — while a human's profile is handle, avatar, account age, a day-by-day
+  activity heatmap, rivalries and every tournament played. Served anonymously that turns a
+  sequential id walk into a roster dump, and this app has no rate limiting to slow one
+  down. Two details are load-bearing: the 401 is **uniform** (an unknown id answers exactly
+  like a real person's, so the walk can't even map which accounts exist), and the
+  kind check runs through `profileKind()` **before** `playerStats()`, so a walk can't drive
+  the full stats query pile for every id it tries. The personas are reachable at all
+  because `/api/leaderboard` returns them in a `house` array beside the ladder — they never
+  rate, so they can't be ranked on it. `Player.tsx` renders an explanation rather than
+  "Player not found" for a refusal, since the uniform 401 means the client genuinely
+  doesn't know which it was.
+- **`app.ts`'s interactive-request hook gates on `hasSession`**, not the `/api/` prefix:
+  without that, a scraper polling the public leaderboard would park the AI personas'
+  background play indefinitely.
+- **A per-user "hide my profile from anonymous traffic" setting is the agreed escape hatch
+  if the remaining exposure (handles + Elo on the public ladder) becomes a problem; it does
+  not exist yet.** There is no rate limiting anywhere in this codebase either — a
+  deliberate call, not an oversight, since what stays public is a single bounded list.
 
 **Discoverability: what gets INDEXED is a separate decision.** The app is client-rendered,
 so a crawler that doesn't run JS (Bing, DuckDuckGo, most social and LLM crawlers) sees an
