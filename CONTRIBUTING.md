@@ -121,8 +121,10 @@ docs            design-brief.md — requirements spec for the visual redesign;
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html
-.claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
-                design-system skill — see "Design system" below
+.claude         CLAUDE.md symlink (→ this file) + settings.json (permission +
+                auto-mode allowances for the player-outreach routine — see
+                "Unattended outreach permissions" below) + skills/nickel-bridge-design/,
+                the design-system skill — see "Design system" below
 ```
 
 ## Development workflow
@@ -564,6 +566,38 @@ without a hamburger.
    database. CI's `deploy-production` job refuses to deploy if either secret exists on the
    production app. PR previews and the permanent demo app (`nickel-bridge-demo`) are separate
    apps with their own throwaway databases where both flags are intentional.
+
+## Unattended outreach permissions
+
+`.claude/settings.json` exists for exactly one reason: the weekly player-outreach routine
+(`.claude/skills/player-outreach/`) fires into a fresh, non-interactive session, and a session
+that can't answer a permission prompt simply stalls at it. Every rule in that file is scoped to
+that workflow. It is checked in so the routine behaves identically for anyone who runs it,
+rather than depending on one person's local approvals.
+
+Three groups, and the reasoning matters more than the list:
+
+- **The roster script.** `Bash(node .claude/skills/player-outreach/scripts/player_report.mjs *)`
+  plus an `autoMode` rule, because this is the one step that execs on the production machine.
+  The allowance is deliberately narrow — that exact script, any of its flags — and the
+  `autoMode` entry spells out *why* it's safe (read-only SQLite handle, fixed SELECT, no argv
+  in the SQL) so the next reader can re-evaluate rather than trust. **Don't widen it into a
+  general exec-on-production allowance**, and re-check it if the script changes.
+- **Gmail reads.** `search_threads`, `list_drafts`, `get_thread`, `get_message`, `list_labels`.
+  These are how the skill avoids emailing anyone twice, so blocking them is the *less* safe
+  option: a run that can't check who's been contacted either stops or guesses.
+- **Gmail drafts.** `create_draft` and `update_draft`. Safe to automate only because the
+  connector exposes **no send capability whatsoever** — the worst case is drafts a human deletes.
+  That human review is the safety boundary of the whole workflow.
+
+`permissions.deny` explicitly blocks the trash/spam labellers (`apply_sensitive_*_label`) and
+`delete_label`. The skill never needs them, and an unattended agent should not be one
+mis-selected tool away from moving someone's mail to spam.
+
+Two things this file does **not** grant, on purpose: sending mail (impossible via the connector
+today — if that ever changes, adding a send tool to `allow` must be a deliberate, separately
+reviewed decision, not an oversight), and any other production exec. `autoMode.allow` starts
+with `"$defaults"` so the built-in classifier rules still apply underneath.
 
 ## Design system
 
