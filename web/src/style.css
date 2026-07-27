@@ -3861,14 +3861,62 @@ a.stat-tile:hover {
   font-size: 11px;
 }
 
+/* Each panel is a page of the pamphlet, and the rule between two of them is a
+   fold — so it needs air on BOTH sides. The bottom padding is what was missing:
+   every child in here carries top margin only (.landing-copy, .landing-aside),
+   so a panel's last line sat flush against the next panel's rule while its own
+   label had 30px above it. Symmetric, and roomier than the old top value. */
 .landing-panel {
   display: flex;
   flex-direction: column;
-  padding: 30px 24px 0;
+  padding: 36px 24px;
   border-top: 1px solid var(--line);
 }
 .landing-panel:first-of-type {
   border-top: 0;
+}
+
+/* Each fold rises as it is scrolled to — the intro sequence's gesture
+   (cubic-bezier(.2,.7,.2,1), no bounce), driven by scroll position instead of
+   a timer, so it tracks the reader's own thumb rather than playing at them.
+   Scroll-driven timelines are progressive enhancement in two layers, and both
+   guards matter: @supports keeps the `from` state's opacity: 0 from ever
+   applying in a browser that can't run the timeline (which would leave the
+   whole pitch invisible), and no-preference keeps it off for readers who asked
+   for stillness — they get the finished state, which is just the page.
+
+   `entry` runs from the panel's top edge touching the viewport bottom to it
+   fully entered, so a fold settles as it arrives at reading height. Nothing can
+   end up stuck hidden: a panel scrolled past its range renders at the end state
+   (verified at the page bottom, where the footer's own range completes), and a
+   browser without view() support never applies the `from` state at all — which
+   is the whole reason the @supports guard wraps the animation rather than just
+   the timeline property. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .landing-panel,
+    .landing-foot {
+      /* linear, deliberately — NOT the intro's cubic-bezier(.2,.7,.2,1). That
+         curve is for a rise that plays on a clock and has to settle by itself;
+         mapped onto scroll it front-loads so hard the fold is ~90% resolved
+         within a fifth of its range, i.e. over before the reader sees it. Here
+         the thumb supplies the easing, and a 1:1 mapping is what makes the
+         panel feel attached to it. No bounce either way, per the brand rules. */
+      animation: nbLandingFold linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
+@keyframes nbLandingFold {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .landing-no {
   color: var(--ink);
@@ -3928,10 +3976,11 @@ a.stat-tile:hover {
 
 /* V — the three doors that need no account. The whole page exists to arrive
    here, so it gets the inset call-to-action surface. */
+/* No padding-bottom override: it used to add the breathing room that
+   .landing-panel itself now has on every fold. */
 .landing-doors {
   background: var(--surface);
   border-top: 1px solid var(--surface-line);
-  padding-bottom: 26px;
 }
 .landing-door-actions {
   display: flex;
