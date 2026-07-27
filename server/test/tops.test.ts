@@ -16,30 +16,37 @@ freshDbEnv('tops');
 
 const { db } = await import('../src/db.js');
 
+/** a standard tournament with no boards yet */
+const mkTournament = (name: string) =>
+  (
+    db
+      .prepare(`INSERT INTO tournaments (name, seed, difficulty) VALUES (?, ?, 'intermediate') RETURNING id`)
+      .get(name, `${name}-seed`) as { id: number }
+  ).id;
+
+const mkUser = (handle: string) =>
+  (
+    db
+      .prepare(`INSERT INTO users (google_id, name, handle, handle_key) VALUES (?, ?, ?, ?) RETURNING id`)
+      .get(`dev:${handle}`, handle, handle, handle.toLowerCase()) as { id: number }
+  ).id;
+
+const insert = db.prepare(
+  `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, bid_evals, updated_at)
+   VALUES (?, ?, ?, 'done', ?, '[]', ?)`,
+);
+
 describe('tops (boards taken outright)', () => {
   it('counts full-matchpoint boards only, and names the most recently finished one', async () => {
     const app = await makeApp();
     const viewer = new TestClient(app, 'TopsViewer');
     await viewer.login();
 
-    const t = db
-      .prepare(`INSERT INTO tournaments (name, seed, difficulty) VALUES ('Tops', 'tops-seed', 'intermediate') RETURNING id`)
-      .get() as { id: number };
-    const mk = (suffix: string, handle: string) =>
-      (
-        db
-          .prepare(
-            `INSERT INTO users (google_id, name, handle, handle_key) VALUES (?, ?, ?, ?) RETURNING id`,
-          )
-          .get(`dev:tops-${suffix}`, handle, handle, handle.toLowerCase()) as { id: number }
-      ).id;
-    const topper = mk('a', 'Topper');
-    const rival = mk('b', 'TopsRival');
+    const tid = mkTournament('Tops');
+    const topper = mkUser('Topper');
+    const rival = mkUser('TopsRival');
+    const t = { id: tid };
 
-    const insert = db.prepare(
-      `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, bid_evals, updated_at)
-       VALUES (?, ?, ?, 'done', ?, '[]', ?)`,
-    );
     // 1: outright win -> a top, finished last of the four (updated_at 5000)
     insert.run(t.id, topper, 1, 400, 5000);
     insert.run(t.id, rival, 1, 100, 5000);
@@ -61,6 +68,31 @@ describe('tops (boards taken outright)', () => {
     // the losing side of the same boards earns none of them
     const rivalStats = await viewer.get(`/api/users/${rival}/stats`);
     expect(rivalStats.totals.tops).toEqual({ count: 0, latest: null });
+  });
+
+  it('breaks a same-second tie toward the later board', async () => {
+    const app = await makeApp();
+    const viewer = new TestClient(app, 'TieViewer');
+    await viewer.login();
+
+    const tid = mkTournament('Ties');
+    const tier = mkUser('Tier');
+    const foil = mkUser('TieFoil');
+
+    // updated_at is second-resolution (db.ts), so two boards finishing inside
+    // one second is ordinary — a persona sweeping a tournament, or a claim
+    // fast-forward. Both of these are tops, both stamped 7000.
+    insert.run(tid, tier, 1, 400, 7000);
+    insert.run(tid, foil, 1, 100, 7000);
+    insert.run(tid, tier, 2, 400, 7000);
+    insert.run(tid, foil, 2, 100, 7000);
+
+    const stats = await viewer.get(`/api/users/${tier}/stats`);
+    expect(stats.totals.tops.count).toBe(2);
+    // board 2, not board 1: boards are normally played in ascending order, so
+    // the later one is the better guess at "most recent" — and pinning the
+    // direction keeps the tile's deep link from flipping under a refactor
+    expect(stats.totals.tops.latest).toEqual({ tournamentId: tid, boardNo: 2 });
   });
 
   it('keeps per-board pcts off the client-facing standings rows', async () => {

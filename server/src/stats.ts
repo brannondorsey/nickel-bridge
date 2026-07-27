@@ -504,6 +504,15 @@ export function playerStats(userId: number): PlayerStats | null {
     if (!mine || mine.totalPct === null) return [];
     if (mine.complete) tournamentsCompleted++;
     // Tops ride along on the same memoized standings pass — see totals.tops.
+    // The `>=` keeps the LAST board iterated on a tie, deliberately the
+    // opposite of bestPct's earliest-wins convention below: that one credits
+    // the first time a score was reached, this one wants the freshest link.
+    // Ties are real — updated_at is second-resolution (db.ts) and a persona
+    // sweeping a tournament or a claim fast-forward can finish two boards
+    // inside one second — and iteration order is fixed (tournaments
+    // oldest-first, boards ascending), so the winner is deterministic either
+    // way; the later-iterated board is simply the better guess at "most
+    // recent", since boards are normally played in ascending order.
     for (const { no, pct } of mine.boardPcts) {
       if (pct !== 100) continue;
       tops.count++;
