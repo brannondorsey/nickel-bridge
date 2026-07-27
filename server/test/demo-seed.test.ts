@@ -38,7 +38,6 @@ describe('demo seeder', () => {
       // stats only look like this when boards went through submitCall/submitPlay
       const stats = playerStats(bots[0].id)!;
       expect(stats.totals.boardsCompleted).toBe(4);
-      expect(stats.totals.ratedTournaments).toBe(1);
       expect(stats.eloSeries.length).toBe(1);
       const grades = stats.totals.gradeCounts;
       expect(grades.excellent + grades.good + grades.fair + grades.poor).toBeGreaterThan(0);

@@ -171,15 +171,15 @@ describe('Stats', () => {
       'DEFENDING',
       'TOURNAMENTS',
       'BOARDS',
-      'RATED',
+      'STREAK',
       'AVG SCORE',
       'BEST CROSSING',
       'TOUGHEST CROSSING',
     ]);
-    // RATED moved up one row and left one column; best/toughest are now the
+    // STREAK moved up one row and left one column; best/toughest are now the
     // final row (indices 6 and 7 of an 8-tile, 2-column grid) — horizontal
     // together on the bottom.
-    expect(labels.indexOf('RATED')).toBe(4);
+    expect(labels.indexOf('STREAK')).toBe(4);
     expect(labels.indexOf('BEST CROSSING')).toBe(6);
     expect(labels.indexOf('TOUGHEST CROSSING')).toBe(7);
   });
@@ -346,10 +346,11 @@ describe('Stats', () => {
     const hero = document.querySelector('.player-hero')!;
     expect(within(hero as HTMLElement).getByText('HOUSE')).toBeInTheDocument();
     expect(screen.getByText(/House player/)).toBeInTheDocument();
-    // personas never rate: no rating hero, no rating chart, no RATED tile
+    // personas never rate: no rating hero, no rating chart
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
     expect(screen.queryByText('RATING BY TOURNAMENT')).not.toBeInTheDocument();
-    expect(screen.queryByText('RATED')).not.toBeInTheDocument();
+    // streak isn't Elo-specific, so it stays for house profiles too
+    expect(screen.getByText('STREAK')).toBeInTheDocument();
     // matchpoint surfaces stay — the house competes on the scoresheet
     expect(screen.getByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
     // personal-best tiles aren't Elo-specific, so they stay for house profiles too
