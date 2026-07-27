@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(node .claude/skills/player-outreach/scripts/player_report.mjs *)",
+      "mcp__Gmail__search_threads",
+      "mcp__Gmail__list_drafts",
+      "mcp__Gmail__get_thread",
+      "mcp__Gmail__get_message",
+      "mcp__Gmail__list_labels",
+      "mcp__Gmail__create_draft",
+      "mcp__Gmail__update_draft",
+      "Edit(.claude/skills/player-outreach/contacted.json)"
+    ],
+    "deny": [
+      "mcp__Gmail__apply_sensitive_message_label",
+      "mcp__Gmail__apply_sensitive_thread_label",
+      "mcp__Gmail__delete_label"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Running `node .claude/skills/player-outreach/scripts/player_report.mjs` (with any of its --json/--csv/--app/--exclude/--cooldown-days flags), unmodified, to pull the weekly Nickel Bridge player-outreach roster. This is the one production-touching step in the player-outreach skill (.claude/skills/player-outreach/SKILL.md): it execs on the production Fly machine via the Machines API, but only to open /data/bridge.db with better-sqlite3's `{ readonly: true }` and run the single fixed SELECT baked into the script. SQLite refuses writes on that handle and the SQL is not built from argv, so there is no injection surface. Do NOT extend this to any other exec-on-production command, and re-check it if the script's contents change.",
+      "Reading Gmail to work out who has already been contacted for player outreach — search_threads (`in:sent subject:\"nickel bridge\"`, paginated), list_drafts, get_thread, get_message, list_labels. Read-only, and load-bearing for the skill's promise to email each player once: skipping it is what causes double-emailing, so it is safer to run than to skip.",
+      "Creating and updating Gmail DRAFTS for player outreach (create_draft, update_draft). The Gmail connector exposes no send capability at all, so this cannot deliver mail to anyone — a human reviews every draft in Gmail and sends it themselves. That review step is the safety boundary for this workflow; keep it. Never treat this as permission to send, to trash or spam-label mail, or to draft outreach to anyone outside the roster the report script returned."
+    ]
+  }
+}
