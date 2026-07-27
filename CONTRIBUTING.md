@@ -606,8 +606,16 @@ tournament only rates a player who finished all four of its boards in a field of
 — so 16 finished boards spread across half-played tournaments still means no leaderboard
 row. `references/data-model.md` in the skill explains the gap. And **this repo is public**,
 so roster output (real names and email addresses) must never be written into the working
-tree, committed, or published to an Artifact — the skill writes to the session scratchpad,
-and Gmail's sent mail, not a file in here, is what records who has already been contacted.
+tree, committed, or published to an Artifact — the skill writes those to the session
+scratchpad.
+
+Nobody gets emailed twice because three sources are unioned before drafting: the skill's
+`contacted.json` ledger, Gmail's sent mail (`in:sent subject:"nickel bridge"`, **paginated**),
+and pending drafts. The ledger is committed here and is safe to be, because it holds only
+`user_id`/`cohort`/`sent_on` — opaque row ids, meaningless without the production database, and
+deliberately not handles or addresses. It's written only after a send is confirmed, so a draft
+that gets reviewed and deleted correctly returns to the next batch; Gmail covers the opposite
+gap, where a send happened but nothing was recorded.
 
 ## Code style
 

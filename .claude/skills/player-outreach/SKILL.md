@@ -50,25 +50,46 @@ The point of the weekly cadence is to reach people **once**, shortly after they 
 someone a second time with the same question is the fastest way to turn a friendly solo-dev note
 into spam.
 
-There is deliberately **no contact ledger in this repo** — it's public, so it can't hold player
-data. Gmail's sent mail is the source of truth, and it has the advantage of recording what was
-actually *sent* rather than what was merely drafted:
+Three sources build the contacted set, and you take the **union** — if any of them says a person
+has been written to or is about to be, skip them. The two failure modes are not symmetric:
+missing someone for a week is a nuisance, emailing them twice is the thing that turns a friendly
+solo-dev note into spam. When the sources disagree, believe the one that says "contacted".
+
+**1. The ledger — `contacted.json` in this directory.** One entry per person actually written
+to: `{ user_id, cohort, sent_on }` and nothing else. No addresses, no names, no handles — the
+repo is public, so it holds only opaque row ids, which are meaningless to anyone without the
+production database. This is the fast, complete record, and unlike a mail search it can't be
+defeated by a reworded subject line.
+
+**2. Gmail's sent mail — the reality check.** The ledger records what was *meant* to go out;
+Gmail records what actually left. That difference matters both ways: a draft you deleted during
+review never reaches the ledger, so that person correctly returns to next week's pool.
 
 ```
 search_threads: in:sent subject:"nickel bridge"
 ```
 
-Collect every recipient address from those threads, plus anything already sitting in
-`list_drafts`, and subtract that set from the roster. Whoever remains is this week's batch.
+**Paginate this.** `search_threads` returns at most 50 threads and defaults to 20, so keep
+passing `pageToken` until a page comes back empty. Skipping it is the single most dangerous
+shortcut in this whole skill, because a partial contacted-set is indistinguishable from a
+correct one — everything looks fine right up until the roster outgrows one page and the tail of
+your players quietly get a second copy of an email they already answered.
+
+Take recipients from **the messages the operator sent** — the ones whose `from` is the account's
+own address — not from every participant in the thread. Once a player replies, their address
+appears as a sender too, and naive extraction starts scraping anyone who was ever in the
+conversation.
+
+**3. Pending drafts — `list_drafts`, also paginated.** An unsent draft is in-flight, not
+available. Without this, a second run on the same day cheerfully drafts the whole batch again.
 
 This is why **every subject line must contain the words "Nickel Bridge"** — rewrite subjects
-however you like otherwise, but that phrase is load-bearing. It's what makes next week's run
-able to see this week's, and a clever subject that drops it quietly re-enrolls that person in
-the next batch.
+however you like otherwise, but that phrase is load-bearing for source 2. The ledger now covers
+you if it drifts, which is exactly why both exist.
 
-If that search returns nothing on a first run, say so plainly rather than assuming — an empty
-result and a broken query look identical, and the cost of guessing wrong is double-emailing
-everyone.
+If any of these calls errors or returns nothing on what you believe is a later run, say so
+plainly rather than assuming — an empty result and a broken query look identical, and guessing
+wrong here means emailing everyone twice.
 
 ## Step 3 — Choose who gets written to
 
@@ -230,6 +251,8 @@ answer is that they were too slow to understand it; saying it's your fault first
 different URL would have helped is absurd, since finding the site plainly wasn't their problem.
 Keep it to five lines. The brevity is doing work: it signals that a reply can be short too.
 
+## Step 5 — Hand off for review
+
 You cannot send, and shouldn't want to. Report back with a table of who's in each cohort and
 why, the counts including the `never_played` group, anything you skipped and your reason, and a
 note that the drafts are in Gmail awaiting review.
@@ -243,6 +266,28 @@ not just the batch.
 
 Tell the user plainly that nothing has been sent. If they later ask you to "send them", say that
 the connector only drafts — they send from Gmail.
+
+## Step 6 — Record what actually went out
+
+Only once the user confirms they sent the batch, append an entry per recipient to
+`contacted.json` and commit it:
+
+```json
+{ "user_id": 7, "cohort": "friction", "sent_on": "2026-07-27" }
+```
+
+**Timing is the whole design.** Writing entries when you *draft* would be easier and wrong: a
+draft the user reads and deletes was never sent, and a ledger that recorded it would exclude
+that person forever, silently. Waiting for confirmation means the worst case is a missing entry
+— and Gmail's sent mail, which you also check, covers exactly that gap. The two sources fail in
+opposite directions on purpose.
+
+If the user never confirms either way, write nothing and say so. The next run re-derives the
+truth from Gmail, which is slower but never wrong.
+
+Keep it to `user_id`, `cohort`, and `sent_on`. It is tempting to add a handle or address to make
+the file readable at a glance — don't. This repo is public, and an opaque row id is the entire
+reason the ledger is allowed to exist here at all.
 
 ## When the cohorts drift
 
