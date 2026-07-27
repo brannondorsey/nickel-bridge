@@ -67,9 +67,17 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   const boardUrl = new URL(page.url());
   const [, , tid, , no] = boardUrl.pathname.split('/'); // /t/:tid/b/:no
 
-  // levels 5–7 hide behind the fold until asked for
-  await expect(page.locator('.bidbox button.bid[aria-label="7NT"]')).toHaveCount(0);
-  await page.click('.bidbox-fold');
+  // levels 5–7 live behind the fold, and the high bids must be reachable.
+  // WHICH of BidBox's two states this deal lands in is luck, not wiring:
+  // tournament seeds are random (randomBytes in tournaments.ts), so the robots
+  // sometimes bid past 4NT before our first turn and the box auto-expands
+  // rather than show a fold over zero enabled bids. Asserting the fold
+  // unconditionally made this a coin-flip across CI runs. The conditional
+  // itself is covered deterministically by the unit suite — see
+  // game.test.tsx's 'auto-expands when every legal bid lives above level 4' —
+  // so all this needs to prove is that 7NT is reachable either way.
+  const fold = page.locator('.bidbox-fold');
+  if (await fold.count()) await fold.click();
   await expect(page.locator('.bidbox button.bid[aria-label="7NT"]')).toBeVisible();
 
   // tapping a past call in the auction opens the inspector bottom sheet

@@ -238,6 +238,7 @@ export async function buildApp(): Promise<FastifyInstance> {
           'Disallow: /auth/',
           'Disallow: /t/',
           'Disallow: /players/',
+          'Disallow: /leaderboard',
           'Disallow: /scenarios',
           'Disallow: /tour',
           '',

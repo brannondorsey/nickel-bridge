@@ -65,6 +65,17 @@ if (!shell.includes(ROOT_DIV)) throw new Error(`web/dist/index.html has no ${ROO
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * Serialize for embedding in a <script> element. HTML doesn't parse entities
+ * inside a script, so esc() is the wrong tool here — but JSON.stringify leaves
+ * `<` alone, which means a term whose text ever contained the literal
+ * `</script>` would close the tag early and turn the rest of its definition
+ * into markup. `<` is a valid JSON string escape, so parsers see exactly
+ * the same value. Nothing in the curated terms trips this today; this is so
+ * the next content edit can't quietly introduce it.
+ */
+const jsonForScript = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
+
 /** Meta descriptions get truncated by search engines around 155 chars anyway. */
 function clamp(s, max = 155) {
   const flat = String(s).replace(/\s+/g, ' ').trim();
@@ -133,7 +144,7 @@ function head({ title, description, url, jsonLd }) {
     `<meta name="twitter:title" content="${esc(title)}" />`,
     `<meta name="twitter:description" content="${esc(description)}" />`,
     `<meta name="twitter:image" content="${ORIGIN}/og-image.png" />`,
-    `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
+    `<script type="application/ld+json">${jsonForScript(jsonLd)}</script>`,
     STYLE,
   ].join('\n    ');
 }

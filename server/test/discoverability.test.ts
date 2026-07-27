@@ -52,9 +52,24 @@ describe('robots.txt', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Allow: /');
     expect(res.body).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
-    // gated routes render the same login splash for everyone — nothing to index
-    expect(res.body).toContain('Disallow: /t/');
     expect(res.body).not.toMatch(/^Disallow: \/$/m);
+    await app.close();
+  });
+
+  // Every route that renders the login splash for a signed-out visitor belongs
+  // here: they're all the same thin page under different URLs. Enumerated so
+  // the list can't drift out of step with App.tsx's auth branch again —
+  // /leaderboard was missed the first time precisely because it's the one
+  // gated top-level route whose path doesn't share a prefix with the others.
+  it('disallows every gated top-level route', async () => {
+    const app = await productionApp();
+    const { body } = await app.inject({ method: 'GET', url: '/robots.txt' });
+    for (const path of ['/api/', '/auth/', '/t/', '/players/', '/leaderboard', '/scenarios', '/tour']) {
+      expect(body, path).toContain(`Disallow: ${path}`);
+    }
+    // ...and nothing public: the glossary is the whole point, and / is the
+    // only indexable non-glossary page there is.
+    expect(body).not.toContain('Disallow: /glossary');
     await app.close();
   });
 
