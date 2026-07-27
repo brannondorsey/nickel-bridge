@@ -122,7 +122,9 @@ docs            design-brief.md — requirements spec for the visual redesign;
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html
 .claude         CLAUDE.md symlink (→ this file) + skills/nickel-bridge-design/, the
-                design-system skill — see "Design system" below
+                design-system skill — see "Design system" below; and
+                skills/player-outreach/, the operator skill that reads the production
+                roster and drafts the weekly player emails — see "Player outreach" below
 ```
 
 ## Development workflow
@@ -580,6 +582,40 @@ requirements spec it grew from). The skill's JSX components are prototyping refe
 imports: production equivalents live in `web/src/components/ds/`, and styles get ported into
 `web/src/style.css`. Note the skill's demo HTML uses Google-hosted fonts via `@import`;
 production self-hosts the same faces via `@fontsource`.
+
+## Player outreach
+
+`.claude/skills/player-outreach/` is operator tooling, not part of the build — it lives in
+a skill rather than `tools/` because it needs `FLY_API_TOKEN` and touches production. Its
+`scripts/player_report.mjs` is the **only** supported way to read the live player roster:
+there is no analytics stack and no admin API, so it execs a read-only (`readonly: true`)
+SQLite query on the production machine via the Fly Machines API and emits a roster CSV/JSON
+with each player bucketed into `retained` / `friction` / `abandoned_first` / `never_played`.
+The skill then drafts the weekly outreach emails through the Gmail connector — which can only
+*draft*, never send, so a human reads every word first.
+
+`abandoned_first` (opened a board, never finished one) carries `stopped_at` and `human_calls`,
+derived from the board's `calls`/`plays` arrays plus core's seat rules — seats `0=N 1=E 2=S
+3=W` with the human always South, `dealer = (boardNo - 1) % 4`, seat `(dealer + i) % 4` on call
+`i`. That yields "left without ever bidding", which the outreach states to a real person, so
+keep it derived from those rules rather than re-guessed.
+
+Two things to know before touching it. **`boards_done` is not the leaderboard test**: the
+leaderboard gates on `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a
+tournament only rates a player who finished all four of its boards in a field of 2+ humans
+— so 16 finished boards spread across half-played tournaments still means no leaderboard
+row. `references/data-model.md` in the skill explains the gap. And **this repo is public**,
+so roster output (real names and email addresses) must never be written into the working
+tree, committed, or published to an Artifact — the skill writes those to the session
+scratchpad.
+
+Nobody gets emailed twice because three sources are unioned before drafting: the skill's
+`contacted.json` ledger, Gmail's sent mail (`in:sent subject:"nickel bridge"`, **paginated**),
+and pending drafts. The ledger is committed here and is safe to be, because it holds only
+`user_id`/`cohort`/`sent_on` — opaque row ids, meaningless without the production database, and
+deliberately not handles or addresses. It's written only after a send is confirmed, so a draft
+that gets reviewed and deleted correctly returns to the next batch; Gmail covers the opposite
+gap, where a send happened but nothing was recorded.
 
 ## Code style
 
