@@ -1,0 +1,16 @@
+{
+  "_README": [
+    "Outreach contact ledger — see SKILL.md Step 2 (dedupe) and Step 6 (recording).",
+    "One entry per person ACTUALLY EMAILED, appended only after the operator confirms",
+    "they sent the batch. Never written at draft time: a draft that gets reviewed and",
+    "deleted was never sent, and recording it would exclude that person forever.",
+    "",
+    "Fields are user_id, cohort, sent_on — and nothing else. This repo is public, so",
+    "the ledger holds only opaque row ids, which are meaningless without the production",
+    "database. Do not add handles, names, or email addresses to make it readable.",
+    "",
+    "This is one of three dedupe sources, unioned: this file, Gmail sent mail, and",
+    "pending drafts. If any of them says someone has been written to, skip them."
+  ],
+  "contacted": []
+}
