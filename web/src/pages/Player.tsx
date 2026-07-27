@@ -215,7 +215,7 @@ export default function Player() {
   const isMe = stats.user.id === me?.user?.id;
   // Benchmark house personas are never Elo-rated (their scores count in
   // matchpoints but not in ratings), so every Elo surface — the rating hero,
-  // the rating chart, the RATED tile — is hidden on their profiles.
+  // the rating chart — is hidden on their profiles.
   const house = stats.user.kind === 'ai';
   const t = stats.totals;
   const gradedCalls = GRADE_ROWS.reduce((s, g) => s + t.gradeCounts[g.key], 0);
