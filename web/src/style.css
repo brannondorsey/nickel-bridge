@@ -3153,6 +3153,17 @@ a.stat-tile:hover {
   font-style: italic;
   color: var(--muted);
 }
+/* A caveat that belongs to a whole panel rather than one row — said once at
+   the top of SIGNED OUT instead of repeated in every description. */
+.exhibit-panel-note {
+  margin: 0 0 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-quiet);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--muted);
+}
 .exhibit-reset-armed {
   border-color: var(--negative);
   color: var(--negative);

@@ -416,9 +416,17 @@ tournaments deliberately never get AI rows, so a canned exhibit couldn't show th
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash and the automatic first-crossing tour
 (`App.tsx`) — the tour is click-testable from its FRONT DOOR gallery row, which opens
-`/tour`. **Shipping a new
+`/tour`.
+One more group is client-only and unlike all the others: **SIGNED OUT** (`Scenarios.tsx`'s
+`SIGNED_OUT`) really ends the Inspector session — `api.logout()`, then a hard
+`location.assign`, so the app boots as a first-time visitor's browser would with no stale
+`me` to flash the signed-in variant. It has to: the landing page's live links, the tour's
+ending toll gate, the ladder's unlinked human rows and a refused profile are all decided by
+whether `me.user` is genuinely null, and no overlay can fake that. The way back is `/demo`,
+said once on the panel rather than in every row. **Shipping a new
 hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenarios.ts`** (mine
-the recipe with the tool, label it from the tester's point of view) — the drift-guard test
+the recipe with the tool, label it from the tester's point of view) — or, for a state that
+needs no server board, a client-only row like those two groups. The drift-guard test
 keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
 **The first crossing (onboarding):** a new account gets the toll office's pamphlet before

@@ -22,6 +22,47 @@ import Login from './Login';
 /** The client-only overlay exhibit screens. */
 type Overlay = 'splash' | 'login' | 'handle';
 
+/**
+ * The signed-out exhibits. Unlike everything else in the hall, these END the
+ * Inspector session — the states they show only exist without one, and an
+ * overlay can't fake that: the landing page's own links, the tour's ending
+ * gate, the ladder's unlinked rows and a refused profile are all decided by
+ * whether `me.user` is null for real.
+ *
+ * `to` is resolved at click time because one of them needs a seeded id (see
+ * the `richProfileId` row below).
+ */
+const SIGNED_OUT: { key: string; label: string; description: string; to: (ids: { richProfileId: number | null }) => string | null }[] = [
+  {
+    key: 'anon-landing',
+    label: 'The front door, as a stranger',
+    description:
+      'What someone who has never signed in actually lands on: the splash, the pitch below it, and the three doors that ask no toll. Every link here is live and anonymous.',
+    to: () => '/',
+  },
+  {
+    key: 'anon-tour',
+    label: 'The practice deal, no account',
+    description:
+      'Board №0 walked with no session at all — the same pamphlet and the same real Board UI, but ending at the toll gate instead of a lobby. Walk it to the postmark to see the sign-in ask; sign in there and the tour will not be shown to you a second time.',
+    to: () => '/tour',
+  },
+  {
+    key: 'anon-rankings',
+    label: 'The rankings, as a stranger',
+    description:
+      'The ladder reads without an account, but the players on it do not: the human rows are deliberately unlinked, and the house panel underneath is the one profile a stranger can open.',
+    to: () => '/leaderboard',
+  },
+  {
+    key: 'anon-profile-refused',
+    label: 'A player’s record, refused',
+    description:
+      'A real (seeded) player’s stats page with no session — the explanation a stranger gets instead. The server’s refusal is deliberately identical for an id nobody has, so the page can’t claim “not found”.',
+    to: (ids) => (ids.richProfileId != null ? `/players/${ids.richProfileId}` : null),
+  },
+];
+
 /** Client-only exhibits: the entry screens, shown as overlays on demand. */
 const FRONT_DOOR: { key: Overlay; label: string; description: string }[] = [
   {
@@ -31,9 +72,9 @@ const FRONT_DOOR: { key: Overlay; label: string; description: string }[] = [
   },
   {
     key: 'login',
-    label: 'The logged-out landing',
+    label: 'The landing page',
     description:
-      'The splash with the toll gate closed. Its buttons are live — a dev sign-in really signs you in as someone new; follow the /demo link again to come back as the Inspector.',
+      'The whole front page — the splash, then the pitch under it and the three doors that need no account — shown over your Inspector session, so its own links still navigate the signed-in app. To use them as a stranger would, take the SIGNED OUT exhibits below. Its buttons are live: a dev sign-in really signs you in as someone new.',
   },
   {
     key: 'handle',
@@ -92,6 +133,26 @@ export default function Scenarios() {
       setError(e instanceof Error ? e.message : 'failed to prepare the exhibit');
       setBusyId(null);
     }
+  };
+
+  /**
+   * Leave as a stranger: drop the Inspector session, then load the target with
+   * a real navigation rather than a router push. The hard load is the point —
+   * it boots the app exactly as a first-time visitor's browser would, with no
+   * stale `me` to flash the signed-in variant of the screen on the way. The
+   * way back is /demo, which signs the Inspector in again (said once, on the
+   * panel, rather than four times in the rows).
+   */
+  const leaveAnonymously = async (key: string, to: string) => {
+    if (busyId) return;
+    setBusyId(key);
+    setError(null);
+    try {
+      await api.logout();
+    } catch {
+      /* already signed out, or the session was gone — either way, carry on */
+    }
+    window.location.assign(to);
   };
 
   const reset = async () => {
@@ -189,6 +250,33 @@ export default function Scenarios() {
                 ENTER →
               </Button>
             </div>
+          </PerforatedPanel>
+
+          <PerforatedPanel heading="SIGNED OUT" className="exhibit-panel">
+            <p className="exhibit-panel-note">
+              These sign you out for real — the states below only exist without a session. Open{' '}
+              <b>/demo</b> to come back as the Inspector.
+            </p>
+            {SIGNED_OUT.map((s) => {
+              const to = s.to({ richProfileId });
+              return (
+                <div key={s.key} className="exhibit-row">
+                  <div className="exhibit-row-text">
+                    <b>{s.label}</b>
+                    <span className="exhibit-row-desc">{s.description}</span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => to && leaveAnonymously(s.key, to)}
+                    busy={busyId === s.key}
+                    busyLabel="LEAVING…"
+                    disabled={to === null || (busyId !== null && busyId !== s.key)}
+                  >
+                    ENTER →
+                  </Button>
+                </div>
+              );
+            })}
           </PerforatedPanel>
 
           <PerforatedPanel heading="PROFILES" className="exhibit-panel">

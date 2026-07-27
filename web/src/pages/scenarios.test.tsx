@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Scenarios from './Scenarios';
@@ -64,6 +64,61 @@ describe('Scenarios (the Exhibit Hall)', () => {
     expect(splash).toBeInTheDocument();
     await userEvent.click(splash);
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
+  });
+
+  // The SIGNED OUT group is the one that really ends the session — an overlay
+  // can't fake the states it shows, since they're all decided by whether
+  // me.user is genuinely null. It leaves with a hard navigation so the app
+  // boots the way a first-time visitor's browser would, with no stale `me`.
+  describe('the signed-out exhibits', () => {
+    const assign = vi.fn();
+    beforeEach(() => {
+      assign.mockClear();
+      Object.defineProperty(window, 'location', { value: { assign }, writable: true });
+    });
+
+    it('drops the session, then hard-loads the target', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog);
+      apiMock.logout.mockResolvedValue({ ok: true });
+      renderWithMe(<Scenarios />, { me: meDemo });
+      const row = (await screen.findByText('The practice deal, no account')).closest('.exhibit-row') as HTMLElement;
+      await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
+      expect(apiMock.logout).toHaveBeenCalled();
+      await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/tour'));
+    });
+
+    it('leaves anyway when the session was already gone', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog);
+      apiMock.logout.mockRejectedValue(new Error('no session'));
+      renderWithMe(<Scenarios />, { me: meDemo });
+      const row = (await screen.findByText('The front door, as a stranger')).closest('.exhibit-row') as HTMLElement;
+      await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
+      await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
+    });
+
+    // This one needs a seeded player to refuse, so it stays disabled until the
+    // catalog carries one rather than navigating to /players/null.
+    it('holds the refused-profile exhibit shut until the seeded id arrives', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog); // no richProfileId
+      renderWithMe(<Scenarios />, { me: meDemo });
+      const row = (await screen.findByText('A player’s record, refused')).closest('.exhibit-row') as HTMLElement;
+      expect(within(row).getByRole('button', { name: /enter/i })).toBeDisabled();
+    });
+
+    it('opens the refused-profile exhibit on the seeded player once it has one', async () => {
+      apiMock.demoScenarios.mockResolvedValue({ ...catalog, richProfileId: 42 });
+      apiMock.logout.mockResolvedValue({ ok: true });
+      renderWithMe(<Scenarios />, { me: meDemo });
+      const row = (await screen.findByText('A player’s record, refused')).closest('.exhibit-row') as HTMLElement;
+      await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
+      await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/players/42'));
+    });
+
+    it('says once how to get back in, rather than in every row', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog);
+      renderWithMe(<Scenarios />, { me: meDemo });
+      expect(await screen.findByText(/come back as the Inspector/i)).toBeInTheDocument();
+    });
   });
 
   it('arms the reset on first tap and only wipes on the second', async () => {
