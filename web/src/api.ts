@@ -334,8 +334,14 @@ export const api = {
       }[];
       /** rated tournaments needed before a player shows up in `leaderboard` */
       provisionalMin: number;
-      /** the signed-in user's own rated-tournament count, even if below provisionalMin */
-      yourRatedTournaments: number;
+      /**
+       * The signed-in user's own rated-tournament count, even if below
+       * provisionalMin — null when nobody is signed in. The ladder itself is
+       * public, so this is the one field that has an anonymous case, and it
+       * has to be distinguishable from a real 0: 0 means "you have played
+       * nothing yet", null means there is no you.
+       */
+      yourRatedTournaments: number | null;
     }>('/api/leaderboard'),
 };
 

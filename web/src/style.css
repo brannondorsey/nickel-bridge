@@ -3776,3 +3776,145 @@ a.stat-tile:hover {
 .tour-board .receipt .board-actions .ds-btn-secondary {
   display: none;
 }
+
+/* ---- Landing (pages/Login.tsx — what a visitor without an account gets) ----
+
+   The splash hero is untouched: it's still `.splash`, still 100dvh, and
+   `.splash-auto` (the returning-visitor overlay) is the same element with six
+   properties swapped. So nothing here may add a rule to bare `.splash` — every
+   landing rule hangs off `.landing`, and the hero simply becomes the first
+   child of a taller page instead of the whole of a short one.
+
+   `.shell` is already a flex column at min-height 100dvh, so appending
+   siblings under a `flex: 1` hero works without touching the frame. */
+.landing {
+  display: flex;
+  flex-direction: column;
+}
+/* The hero stops claiming the leftover height once there's a page under it —
+   without this it grows to swallow the sections and they never come into view
+   on a short viewport. */
+.landing .splash {
+  flex: none;
+}
+
+/* The "there is more below" cue. Sits above the river scene rather than in the
+   splash stack, so the hero's own composition (wordmark, rule, actions, pitch)
+   is untouched — and it fades in last, after the CTA has had its moment. */
+.landing-cue {
+  position: absolute;
+  /* clear of the river scene, which is 146px tall at bottom: 0 — the cue must
+     never print over the bridge linework */
+  bottom: 162px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px;
+  animation: nbSubIn 0.6s ease-out 1.4s both;
+}
+.landing-cue span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.landing-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 30px 24px 0;
+  border-top: 1px solid var(--line);
+}
+.landing-panel:first-of-type {
+  border-top: 0;
+}
+.landing-no {
+  color: var(--ink);
+}
+.landing-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 12px 0 0;
+}
+.landing-copy {
+  margin: 12px 0 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.landing-aside {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+.landing-specimen {
+  margin: 16px 0 2px;
+}
+
+/* III — one graded call, shown the way the board really prints it */
+.landing-grade {
+  margin: 16px 0 2px;
+}
+.landing-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+}
+.landing-grade-call {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 17px;
+}
+.landing-grade-meaning {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* IV — the motif row: a ticket and a cancellation, side by side */
+.landing-motifs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 18px 0 2px;
+}
+
+/* V — the three doors that need no account. The whole page exists to arrive
+   here, so it gets the inset call-to-action surface. */
+.landing-doors {
+  background: var(--surface);
+  border-top: 1px solid var(--surface-line);
+  padding-bottom: 26px;
+}
+.landing-door-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.landing-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--ink);
+  padding: 26px 24px 32px;
+}
+.landing-foot .landing-aside {
+  text-align: center;
+  margin: 2px 0 0;
+}
+.landing-foot-cta {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}

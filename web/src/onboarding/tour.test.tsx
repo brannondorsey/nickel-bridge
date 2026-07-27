@@ -2,8 +2,8 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { claimAnnouncement, stageClaimSteps } from '../components/game/playAnim';
-import Tour from '../pages/Tour';
-import { meFreshCrosser } from '../test/fixtures';
+import Tour, { TourPostmark } from '../pages/Tour';
+import { meFreshCrosser, meLoggedOut } from '../test/fixtures';
 import { GlossaryProvider } from '../glossary/GlossaryContext';
 import { apiMock, renderWithMe } from '../test/utils';
 import board0 from './board0.json';
@@ -11,6 +11,7 @@ import { type TourBoard, loadTourBoard } from './board0';
 import { segmentProse } from '../glossary/linkify';
 import { TERM_BY_SLUG } from '../glossary/terms';
 import { COPY, STEPS, TOUR_LINKS, guidanceFor } from './script';
+import { peekTourDone } from './tourDone';
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -358,6 +359,60 @@ describe('the tour’s glossary links', () => {
     await user.click(screen.getByRole('button', { name: /continue/i }));
     await user.click(screen.getByRole('button', { name: 'duplicate' }));
     expect(await screen.findByRole('dialog')).toHaveTextContent('Duplicate bridge');
+  });
+
+  // The tour reads without an account (App.tsx's isPublicPath) — it is the one
+  // thing a visitor can actually DO before being asked for one, so none of it
+  // may depend on a session. The board itself never did; the two doors out
+  // of it did.
+  describe('walked without an account', () => {
+    it('skips straight out, without a POST that could only 401', async () => {
+      const user = userEvent.setup();
+      renderWithMe(<Tour />, { me: meLoggedOut });
+      expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
+      expect(apiMock.setOnboarded).not.toHaveBeenCalled();
+    });
+
+    it('reads the whole pamphlet and reaches the practice offer', async () => {
+      const user = userEvent.setup();
+      renderWithMe(<Tour />, { me: meLoggedOut });
+      await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
+      await user.click(screen.getByRole('button', { name: /continue/i }));
+      expect(screen.getByText('Harold')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /continue/i }));
+      expect(screen.getByRole('button', { name: /practice/i })).toBeInTheDocument();
+    });
+  });
+
+  // The last page is the payoff, and signed out it is also the sign-up: the
+  // one moment where asking for an account buys the visitor something they
+  // have just been shown. Rendered directly — reaching it through the board
+  // costs a 30-second walk, and what changed is only these two doors.
+  describe('the postmark, as a gate', () => {
+    it('asks for the account there, and records the walk before the redirect', async () => {
+      const user = userEvent.setup();
+      renderWithMe(<TourPostmark authed={false} busy={false} onPlay={vi.fn()} onSkip={vi.fn()} />, {
+        me: meLoggedOut,
+      });
+      expect(screen.getByText(/nor of anyone who only came to look/)).toBeInTheDocument();
+      // no lobby to be sent back to — the ledger is what they can read now
+      expect(screen.getByRole('link', { name: /read the ledger instead/i })).toHaveAttribute('href', '/glossary');
+      expect(peekTourDone()).toBe(false);
+      await user.click(screen.getByRole('link', { name: /play the toll/i }));
+      // stamped on the way out, so signing in doesn't hand them this same tour
+      expect(peekTourDone()).toBe(true);
+    });
+
+    it('sends a signed-in finisher to a real table instead', async () => {
+      const onPlay = vi.fn();
+      const user = userEvent.setup();
+      renderWithMe(<TourPostmark authed busy={false} onPlay={onPlay} onSkip={vi.fn()} />, { me: meFreshCrosser });
+      await user.click(screen.getByRole('button', { name: /play the toll/i }));
+      expect(onPlay).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /to the lobby instead/i })).toBeInTheDocument();
+      expect(peekTourDone()).toBe(false);
+    });
   });
 
   it('leaves display type alone — no dotted underlines through the headlines', () => {

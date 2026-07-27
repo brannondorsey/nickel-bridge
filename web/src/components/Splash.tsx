@@ -10,10 +10,23 @@ import riverSceneNight from '../assets/bridge-river-scene-night.svg';
  * - auto (`onDone` set): overlay for logged-in users returning after 3+ days.
  *   Plays the full sequence, exits on its own at 3.3s; any tap (or the
  *   screen-reader skip button) ends it immediately.
- * - login (`cta` set): the logged-out landing screen. No timer — the CTA is
- *   the only exit — plus the one-line pitch below the actions.
+ * - login (`cta` set): the hero of the logged-out landing page. No timer — plus
+ *   the one-line pitch below the actions, and `cue`, which the landing page
+ *   uses to say that the pitch continues below the fold. That cue is the only
+ *   reason anyone scrolls: the hero is a full 100dvh and otherwise looks
+ *   exactly like the dead-end splash it used to be.
  */
-export function Splash({ onDone, cta, pitch }: { onDone?: () => void; cta?: ReactNode; pitch?: string }) {
+export function Splash({
+  onDone,
+  cta,
+  pitch,
+  cue,
+}: {
+  onDone?: () => void;
+  cta?: ReactNode;
+  pitch?: string;
+  cue?: ReactNode;
+}) {
   useEffect(() => {
     if (!onDone) return;
     const t = setTimeout(onDone, 3300);
@@ -33,6 +46,7 @@ export function Splash({ onDone, cta, pitch }: { onDone?: () => void; cta?: Reac
         {cta ? <div className="splash-cta">{cta}</div> : null}
         {pitch ? <p className="splash-pitch">{pitch}</p> : null}
       </div>
+      {cue ?? null}
       <div className="splash-bridge">
         <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
         <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />

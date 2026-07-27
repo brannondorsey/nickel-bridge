@@ -29,11 +29,23 @@ async function completeTournament(players: TestClient[]): Promise<number> {
 }
 
 describe('player stats', () => {
-  it('requires auth and 404s on unknown or garbage ids', async () => {
-    const anon = new TestClient(app, 'Anon');
-    expect((await anon.raw('GET', '/api/users/1/stats')).statusCode).toBe(401);
+  it('404s on unknown or garbage ids', async () => {
     expect((await alice.raw('GET', '/api/users/999999/stats')).statusCode).toBe(404);
     expect((await alice.raw('GET', '/api/users/abc/stats')).statusCode).toBe(404);
+  });
+
+  // Profiles read without an account (App.tsx's isPublicPath): a visitor who
+  // hasn't signed up can look at the house personas' records, and at anyone
+  // else's, before deciding whether to. Nothing here is scoped to the viewer,
+  // so the anonymous payload has to be the identical object.
+  it('serves the same profile to a caller with no session at all', async () => {
+    const anon = new TestClient(app, 'Anon');
+    const id = await userId(alice);
+    const res = await anon.raw('GET', `/api/users/${id}/stats`);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(await alice.get(`/api/users/${id}/stats`));
+    // still an honest 404 for a id nobody has
+    expect((await anon.raw('GET', '/api/users/999999/stats')).statusCode).toBe(404);
   });
 
   it('404s on a signed-in user who never claimed a handle, instead of leaking a blank-name profile', async () => {

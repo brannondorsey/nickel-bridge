@@ -30,14 +30,41 @@ const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch()
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
-function userFromRequest(req: FastifyRequest): UserRow | null {
+/**
+ * The session's user, or null — without sending a 401.
+ *
+ * This is the read the public routes need: `/api/leaderboard` and
+ * `/api/users/:id/stats` serve the same rows to everyone, and consult the
+ * caller only to answer "…and where do *you* sit?" (see app.ts). Everything
+ * that writes, or that reads a specific person's board state, goes through
+ * requireUser/requireUserWithHandle below instead.
+ */
+export function optionalUser(req: FastifyRequest): UserRow | null {
   const sid = req.cookies[SESSION_COOKIE];
   if (!sid) return null;
   return (stmtSessionUser.get(sid) as UserRow | undefined) ?? null;
 }
 
+/**
+ * Does this request come from a browser that has signed in at some point?
+ *
+ * Deliberately a cookie-presence check and not a session lookup: the only
+ * caller is app.ts's interactive-request hook, which asks "is a person using
+ * the app right now?" so the AI personas can get out of their way. A stale or
+ * forged cookie answering yes costs one quiet window and nothing else, which
+ * is a better trade than a DB round trip on every single API request.
+ *
+ * The reason this exists at all: some read-only API routes are public now, so
+ * "an /api/ request arrived" no longer implies a human is at the keyboard —
+ * an uptime check or a scraper polling the leaderboard would otherwise park
+ * the personas' background play indefinitely.
+ */
+export function hasSession(req: FastifyRequest): boolean {
+  return Boolean(req.cookies[SESSION_COOKIE]);
+}
+
 function requireUser(req: FastifyRequest, reply: FastifyReply): UserRow | null {
-  const user = userFromRequest(req);
+  const user = optionalUser(req);
   if (!user) {
     reply.code(401).send({ error: 'not signed in' });
     return null;
@@ -164,7 +191,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   });
 
   app.get('/api/me', (req, reply) => {
-    const user = userFromRequest(req);
+    const user = optionalUser(req);
     return reply.send({
       user: user
         ? {

@@ -17,6 +17,7 @@ import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
 import Tour from './pages/Tour';
 import Tournament from './pages/Tournament';
+import { clearTourDone, peekTourDone } from './onboarding/tourDone';
 import { splashOnReturn, stampVisit } from './splash';
 import { applyThemePref, readThemePref } from './theme';
 
@@ -51,13 +52,51 @@ function inTabScope(pathname: string): boolean {
  * the app's front door from search: ~900 bridge terms, each a page someone
  * might land on from a query like "what is a squeeze in bridge". Requiring a
  * sign-in to read them means search engines see a login screen and index
- * nothing, which is why these two routes sit outside the auth branch below.
+ * nothing, which is why these two routes were the first to sit outside the
+ * auth branch (isPublicPath below is now the gate for all of them).
  * The build also prerenders them to static HTML for crawlers that don't run JS
- * (web/scripts/prerender-glossary.mjs); this gate is what makes those pages honest
+ * (web/scripts/prerender.mjs); this gate is what makes those pages honest
  * when a real visitor follows one in.
  */
 function isGlossaryPath(pathname: string): boolean {
   return pathname === '/glossary' || pathname.startsWith('/glossary/');
+}
+
+/**
+ * What the app shows to someone without an account.
+ *
+ * This used to be the glossary alone, on the narrow argument above. That
+ * reasoning still holds for /glossary; the list is longer now for a different
+ * one. A visitor was being asked to hand over a Google account before being
+ * told what duplicate bridge is, or shown a single card — so the pitch (/),
+ * the practice board (/tour, a captured replay with no server board behind
+ * it) and the read-only record (/leaderboard, /players/:id) are all readable
+ * first, and the toll is asked once, at a real tournament board.
+ *
+ * The honest version of the invariant, since "nothing user-scoped" no longer
+ * covers profiles: nothing here WRITES, nothing here is scoped to the VIEWER,
+ * and nothing here exposes live board state. A player's record is genuinely
+ * someone's data — public by decision, and kept out of the search index by
+ * robots.txt rather than by an auth wall (see server/src/app.ts).
+ */
+function isPublicPath(pathname: string): boolean {
+  return (
+    pathname === '/' ||
+    pathname === '/tour' ||
+    pathname === '/leaderboard' ||
+    pathname.startsWith('/players/') ||
+    isGlossaryPath(pathname)
+  );
+}
+
+/**
+ * Which public routes take the SignInBar in the TabBar's slot: the ones that
+ * are just content. The landing page closes with its own sign-in actions and
+ * the tour ends at the gate by design, so a bar on either would be the same
+ * ask twice on one screen.
+ */
+function wantsSignInBar(pathname: string): boolean {
+  return pathname !== '/' && pathname !== '/tour' && isPublicPath(pathname);
 }
 
 export default function App() {
@@ -119,6 +158,44 @@ export default function App() {
     stampVisit();
   }, [authed, demo, onboarded]);
 
+  // The public tour's claim: /tour reads without an account, so someone can
+  // finish the whole practice board and only then sign in — arriving here as a
+  // brand-new account, at '/', with onboarded_at NULL. That is exactly the
+  // shape the arrival gate below fires on, so without this, finishing the tour
+  // is rewarded with the tour.
+  //
+  // Three things about this one line of state (see onboarding/tourDone.ts):
+  //
+  // - Read at MOUNT, not in the effect. `me` resolves asynchronously, and the
+  //   first render that has a user would otherwise flash the pamphlet cover
+  //   before any effect could suppress it.
+  // - The read is NON-DESTRUCTIVE. StrictMode double-invokes this initializer
+  //   in development, so a read-and-clear would spend the claim on the
+  //   throwaway pass. Only the effect below clears, and only once it has
+  //   something to trade it for.
+  // - It is write-once for the session and never flipped back. It answers "has
+  //   this person already walked the tour?", which never stops being true.
+  //   Clearing it when the server stamp lands would re-open the gate for the
+  //   render or two before the refreshed `me` arrives — and would show the
+  //   pamphlet outright if the stamp failed, which is the opposite of what
+  //   someone who just finished the tour has earned.
+  const [tourClaim] = useState(() => peekTourDone());
+  useEffect(() => {
+    // Keyed on the user id, not just on mount: Google sign-in is a full page
+    // load so mount alone would do, but DEV_AUTH sign-in calls refresh() in
+    // place and never remounts.
+    if (!tourClaim || !me?.user) return; // nobody signed in yet — the claim keeps until it expires
+    if (!peekTourDone()) return; // already spent, this session or another tab
+    clearTourDone(); // spend it first, so it can't skip onboarding for whoever signs in here next
+    if (onboarded) return; // an established account; nothing to trade it for
+    api
+      .setOnboarded()
+      .catch(() => {
+        /* the gate must never trap anyone; the suppression above stands regardless */
+      })
+      .finally(refresh);
+  }, [tourClaim, me?.user?.id, onboarded]);
+
   if (!loaded) {
     return (
       <div className="shell">
@@ -134,7 +211,7 @@ export default function App() {
       <div className="shell">
         {me?.user && !me.user.handle ? (
           <CreateHandle />
-        ) : me?.user && !onboarded && !demo && tourOnArrival ? (
+        ) : me?.user && !onboarded && !demo && tourOnArrival && !tourClaim ? (
           // First crossing: new accounts arriving at the main app meet the
           // toll office before it (deep-link arrivals skip straight to their
           // destination — see tourOnArrival above). Demo mode suppresses it
@@ -168,22 +245,28 @@ export default function App() {
             {showTabs ? <TabBar myId={me.user.id} pathname={pathname} /> : null}
             {splash ? <Splash onDone={() => setSplash(false)} /> : null}
           </GlossaryProvider>
-        ) : isGlossaryPath(pathname) ? (
-          // Signed out, but on a public route: render the glossary itself
-          // rather than the login splash (see isGlossaryPath). Its own
-          // provider, for the same reason the tour needs one — this branch
-          // renders in place of the authed <Routes>, which is what the
-          // app-wide provider wraps. SignInBar takes the TabBar's slot, since
-          // every tab but this one leads somewhere that needs an account.
+        ) : (
+          // Signed out. The public routes render themselves (see isPublicPath);
+          // anything else — a shared board or tournament link, a typo — falls
+          // through to the landing page, which is the invitation. Deliberately
+          // not a 404: someone following a friend's link should be told how to
+          // get in, not that the page doesn't exist.
+          //
+          // Its own GlossaryProvider, for the same reason the tour has one:
+          // this branch renders in place of the authed <Routes>, which is what
+          // the app-wide provider wraps. It has to cover the fallback too — the
+          // landing page's prose links terms like every other teaching surface.
           <GlossaryProvider>
             <Routes>
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/players/:id" element={<Player />} />
               <Route path="/glossary" element={<Glossary />} />
               <Route path="/glossary/:slug" element={<Glossary />} />
+              <Route path="/tour" element={<Tour />} />
+              <Route path="*" element={<Login />} />
             </Routes>
-            <SignInBar />
+            {wantsSignInBar(pathname) ? <SignInBar /> : null}
           </GlossaryProvider>
-        ) : (
-          <Login />
         )}
       </div>
     </MeContext.Provider>

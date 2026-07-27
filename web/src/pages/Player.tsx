@@ -563,20 +563,25 @@ export default function Player() {
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
             <Tile label="STREAK" value={`${t.streakDays} day${t.streakDays === 1 ? '' : 's'}`} sub="longest run" />
             <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
+            {/* Points at the tournament, which is viewer-agnostic, so it links
+                on anyone's profile — but only for someone who can open it.
+                Profiles read without an account now, and /t/:tid needs one:
+                without this the tile would sit there looking tappable and
+                bounce a visitor back to the landing page. */}
             <Tile
               label="BEST CROSSING"
               value={t.bestPct ? `${t.bestPct.pct}%` : '—'}
               sub={t.bestPct ? t.bestPct.tournamentName : 'no crossings yet'}
-              to={t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
+              to={me?.user && t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
             />
             {/* Boards where the field was beaten outright — links to the most
                 recent one's receipt, so the tile is worth tapping. Own profile
-                only: boards are per-user, and GET /t/:tid/b/:no loads the
-                VIEWER's board of that number, creating one if absent (app.ts) —
-                so linking someone else's top would deal the viewer into a
-                tournament they were never placed in. BEST CROSSING dodges this
-                by pointing at the tournament, which is viewer-agnostic; a
-                specific board has no such URL, so it simply doesn't link. */}
+                only (so also never signed out): boards are per-user, and
+                GET /t/:tid/b/:no loads the VIEWER's board of that number,
+                creating one if absent (app.ts) — so linking someone else's top
+                would deal the viewer into a tournament they were never placed
+                in. A specific board has no viewer-agnostic URL the way a
+                tournament does, so it simply doesn't link. */}
             <Tile
               label="TOPS"
               value={String(t.tops.count)}

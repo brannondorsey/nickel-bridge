@@ -118,6 +118,11 @@ export const COPY = {
   doneBody:
     'Bid with meaning. Play with care. Read the ledger. From here it counts: four deals a crossing, everyone on the same cards, one ledger between you.',
   doneAside: 'The tollkeeper keeps no record of practice boards.',
+  // The tour reads without an account, so this page is also a sign-up screen
+  // — the one moment where asking for one buys the visitor something they
+  // have just been shown. Same fact as doneAside, said to someone who hasn't
+  // yet decided whether to be written down at all.
+  doneAsideAnon: 'The tollkeeper keeps no record of practice boards — nor of anyone who only came to look.',
 } as const;
 
 /**

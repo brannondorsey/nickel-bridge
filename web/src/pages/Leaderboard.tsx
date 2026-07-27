@@ -20,7 +20,8 @@ interface Row {
 interface LeaderboardData {
   leaderboard: Row[];
   provisionalMin: number;
-  yourRatedTournaments: number;
+  /** null when nobody is signed in — the ladder reads without an account */
+  yourRatedTournaments: number | null;
 }
 
 /** Rank movement since the previous rated tournament — glyph + color, never color alone. */
@@ -44,7 +45,11 @@ export default function Leaderboard() {
   }, []);
 
   const rows = data?.leaderboard ?? null;
-  const stillProvisional = data !== null && data.yourRatedTournaments < data.provisionalMin;
+  // Signed out there is no "you" to be provisional about, so the note is
+  // suppressed rather than shown at 0 of 4 — hence the null check and not a
+  // falsy one, since 0 is a real count for a signed-in player who has yet to
+  // finish a tournament.
+  const stillProvisional = data?.yourRatedTournaments != null && data.yourRatedTournaments < data.provisionalMin;
 
   return (
     <div className="rankings">

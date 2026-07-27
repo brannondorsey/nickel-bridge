@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { TOUR_DONE_KEY, stampTourDone } from './onboarding/tourDone';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
 import { meFixture, meFreshCrosser, meLoggedOut, meNoHandle, playerStatsFull } from './test/fixtures';
 import { apiMock } from './test/utils';
@@ -68,12 +69,61 @@ describe('App — logged out', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent(/finesse/i);
   });
 
-  it('still gates everything that is not the glossary', async () => {
+  // Play is still the toll. A gated deep link lands on the landing page rather
+  // than a 404 — someone following a friend's board link should be told how to
+  // get in, not that the page is missing.
+  it('still gates the game itself, landing a shared board link on the invitation', async () => {
     apiMock.me.mockResolvedValue(meLoggedOut);
-    renderApp('/leaderboard');
+    renderApp('/t/12/b/1');
     await screen.findByRole('link', { name: /play the toll/i });
     expect(screen.queryByText('The Glossary')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/dev/i)).toBeInTheDocument();
+  });
+
+  // The whole point of the change: a visitor can see what this is, and try it,
+  // before being asked for an account.
+  it('pitches the app under the splash instead of stopping at it', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp();
+    expect(await screen.findByText('Everyone plays the same deals.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /walk a practice deal/i })).toHaveAttribute('href', '/tour');
+    expect(screen.getByRole('link', { name: /the glossary/i })).toHaveAttribute('href', '/glossary');
+    expect(screen.getByRole('link', { name: /the field/i })).toHaveAttribute('href', '/leaderboard');
+    // exactly one dev form on the page, or every by-placeholder lookup (here,
+    // in auth.test.tsx and in the Playwright smoke) becomes ambiguous
+    expect(screen.getAllByPlaceholderText(/dev/i)).toHaveLength(1);
+  });
+
+  it('reads the rankings without an account, with a sign-in bar for chrome', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    apiMock.leaderboard.mockResolvedValue({
+      leaderboard: [{ id: 7, handle: 'Margaret', picture: null, elo: 1512, rated_tournaments: 6, played_tournaments: 6, movement: 1 }],
+      provisionalMin: 4,
+      yourRatedTournaments: null,
+    });
+    renderApp('/leaderboard');
+    expect(await screen.findByText('Margaret')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /play the toll/i })).toHaveAttribute('href', '/');
+    // no "you", and no provisional note — there is no you to be provisional about
+    expect(screen.queryByText(/you'll join the field/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/— you/)).not.toBeInTheDocument();
+  });
+
+  it('reads a player profile without an account, minus the owner-only controls', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderApp(`/players/${playerStatsFull.user.id}`);
+    expect(await screen.findByText(playerStatsFull.user.handle)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /appearance/i })).not.toBeInTheDocument();
+  });
+
+  it('walks the practice deal without an account', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/tour');
+    expect(await screen.findByRole('button', { name: /read the pamphlet/i })).toBeInTheDocument();
+    // the tour ends at the gate, so it carries its own ask — no SignInBar too
+    expect(screen.queryByText(/reading the ledger is free/i)).not.toBeInTheDocument();
   });
 });
 
@@ -115,6 +165,45 @@ describe('App — authenticated', () => {
     renderApp('/glossary'); // a shared link goes where it points; the tour waits for a home arrival
     expect(await screen.findByText('The Glossary')).toBeInTheDocument();
     expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+  });
+
+  // The public tour's claim (onboarding/tourDone.ts). Someone who walked the
+  // whole practice board signed out, then signed in, must not be handed the
+  // same pamphlet again — that was the reward for finishing it.
+  describe('carrying a public tour across sign-in', () => {
+    it('trades the claim for the server stamp instead of replaying the tour', async () => {
+      stampTourDone();
+      apiMock.me.mockResolvedValue(meFreshCrosser);
+      apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+      apiMock.setOnboarded.mockResolvedValue({ ok: true });
+      renderApp('/');
+      // straight to Home — and never a flash of the cover on the way, which is
+      // why the claim is read at mount rather than in an effect
+      expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+      expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+      await vi.waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
+      // spent, so it can't skip onboarding for whoever signs in next here
+      expect(localStorage.getItem(TOUR_DONE_KEY)).toBeNull();
+    });
+
+    it('drops a stale claim rather than skipping a returning player past nothing', async () => {
+      // an abandoned OAuth leaves the flag behind; it expires on its own
+      stampTourDone(new Date(Date.now() - 6 * 60 * 60 * 1000));
+      apiMock.me.mockResolvedValue(meFreshCrosser);
+      renderApp('/');
+      expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+      expect(apiMock.setOnboarded).not.toHaveBeenCalled();
+    });
+
+    it('leaves the claim alone while nobody is signed in', async () => {
+      stampTourDone();
+      apiMock.me.mockResolvedValue(meLoggedOut);
+      renderApp('/');
+      await screen.findByRole('link', { name: /play the toll/i });
+      // still there for the sign-in that hasn't happened yet
+      expect(localStorage.getItem(TOUR_DONE_KEY)).not.toBeNull();
+      expect(apiMock.setOnboarded).not.toHaveBeenCalled();
+    });
   });
 
   it('demo mode suppresses the automatic tour like the splash (the /tour route stays reachable)', async () => {

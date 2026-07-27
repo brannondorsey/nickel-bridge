@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useMe } from '../App';
 import { Dialog } from '../components/ds/Dialog';
 import { GlossaryProse } from '../components/game/GlossaryProse';
 import { SuitText } from '../components/game/SuitText';
@@ -24,11 +23,12 @@ export function TermSheet({
   onOpenTerm: (slug: string) => void;
   onClose: () => void;
 }) {
-  // `action` destinations are in-app screens behind the auth gate (/tour
-  // today), so they're dead ends for the signed-out readers the public
-  // glossary now serves — the sheet still shows the entry, just not the door.
-  const { me } = useMe();
-  const signedIn = Boolean(me?.user);
+  // `action` used to be hidden from signed-out readers, because its one
+  // destination (/tour, the 'First crossing' entry) was behind the auth gate
+  // and the door would only have led back to a sign-in screen. /tour reads
+  // without an account now, so the door is real for everyone and the check is
+  // gone. If a future action ever points at a gated screen, gate it here —
+  // per-term, not for the whole feature.
   const term = TERM_BY_SLUG.get(slug);
   if (!term) {
     return (
@@ -69,7 +69,7 @@ export function TermSheet({
           ))}
         </div>
       ) : null}
-      {term.action && signedIn ? (
+      {term.action ? (
         // navigating away drops the ?term= param, so the sheet closes itself;
         // browser back returns here with the sheet still open
         <Link to={term.action.to} className="label-caps gloss-action">

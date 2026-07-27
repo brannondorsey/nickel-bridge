@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
-import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
+import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
@@ -44,8 +44,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Every interactive API request parks the AI personas' non-urgent
   // background play for a quiet window (see ai-players.ts scheduling).
   // /api/demo is excluded so a demo reset isn't gated on its own request.
+  //
+  // hasSession() is the interactivity test, not the /api/ prefix alone: the
+  // leaderboard and player-stats reads are public now, so a scraper, an
+  // uptime check or a hot-linked widget could otherwise hold the personas
+  // parked forever without a single human at the keyboard.
   app.addHook('onRequest', (req, _reply, done) => {
-    if (req.url.startsWith('/api/') && !req.url.startsWith('/api/demo')) noteInteractiveRequest();
+    if (req.url.startsWith('/api/') && !req.url.startsWith('/api/demo') && hasSession(req)) noteInteractiveRequest();
     done();
   });
 
@@ -151,9 +156,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({ board: boardView(t, b, user.elo) });
   });
 
+  // Public (see App.tsx's isPublicPath): the ladder is the same for everyone,
+  // and it's the social proof a visitor who hasn't signed up yet should be
+  // able to see. Only `yourRatedTournaments` consults the caller.
   app.get('/api/leaderboard', (req, reply) => {
-    const user = requireUserWithHandle(req, reply);
-    if (!user) return;
+    const user = optionalUser(req);
     // DEMO=1 (previews + the permanent demo app) relaxes the quota so the
     // boot seeder's ambient tournaments — at most 2 per bot, see
     // DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment — still populate a
@@ -172,9 +179,13 @@ export async function buildApp(): Promise<FastifyInstance> {
       )
       .all(provisionalMin) as { id: number }[];
     const movement = leaderboardMovement();
-    const yourRatedTournaments = (
-      db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }
-    ).n;
+    // null, not 0, when nobody is signed in: the client renders a "you'll join
+    // the field once you've completed N crossings — x of N so far" note off
+    // this number, and 0 would state that about a visitor who has no record to
+    // be provisional about.
+    const yourRatedTournaments = user
+      ? (db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`).get(user.id) as { n: number }).n
+      : null;
     return reply.send({
       leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
       provisionalMin,
@@ -182,9 +193,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
+  // Public, like the leaderboard: playerStats() takes no viewer, and every
+  // board query inside it joins tournaments on kind = 'standard', so exhibit
+  // and scenario boards can't leak out through it either.
   app.get('/api/users/:id/stats', (req, reply) => {
-    const user = requireUserWithHandle(req, reply);
-    if (!user) return;
     const id = Number((req.params as { id: string }).id);
     const stats = Number.isInteger(id) ? playerStats(id) : null;
     if (!stats) return reply.code(404).send({ error: 'not found' });
@@ -217,9 +229,26 @@ export async function buildApp(): Promise<FastifyInstance> {
       : [
           'User-agent: *',
           'Allow: /',
-          // Everything below needs an account, so it renders as the same login
-          // splash for a crawler. Nothing to index, and it burns crawl budget
-          // that should go to the glossary.
+          // Three different reasons to keep a crawler out, and they're worth
+          // keeping straight — public and indexable are not the same thing.
+          //
+          // /api/, /auth/, /t/ and /scenarios still need an account (or are
+          // machine endpoints): a crawler gets the landing page or a 401, so
+          // there is nothing to index and it burns budget that should go to
+          // the glossary.
+          //
+          // /players/ IS readable without an account now. It stays out of the
+          // index anyway: these are real people's handles, ratings and daily
+          // activity, and being able to look one up is a different thing from
+          // being findable by name in a search engine.
+          //
+          // /leaderboard and /tour are public too, and excluded for a third
+          // reason — neither is prerendered, so a crawler that doesn't run JS
+          // gets the SPA shell: an empty #root carrying the HOME page's exact
+          // title, description and OG tags. Indexing those is two thin
+          // near-duplicates competing with / itself. Prerender either one and
+          // it can come off this list (and go into the sitemap, which must
+          // never list a URL disallowed here).
           'Disallow: /api/',
           'Disallow: /auth/',
           'Disallow: /t/',
@@ -239,7 +268,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');
   if (existsSync(webDist)) {
     // Prerendered glossary pages (web/dist/glossary-static, built by
-    // web/scripts/prerender-glossary.mjs) shadow the SPA fallback for the two public
+    // web/scripts/prerender.mjs) shadow the SPA fallback for the two public
     // glossary routes. They are the same shell with the term's content already
     // in the HTML, so a crawler that doesn't run JavaScript gets the actual
     // definition instead of an empty #root — and a human still boots the normal
@@ -271,7 +300,28 @@ export async function buildApp(): Promise<FastifyInstance> {
         ? reply.type('text/html; charset=utf-8').send(readFileSync(join(staticGlossary, `${name}.html`)))
         : reply.code(missing).sendFile('index.html');
 
-    await app.register(fastifyStatic, { root: webDist });
+    // index: false so `/` is ours to answer below. @fastify/static registers a
+    // route for the prefix itself — not just prefix + '*' — so leaving the
+    // default on and adding app.get('/') is FST_ERR_DUPLICATED_ROUTE at boot,
+    // not a route-priority contest like /glossary wins against the wildcard.
+    // Nothing else depended on directory-index resolution: both fallbacks
+    // below name index.html explicitly.
+    await app.register(fastifyStatic, { root: webDist, index: false });
+
+    // The landing page, prerendered (web/dist/home-static/index.html) for the
+    // crawlers that don't run JavaScript — the same deal the glossary gets,
+    // for the one URL that matters most. Its own directory rather than a file
+    // inside glossary-static/, because `prerendered` above is built by listing
+    // that directory: a home.html in there would silently also answer to
+    // /glossary/home.
+    const staticHome = join(webDist, 'home-static', 'index.html');
+    app.get('/', (_req, reply) =>
+      existsSync(staticHome)
+        ? reply.type('text/html; charset=utf-8').send(readFileSync(staticHome))
+        : // dev (no prerender step has run) and the test fixtures: the SPA
+          // shell is still a correct answer, just an empty one for crawlers.
+          reply.sendFile('index.html'),
+    );
 
     // ?term=<slug> is the glossary's live sheet mechanism (see
     // GlossaryContext), and the URL the app leaves a reader on — so it's the

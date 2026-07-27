@@ -35,9 +35,13 @@ Free, no app to install — sign in with Google and you're at the table.
   </tr>
 </table>
 
-**Rather not sign in yet?** [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo)
-drops you in as a guest with a seeded field behind you and a gallery of prepared boards to
-click through — no account at all.
+**Rather not sign in yet?** You don't have to. [Walk a practice deal](https://bridge.brannon.online/tour)
+— bid it, play it, read the toll receipt and see how the field did on the same cards — with
+no account at all, along with [the glossary](https://bridge.brannon.online/glossary) and
+[the rankings](https://bridge.brannon.online/leaderboard). Signing in is what gets you a
+seat at a real tournament. (For a fuller poke around, including a gallery of prepared
+boards, [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo) drops
+you in as a guest with a seeded field behind you.)
 
 <details>
 <summary>More screens — the field, stats, the glossary, the first-crossing tour, desktop</summary>
@@ -65,7 +69,7 @@ click through — no account at all.
 - **The Glossary** — a top-level, tappable bridge dictionary: 125 curated terms with
   themes and search, the full Wikipedia glossary one toggle deeper, and every term
   mentioned in bid meanings, grades, or the toll receipt deep-links to its definition
-  sheet in place. It's the one part of the app that needs no account —
+  sheet in place. No account needed —
   [read it, or any single term, without signing in](https://bridge.brannon.online/glossary).
 - **Full review** — after each board: everyone's contract/result on that deal, matchpoint
   percentages, and all four hands.

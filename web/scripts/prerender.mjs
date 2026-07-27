@@ -1,5 +1,5 @@
 /**
- * Prerender the glossary to static HTML — the crawlable half of the app.
+ * Prerender the public pages to static HTML — the crawlable half of the app.
  *
  * This is a BUILD STEP, not one of the offline generators in the repo's
  * top-level tools/: its output lands in web/dist (never committed) and it must
@@ -22,10 +22,24 @@
  * scrapers, most LLM crawlers) sees an empty <div id="root">. This emits real
  * HTML for them.
  *
+ * The landing page (/) gets the same treatment for the same reason, and it is
+ * why this file is no longer named prerender-glossary: the site's front door
+ * is the URL most likely to be crawled, linked and unfurled, and it was the
+ * one serving an empty #root to every agent that can't run JavaScript.
+ *
+ * WHAT IS NOT PRERENDERED, and deliberately: /leaderboard, /players/:id and
+ * /tour are readable without an account now, but there is nothing durable to
+ * put in the HTML — live personal records, or a board that only exists once
+ * JavaScript runs. robots.txt (server/src/app.ts) keeps all three out of the
+ * index rather than let them compete with / while carrying its metadata.
+ * Public and indexable are separate decisions; if one of them ever earns a
+ * real static page, prerender it here AND take it off that Disallow list AND
+ * add it to the sitemap below, in one change.
+ *
  * HOW. Each page is web/dist/index.html with exactly two substitutions:
  *   1. the <!-- seo:start --> … <!-- seo:end --> span in <head> is replaced
  *      with that page's title/description/canonical/OG/JSON-LD;
- *   2. <div id="root"></div> is filled with the term's content.
+ *   2. <div id="root"></div> is filled with the page's content.
  * Everything else — the module script tag, the pre-paint theme script — is
  * copied verbatim, so a real visitor who follows a search result still boots
  * the ordinary SPA. React clears #root on mount, so the prerendered markup is
@@ -36,7 +50,7 @@
  * repo's engines floor, and what CI and the Dockerfile use) strips types
  * natively, so this needs no build of `web` and no bundler.
  *
- *   node scripts/prerender-glossary.mjs          # from web/, after `vite build`
+ *   node scripts/prerender.mjs          # from web/, after `vite build`
  *
  * Also emits web/dist/sitemap.xml, so the URL list has exactly one source.
  */
@@ -48,6 +62,13 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
 const outDir = join(dist, 'glossary-static');
+/**
+ * The landing page gets its OWN directory, not a file in glossary-static/.
+ * server/src/app.ts builds its set of servable term pages by listing that
+ * directory, so a home.html dropped in there would quietly also answer to
+ * /glossary/home — a second URL for the front page, filed under the ledger.
+ */
+const homeDir = join(dist, 'home-static');
 
 /** Production origin. Canonicals and the sitemap must point here from every
  *  deployment — the demo app and PR previews serve the same build, and are
@@ -121,6 +142,27 @@ const STYLE = `<style>
         .pr-crumbs, .pr-themes, .pr-example, .pr-aliases, .pr-attrib { color: #9A948A; }
         .pr-terms li { border-bottom-color: #33302B; }
       }
+      /* The media query alone isn't enough: index.html's pre-paint script sets
+         data-theme from the stored nb:theme preference, so a visitor who chose
+         Night on a light-OS machine would get a light flash on exactly the
+         surface that paints first. Same both-places rule style.css follows for
+         its own night tokens. */
+      :root[data-theme='night'] .pr { color: #EDE9E1; }
+      :root[data-theme='night'] .pr a { color: #EDE9E1; }
+      :root[data-theme='night'] .pr-crumbs,
+      :root[data-theme='night'] .pr-themes,
+      :root[data-theme='night'] .pr-example,
+      :root[data-theme='night'] .pr-aliases,
+      :root[data-theme='night'] .pr-attrib { color: #9A948A; }
+      :root[data-theme='night'] .pr-terms li { border-bottom-color: #33302B; }
+      :root[data-theme='light'] .pr { color: #141414; }
+      :root[data-theme='light'] .pr a { color: #141414; }
+      :root[data-theme='light'] .pr-crumbs,
+      :root[data-theme='light'] .pr-themes,
+      :root[data-theme='light'] .pr-example,
+      :root[data-theme='light'] .pr-aliases,
+      :root[data-theme='light'] .pr-attrib { color: #6E6A62; }
+      :root[data-theme='light'] .pr-terms li { border-bottom-color: #E4E1D8; }
     </style>`;
 
 /** Swap the shell's site-wide SEO span and fill #root. */
@@ -245,7 +287,79 @@ writeFileSync(
   }),
 );
 
+// ---- the landing page ----
+// A plain-prose version of pages/Login.tsx: the same five things it tells a
+// visitor, in the order it tells them, minus everything that needs React (the
+// specimen ledger, the graded-call panel, the ticket motifs). It must NOT try
+// to reproduce the sign-in controls — which door a deployment offers is a
+// /api/me answer the SPA resolves at runtime, and a statically rendered
+// DEV_AUTH form would be a lie on production and an invitation on a preview.
+// One CTA, pointing at the page itself, is the honest static fallback.
+mkdirSync(homeDir, { recursive: true });
+
+const homeTitle = 'Nickel Bridge — learn & play duplicate bridge';
+const homeDesc =
+  'Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open.';
+
+const homeBody = `<article class="pr">
+      <h1>Nickel Bridge</h1>
+      <p>${esc(homeDesc)}</p>
+      <h2>A small club, one crossing at a time</h2>
+      <p>Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is
+        a robot of even temper; your opponents, two more. Four deals to a crossing, and nobody waiting on
+        you to finish.</p>
+      <h2>Everyone plays the same deals</h2>
+      <p>Bad cards are no excuse here — everyone who crosses holds exactly what you held, whenever they
+        get around to it. You are scored against what they did with it, not against the luck of the deal.
+        That is duplicate bridge: the luck is dealt out of the game, and judgment is what is left.</p>
+      <h2>Read the bid before you make it</h2>
+      <p>Tap any call and the house tells you what it promises — the point range, the shape, whether it is
+        conventional — before you commit to it. Tap a robot’s call and it does the same. Then, after you
+        bid, a grade against the engine’s own choice, in Standard American Yellow Card.</p>
+      <h2>Boards are tickets. Playing is paying the toll.</h2>
+      <p>Every board prints a receipt — the score itemized line by line, overtricks and insult and all —
+        and then shows you the whole field on that deal. Results are cancelled with a postmark, and the
+        ledger of crossings keeps the running rating.</p>
+      <h2>Before you sign anything</h2>
+      <p>Reading the ledger is free: a <a href="/glossary">glossary of ${TERMS.length} bridge terms</a> in
+        plain language, no account needed. So is the practice board — walk one deal with the tollkeeper,
+        bid it, play it, read the receipt.</p>
+      <p class="pr-cta"><a href="/">Play duplicate bridge at Nickel Bridge →</a></p>
+    </article>`;
+
+writeFileSync(
+  join(homeDir, 'index.html'),
+  page({
+    head: head({
+      title: homeTitle,
+      description: homeDesc,
+      url: `${ORIGIN}/`,
+      // A self-canonical is safe here and nowhere else in the shell: this file
+      // is served for exactly one URL (server/src/app.ts's GET /), whereas
+      // web/index.html answers for every unprerendered route and deliberately
+      // carries no canonical at all.
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'Nickel Bridge',
+        url: `${ORIGIN}/`,
+        applicationCategory: 'GameApplication',
+        operatingSystem: 'Any (modern web browser)',
+        description: homeDesc,
+        image: `${ORIGIN}/og-image.png`,
+        isAccessibleForFree: true,
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      },
+    }).replace('og:type" content="article"', 'og:type" content="website"'),
+    body: homeBody,
+  }),
+);
+
 // ---- sitemap ----
+// Only URLs that are BOTH public and prerendered. /leaderboard, /players/:id
+// and /tour are public but Disallow'd in robots.txt (see the note at the top
+// of this file), and a sitemap entry for a disallowed URL is a contradiction
+// a crawler will report back to you.
 const urls = [`${ORIGIN}/`, indexUrl, ...TERMS.map((t) => `${ORIGIN}/glossary/${t.slug}`)];
 writeFileSync(
   join(dist, 'sitemap.xml'),
@@ -256,4 +370,5 @@ writeFileSync(
 );
 
 console.log(`prerendered ${TERMS.length} term pages + index → ${outDir}`);
+console.log(`prerendered the landing page → ${join(homeDir, 'index.html')}`);
 console.log(`sitemap: ${urls.length} urls → ${join(dist, 'sitemap.xml')}`);
