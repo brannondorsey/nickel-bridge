@@ -570,12 +570,18 @@ export default function Player() {
               to={t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
             />
             {/* Boards where the field was beaten outright — links to the most
-                recent one's receipt, so the tile is worth tapping. */}
+                recent one's receipt, so the tile is worth tapping. Own profile
+                only: boards are per-user, and GET /t/:tid/b/:no loads the
+                VIEWER's board of that number, creating one if absent (app.ts) —
+                so linking someone else's top would deal the viewer into a
+                tournament they were never placed in. BEST CROSSING dodges this
+                by pointing at the tournament, which is viewer-agnostic; a
+                specific board has no such URL, so it simply doesn't link. */}
             <Tile
               label="TOPS"
               value={String(t.tops.count)}
               sub={topsSub(t.tops.count, t.boardsCompleted)}
-              to={t.tops.latest ? `/t/${t.tops.latest.tournamentId}/b/${t.tops.latest.boardNo}` : undefined}
+              to={isMe && t.tops.latest ? `/t/${t.tops.latest.tournamentId}/b/${t.tops.latest.boardNo}` : undefined}
             />
           </div>
 

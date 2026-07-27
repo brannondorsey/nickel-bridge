@@ -355,6 +355,22 @@ describe('Stats', () => {
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
   });
 
+  it('never links the TOPS tile on another player’s page — the board URL is viewer-scoped', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      user: { ...playerStatsFull.user, id: 7, handle: 'Alice' },
+    });
+    renderStats();
+    // GET /t/:tid/b/:no serves the VIEWER's board of that number and creates
+    // one if absent, so following Alice's top would deal the viewer into her
+    // tournament. The count still shows; only the link is withheld.
+    const tops = (await screen.findByText('TOPS')).closest('.stat-tile')!;
+    expect(within(tops as HTMLElement).getByText('31')).toBeInTheDocument();
+    expect(tops.tagName).toBe('DIV');
+    // BEST CROSSING points at a tournament, which is viewer-agnostic — still linked
+    expect(screen.getByText('BEST CROSSING').closest('.stat-tile')).toHaveAttribute('href', '/t/9');
+  });
+
   it('hides every Elo surface on a house (benchmark AI) profile', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
