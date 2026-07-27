@@ -87,6 +87,11 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 index.html (the SPA shell — holds the site-wide SEO block between its
                 seo:start/seo:end markers, which the glossary prerender replaces per
                 page, plus the pre-paint night-mode script),
+                scripts/prerender-glossary.mjs (a BUILD STEP, not an offline generator
+                like tools/'s — `build` runs it after `vite build` to prerender the
+                glossary into dist/glossary-static/ + sitemap.xml; it lives here rather
+                than in tools/ because .dockerignore drops the root-level tools/ and
+                scripts/, see "Discoverability" below),
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 components/ds/ (design-system pieces, incl. SignInBar — the logged-out
                 glossary's bottom bar, standing in for the TabBar) + components/game/ (auction, bid box,
@@ -108,10 +113,6 @@ tools           offline Python weight conversion + golden-fixture generation;
                 gen_tour_board.mjs mines + captures the onboarding practice board
                 (web/src/onboarding/board0.json) by driving the real engine offline —
                 see "The first crossing" below;
-                gen_glossary_static.mjs is the odd one out — a BUILD STEP, not an
-                offline generator: web's `build` script runs it after `vite build` to
-                prerender the glossary into web/dist/glossary-static/ + sitemap.xml,
-                see "Discoverability" below;
                 calibrate_k.mjs sweeps sampled-DD K values (plus --bid-topn/--forget-window)
                 against true-DD reference play; calibrate_stats.mjs is the same sweeps with
                 standard error; calibrate_stack.mjs measures the combined bid+play effect for
@@ -545,7 +546,7 @@ of deliberately cryptic copy. Three pieces changed that, and they only make sens
   term's `action` link when signed out, since those point at gated screens (`/tour`).
 - **They're prerendered.** The app is client-rendered, so a crawler that doesn't run JS
   (Bing, DuckDuckGo, most social and LLM crawlers) still saw an empty `#root`.
-  `tools/gen_glossary_static.mjs` runs after `vite build` and emits one static page per
+  `web/scripts/prerender-glossary.mjs` runs after `vite build` and emits one static page per
   core term into `web/dist/glossary-static/`, each a copy of the built `index.html` with
   the `seo:start`/`seo:end` head span swapped and `#root` filled. The module script is
   copied through untouched, so a human following a search result still boots the ordinary
@@ -581,7 +582,7 @@ throws if either goes missing, so a rename fails the build rather than silently 
 `<link rel="canonical">`: it's served for every unprerendered route, so a static canonical
 would tell crawlers that every deep link "is really" the home page. Prerendered pages
 carry their own correct self-canonical; everything else self-canonicalizes by default.
-Adding a new public route means adding it to the sitemap in `gen_glossary_static.mjs`.
+Adding a new public route means adding it to the sitemap in `web/scripts/prerender-glossary.mjs`.
 
 ## Invariants — do not break
 

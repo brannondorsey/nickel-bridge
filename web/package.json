@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build && node ../tools/gen_glossary_static.mjs",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/prerender-glossary.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

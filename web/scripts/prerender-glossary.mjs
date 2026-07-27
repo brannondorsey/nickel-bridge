@@ -1,11 +1,18 @@
 /**
  * Prerender the glossary to static HTML — the crawlable half of the app.
  *
- * UNLIKE its neighbours in tools/, this is a BUILD STEP, not an offline
- * one-time generator: its output lands in web/dist (never committed) and it
- * must re-run on every build, because each page is a copy of the freshly built
+ * This is a BUILD STEP, not one of the offline generators in the repo's
+ * top-level tools/: its output lands in web/dist (never committed) and it must
+ * re-run on every build, because each page is a copy of the freshly built
  * web/dist/index.html and therefore carries that build's hashed asset URLs.
  * web/package.json's `build` script runs it straight after `vite build`.
+ *
+ * That's also why it lives inside this workspace rather than in tools/. The
+ * repo's .dockerignore drops the top-level tools/ and scripts/ directories —
+ * they're offline tooling the image never needs — and those patterns are
+ * anchored at the context root, so anything the Docker build actually has to
+ * run must sit inside a workspace. A build step in tools/ typecheck-passes,
+ * test-passes and builds fine locally, then fails only in the Docker job.
  *
  * WHY IT EXISTS. The glossary is ~125 curated bridge terms, each a page
  * someone might land on from a query like "what is a squeeze in bridge" — the
@@ -29,7 +36,7 @@
  * repo's engines floor, and what CI and the Dockerfile use) strips types
  * natively, so this needs no build of `web` and no bundler.
  *
- *   node tools/gen_glossary_static.mjs            # after `npm run build -w web`
+ *   node scripts/prerender-glossary.mjs          # from web/, after `vite build`
  *
  * Also emits web/dist/sitemap.xml, so the URL list has exactly one source.
  */
@@ -37,9 +44,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..');
-const dist = resolve(root, 'web/dist');
+/** web/ — this file sits in web/scripts/, so one level up. */
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const dist = resolve(root, 'dist');
 const outDir = join(dist, 'glossary-static');
 
 /** Production origin. Canonicals and the sitemap must point here from every
@@ -47,8 +54,8 @@ const outDir = join(dist, 'glossary-static');
  *  kept out of the index by server/src/app.ts's noindex block. */
 const ORIGIN = 'https://bridge.brannon.online';
 
-const { TERMS, THEME_CHIP } = await import(resolve(root, 'web/src/glossary/terms.ts'));
-const deep = JSON.parse(readFileSync(resolve(root, 'web/src/glossary/deep.json'), 'utf8'));
+const { TERMS, THEME_CHIP } = await import(resolve(root, 'src/glossary/terms.ts'));
+const deep = JSON.parse(readFileSync(resolve(root, 'src/glossary/deep.json'), 'utf8'));
 
 const shell = readFileSync(join(dist, 'index.html'), 'utf8');
 const SEO_SPAN = /<!--\s*seo:start[\s\S]*?seo:end\s*-->/;

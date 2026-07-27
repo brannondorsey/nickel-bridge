@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--
       seo:start — everything between these two markers is the SITE-WIDE
-      discoverability block, and tools/gen_glossary_static.mjs replaces the
+      discoverability block, and web/scripts/prerender-glossary.mjs replaces the
       whole span wholesale when it prerenders a glossary page. Keep the markers
       exactly as they are, and keep anything page-independent (charset,
       viewport, icon, the theme script) OUTSIDE them.
@@ -19,7 +19,7 @@
       - No <link rel="canonical">. A static canonical pointing at the site root
         would tell crawlers that /glossary/finesse "is really" the home page and
         actively suppress the very pages we want indexed. Prerendered glossary
-        pages (tools/gen_glossary_static.mjs) carry their own correct
+        pages (web/scripts/prerender-glossary.mjs) carry their own correct
         self-canonical instead; everything else self-canonicalizes by default.
       - The description is plain and keyword-bearing on purpose. It is never
         rendered to a visitor — the on-screen splash keeps its own voice — so it

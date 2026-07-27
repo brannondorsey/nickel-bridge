@@ -53,7 +53,7 @@ function inTabScope(pathname: string): boolean {
  * sign-in to read them means search engines see a login screen and index
  * nothing, which is why these two routes sit outside the auth branch below.
  * The build also prerenders them to static HTML for crawlers that don't run JS
- * (tools/gen_glossary_static.mjs); this gate is what makes those pages honest
+ * (web/scripts/prerender-glossary.mjs); this gate is what makes those pages honest
  * when a real visitor follows one in.
  */
 function isGlossaryPath(pathname: string): boolean {

@@ -252,7 +252,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');
   if (existsSync(webDist)) {
     // Prerendered glossary pages (web/dist/glossary-static, built by
-    // tools/gen_glossary_static.mjs) shadow the SPA fallback for the two public
+    // web/scripts/prerender-glossary.mjs) shadow the SPA fallback for the two public
     // glossary routes. They are the same shell with the term's content already
     // in the HTML, so a crawler that doesn't run JavaScript gets the actual
     // definition instead of an empty #root — and a human still boots the normal
