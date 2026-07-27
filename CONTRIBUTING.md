@@ -55,6 +55,9 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
+                config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE,
+                plus the boot assertion index.ts calls; lenient at import so tests
+                can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
@@ -192,7 +195,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | Var | Default | Purpose (where it's read) |
 | --- | --- | --- |
 | `PORT` | `3000` | listen port (`server/src/index.ts`) |
-| `BASE_URL` | `http://localhost:3000` | public URL; OAuth redirect + secure-cookie flag (`auth.ts`), `Sitemap:` line in `robots.txt` (`app.ts` — validated as an absolute http(s) URL there, because Vite defines a `BASE_URL` of its own that Vitest puts on `process.env` as `/`) |
+| `BASE_URL` | `http://localhost:3000` | public origin, parsed **only** in `config.ts` (see below); feeds the OAuth redirect + secure-cookie flag (`auth.ts`) and `robots.txt`'s `Sitemap:` line (`app.ts`). Set but not an absolute http(s) URL ⇒ the server refuses to boot; unset ⇒ boots with a warning |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never on the production app** (previews + the demo app are deliberate exceptions) |
 | `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |

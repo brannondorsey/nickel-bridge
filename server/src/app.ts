@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { registerAuthRoutes, requireUserWithHandle } from './auth.js';
+import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
@@ -23,21 +24,6 @@ import {
   PROVISIONAL_MIN_TOURNAMENTS,
   visibleStandings,
 } from './tournaments.js';
-
-/**
- * Origin this deployment answers on, for the absolute URL in robots.txt (the
- * Sitemap directive is required to be absolute). BASE_URL is already the app's
- * own notion of its public address — auth.ts builds the OAuth redirect from it
- * — so there's no second thing to configure.
- *
- * Validated rather than defaulted, because BASE_URL is not always ours: Vite
- * defines a BASE_URL of its own (the public base path, default "/") and Vitest
- * puts it on process.env, so under the test runner this reads "/". Anything
- * that isn't an absolute http(s) URL falls back to the dev origin.
- */
-const PUBLIC_ORIGIN = /^https?:\/\//.test(process.env.BASE_URL ?? '')
-  ? process.env.BASE_URL!.replace(/\/+$/, '')
-  : 'http://localhost:3000';
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {

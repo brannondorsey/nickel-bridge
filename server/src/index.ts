@@ -1,6 +1,12 @@
 import { buildApp } from './app.js';
+import { assertPublicOrigin } from './config.js';
 
 const app = await buildApp();
+// Refuse to start on a BASE_URL that's set but unusable, before anything can
+// serve a request with a broken OAuth redirect or a non-Secure session cookie.
+// Here rather than in config.ts because every consequence is silent, and a
+// module-level throw would also fire in tests (see config.ts).
+assertPublicOrigin(app.log);
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: '0.0.0.0' });
 
