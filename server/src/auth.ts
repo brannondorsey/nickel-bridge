@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { DIFFICULTIES, type SettableDifficulty } from '@bridge/ai';
+import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
 import { db, UserRow } from './db.js';
 import { validateHandle } from './handle.js';
 
@@ -66,7 +67,7 @@ export function startSession(reply: FastifyReply, userId: number): void {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: (process.env.BASE_URL ?? '').startsWith('https'),
+    secure: COOKIES_SECURE,
     maxAge: SESSION_TTL_S,
   });
 }
@@ -97,8 +98,7 @@ export function upsertGoogleUser(googleId: string, email: string | null, name: s
 export function registerAuthRoutes(app: FastifyInstance): void {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const baseUrl = process.env.BASE_URL ?? 'http://localhost:3000';
-  const redirectUri = `${baseUrl}/auth/google/callback`;
+  const redirectUri = `${PUBLIC_ORIGIN}/auth/google/callback`;
 
   app.get('/auth/google', (req, reply) => {
     if (!clientId) return reply.code(500).send({ error: 'GOOGLE_CLIENT_ID not configured' });
