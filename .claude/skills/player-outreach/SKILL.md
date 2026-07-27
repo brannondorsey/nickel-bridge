@@ -159,6 +159,11 @@ What makes these work:
   small enough to ride along. It stays out of `abandoned_first` — see that template.
 - **A cheap out.** "One line is plenty" gets more replies than an open-ended ask.
 - **No tracking, no images, no unsubscribe boilerplate.** It's a personal email, so let it be one.
+- **No `http://`/`https://` links, anywhere in the body.** Gmail treats a link in a cold,
+  unsolicited plain-text email as a spam/phishing signal — it can trigger warning banners or
+  hurt deliverability, which defeats the whole point of these emails. Mention the site as bare
+  text (`bridge.brannon.online`, `nickelbridge.com`) with no scheme prefix and don't wrap it in
+  markdown link syntax; a reader can still copy-paste it into a browser.
 
 ### Asking the domain question without poisoning it
 
@@ -183,7 +188,7 @@ there" if both look like junk.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online), the duplicate
+My name is Brannon and I built Nickel Bridge (bridge.brannon.online), the duplicate
 bridge site you tried on {date}.
 
 I noticed that you played {n} boards and then didn't come back, and I'd love to learn why.
@@ -192,7 +197,7 @@ There's no wrong answer: too confusing, too slow, awkward on your phone, robots 
 strong, or just not your thing. Whatever made you close the tab is the most useful
 thing you could tell me.
 
-One other thing I'm weighing: the app currently lives at https://bridge.brannon.online. Would a
+One other thing I'm weighing: the app currently lives at bridge.brannon.online. Would a
 real domain like nickelbridge.com have made any difference — easier to remember or
 to trust — or does the address not matter to you?
 
@@ -209,7 +214,7 @@ to make it better for folks.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online). You've played
+My name is Brannon and I built Nickel Bridge (bridge.brannon.online). You've played
 {n} boards {when}, which puts
 you in a very small group of people who've really used it. Thank you, sincerely!
 
@@ -218,7 +223,7 @@ grading, beating the house robots, the fact it's free, or something I'd never gu
 
 I'm also curious if there is anything you'd like to see changed?
 
-Also a small one: it lives at https://bridge.brannon.online today. If you wanted to tell a
+Also a small one: it lives at bridge.brannon.online today. If you wanted to tell a
 bridge-playing friend about it, would a real domain like nickelbridge.com make that
 easier — or is the address irrelevant?
 
@@ -235,7 +240,7 @@ to make it better for folks.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online). You tried it
+My name is Brannon and I built Nickel Bridge (bridge.brannon.online). You tried it
 on the {when} and didn't
 get far before leaving.
 
