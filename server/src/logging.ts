@@ -33,6 +33,7 @@ export const MAX_HEADER_LOG_CHARS = 256;
 export type RequestLog = {
   method: string;
   url: string;
+  version?: string;
   host?: string;
   remoteAddress?: string;
   remotePort?: number;
@@ -70,11 +71,20 @@ function clientIp(headers: Headers): string | undefined {
   return forwarded?.split(',')[0]?.trim() || undefined;
 }
 
-/** Fastify's default request log line, plus who sent it. */
+/**
+ * Fastify's default request log line, plus who sent it.
+ *
+ * Strictly additive on purpose: Fastify merges user serializers over its built-ins per key,
+ * so naming `req` replaces the default one wholesale rather than extending it. Every field
+ * `logger-pino.js` emits is therefore repeated here — including `version`, which this app
+ * never sets (it comes from `accept-version`, for Fastify's constrained routing) but which
+ * would otherwise silently vanish from the logs of anything that does.
+ */
 export function serializeRequestLog(req: FastifyRequest): RequestLog {
   return {
     method: req.method,
     url: req.url,
+    version: req.headers?.['accept-version'] as string | undefined,
     host: req.host,
     remoteAddress: req.ip,
     remotePort: req.socket?.remotePort,

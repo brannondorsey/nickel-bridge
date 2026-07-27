@@ -1,6 +1,27 @@
-import type { FastifyRequest } from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { MAX_HEADER_LOG_CHARS, serializeRequestLog } from '../src/logging.js';
+
+/**
+ * The `req` keys Fastify actually emits under a given serializer config — driven through a
+ * real app rather than by importing fastify/lib/logger-pino.js, so the parity check below
+ * rests on public API and survives Fastify moving its internals around.
+ */
+async function loggedReqKeys(useOurs: boolean): Promise<string[]> {
+  const lines: string[] = [];
+  const app = Fastify({
+    logger: {
+      level: 'info',
+      stream: { write: (line: string) => void lines.push(line) },
+      ...(useOurs ? { serializers: { req: serializeRequestLog } } : {}),
+    },
+  });
+  app.get('/x', (_req, reply) => reply.send({ ok: true }));
+  await app.inject({ method: 'GET', url: '/x', headers: { 'accept-version': '1.0.0' } });
+  await app.close();
+  const entry = lines.map((l) => JSON.parse(l)).find((l) => l.req);
+  return Object.keys(entry.req).sort();
+}
 
 /**
  * The serializer is unit-tested directly rather than through app.inject(): the server
@@ -30,6 +51,19 @@ describe('serializeRequestLog', () => {
       remoteAddress: '172.16.18.186',
       remotePort: 60290,
     });
+  });
+
+  it('carries accept-version through, the one default field easy to drop by accident', () => {
+    expect(serializeRequestLog(request({ 'accept-version': '1.2.0' })).version).toBe('1.2.0');
+    expect(serializeRequestLog(request()).version).toBeUndefined();
+  });
+
+  // Naming `req` replaces Fastify's built-in serializer outright rather than extending it,
+  // so anything it logs and we don't just disappears. Guard the superset, not a field list.
+  it('logs every field Fastify would have logged by default', async () => {
+    const [ours, theirs] = await Promise.all([loggedReqKeys(true), loggedReqKeys(false)]);
+    expect(theirs.length).toBeGreaterThan(0);
+    expect(ours).toEqual(expect.arrayContaining(theirs));
   });
 
   it('records the visitor from Fly-Client-IP, distinct from the proxy address', () => {

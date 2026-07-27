@@ -49,8 +49,20 @@ jobs:
 
       - name: Destroy the preview app, and confirm it stays destroyed
         run: |
-          exists() {
-            flyctl apps list --json | jq -e --arg a "$APP" 'any(.[]; .Name == $a)' >/dev/null
+          # Three outcomes, not two. A failed or malformed `flyctl apps list` (a transient
+          # Fly API blip) must not read as "absent" — piping that straight into `jq -e`
+          # would exit non-zero exactly like a real not-found, so three hiccups in a row
+          # would report "gone" and exit 0 while the app kept billing a volume. That is
+          # the silent-success failure this job exists to stop being.
+          app_state() {
+            local listing
+            listing=$(flyctl apps list --json 2>/dev/null) || { echo unknown; return; }
+            jq -e 'type == "array"' >/dev/null 2>&1 <<<"$listing" || { echo unknown; return; }
+            if jq -e --arg a "$APP" 'any(.[]; .Name == $a)' >/dev/null 2>&1 <<<"$listing"; then
+              echo present
+            else
+              echo absent
+            fi
           }
 
           # Three consecutive absent polls, 30s apart, before believing it. The observed
@@ -58,20 +70,35 @@ jobs:
           # nothing at all.
           absent=0
           for attempt in $(seq 1 12); do
-            if exists; then
-              echo "attempt $attempt: $APP exists — destroying"
-              flyctl apps destroy "$APP" --yes || true
-              absent=0
-            else
-              absent=$((absent + 1))
-              echo "attempt $attempt: $APP absent ($absent/3 consecutive)"
-              [ "$absent" -ge 3 ] && break
-            fi
+            case "$(app_state)" in
+              present)
+                echo "attempt $attempt: $APP exists — destroying"
+                flyctl apps destroy "$APP" --yes || true
+                absent=0
+                ;;
+              absent)
+                absent=$((absent + 1))
+                echo "attempt $attempt: $APP absent ($absent/3 consecutive)"
+                if [ "$absent" -ge 3 ]; then break; fi
+                ;;
+              *)
+                # Evidence of nothing — leave the counter where it is and re-ask.
+                echo "attempt $attempt: could not list apps; retrying"
+                ;;
+            esac
             sleep 30
           done
 
-          if exists; then
-            echo "::error::$APP still exists after teardown — it bills a volume until destroyed by hand"
-            exit 1
-          fi
-          echo "$APP is gone."
+          case "$(app_state)" in
+            absent)
+              echo "$APP is gone."
+              ;;
+            present)
+              echo "::error::$APP still exists after teardown — it bills a volume until destroyed by hand"
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not confirm $APP was destroyed (Fly API unreachable) — check by hand"
+              exit 1
+              ;;
+          esac

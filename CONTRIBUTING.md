@@ -68,7 +68,7 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 on PR previews + the permanent demo app — see "Demo mode" below),
                 logging.ts (the request-log serializer: Fastify's default line plus
                 Fly-Client-IP and user agent, so "who woke the machine" is answerable —
-                see "Reading the request log" below)
+                see "Machine time is bought by the request" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
@@ -375,7 +375,7 @@ own volume — `fly.toml` is shared across all of them, with the app name always
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
 
-**Machine time is bought by the request, so the request log records who is asking.** With
+**Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
 a dedicated `performance-1x` core and holds it for Fly's whole idle window (~6-8 min
 observed) — so one bare `GET /` from a crawler costs the same as a real visit, and a low but
