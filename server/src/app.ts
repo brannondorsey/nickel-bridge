@@ -11,6 +11,7 @@ import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
+import { serializeRequestLog } from './logging.js';
 import { playerStats, profileKind } from './stats.js';
 import {
   boardDifficulty,
@@ -27,7 +28,14 @@ import {
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
+  // serializeRequestLog adds the caller's identity (Fly-Client-IP + user agent) to
+  // Fastify's default request line — see logging.ts for why that is worth the bytes.
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+      serializers: { req: serializeRequestLog },
+    },
+  });
 
   await app.register(fastifyCookie);
 

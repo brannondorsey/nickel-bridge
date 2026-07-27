@@ -66,7 +66,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      # The `github.event.action != 'closed'` guard above was evaluated before test/e2e/
+      # docker ran, which is minutes ago — the PR may well have merged since. Creating the
+      # app now would hand pr-preview-teardown.yml an app that did not exist when it ran,
+      # which is how three previews were orphaned in July 2026. Re-ask right before
+      # creating anything; teardown's watch loop covers the residual seconds.
+      - name: Skip if the PR closed while CI was running
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh pr view "${{ github.event.pull_request.number }}" \
+                    --repo "$GITHUB_REPOSITORY" --json state --jq .state)
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          [ "$state" = "OPEN" ] || echo "PR is $state — skipping preview deploy."
       - name: Ensure preview app + volume exist
+        if: steps.pr.outputs.state == 'OPEN'
         run: |
           flyctl apps create "$APP" --org personal || true
           count=$(flyctl volumes list --app "$APP" --json 2>/dev/null | jq 'length' 2>/dev/null)
@@ -76,8 +91,10 @@ jobs:
           fi
           flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://$APP.fly.dev" --app "$APP"
       - name: Deploy preview
+        if: steps.pr.outputs.state == 'OPEN'
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
       - name: Comment preview URL on the PR
+        if: steps.pr.outputs.state == 'OPEN'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: preview-url
