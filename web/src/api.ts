@@ -212,7 +212,8 @@ export interface PlayerStats {
     boardsCompleted: number;
     tournamentsPlayed: number;
     tournamentsCompleted: number;
-    ratedTournaments: number;
+    /** longest run of consecutive UTC calendar days with >=1 completed board (server/src/stats.ts) */
+    streakDays: number;
     currentElo: number;
     peakElo: number;
     avgPct: number | null;

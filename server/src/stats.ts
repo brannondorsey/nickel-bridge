@@ -83,7 +83,8 @@ interface PlayerStats {
     boardsCompleted: number;
     tournamentsPlayed: number;
     tournamentsCompleted: number;
-    ratedTournaments: number;
+    /** longest run of consecutive UTC calendar days with >=1 completed board, from `dailyBoards` */
+    streakDays: number;
     currentElo: number;
     peakElo: number;
     avgPct: number | null;
@@ -318,6 +319,25 @@ function betterThan(value: number, field: number[]): number | null {
   return Math.round((below / (field.length - 1)) * 100);
 }
 
+/**
+ * Longest run of consecutive UTC calendar days in `dates` (already sorted
+ * ascending, one entry per day with >=1 completed board — see `dailyBoards`).
+ * Parsing each 'YYYY-MM-DD' as UTC midnight and diffing in days (rather than
+ * string-comparing) keeps month/year boundaries correct.
+ */
+function longestDayStreak(dates: string[]): number {
+  if (!dates.length) return 0;
+  let best = 1;
+  let current = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(`${dates[i - 1]}T00:00:00Z`).getTime();
+    const curr = new Date(`${dates[i]}T00:00:00Z`).getTime();
+    current = curr - prev === 86_400_000 ? current + 1 : 1;
+    best = Math.max(best, current);
+  }
+  return best;
+}
+
 export function playerStats(userId: number): PlayerStats | null {
   const u = stmtUser.get(userId) as
     | { id: number; handle: string; picture: string | null; elo: number; created_at: number; kind: 'human' | 'ai' }
@@ -518,7 +538,7 @@ export function playerStats(userId: number): PlayerStats | null {
       boardsCompleted: boards.length,
       tournamentsPlayed: byTournament.size,
       tournamentsCompleted,
-      ratedTournaments: eloSeries.length,
+      streakDays: longestDayStreak(dailyBoards.map((d) => d.date)),
       currentElo: u.elo,
       peakElo: Math.max(ELO_INITIAL, ...eloSeries.map((e) => e.elo)),
       avgPct,

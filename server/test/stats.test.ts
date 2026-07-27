@@ -48,6 +48,7 @@ describe('player stats', () => {
     const stats = await carol.get(`/api/users/${await userId(carol)}/stats`);
     expect(stats.totals.boardsCompleted).toBe(0);
     expect(stats.totals.tournamentsPlayed).toBe(0);
+    expect(stats.totals.streakDays).toBe(0);
     expect(stats.totals.avgPct).toBeNull();
     expect(stats.totals.bestPct).toBeNull();
     expect(stats.totals.worstPct).toBeNull();
@@ -93,7 +94,8 @@ describe('player stats', () => {
     expect(stats.totals.boardsCompleted).toBe(4);
     expect(stats.totals.tournamentsPlayed).toBe(1);
     expect(stats.totals.tournamentsCompleted).toBe(1);
-    expect(stats.totals.ratedTournaments).toBe(1);
+    // all 4 boards land in dailyBoards on the same UTC day → a 1-day streak
+    expect(stats.totals.streakDays).toBe(1);
 
     // elo matches the stored rating — alice's 1 rated tournament is below the
     // leaderboard's provisional quota, so she isn't in its list yet (covered
@@ -205,6 +207,26 @@ describe('player stats', () => {
       { date: '2026-01-07', count: 1 },
     ]);
     expect(stats.dailyBoards.reduce((s: number, d: any) => s + d.count, 0)).toBe(stats.totals.boardsCompleted);
+  });
+
+  it('reports the longest run of consecutive played days, not just the most recent run', async () => {
+    const uid = await userId(carol);
+    const tid = (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', 'seed') RETURNING id`).get() as { id: number })
+      .id;
+    // Jan 5-7 is a 3-day run; Jan 9-10 (after a gap) is only 2 — the max
+    // must stay 3 even though the shorter run is more recent.
+    const insert = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, bid_evals, updated_at) VALUES (?, ?, ?, 'done', '[]', '[]', ?)`,
+    );
+    const at = (iso: string) => Math.floor(new Date(iso).getTime() / 1000);
+    insert.run(tid, uid, 1, at('2026-01-05T12:00:00Z'));
+    insert.run(tid, uid, 2, at('2026-01-06T12:00:00Z'));
+    insert.run(tid, uid, 3, at('2026-01-07T12:00:00Z'));
+    insert.run(tid, uid, 4, at('2026-01-09T12:00:00Z'));
+    insert.run(tid, uid, 5, at('2026-01-10T12:00:00Z'));
+
+    const stats = await carol.get(`/api/users/${uid}/stats`);
+    expect(stats.totals.streakDays).toBe(3);
   });
 
   it('buckets a Stayman ask under conventions and excludes the natural continuation', async () => {

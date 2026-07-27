@@ -215,7 +215,7 @@ export default function Player() {
   const isMe = stats.user.id === me?.user?.id;
   // Benchmark house personas are never Elo-rated (their scores count in
   // matchpoints but not in ratings), so every Elo surface — the rating hero,
-  // the rating chart, the RATED tile — is hidden on their profiles.
+  // the rating chart — is hidden on their profiles.
   const house = stats.user.kind === 'ai';
   const t = stats.totals;
   const gradedCalls = GRADE_ROWS.reduce((s, g) => s + t.gradeCounts[g.key], 0);
@@ -549,7 +549,7 @@ export default function Player() {
             />
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
-            {!house ? <Tile label="RATED" value={String(t.ratedTournaments)} sub="head-to-head" /> : null}
+            <Tile label="STREAK" value={`${t.streakDays} day${t.streakDays === 1 ? '' : 's'}`} sub="longest run" />
             <Tile label="AVG SCORE" value={t.avgPct !== null ? `${t.avgPct}%` : '—'} sub="50% = field average" />
             <Tile
               label="BEST CROSSING"
