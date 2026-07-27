@@ -555,6 +555,17 @@ of deliberately cryptic copy. Three pieces changed that, and they only make sens
   path. Deep-reference entries deliberately get no page of their own: they're close
   paraphrases of Wikipedia's glossary, so indexable prose for them would be thin,
   duplicative content competing with the source we adapted.
+- **Both URL forms answer the same way.** `/glossary?term=<slug>` serves that term's page,
+  not the ledger index — it's the glossary's live sheet mechanism and the URL the app
+  leaves a reader on (`Glossary.tsx` normalizes the path form into it with a `replace`), so
+  it's the form that actually gets shared. Without this the server disagreed with the
+  client about what `?term=` meant, and a shared definition unfurled as the whole glossary.
+  The term page's self-canonical then hands the link back to `/glossary/<slug>`, which
+  stays the canonical form and the one in the sitemap. An unknown `?term=` is not an error
+  (it falls back to the index, 200); an unknown *path* slug is, and answers `404` with the
+  SPA shell — browsers render a 404 body, so the app still boots and shows its own
+  not-in-the-ledger sheet, while ~780 guessable deep-reference slugs stop looking like
+  real pages to a crawler.
 - **Throwaway origins stay out of the index.** The demo app and every PR preview serve a
   byte-identical build from their own hostnames, so without this the index fills with
   duplicates that outrank production and hand searchers a database that gets wiped.

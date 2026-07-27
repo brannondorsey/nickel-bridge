@@ -110,10 +110,14 @@ describe('prerendered glossary', () => {
     await app.close();
   });
 
-  it('falls through to the SPA for a slug with no prerendered page', async () => {
+  // A slug with no page is a dead end, and there are ~780 of them a crawler can
+  // reach by guessing a deep-reference term. Answering 200 with the generic
+  // shell makes every one look like a real page (a "soft 404"); the SPA still
+  // boots off a 404 body and shows its own not-in-the-ledger sheet.
+  it('404s a slug with no prerendered page, still serving the SPA shell', async () => {
     const app = await productionApp();
     const res = await app.inject({ method: 'GET', url: '/glossary/not-a-real-term' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(404);
     expect(res.body).toContain('<div id="root">');
     await app.close();
   });
@@ -124,7 +128,31 @@ describe('prerendered glossary', () => {
     const app = await productionApp();
     for (const url of ['/glossary/..%2F..%2Findex', '/glossary/%2e%2e%2findex']) {
       const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(404);
       expect(res.body, url).toContain('<div id="root">');
+    }
+    await app.close();
+  });
+
+  // ?term= is the form the app leaves a reader on, so it's the form that gets
+  // shared. It must answer with the same term the client would show — otherwise
+  // a shared definition unfurls as the whole glossary.
+  it('serves the matching term page for /glossary?term=<slug>', async () => {
+    const app = await productionApp();
+    const res = await app.inject({ method: 'GET', url: '/glossary?term=finesse' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('FINESSE PAGE');
+    await app.close();
+  });
+
+  // Unlike a bad path slug, a bad query is not a dead end — /glossary is a real
+  // page whatever trails behind it.
+  it('falls back to the ledger index for an unknown ?term=, without a 404', async () => {
+    const app = await productionApp();
+    for (const url of ['/glossary?term=not-a-real-term', '/glossary?term=index', '/glossary?term=']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.body, url).toContain('THE LEDGER INDEX');
     }
     await app.close();
   });

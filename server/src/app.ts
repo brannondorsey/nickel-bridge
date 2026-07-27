@@ -266,22 +266,47 @@ export async function buildApp(): Promise<FastifyInstance> {
         )
       : new Set<string>();
 
-    /** Serve a prerendered page, or fall through to the SPA for unknown slugs.
-     *  Membership in `prerendered` is what makes the slug safe to join onto a
-     *  path — it can only ever be a filename this build emitted. */
-    const sendPrerendered = (name: string, reply: FastifyReply) =>
+    /**
+     * Serve a prerendered page, falling back to the SPA shell when there isn't
+     * one. Membership in `prerendered` is what makes the name safe to join onto
+     * a path — it can only ever be a filename this build emitted.
+     *
+     * `missing` is the status for that fallback, and it differs by call site:
+     * a URL that *could* have named a term but doesn't is a dead end and should
+     * say so (404), while /glossary itself is a real page whatever its query
+     * string. Serving the shell with a 404 is deliberate, not a contradiction —
+     * browsers render a 404 body normally, so the SPA still boots and shows its
+     * own "not in the ledger" sheet, while crawlers get the honest signal
+     * instead of another 200 that looks like content.
+     */
+    const sendPrerendered = (name: string, reply: FastifyReply, missing: 200 | 404 = 200) =>
       prerendered.has(name)
         ? reply.type('text/html; charset=utf-8').send(readFileSync(join(staticGlossary, `${name}.html`)))
-        : reply.sendFile('index.html');
+        : reply.code(missing).sendFile('index.html');
 
     await app.register(fastifyStatic, { root: webDist });
 
-    app.get('/glossary', (_req, reply) => sendPrerendered('index', reply));
+    // ?term=<slug> is the glossary's live sheet mechanism (see
+    // GlossaryContext), and the URL the app leaves a reader on — so it's the
+    // form that actually gets shared. Serving the matching term page here keeps
+    // the server's answer the same as the client's, which also means a shared
+    // link unfurls as that term rather than as the whole ledger, and its
+    // self-canonical hands the link back to /glossary/<slug>. An unrecognised
+    // term is not an error: /glossary is still /glossary.
+    app.get('/glossary', (req, reply) => {
+      const { term } = req.query as { term?: string };
+      // Resolve to a page BEFORE dispatching: an unknown term has to land on
+      // the prerendered ledger index, not on sendPrerendered's bare-shell
+      // fallback, or a junk query would strip the page of its own content.
+      const named = term && term !== 'index' && prerendered.has(term);
+      return sendPrerendered(named ? term : 'index', reply);
+    });
+
     app.get('/glossary/:slug', (req, reply) => {
       const { slug } = req.params as { slug: string };
       // 'index' is the ledger page's own file, not a term — don't let
       // /glossary/index become a second URL for /glossary.
-      return sendPrerendered(slug === 'index' ? '' : slug, reply);
+      return sendPrerendered(slug === 'index' ? '' : slug, reply, 404);
     });
 
     app.setNotFoundHandler((req, reply) => {
