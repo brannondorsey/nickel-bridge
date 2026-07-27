@@ -257,11 +257,12 @@ automatically — there's no separate manual first deploy to do.
 
 | Var | Default | Purpose |
 | --- | --- | --- |
-| `BASE_URL` | `http://localhost:3000` | public URL (OAuth redirects, secure cookies) |
+| `BASE_URL` | `http://localhost:3000` | public origin (OAuth redirects, secure cookies, sitemap link). Set but not an absolute http(s) URL ⇒ the server refuses to boot |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth |
 | `DB_PATH` | `./data/bridge.db` | SQLite location |
 | `PORT` | `3000` | listen port |
 | `AI_MODEL` | `sl` | `sl` or `rl-fsp` |
+| `INDEXNOW_KEY` | — | search-engine submission key, served at `/<key>.txt` (see `scripts/indexnow.mjs`) |
 | `DEV_AUTH` | off | `1` enables name-only dev login (previews + the demo app) — never on the production app |
 | `DEMO` | off | `1` enables the demo-mode gallery + seeding (previews + the demo app) — never on the production app |
 

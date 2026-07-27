@@ -301,6 +301,21 @@ export async function buildApp(): Promise<FastifyInstance> {
       .send(robotsTxt({ throwaway: throwawayOrigin, origin: PUBLIC_ORIGIN })),
   );
 
+  // IndexNow ownership proof. The protocol authenticates a submission by
+  // fetching a key file from the host being submitted for, so this route is
+  // what makes scripts/indexnow.mjs's pings acceptable rather than ignored.
+  // The key is not a secret — it is published here by design; it proves
+  // control of the host, nothing more.
+  //
+  // Off unless INDEXNOW_KEY is set, and never served from a throwaway origin:
+  // a preview must not claim a key, for the same reason it must not be
+  // indexed. An invalid key is treated as unset rather than registered as a
+  // strange route — the protocol requires 8–128 chars of [a-zA-Z0-9-].
+  const indexNowKey = process.env.INDEXNOW_KEY;
+  if (!throwawayOrigin && indexNowKey && /^[a-zA-Z0-9-]{8,128}$/.test(indexNowKey)) {
+    app.get(`/${indexNowKey}.txt`, (_req, reply) => reply.type('text/plain; charset=utf-8').send(indexNowKey));
+  }
+
   // ---- static SPA ----
   const here = dirname(fileURLToPath(import.meta.url));
   const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');

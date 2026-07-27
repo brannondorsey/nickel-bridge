@@ -148,7 +148,9 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 og-image.mjs (regenerates the checked-in social share card
-                web/public/og-image.png — offline, no running instance needed)
+                web/public/og-image.png — offline, no running instance needed),
+                indexnow.mjs (submits the sitemap's URLs to IndexNow — run by hand
+                when glossary content changes, see "Discoverability" below)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
@@ -227,6 +229,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | `AI_MODEL` | `sl` | `sl` (SAYC-faithful) or `rl-fsp` (stronger, drifts from SAYC) (`game.ts`) |
 | `AI_PLAYERS` | on | `0` disables the benchmark AI personas' background play + boot sweep (`ai-players.ts`) — set by the server test harness (`server/test/helpers.ts`) so suites exercising `placeUser` don't play 12 bot boards per placement |
 | `AI_PAUSE_MS` | `15000` | how long after an interactive API request the personas' non-urgent play stays parked (`ai-players.ts`); tests set `0` |
+| `INDEXNOW_KEY` | — | 8–128 chars of `[a-zA-Z0-9-]`; when set, `app.ts` serves it at `/<key>.txt` as IndexNow's ownership proof (never on a `DEMO`/`DEV_AUTH` origin). Unset ⇒ the route doesn't exist and `scripts/indexnow.mjs` can't submit |
 | `LOG_LEVEL` | `info` | Fastify logger (`app.ts`) |
 | `WEB_DIST` | `../../web/dist` | override static SPA path (`app.ts`) |
 
@@ -780,6 +783,18 @@ it emits. See "keeping it that way" at the end of this section.
   to disallow-all *and* adds `X-Robots-Tag: noindex, nofollow` to every response — the
   header is the one that matters, since a preview link posted in a PR is inbound-link
   enough to get a URL indexed without ever being fetched.
+- **Submission is pull, plus one push channel.** Google and Bing both retired their
+  anonymous `ping?sitemap=` endpoints (2023–24), so discovery is otherwise pull-only:
+  `robots.txt` advertises `sitemap.xml` and crawlers come when they come (Google
+  additionally wants the sitemap registered in Search Console, which needs verified
+  domain ownership — a human step, not automatable from here). IndexNow is the one
+  push channel left, and it reaches Bing/Yandex/Seznam/Naver but **not Google**. It
+  authenticates by fetching a key file from the host, which `app.ts` serves at
+  `/<INDEXNOW_KEY>.txt` when that var is set — never on a throwaway origin, for the
+  same reason those aren't indexed. `scripts/indexnow.mjs` does the submitting and is
+  deliberately manual: IndexNow asks you to submit URLs that *changed*, and re-pushing
+  127 unchanged pages every deploy is what its docs tell you not to do. Glossary
+  content changes when someone edits `terms.ts`, so run it then.
 
 Two things to keep in mind when editing. `web/index.html` must keep its `seo:start`/
 `seo:end` markers and its `<div id="root"></div>` exactly as they are — the prerender

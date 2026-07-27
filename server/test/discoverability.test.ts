@@ -41,6 +41,7 @@ beforeAll(async () => {
 afterEach(() => {
   process.env.DEV_AUTH = '1';
   delete process.env.DEMO;
+  delete process.env.INDEXNOW_KEY;
 });
 
 /** Production shape: neither throwaway flag set. */
@@ -162,6 +163,61 @@ describe('prerendered landing page', () => {
     expect(spa.statusCode).toBe(200);
     expect(spa.body).toContain('<div id="root">');
     await app.close();
+  });
+});
+
+// IndexNow authenticates a submission by fetching this file from the host being
+// submitted for, so the route is the whole basis of scripts/indexnow.mjs.
+describe('IndexNow key file', () => {
+  const KEY = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+  it('serves the key at /<key>.txt when INDEXNOW_KEY is set', async () => {
+    process.env.INDEXNOW_KEY = KEY;
+    const app = await productionApp();
+    const res = await app.inject({ method: 'GET', url: `/${KEY}.txt` });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.trim()).toBe(KEY);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    await app.close();
+  });
+
+  // Not registered ⇒ the path falls through to the SPA shell like any unknown
+  // route, so the property to assert is that the KEY isn't served — a 200 of
+  // HTML fails IndexNow's content check just as an error would.
+  it('is absent when INDEXNOW_KEY is unset', async () => {
+    const app = await productionApp();
+    const res = await app.inject({ method: 'GET', url: `/${KEY}.txt` });
+    expect(res.body.trim()).not.toBe(KEY);
+    expect(res.body).toContain('<div id="root">');
+    await app.close();
+  });
+
+  // Same reasoning as the noindex header: a throwaway origin must not present
+  // itself as an authority for content, and submitting preview URLs would push
+  // a to-be-destroyed hostname into someone's index.
+  it('is never served from a DEMO or DEV_AUTH origin', async () => {
+    for (const flag of ['DEMO', 'DEV_AUTH'] as const) {
+      delete process.env.DEV_AUTH;
+      delete process.env.DEMO;
+      process.env[flag] = '1';
+      process.env.INDEXNOW_KEY = KEY;
+      const app = await buildApp();
+      const res = await app.inject({ method: 'GET', url: `/${KEY}.txt` });
+      expect(res.body.trim(), flag).not.toBe(KEY);
+      await app.close();
+    }
+  });
+
+  // A malformed key would otherwise register a route the protocol can never
+  // accept; treating it as unset keeps the failure at the script, which says why.
+  it('ignores a key that violates the protocol’s character/length rules', async () => {
+    for (const bad of ['short', 'has spaces in it', 'has/slash/es', 'a'.repeat(129)]) {
+      process.env.INDEXNOW_KEY = bad;
+      const app = await productionApp();
+      const res = await app.inject({ method: 'GET', url: `/${encodeURIComponent(bad)}.txt` });
+      expect(res.body.trim(), bad).not.toBe(bad);
+      await app.close();
+    }
   });
 });
 
