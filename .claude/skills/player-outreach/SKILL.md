@@ -211,9 +211,10 @@ Hi {first},
 My name is Brannon and I built Nickel Bridge. You've played {n} boards {when}, which puts
 you in a very small group of people who've really used it. Thank you, sincerely!
 
-I'd love to know what keeps you coming back — the duplicate scoring, the bid
-grading, beating the house robots, something I'd never guess? And the other half of
-that: is there anything you'd like to see changed?
+I'd love to know what has kept you playing — the duplicate scoring, the bid
+grading, beating the house robots, the fact it's free, or something I'd never guess? 
+
+I'm also curious if there is anything you'd like to see changed?
 
 Also a small one: it lives at https://bridge.brannon.online today. If you wanted to tell a
 bridge-playing friend about it, would a real domain like nickelbridge.com make that
