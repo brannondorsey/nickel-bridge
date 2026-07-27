@@ -183,7 +183,8 @@ there" if both look like junk.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge, the duplicate bridge site you tried on {date}.
+My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online), the duplicate
+bridge site you tried on {date}.
 
 I noticed that you played {n} boards and then didn't come back, and I'd love to learn why.
 
@@ -208,7 +209,8 @@ to make it better for folks.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge. You've played {n} boards {when}, which puts
+My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online). You've played
+{n} boards {when}, which puts
 you in a very small group of people who've really used it. Thank you, sincerely!
 
 I'd love to know what has kept you playing — the duplicate scoring, the bid
@@ -233,7 +235,8 @@ to make it better for folks.
 ```
 Hi {first},
 
-My name is Brannon and I built Nickel Bridge. You tried it on the {when} and didn't
+My name is Brannon and I built Nickel Bridge (https://bridge.brannon.online). You tried it
+on the {when} and didn't
 get far before leaving.
 
 Would you be up for telling me what you bounced? A sentence is plenty.
