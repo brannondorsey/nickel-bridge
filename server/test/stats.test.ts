@@ -51,7 +51,7 @@ describe('player stats', () => {
     expect(stats.totals.streakDays).toBe(0);
     expect(stats.totals.avgPct).toBeNull();
     expect(stats.totals.bestPct).toBeNull();
-    expect(stats.totals.worstPct).toBeNull();
+    expect(stats.totals.tops).toEqual({ count: 0, latest: null });
     expect(stats.totals.avgBidAccuracy).toBeNull();
     expect(stats.eloSeries).toEqual([]);
     expect(stats.pctSeries).toEqual([]);
@@ -115,13 +115,21 @@ describe('player stats', () => {
     expect(stats.pctSeries[0].fieldSize).toBe(2);
     expect(stats.pctSeries[0].finishedAt).toBeGreaterThan(0);
 
-    // with a single pctSeries entry, best and worst crossing are that entry
+    // with a single pctSeries entry, best crossing is that entry
     expect(stats.totals.bestPct).toEqual({
       pct: stats.pctSeries[0].pct,
       tournamentName: stats.pctSeries[0].tournamentName,
       tournamentId: stats.pctSeries[0].tournamentId,
     });
-    expect(stats.totals.worstPct).toEqual(stats.totals.bestPct);
+
+    // tops agree with the per-board pcts the tournament page shows — an
+    // independent derivation of the same matchpoints (myBoardSummaries), so
+    // this catches the two paths drifting apart
+    const topBoards = t.myBoards.filter((b: any) => b.pct === 100);
+    expect(stats.totals.tops.count).toBe(topBoards.length);
+    expect(stats.totals.tops.latest).toEqual(
+      topBoards.length ? { tournamentId: tid, boardNo: topBoards[topBoards.length - 1].no } : null,
+    );
 
     // every graded call is counted exactly once
     const grades = stats.totals.gradeCounts;
@@ -279,20 +287,27 @@ describe('player stats', () => {
     expect(stats.pctSeries[0].finishedAt).toBeLessThanOrEqual(stats.pctSeries[1].finishedAt);
     expect(stats.totals.peakElo).toBe(Math.max(1200, ...stats.eloSeries.map((e: any) => e.elo)));
 
-    // best/worst crossing, derived from pctSeries with the same tie-break (earlier wins ties)
+    // best crossing, derived from pctSeries with the same tie-break (earlier wins ties)
     const [p0, p1] = stats.pctSeries;
     const expectedBest = p1.pct > p0.pct ? p1 : p0;
-    const expectedWorst = p1.pct < p0.pct ? p1 : p0;
     expect(stats.totals.bestPct).toEqual({
       pct: expectedBest.pct,
       tournamentName: expectedBest.tournamentName,
       tournamentId: expectedBest.tournamentId,
     });
-    expect(stats.totals.worstPct).toEqual({
-      pct: expectedWorst.pct,
-      tournamentName: expectedWorst.tournamentName,
-      tournamentId: expectedWorst.tournamentId,
-    });
+
+    // tops accumulate across tournaments and `latest` names the most recent
+    // one, both cross-checked against the per-board pcts myBoardSummaries
+    // reports (pctSeries is in play order, so its last entry is the newest)
+    const perTournament = [];
+    for (const p of stats.pctSeries) {
+      const view = await alice.get(`/api/tournaments/${p.tournamentId}`);
+      for (const b of view.myBoards.filter((b: any) => b.pct === 100)) {
+        perTournament.push({ tournamentId: p.tournamentId, boardNo: b.no });
+      }
+    }
+    expect(stats.totals.tops.count).toBe(perTournament.length);
+    expect(stats.totals.tops.latest).toEqual(perTournament.at(-1) ?? null);
 
     // percentiles: Alice and Bob are both rated/active; exactly one of them
     // beats the other on elo (or they tie at 0)
