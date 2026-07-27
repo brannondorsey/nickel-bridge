@@ -65,7 +65,10 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
                 AI personas), demo.ts + scenarios.ts + demo-seed.ts (DEMO=1 demo mode,
-                on PR previews + the permanent demo app — see "Demo mode" below)
+                on PR previews + the permanent demo app — see "Demo mode" below),
+                logging.ts (the request-log serializer: Fastify's default line plus
+                Fly-Client-IP and user agent, so "who woke the machine" is answerable —
+                see "Machine time is bought by the request" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
@@ -161,7 +164,11 @@ npm run dev -w web       # Vite dev server on :5173, proxies /api, /auth, /demo 
 Checks — run all three before pushing; CI runs exactly these plus the Playwright smoke and a
 Docker build (`.github/workflows/ci.yml`, on pushes to `main` and all PRs). Once those pass,
 CI also deploys: every open PR gets its own Fly.io preview app (destroyed on close by
-`.github/workflows/pr-preview-teardown.yml`), and every push to `main` deploys to production
+`.github/workflows/pr-preview-teardown.yml` — which cancels the in-flight CI run and then
+watches until the app *stays* destroyed, because `deploy-preview` sits behind
+`needs: [test, e2e, docker]` and would otherwise re-create the app minutes after teardown
+had already run and found nothing; `deploy-preview` re-checks the PR state immediately
+before creating anything for the same reason), and every push to `main` deploys to production
 *and* redeploys the permanent demo app (`nickel-bridge-demo`, demo.bridge.brannon.online — a
 stable DEMO=1 instance for automation and click-testing) — see README.md "Deployment" for the
 one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
@@ -367,6 +374,22 @@ falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single vol
 own volume — `fly.toml` is shared across all of them, with the app name always overridden
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
+
+**Machine time is bought by the request**, so the request log records who is asking. With
+`auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
+a dedicated `performance-1x` core and holds it for Fly's whole idle window (~6-8 min
+observed) — so one bare `GET /` from a crawler costs the same as a real visit, and a low but
+steady trickle of them keeps the machine up permanently. Fly's health checks are not part of
+this: they reach the machine directly from flyd rather than through the proxy, so they can
+neither wake it nor keep it awake. `server/src/logging.ts` therefore logs `clientIp`
+(`Fly-Client-IP`, falling back to `X-Forwarded-For`) and `userAgent` alongside Fastify's
+default fields; `remoteAddress` deliberately still means the proxy. A line with no `clientIp`
+came from flyd, not the internet. Note the SPA fallback above returns **200** for every
+unmatched path, so scanner probes do not show up as 404s — the user agent is the honest
+signal, not the status code. Historical machine time comes from Fly's Prometheus
+(`fly_instance_up`, scraped every 15s; the metric is simply absent while suspended). Query it
+with `Authorization: FlyV1 <token>` — not `Bearer` — and derive uptime from raw samples
+rather than `count_over_time`, which gets downsampled over long ranges and badly under-reports.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
