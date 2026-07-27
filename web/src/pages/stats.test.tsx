@@ -161,7 +161,7 @@ describe('Stats', () => {
     expect(screen.getByText(/better than 72% of 54 rated players/)).toBeInTheDocument();
   });
 
-  it('orders the tile grid so best and toughest crossing land together on the bottom row', async () => {
+  it('orders the tile grid so the two personal-best tiles land together on the bottom row', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     const tiles = (await screen.findByText('TOURNAMENTS')).closest('.stats-tiles') as HTMLElement;
@@ -174,39 +174,60 @@ describe('Stats', () => {
       'STREAK',
       'AVG SCORE',
       'BEST CROSSING',
-      'TOUGHEST CROSSING',
+      'TOPS',
     ]);
-    // STREAK moved up one row and left one column; best/toughest are now the
-    // final row (indices 6 and 7 of an 8-tile, 2-column grid) — horizontal
-    // together on the bottom.
+    // STREAK sits one row up and one column left; the best-crossing/tops pair
+    // is the final row (indices 6 and 7 of an 8-tile, 2-column grid) —
+    // horizontal together on the bottom, best tournament beside best boards.
     expect(labels.indexOf('STREAK')).toBe(4);
     expect(labels.indexOf('BEST CROSSING')).toBe(6);
-    expect(labels.indexOf('TOUGHEST CROSSING')).toBe(7);
+    expect(labels.indexOf('TOPS')).toBe(7);
   });
 
-  it('shows the best and toughest crossing tiles, each linking to that tournament', async () => {
+  it('shows the best crossing tile, linking to that tournament', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
     expect(within(best as HTMLElement).getByText('74%')).toBeInTheDocument();
     expect(within(best as HTMLElement).getByText('Tournament #9')).toBeInTheDocument();
     expect(best).toHaveAttribute('href', '/t/9');
-    const worst = screen.getByText('TOUGHEST CROSSING').closest('.stat-tile')!;
-    expect(within(worst as HTMLElement).getByText('31%')).toBeInTheDocument();
-    expect(within(worst as HTMLElement).getByText('Tournament #4')).toBeInTheDocument();
-    expect(worst).toHaveAttribute('href', '/t/4');
+  });
+
+  it('counts tops as a rate over completed boards, linking to the most recent one', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const tops = (await screen.findByText('TOPS')).closest('.stat-tile')!;
+    expect(within(tops as HTMLElement).getByText('31')).toBeInTheDocument();
+    // 31 tops in 214 boards
+    expect(within(tops as HTMLElement).getByText('1 in 7 boards')).toBeInTheDocument();
+    expect(tops).toHaveAttribute('href', '/t/12/b/3');
+  });
+
+  it('prints the raw tally instead of a 1-in-N rate while the sample is tiny', async () => {
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      totals: { ...playerStatsFull.totals, boardsCompleted: 4, tops: { count: 3, latest: { tournamentId: 2, boardNo: 4 } } },
+    });
+    renderStats();
+    const tops = (await screen.findByText('TOPS')).closest('.stat-tile')!;
+    // "1 in 1 boards" would round its way into claiming a clean sweep
+    expect(within(tops as HTMLElement).getByText('3 of 4 boards')).toBeInTheDocument();
   });
 
   it('falls back gracefully — no link — when personal-best data is absent', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
-      totals: { ...playerStatsFull.totals, bestPct: null, worstPct: null },
+      totals: { ...playerStatsFull.totals, bestPct: null, tops: { count: 0, latest: null } },
     });
     renderStats();
     const best = (await screen.findByText('BEST CROSSING')).closest('.stat-tile')!;
     expect(within(best as HTMLElement).getByText('—')).toBeInTheDocument();
     expect(within(best as HTMLElement).getByText('no crossings yet')).toBeInTheDocument();
     expect(best.tagName).toBe('DIV');
+    const tops = screen.getByText('TOPS').closest('.stat-tile')!;
+    expect(within(tops as HTMLElement).getByText('0')).toBeInTheDocument();
+    expect(within(tops as HTMLElement).getByText('no tops yet')).toBeInTheDocument();
+    expect(tops.tagName).toBe('DIV');
   });
 
   it('renders the contract mix panel with tier rows, doubled tally, and strain split', async () => {
@@ -355,7 +376,7 @@ describe('Stats', () => {
     expect(screen.getByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
     // personal-best tiles aren't Elo-specific, so they stay for house profiles too
     expect(screen.getByText('BEST CROSSING')).toBeInTheDocument();
-    expect(screen.getByText('TOUGHEST CROSSING')).toBeInTheDocument();
+    expect(screen.getByText('TOPS')).toBeInTheDocument();
     // nor is the trick-delta stem plot
     expect(screen.getByText('TRICKS TAKEN — 88 CONTRACTS')).toBeInTheDocument();
     // nor the contract mix panel

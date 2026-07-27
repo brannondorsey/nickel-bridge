@@ -129,6 +129,18 @@ function trickDeltaNote(avgDelta: number): string {
   return 'Tricks made track the bid closely — the mark of an honest auction.';
 }
 
+/**
+ * Sub-line for the TOPS tile. "1 in 7 boards" is the reading worth printing,
+ * but it only stays true once the ratio rounds to 2 or more — 3 tops in 4
+ * boards would round to "1 in 1" and read as a clean sweep. Below that, and
+ * for the cold-start case, print the plain tally.
+ */
+function topsSub(count: number, boards: number): string {
+  if (count === 0) return 'no tops yet';
+  const ratio = Math.round(boards / count);
+  return ratio >= 2 ? `1 in ${ratio} boards` : `${count} of ${boards} boards`;
+}
+
 /** "Crossed paths 6 times — ahead 4-2." / "...— dead even 3-3." / "...— behind 2-4 (1 tied)." */
 function rivalLine(r: Rival): string {
   const { ahead, behind, tied } = r.record;
@@ -557,11 +569,13 @@ export default function Player() {
               sub={t.bestPct ? t.bestPct.tournamentName : 'no crossings yet'}
               to={t.bestPct ? `/t/${t.bestPct.tournamentId}` : undefined}
             />
+            {/* Boards where the field was beaten outright — links to the most
+                recent one's receipt, so the tile is worth tapping. */}
             <Tile
-              label="TOUGHEST CROSSING"
-              value={t.worstPct ? `${t.worstPct.pct}%` : '—'}
-              sub={t.worstPct ? t.worstPct.tournamentName : 'no crossings yet'}
-              to={t.worstPct ? `/t/${t.worstPct.tournamentId}` : undefined}
+              label="TOPS"
+              value={String(t.tops.count)}
+              sub={topsSub(t.tops.count, t.boardsCompleted)}
+              to={t.tops.latest ? `/t/${t.tops.latest.tournamentId}/b/${t.tops.latest.boardNo}` : undefined}
             />
           </div>
 

@@ -12,7 +12,7 @@ import {
   explainBid,
 } from '@bridge/core';
 import { db } from './db.js';
-import { Standing, standings } from './tournaments.js';
+import { StandingDetail, standings } from './tournaments.js';
 
 const stmtUser = db.prepare(
   `SELECT id, handle, picture, elo, created_at, kind FROM users WHERE id = ? AND handle IS NOT NULL`,
@@ -90,8 +90,23 @@ interface PlayerStats {
     avgPct: number | null;
     /** the player's best single-tournament score, from pctSeries; null if pctSeries is empty */
     bestPct: { pct: number; tournamentName: string; tournamentId: number } | null;
-    /** the player's worst single-tournament score, from pctSeries; null if pctSeries is empty */
-    worstPct: { pct: number; tournamentName: string; tournamentId: number } | null;
+    /**
+     * Boards taken outright: full matchpoints, i.e. this player outscored
+     * EVERY other pair who has played that deal (the 'top' of duplicate
+     * bridge — see the glossary term). Counted from the per-board pcts
+     * standings() already computes (`boardPcts`), so it costs no extra
+     * matchpointing; `pct === 100` is the honest test, since matchpoints()
+     * splits a tie (two pairs with the same score each get 50 in a two-pair
+     * field) and hands a lone finisher 50 rather than a free top.
+     *
+     * The natural denominator is `boardsCompleted` — the boards swept here are
+     * exactly the boards counted there, so no separate total is carried.
+     */
+    tops: {
+      count: number;
+      /** most recent one by completion time, for a deep link; null when count === 0 */
+      latest: { tournamentId: number; boardNo: number } | null;
+    };
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };
@@ -235,8 +250,8 @@ const HUMAN_SEAT: Seat = 2;
  * any cross-request staleness concern (a fresh closure, and thus a fresh
  * cache, is created at the top of every playerStats() call).
  */
-function memoizedStandings(): (tournamentId: number) => Standing[] {
-  const cache = new Map<number, Standing[]>();
+function memoizedStandings(): (tournamentId: number) => StandingDetail[] {
+  const cache = new Map<number, StandingDetail[]>();
   return (tournamentId: number) => {
     let s = cache.get(tournamentId);
     if (!s) {
@@ -274,7 +289,7 @@ function memoizedStandings(): (tournamentId: number) => Standing[] {
  * `getStandings` cache — so a tournament already matchpointed for pctSeries
  * or about to be swept by fieldPercentiles() isn't recomputed here.
  */
-function rivalries(userId: number, tournamentIds: number[], getStandings: (id: number) => Standing[]): Rival[] {
+function rivalries(userId: number, tournamentIds: number[], getStandings: (id: number) => StandingDetail[]): Rival[] {
   const tally = new Map<
     number,
     { handle: string; kind: 'human' | 'ai'; shared: number; ahead: number; behind: number; tied: number }
@@ -377,6 +392,10 @@ export function playerStats(userId: number): PlayerStats | null {
     strains: { notrump: 0, major: 0, minor: 0 },
   };
   const byDay = new Map<string, number>(); // UTC 'YYYY-MM-DD' -> completed-board count
+  // '<tournamentId>:<boardNo>' -> when it was finished, so the tops tally below
+  // can pick the most recent one by actual completion time rather than assuming
+  // board order within a tournament.
+  const doneAt = new Map<string, number>();
 
   for (const b of boards) {
     const t = byTournament.get(b.tournament_id) ?? { name: b.tournament_name, finishedAt: 0, scores: [] };
@@ -391,6 +410,7 @@ export function playerStats(userId: number): PlayerStats | null {
 
     const day = new Date(b.updated_at * 1000).toISOString().slice(0, 10); // UTC 'YYYY-MM-DD'
     byDay.set(day, (byDay.get(day) ?? 0) + 1);
+    doneAt.set(`${b.tournament_id}:${b.board_no}`, b.updated_at);
 
     // Re-pair each eval with its auction context: evals are appended one per
     // human call, so the nth eval belongs to the nth call made from the human
@@ -471,11 +491,28 @@ export function playerStats(userId: number): PlayerStats | null {
   }));
 
   let tournamentsCompleted = 0;
+  // Accumulated in the pctSeries pass below. `at` is the completion time of the
+  // board `latest` points at — a tie-break for "most recent", never returned.
+  const tops: { count: number; latest: { tournamentId: number; boardNo: number } | null; at: number } = {
+    count: 0,
+    latest: null,
+    at: 0,
+  };
   const pctSeries = tournaments.flatMap(([tid, t]) => {
     const field = getStandings(tid);
     const mine = field.find((s) => s.userId === userId);
     if (!mine || mine.totalPct === null) return [];
     if (mine.complete) tournamentsCompleted++;
+    // Tops ride along on the same memoized standings pass — see totals.tops.
+    for (const { no, pct } of mine.boardPcts) {
+      if (pct !== 100) continue;
+      tops.count++;
+      const at = doneAt.get(`${tid}:${no}`) ?? 0;
+      if (!tops.latest || at >= tops.at) {
+        tops.latest = { tournamentId: tid, boardNo: no };
+        tops.at = at;
+      }
+    }
     return [
       {
         tournamentId: tid,
@@ -489,11 +526,10 @@ export function playerStats(userId: number): PlayerStats | null {
     ];
   });
 
-  // Personal-best callouts: a plain min/max reduction over pctSeries, which
-  // is already chronological — a strict >/< comparison keeps the earliest
+  // Personal-best callout: a plain max reduction over pctSeries, which is
+  // already chronological — a strict > comparison keeps the earliest
   // tournament on a tie (same tie-break convention as bidTypes' sort below).
   const bestPct = pctSeries.length ? pctSeries.reduce((best, p) => (p.pct > best.pct ? p : best)) : null;
-  const worstPct = pctSeries.length ? pctSeries.reduce((worst, p) => (p.pct < worst.pct ? p : worst)) : null;
 
   const avgPct = pctSeries.length ? round1(mean(pctSeries.map((p) => p.pct))) : null;
   const avgBidAccuracy = allScores.length ? Math.round(mean(allScores) * 100) : null;
@@ -543,9 +579,7 @@ export function playerStats(userId: number): PlayerStats | null {
       peakElo: Math.max(ELO_INITIAL, ...eloSeries.map((e) => e.elo)),
       avgPct,
       bestPct: bestPct ? { pct: bestPct.pct, tournamentName: bestPct.tournamentName, tournamentId: bestPct.tournamentId } : null,
-      worstPct: worstPct
-        ? { pct: worstPct.pct, tournamentName: worstPct.tournamentName, tournamentId: worstPct.tournamentId }
-        : null,
+      tops: { count: tops.count, latest: tops.latest },
       avgBidAccuracy,
       gradeCounts,
       declarer,
@@ -596,7 +630,7 @@ function fieldPercentiles(
   avgPct: number | null,
   avgBidAccuracy: number | null,
   declaringRate: number | null,
-  getStandings: (id: number) => Standing[],
+  getStandings: (id: number) => StandingDetail[],
 ): PlayerStats['percentiles'] {
   const ratedElos = (stmtRatedElos.all() as { elo: number }[]).map((r) => r.elo);
 

@@ -371,7 +371,8 @@ export const playerStatsFull: PlayerStats = {
     peakElo: 1502,
     avgPct: 57,
     bestPct: { pct: 74, tournamentName: 'Tournament #9', tournamentId: 9 },
-    worstPct: { pct: 31, tournamentName: 'Tournament #4', tournamentId: 4 },
+    // 31 of 214 boards -> "1 in 7 boards"
+    tops: { count: 31, latest: { tournamentId: 12, boardNo: 3 } },
     avgBidAccuracy: 78,
     gradeCounts: { excellent: 137, good: 58, fair: 15, poor: 4 },
     declarer: { boards: 88, made: 54 },
@@ -449,7 +450,7 @@ export const playerStatsEmpty: PlayerStats = {
     peakElo: 1200,
     avgPct: null,
     bestPct: null,
-    worstPct: null,
+    tops: { count: 0, latest: null },
     avgBidAccuracy: null,
     gradeCounts: { excellent: 0, good: 0, fair: 0, poor: 0 },
     declarer: { boards: 0, made: 0 },

@@ -124,6 +124,19 @@ export interface Standing {
   rank?: number;
 }
 
+/**
+ * A Standing plus the per-board matchpoints it averages into `totalPct` —
+ * what standings() actually returns, so a caller that needs board-level detail
+ * (stats.ts's TOPS tally) gets it out of the same single aggregation pass
+ * instead of matchpointing the tournament a second time. visibleStandings()
+ * strips it back off: the client-facing field panel has no use for it, and
+ * `Standing` stays the shape web/src/api.ts mirrors.
+ */
+export interface StandingDetail extends Standing {
+  /** one entry per board this player has finished, ascending by board number */
+  boardPcts: { no: number; pct: number }[];
+}
+
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
 
@@ -140,7 +153,8 @@ interface PlayerAgg {
   handle: string;
   kind: 'human' | 'ai';
   google: string;
-  pcts: number[];
+  /** per-board matchpoint pcts, in board order — sparse (finished boards only) */
+  pcts: { no: number; pct: number }[];
   /** unixepoch of this player's most recently completed board — display-only
    * (visibleStandings()'s staleness filter); not part of the public Standing
    * shape. */
@@ -174,7 +188,7 @@ function aggregateStandings(tournamentId: number): { userId: number; agg: Player
       const u =
         players.get(r.user_id) ??
         { handle: r.user_handle, kind: r.user_kind, google: r.user_google, pcts: [], lastDoneAt: 0 };
-      u.pcts.push(mps[i].pct);
+      u.pcts.push({ no, pct: mps[i].pct });
       u.lastDoneAt = Math.max(u.lastDoneAt, r.updated_at);
       players.set(r.user_id, u);
     });
@@ -189,14 +203,15 @@ function aggregateStandings(tournamentId: number): { userId: number; agg: Player
   }));
 }
 
-function toStandings(entries: { userId: number; agg: PlayerAgg }[]): Standing[] {
-  const list: Standing[] = entries.map(({ userId, agg }): Standing => ({
+function toStandings(entries: { userId: number; agg: PlayerAgg }[]): StandingDetail[] {
+  const list: StandingDetail[] = entries.map(({ userId, agg }): StandingDetail => ({
     userId,
     handle: agg.handle,
     kind: agg.kind,
     boardsDone: agg.pcts.length,
-    totalPct: avg(agg.pcts),
+    totalPct: avg(agg.pcts.map((p) => p.pct)),
     complete: agg.pcts.length >= BOARDS_PER_TOURNAMENT,
+    boardPcts: agg.pcts,
   }));
   list.sort((a, b) => (b.totalPct ?? -1) - (a.totalPct ?? -1));
   for (const s of list) {
@@ -222,8 +237,11 @@ function toStandings(entries: { userId: number; agg: PlayerAgg }[]): Standing[] 
  * they went quiet, which is normal in an evergreen app that never forces
  * completion. See visibleStandings() for the client-facing field, which
  * layers a display-only staleness filter on top of this same aggregation.
+ *
+ * Returns StandingDetail (Standing + `boardPcts`) so a server-side caller can
+ * read per-board matchpoints off the same pass — see that interface.
  */
-export function standings(tournamentId: number): Standing[] {
+export function standings(tournamentId: number): StandingDetail[] {
   return toStandings(aggregateStandings(tournamentId));
 }
 
@@ -249,7 +267,9 @@ export function visibleStandings(tournamentId: number): Standing[] {
     ({ agg }) =>
       agg.kind === 'ai' || agg.pcts.length >= BOARDS_PER_TOURNAMENT || now - agg.lastDoneAt <= STANDINGS.ABANDON_TTL_S,
   );
-  return toStandings(entries);
+  // ...minus boardPcts: this is the one standings shape that gets serialized to
+  // the client (app.ts's tournament routes), and nothing there reads it.
+  return toStandings(entries).map(({ boardPcts: _boardPcts, ...s }) => s);
 }
 
 /**

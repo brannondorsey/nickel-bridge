@@ -218,7 +218,12 @@ export interface PlayerStats {
     peakElo: number;
     avgPct: number | null;
     bestPct: { pct: number; tournamentName: string; tournamentId: number } | null;
-    worstPct: { pct: number; tournamentName: string; tournamentId: number } | null;
+    /**
+     * Boards taken outright — full matchpoints against everyone who has played
+     * that deal (server/src/stats.ts). `boardsCompleted` is the denominator;
+     * `latest` deep-links the tile to the most recent one.
+     */
+    tops: { count: number; latest: { tournamentId: number; boardNo: number } | null };
     avgBidAccuracy: number | null;
     gradeCounts: { excellent: number; good: number; fair: number; poor: number };
     declarer: { boards: number; made: number };
