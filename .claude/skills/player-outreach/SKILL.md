@@ -183,20 +183,24 @@ there" if both look like junk.
 ```
 Hi {first},
 
-I'm Brannon — I built Nickel Bridge, the duplicate bridge site you tried on {date}.
-You played {n} boards and then didn't come back, and I'd really like to know why.
+My name is Brannon and I built Nickel Bridge, the duplicate bridge site you tried on {date}.
+
+I noticed that you played {n} boards and then didn't come back, and I'd love to learn why.
 
 There's no wrong answer: too confusing, too slow, awkward on your phone, robots too
 strong, or just not your thing. Whatever made you close the tab is the most useful
 thing you could tell me.
 
-One other thing I'm weighing: it currently lives at bridge.brannon.online. Would a
+One other thing I'm weighing: the app currently lives at https://bridge.brannon.online. Would a
 real domain like nickelbridge.com have made any difference — easier to remember or
 to trust — or does the address not matter to you?
 
 Just hit reply, one line is plenty.
 
 — Brannon
+
+P.S. This is a hobby project for me and I have no intent to monetize it. I'm just looking for ways
+to make it better for folks.
 ```
 
 **`retained`** — subject: `Nickel Bridge — what's making it stick?`
@@ -204,20 +208,23 @@ Just hit reply, one line is plenty.
 ```
 Hi {first},
 
-Brannon here — I built Nickel Bridge. You've played {n} boards {when}, which puts
-you in a very small group of people who've really used it. Thank you, sincerely.
+My name is Brannon and I built Nickel Bridge. You've played {n} boards {when}, which puts
+you in a very small group of people who've really used it. Thank you, sincerely!
 
 I'd love to know what keeps you coming back — the duplicate scoring, the bid
 grading, beating the house robots, something I'd never guess? And the other half of
-that: what's the most annoying part you've put up with?
+that: is there anything you'd like to see changed?
 
-Also a small one: it lives at bridge.brannon.online today. If you wanted to tell a
+Also a small one: it lives at https://bridge.brannon.online today. If you wanted to tell a
 bridge-playing friend about it, would a real domain like nickelbridge.com make that
 easier — or is the address irrelevant?
 
 Whatever you've got, even one line.
 
 — Brannon
+
+P.S. This is a hobby project for me and I have no intent to monetize it. I'm just looking for ways
+to make it better for folks.
 ```
 
 **`abandoned_first`** — subject: `Nickel Bridge — can I ask you something?`
@@ -225,17 +232,19 @@ Whatever you've got, even one line.
 ```
 Hi {first},
 
-I'm Brannon — I made Nickel Bridge. You tried it on the 23rd and didn't
-get far into the bidding before you left, which I'd bet is my fault
-rather than yours.
+My name is Brannon and I built Nickel Bridge. You tried it on the {when} and didn't
+get far before leaving.
 
-Would you be up for telling me what you hit? A sentence is plenty.
+Would you be up for telling me what you bounced? A sentence is plenty.
 You've seen it with completely fresh eyes, which I can't do anymore,
 and that makes your take more useful to me than almost anything else.
 
 Totally fine to ignore this.
 
 — Brannon
+
+P.S. This is a hobby project for me and I have no intent to monetize it. I'm just looking for ways
+to make it better for folks.
 ```
 
 For `stopped_at: 'play'`, swap the first clause to "got a few cards into the hand before you
