@@ -310,9 +310,8 @@ test('a visitor with no account can read the pitch and walk the practice deal', 
   await page.getByRole('link', { name: /walk a practice deal/i }).click();
   await expect(page).toHaveURL(/\/tour$/);
 
-  // one welcome screen, then the real board UI — bid box, hand, HCP badge, all
-  // of it rendered from the captured deal with no server board behind it
-  await page.getByRole('button', { name: /walk board/i }).click();
+  // straight onto the real board UI — bid box, hand, HCP badge, all of it
+  // rendered from the captured deal with no server board behind it
   await expect(page.locator('.bidbox')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.hcp-badge').first()).toBeVisible();
   await expect(page.locator('.tour-narr')).toBeVisible();

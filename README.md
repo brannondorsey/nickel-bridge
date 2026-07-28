@@ -54,7 +54,7 @@ you in as a guest with a seeded field behind you.)
 | <img width="300" src="docs/screenshots/07-rankings.png" alt="Rankings: the all-time Elo ladder with movement arrows"> | <img width="300" src="docs/screenshots/09-glossary-sheet.png" alt="The glossary ledger with the term sheet for Finesse open over it"> |
 | **Rankings** — Elo from head-to-head results, re-ranked live. | **The Glossary** — every term tappable, in prose and on its own screen. |
 | <img width="300" src="docs/screenshots/11-tour.png" alt="The first-crossing tour's cover: Welcome to the bridge, over an illustrated toll bridge"> | <img width="300" src="docs/screenshots/12-desktop-home.png" alt="The app on a desktop viewport: a centered phone-width column with the tournament ledger"> |
-| **The first crossing** — a welcome and a practice deal, before your first real one. Playable [without an account](https://bridge.brannon.online/tour). | **On desktop** the phone column just centers itself — same app, no separate layout. |
+| **The first crossing** — a guided practice deal, before your first real one. Playable [without an account](https://bridge.brannon.online/tour). | **On desktop** the phone column just centers itself — same app, no separate layout. |
 
 </details>
 

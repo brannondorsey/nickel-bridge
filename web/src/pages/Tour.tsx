@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
-import riverSceneNight from '../assets/bridge-river-scene-night.svg';
-import riverScene from '../assets/bridge-river-scene.svg';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -44,9 +42,8 @@ import { BiddingPhase, PlayPhase } from './Board';
  * before you commit, grades after), and the house philosophy (a small,
  * unhurried club; judgment over luck).
  *
- * It opens on one screen: the toll office's welcome, the practice ticket for
- * Board №0, and an honest skip (see the Stage type for what used to be here
- * and why it went).
+ * It opens on the deal itself — see the Stage type for what used to precede
+ * it and why that went.
  *
  * The spine is Board №0, a captured practice deal (onboarding/board0.ts)
  * replayed through Board.tsx's own exported BiddingPhase/PlayPhase — the
@@ -65,8 +62,8 @@ import { BiddingPhase, PlayPhase } from './Board';
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Every line of the tour's own voice — the welcome screen's copy and the
- * tollkeeper's narration — under the tour's glossary link policy (onboarding/script.ts's
+ * Every line of the tour's own voice — the tollkeeper's narration — under
+ * the tour's glossary link policy (onboarding/script.ts's
  * TOUR_LINKS). A first crossing is where the words get met for the first time,
  * so the one screen in the app that says "dummy", "trumps" and "matchpoints"
  * to someone who has never seen them had better be able to define them.
@@ -94,21 +91,29 @@ const GUIDED_FORCED_DELAY_MS = 6000;
 const AUTO_STEP_DELAY_MS = 420;
 
 /**
- * One welcome screen, the board, the postmark.
+ * The board, then the postmark. Nothing in front of them.
  *
- * There used to be a four-page pamphlet here: a cover, a philosophy panel
- * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER), and the
- * practice offer. The landing page now makes those middle two arguments to the
- * same person a moment earlier — same headings, same titles, and they shared
- * the SpecimenField component outright — and since a new account reaches this
- * gate by signing in FROM that page, the pamphlet was reading them their own
- * welcome mat twice. What it kept was the welcome and the offer, merged here.
+ * There used to be a four-page pamphlet here — a cover, a philosophy panel
+ * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER) and a
+ * practice offer — then, briefly, a single welcome screen merged from the
+ * first and last of those. Both were redundant by the time a reader arrived.
  *
- * Duplicate itself is no longer argued in prose before the deal: the field
- * reveal at the end teaches it where it actually lands, with the three house
- * personas' real results on the very cards the player just held.
+ * The landing page makes the philosophy and duplicate arguments in its own
+ * sections I and II (word for word, down to a shared SpecimenField), and its
+ * section V then promises the practice board in the same breath as the CTA:
+ * "walk one deal with the tollkeeper — bid it, play it, read the receipt". A
+ * welcome screen restating that is the reader's own last ten seconds handed
+ * back. And it is not a minority path: the automatic gate fires for a new
+ * account arriving at `/`, which is where signing in FROM the landing page
+ * returns them, so essentially every first-timer came through that pitch.
+ *
+ * So the tour opens on the deal itself. The tollkeeper's first line is the
+ * framing ("Your hand, counted: fifteen high card points…"), the board head
+ * already carries the PRACTICE №0 ticket, and SKIP THE TUTORIAL moved to the
+ * narration ribbon — which is sticky, so unlike the pamphlet's fine print it
+ * is now reachable at every moment of the deal rather than only before it.
  */
-type Stage = 'welcome' | 'board' | 'postmark';
+type Stage = 'board' | 'postmark';
 
 export default function Tour() {
   const { me, refresh } = useMe();
@@ -122,7 +127,7 @@ export default function Tour() {
   // rendered by App's arrival gate in place of the routes. The gate unmounts
   // on refresh(); a routed visit has to navigate out itself.
   const routed = useLocation().pathname === '/tour';
-  const [stage, setStage] = useState<Stage>('welcome');
+  const [stage, setStage] = useState<Stage>('board');
   const [busy, setBusy] = useState(false);
 
   // Skipping and finishing both stamp the visit server-side (idempotent,
@@ -157,7 +162,7 @@ export default function Tour() {
   // Deliberately NOT catching setOnboarded separately: a failed stamp leaves
   // the gate closed, so navigating to a freshly-placed board would show the
   // tour at a board URL until the next reload. Let it fall into the catch
-  // below and land back at the welcome screen's own exit instead.
+  // below and land back on the practice board, whose ribbon carries the exit.
   const playTheToll = async () => {
     if (busy) return;
     setBusy(true);
@@ -178,41 +183,6 @@ export default function Tour() {
     }
   };
 
-  if (stage === 'welcome') {
-    return (
-      <div className="tour-gate">
-        <div className="tour-cover-head">
-          <span className="label-caps">{COPY.welcome.dept}</span>
-          <InkStamp color="var(--accent)" rotate={-7}>
-            {COPY.welcome.stamp}
-          </InkStamp>
-        </div>
-        <div className="tour-cover-main">
-          <h1 className="tour-cover-title">{COPY.welcome.title}</h1>
-          <div className="tour-welcome-ticket">
-            <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
-          </div>
-          <p className="tour-copy">
-            <TourProse text={COPY.welcome.body} />
-          </p>
-          <p className="tour-aside">
-            <TourProse text={COPY.welcome.aside} />
-          </p>
-          <div className="tour-gate-actions">
-            <Button onClick={() => setStage('board')}>{COPY.welcome.begin}</Button>
-          </div>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-        <div className="tour-scene">
-          <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
-          <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
-        </div>
-      </div>
-    );
-  }
-
   if (stage === 'postmark') {
     return <TourPostmark authed={authed} busy={busy} onPlay={playTheToll} onSkip={skip} />;
   }
@@ -224,8 +194,8 @@ export default function Tour() {
   // which is what leaving actually means here. (The tour shell also hides that
   // button outright — see .tour-board .receipt in style.css — so this is a
   // belt-and-braces override, not the visible exit; the visible one is the
-  // welcome screen's SKIP THE TUTORIAL and, signed out, the postmark below.)
-  return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} />;
+  // ribbon's SKIP THE TUTORIAL and, signed out, the postmark below.)
+  return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} busy={busy} />;
 }
 
 /**
@@ -305,11 +275,31 @@ export function TourPostmark({
  * announces mutations inside a live region it is already watching, and a
  * region swapped out for a fresh, already-populated one is routinely missed.
  */
-function Tollkeeper({ text, skip }: { text: string; skip?: readonly string[] }) {
+function Tollkeeper({
+  text,
+  skip,
+  onSkip,
+  busy,
+}: {
+  text: string;
+  skip?: readonly string[];
+  onSkip: () => void;
+  busy: boolean;
+}) {
   return (
     <div className="tour-narr" role="status">
       <span key={text} className="tour-narr-wash" aria-hidden="true" />
-      <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
+      <div className="tour-narr-head">
+        <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
+        {/* The way out, and the only one now that nothing precedes the board.
+            It lives in the ribbon because the ribbon is sticky: the pamphlet's
+            fine print could only be reached before the deal started, this can
+            be reached at any point during it. Outside the role="status" text
+            so a live-region announcement never reads the control. */}
+        <button type="button" className="label-caps tour-narr-skip" onClick={onSkip} disabled={busy}>
+          {COPY.skip}
+        </button>
+      </div>
       <p>
         <TourProse text={text} skip={skip} />
       </p>
@@ -328,7 +318,7 @@ function Tollkeeper({ text, skip }: { text: string; skip?: readonly string[] }) 
  * the same ClaimOverlay + stageClaimSteps fast-forward the live board does,
  * instead of the flat cut a multi-trick jump would otherwise fall back to.
  */
-function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () => void }) {
+function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave: () => void; busy: boolean }) {
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -586,7 +576,7 @@ function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () =>
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <TourHead view={view} />
-      <Tollkeeper text={narration} skip={displayGuidance?.skip} />
+      <Tollkeeper text={narration} skip={displayGuidance?.skip} onSkip={onLeave} busy={busy} />
       {done ? (
         resultView === 'receipt' ? (
           <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} onLeave={onLeave} />

@@ -44,7 +44,7 @@ const SIGNED_OUT: { key: string; label: string; description: string; to: (ids: {
     key: 'anon-tour',
     label: 'The practice deal, no account',
     description:
-      'Board №0 walked with no session at all — the same welcome screen and the same real Board UI, but ending at the toll gate instead of a lobby. Walk it to the postmark to see the sign-in ask; sign in there and the tour will not be shown to you a second time.',
+      'Board №0 walked with no session at all — the same real Board UI, but ending at the toll gate instead of a lobby. Walk it to the postmark to see the sign-in ask; sign in there and the tour will not be shown to you a second time.',
     to: () => '/tour',
   },
   {
@@ -240,8 +240,8 @@ export default function Scenarios() {
               <div className="exhibit-row-text">
                 <b>The first crossing</b>
                 <span className="exhibit-row-desc">
-                  The new-player tour: one welcome screen, then practice board №0 walked through the real Board
-                  UI with the tollkeeper, and the ledger at the end. Demo mode never forces it — it only lives
+                  The new-player tour: practice board №0 walked through the real Board UI with the tollkeeper,
+                  and the ledger at the end. Nothing precedes the deal — the landing page already made the pitch. Demo mode never forces it — it only lives
                   here. Skipping or finishing lands in the lobby; the row stays here to re-enter as often as you
                   like.
                 </span>

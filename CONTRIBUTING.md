@@ -459,16 +459,19 @@ the recipe with the tool, label it from the tester's point of view) — or, for 
 needs no server board, a client-only row like those two groups. The drift-guard test
 keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
-**The first crossing (onboarding):** a new account gets one welcome screen before the app —
-the toll office's greeting ("Welcome to the bridge."), the ADMIT ONE ticket for board №0,
-and a quiet "skip the tutorial" fine-print link at its foot — then the tollkeeper's
-practice board. It used to be a four-page pamphlet (cover, a philosophy panel I · THE
-BRIDGE, duplicate as a specimen ledger II · THE LEDGER, then the practice offer); the
-landing page now makes the middle two arguments word for word, down to the headings and a
-shared `SpecimenField`, and since a new account reaches this gate by signing in *from* that
-page, the pamphlet was replaying the reader's last two minutes. Duplicate is no longer
-argued in prose before the deal at all — the field reveal at the end teaches it with the
-house personas' real results on the cards just played, which is where it lands hardest. `users.onboarded_at`
+**The first crossing (onboarding):** a new account goes straight onto the tollkeeper's
+practice board — nothing precedes it. It used to be a four-page pamphlet (cover, a
+philosophy panel I · THE BRIDGE, duplicate as a specimen ledger II · THE LEDGER, then a
+practice offer), and briefly a single welcome screen merged from the first and last of
+those. Both were redundant by the time anyone read them: the landing page makes the
+philosophy and duplicate arguments in its own sections I and II — word for word, down to
+the headings and a shared `SpecimenField` — and its section V promises the practice board
+in the same breath as the CTA that leads here. Nor is that a minority path; the gate fires
+for a new account arriving at `/`, which is exactly where signing in from the landing page
+returns them. Duplicate is argued only after the deal now, by the field reveal, with the
+house personas' real results on the cards just played. **`COPY.skip` moved to the
+tollkeeper's narration ribbon** — sticky, so unlike the pamphlet's fine print the way out
+is reachable at every moment of the deal rather than only before it starts. `users.onboarded_at`
 NULL makes `App.tsx` render `pages/Tour.tsx` in place of the routes, but only when the
 session *arrived* at the main app (`/`, captured once at mount): a deep-link arrival goes
 straight to its destination and meets the tour on a later home arrival instead, and
@@ -508,7 +511,7 @@ exactly as the engine emitted it). Narration lives in `onboarding/script.ts`, ha
 against the capture — `onboarding/tour.test.tsx` is the drift guard that forces re-curation
 if the capture is regenerated onto a different line (including the field outcomes
 `COPY.fieldSay` names by hand). Every line of the tour's own voice
-(the welcome screen's copy and the tollkeeper's ribbon, but not its display type) renders through
+(the tollkeeper's ribbon, but not its display type) renders through
 `GlossaryProse` under `script.ts`'s `TOUR_LINKS` policy, so the words a first-timer is
 meeting for the first time open the term sheet — which means the gate-rendered tour needs
 its own `GlossaryProvider` in `App.tsx`, since it renders in place of the routes the app-wide
@@ -617,7 +620,7 @@ decide — and the pieces only make sense together.
   `POST /api/me/onboarded` once a session exists. Three details are load-bearing, not
   defensive — the read is **non-destructive** (StrictMode double-invokes the `useState`
   initializer), it's read at **mount into state** (an effect would flash the tour's
-  welcome screen first), and the claim **expires** (~1h, or an abandoned OAuth silently skips
+  board first), and the claim **expires** (~1h, or an abandoned OAuth silently skips
   onboarding for whoever signs in on that browser next). The suppression flag is
   write-once for the session and never flipped back: clearing it when the stamp lands
   would re-open the gate for the render or two before the refreshed `me` arrives.

@@ -21,8 +21,11 @@ Three deliberate deltas from the spec below, all by product decision during impl
    page (`pages/Login.tsx`) later took over those two panels' argument — same headings,
    same titles, a shared `SpecimenField` — and since a new account reaches the gate by
    signing in *from* that page, the pamphlet was repeating what the reader had just read.
-   The cover and the offer are now merged into a single welcome screen; the two panels are
-   gone, and duplicate is taught only by the field reveal after the deal.
+   The cover and the offer were first merged into a single welcome screen, and then that
+   went too: the landing's section V promises the practice board in the same breath as the
+   CTA that leads here, so any screen restating it was the reader's own last ten seconds
+   handed back. The tour now opens on the deal, duplicate is taught only by the field
+   reveal after it, and SKIP THE TUTORIAL lives in the (sticky) narration ribbon.
 5. **No time-of-day words in the shipped copy.** The ribbon lines sketched below say
    "tonight" (③a, ③e, ③f) and the tour shipped that way; a first crossing is walked at
    whatever hour the account is made, so the toll office can't know it's evening. Re-curate

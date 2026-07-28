@@ -36,9 +36,8 @@ import type { TourBoard } from './board0';
  * prose, and it needs a different dial than the sitewide one:
  *
  * - `force` re-links the handful of words terms.ts marks `linkify: false`
- *   because they'd be a link farm in bid copy. Across the welcome screen and
- *   the tollkeeper's narration each appears about once, to someone who has
- *   never seen it before — "eight trumps
+ *   because they'd be a link farm in bid copy. Across the tollkeeper's
+ *   narration each appears about once, to someone who has never seen it before — "eight trumps
  *   between you" and "a choice of game" are precisely the sentences a first
  *   crossing should be able to look up.
  * - `skip` drops a match that reads in the wrong sense here: "you split the
@@ -73,30 +72,12 @@ export interface StepGuidance {
 
 export const COPY = {
   /**
-   * The welcome — one screen, and the only thing standing between arriving and
-   * playing.
-   *
-   * It used to be a four-page pamphlet: this cover, a philosophy panel
-   * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER), and a
-   * separate practice offer. The landing page now makes the middle two
-   * arguments — word for word, down to the headings — and a new account
-   * arrives here by signing in from that very page, so the pamphlet was
-   * repeating the reader's last two minutes back at them. The cover and the
-   * offer are merged here; the rest is gone.
-   *
-   * Nothing in here argues duplicate any more. The field reveal at the end
-   * does that far better, with the house's real results on the cards the
-   * player has just finished holding (see fieldSay).
+   * The way out of the tour, and the only screen it appears on now: the
+   * narration ribbon above the practice board. Nothing precedes the deal any
+   * more — the landing page's section V already promised it in the same breath
+   * as the CTA that got the reader here, so a screen restating that was the
+   * reader's own last ten seconds handed back (see pages/Tour.tsx's Stage).
    */
-  welcome: {
-    dept: 'TOLL DIVISION · RICHMOND',
-    stamp: 'EST. 1925',
-    title: 'Welcome to the bridge.',
-    body:
-      'One practice deal with the tollkeeper before your first real crossing. You’ll bid a hand, play a card or two, and learn to read the ledger.',
-    aside: 'Three minutes, and you’ll know your way across. Nothing here is scored.',
-    begin: 'WALK BOARD №0 →',
-  },
   skip: 'SKIP THE TUTORIAL',
 
   offScriptCall: 'A fine thought — and its meaning is right there. But on this crossing, follow the tollkeeper.',

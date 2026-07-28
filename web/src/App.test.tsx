@@ -145,7 +145,7 @@ describe('App — logged out', () => {
   it('walks the practice deal without an account', async () => {
     apiMock.me.mockResolvedValue(meLoggedOut);
     renderApp('/tour');
-    expect(await screen.findByRole('button', { name: /walk board/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
     // the tour ends at the gate, so it carries its own ask — no SignInBar too
     expect(screen.queryByText(/reading the ledger is free/i)).not.toBeInTheDocument();
   });
@@ -163,10 +163,10 @@ describe('App — authenticated', () => {
     expect(await screen.findByPlaceholderText('Handle')).toBeInTheDocument();
   });
 
-  it('meets a not-yet-onboarded user arriving at home with the pamphlet cover (no splash, no routes)', async () => {
+  it('meets a not-yet-onboarded user arriving at home with the practice board (no splash, no routes)', async () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/');
-    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+    expect(await screen.findByText(/THE TOLLKEEPER/)).toBeInTheDocument();
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
     // the visit still stamps, so no splash replays the moment the tour ends
@@ -178,21 +178,21 @@ describe('App — authenticated', () => {
     // that wraps them), but its narration links terms like any other prose.
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/');
-    await screen.findByText(/Welcome to the bridge/);
-    await userEvent.click(screen.getByRole('button', { name: 'deal' }));
-    expect(await screen.findByRole('dialog')).toHaveTextContent(/deal/i);
+    await screen.findByText(/THE TOLLKEEPER/);
+    await userEvent.click(await screen.findByRole('button', { name: 'high card points' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/high card point/i);
   });
 
   it('never springs the tour on a deep-link arrival — the destination renders instead', async () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/glossary'); // a shared link goes where it points; the tour waits for a home arrival
     expect(await screen.findByText('The Glossary')).toBeInTheDocument();
-    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/THE TOLLKEEPER/)).not.toBeInTheDocument();
   });
 
   // The public tour's claim (onboarding/tourDone.ts). Someone who walked the
   // whole practice board signed out, then signed in, must not be handed the
-  // same pamphlet again — that was the reward for finishing it.
+  // same deal again — that was the reward for finishing it.
   describe('carrying a public tour across sign-in', () => {
     it('trades the claim for the server stamp instead of replaying the tour', async () => {
       stampTourDone();
@@ -200,10 +200,10 @@ describe('App — authenticated', () => {
       apiMock.tournaments.mockResolvedValue({ tournaments: [] });
       apiMock.setOnboarded.mockResolvedValue({ ok: true });
       renderApp('/');
-      // straight to Home — and never a flash of the cover on the way, which is
+      // straight to Home — and never a flash of the tour on the way, which is
       // why the claim is read at mount rather than in an effect
       expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
-      expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/THE TOLLKEEPER/)).not.toBeInTheDocument();
       await vi.waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
       // spent, so it can't skip onboarding for whoever signs in next here
       expect(localStorage.getItem(TOUR_DONE_KEY)).toBeNull();
@@ -214,7 +214,7 @@ describe('App — authenticated', () => {
       stampTourDone(new Date(Date.now() - 6 * 60 * 60 * 1000));
       apiMock.me.mockResolvedValue(meFreshCrosser);
       renderApp('/');
-      expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+      expect(await screen.findByText(/THE TOLLKEEPER/)).toBeInTheDocument();
       expect(apiMock.setOnboarded).not.toHaveBeenCalled();
     });
 
@@ -234,7 +234,7 @@ describe('App — authenticated', () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [] });
     renderApp();
     expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
-    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/THE TOLLKEEPER/)).not.toBeInTheDocument();
   });
 
   it('shows Home with bottom tabs for a recent visitor, no splash', async () => {
