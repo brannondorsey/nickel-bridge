@@ -146,7 +146,7 @@ export default function Login() {
 
       <section className="landing-panel landing-doors">
         <span className="label-caps landing-no">V · BEFORE YOU SIGN ANYTHING</span>
-        <h2 className="landing-title">Reading the ledger is free.</h2>
+        <h2 className="landing-title">The ledger is open to anyone.</h2>
         <p className="landing-copy">
           <GlossaryProse
             text="So is the practice board. Walk one deal with the tollkeeper — bid it, play it, read the receipt — and see for yourself whether the bridge is worth crossing. No account needed, and the tollkeeper keeps no record of practice boards."

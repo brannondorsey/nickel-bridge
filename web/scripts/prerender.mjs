@@ -322,7 +322,7 @@ const homeBody = `<article class="pr">
         and then shows you what the rest of the field did with the same cards. Results are cancelled with a
         postmark, and the ledger of crossings keeps your running rating.</p>
       <h2>Before you sign anything</h2>
-      <p>Reading the ledger is free: a <a href="/glossary">glossary of ${TERMS.length} bridge terms</a> in
+      <p>The ledger is open to anyone: a <a href="/glossary">glossary of ${TERMS.length} bridge terms</a> in
         plain language, no account needed. So is the practice board — walk one deal with the tollkeeper,
         bid it, play it, read the receipt. The tollkeeper keeps no record of practice boards.</p>
       <p class="pr-cta"><a href="/">Play duplicate bridge at Nickel Bridge →</a></p>

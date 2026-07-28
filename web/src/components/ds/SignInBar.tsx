@@ -17,7 +17,7 @@ import { Button } from './Button';
 export function SignInBar() {
   return (
     <div className="signinbar">
-      <p className="signinbar-note">Reading the ledger is free. Crossing asks a toll.</p>
+      <p className="signinbar-note">Reading the ledger asks nothing. Crossing asks a toll.</p>
       <Button to="/">PLAY THE TOLL →</Button>
     </div>
   );
