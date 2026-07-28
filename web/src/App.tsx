@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { Me, api } from './api';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
@@ -135,6 +135,35 @@ export default function App() {
     }, 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Scroll offset belongs to the page you left, not the one you asked for.
+  // A router navigation swaps the DOM without touching the window, so a link
+  // tapped from halfway down one screen drops you halfway down the next.
+  //
+  // That was invisible while every signed-out screen was a single 100dvh
+  // splash — a document shorter than the offset clamps back to the top on its
+  // own — and stopped being invisible the moment the landing page grew a pitch
+  // below the fold. The glossary's PLAY THE TOLL (ds/SignInBar) links to '/',
+  // so a reader who had scrolled down the term list arrived at the landing
+  // page already past its hero, with the sign-in it had just promised them two
+  // viewports above: a button that appears to do nothing.
+  //
+  // Two deliberate exemptions:
+  // - POP. Back/forward is the one case where the old offset IS the right
+  //   answer, and the browser restores it already.
+  // - Anything that leaves the path alone. The term sheet lives in ?term= on
+  //   whatever route you're reading (GlossaryContext), so scrolling on search
+  //   changes would yank the list out from under every term tapped mid-
+  //   glossary. Hence comparing against a ref instead of leaning on the
+  //   [pathname] dep — an unchanged path stays a no-op even on the render
+  //   where the navigation type itself flips.
+  const navType = useNavigationType();
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (pathname === lastPath.current) return;
+    lastPath.current = pathname;
+    if (navType === 'PUSH') window.scrollTo(0, 0);
+  }, [pathname, navType]);
 
   // Returning-visitor gate: decide from the previous stamp BEFORE writing
   // today's, or the splash would never show again. Demo mode (PR previews)

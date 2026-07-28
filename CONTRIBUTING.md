@@ -608,6 +608,15 @@ decide — and the pieces only make sense together.
   `.splash-auto` overrides only six properties, so everything else leaks into it. Landing
   rules hang off `.landing`. The page ends on the three doors that need no account, which
   is the only place they're advertised.
+- **Navigating resets the scroll offset** (`App.tsx`). A router navigation swaps the DOM
+  without touching the window, which nothing noticed while every signed-out screen was a
+  single 100dvh splash: a document shorter than the offset clamps back to the top on its
+  own. A landing page several screens tall doesn't, so the glossary's `PLAY THE TOLL`
+  dropped a reader who had scrolled the term list *below* the hero — sign-in included —
+  and read as a dead button. The reset skips POP (back/forward is the one case where the
+  old offset is the right answer, and the browser restores it already) and anything that
+  leaves the path alone, since a term sheet is a `?term=` push on the route you're
+  already reading.
 - **The tour is playable signed out.** `pages/Tour.tsx` replays a captured deal
   (`onboarding/board0.json`) through the real board UI, so it never needed a server board
   — only its two exits did. Signed out, skipping just leaves, and the postmark's

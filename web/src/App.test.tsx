@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { TOUR_DONE_KEY, stampTourDone } from './onboarding/tourDone';
 import { LAST_VISIT_KEY, stampVisit } from './splash';
@@ -150,6 +150,65 @@ describe('App — logged out', () => {
     expect(screen.queryByText(/sign in to play for free/i)).not.toBeInTheDocument();
   });
 });
+
+// The offset a router navigation leaves behind. This only became visible when
+// the landing page grew taller than one screen: PLAY THE TOLL from a scrolled
+// glossary put the sign-in two viewports above where the visitor landed.
+describe('App — scroll position across navigations', () => {
+  let scrollTo: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  });
+  afterEach(() => scrollTo.mockRestore());
+
+  it("takes the glossary's PLAY THE TOLL to the top of the landing page", async () => {
+    renderApp('/glossary');
+    await screen.findByText('The Glossary');
+    await userEvent.click(screen.getByRole('link', { name: /play the toll/i }));
+    // the hero — and the sign-in in it — is at the top of the page it just went to
+    expect(await screen.findByText('A small club, completely free.')).toBeInTheDocument();
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+
+  // The term sheet is a ?term= push on whatever route you're reading, so this
+  // is the case that a naive scroll-on-every-navigation would break: tapping a
+  // term two thirds down the ledger would throw the list back to 'A'.
+  it('leaves the ledger where it is when a term sheet opens over it', async () => {
+    renderApp('/glossary');
+    await screen.findByText('The Glossary');
+    await userEvent.click(screen.getByRole('button', { name: /Finesse/ }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/finesse/i);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('leaves back/forward alone — the browser restores that offset itself', async () => {
+    render(
+      <MemoryRouter initialEntries={['/glossary']}>
+        <App />
+        <TestBack />
+      </MemoryRouter>,
+    );
+    await screen.findByText('The Glossary');
+    await userEvent.click(screen.getByRole('link', { name: /play the toll/i }));
+    await screen.findByText('A small club, completely free.');
+    scrollTo.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: 'test-back' }));
+    expect(await screen.findByText('The Glossary')).toBeInTheDocument();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+/** A back button the app itself doesn't have, to exercise POP navigations. */
+function TestBack() {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(-1)}>
+      test-back
+    </button>
+  );
+}
 
 describe('App — authenticated', () => {
   beforeEach(() => {
