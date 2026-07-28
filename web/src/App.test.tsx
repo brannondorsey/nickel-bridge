@@ -147,7 +147,7 @@ describe('App — logged out', () => {
     renderApp('/tour');
     expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
     // the tour ends at the gate, so it carries its own ask — no SignInBar too
-    expect(screen.queryByText(/reading the ledger asks nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sign in to play for free/i)).not.toBeInTheDocument();
   });
 });
 
