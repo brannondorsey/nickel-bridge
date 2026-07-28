@@ -145,7 +145,7 @@ describe('App — logged out', () => {
   it('walks the practice deal without an account', async () => {
     apiMock.me.mockResolvedValue(meLoggedOut);
     renderApp('/tour');
-    expect(await screen.findByRole('button', { name: /read the pamphlet/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /walk board/i })).toBeInTheDocument();
     // the tour ends at the gate, so it carries its own ask — no SignInBar too
     expect(screen.queryByText(/reading the ledger is free/i)).not.toBeInTheDocument();
   });
@@ -179,9 +179,8 @@ describe('App — authenticated', () => {
     apiMock.me.mockResolvedValue(meFreshCrosser);
     renderApp('/');
     await screen.findByText(/Welcome to the bridge/);
-    await userEvent.click(screen.getByRole('button', { name: /read the pamphlet/i }));
-    await userEvent.click(screen.getByRole('button', { name: 'robot' }));
-    expect(await screen.findByRole('dialog')).toHaveTextContent('Robot partner');
+    await userEvent.click(screen.getByRole('button', { name: 'deal' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/deal/i);
   });
 
   it('never springs the tour on a deep-link arrival — the destination renders instead', async () => {

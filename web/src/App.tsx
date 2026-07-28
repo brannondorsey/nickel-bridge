@@ -167,8 +167,8 @@ export default function App() {
   // Three things about this one line of state (see onboarding/tourDone.ts):
   //
   // - Read at MOUNT, not in the effect. `me` resolves asynchronously, and the
-  //   first render that has a user would otherwise flash the pamphlet cover
-  //   before any effect could suppress it.
+  //   first render that has a user would otherwise flash the tour's welcome
+  //   screen before any effect could suppress it.
   // - The read is NON-DESTRUCTIVE. StrictMode double-invokes this initializer
   //   in development, so a read-and-clear would spend the claim on the
   //   throwaway pass. Only the effect below clears, and only once it has
@@ -177,8 +177,8 @@ export default function App() {
   //   this person already walked the tour?", which never stops being true.
   //   Clearing it when the server stamp lands would re-open the gate for the
   //   render or two before the refreshed `me` arrives — and would show the
-  //   pamphlet outright if the stamp failed, which is the opposite of what
-  //   someone who just finished the tour has earned.
+  //   tour outright if the stamp failed, which is the opposite of what
+  //   someone who just finished it has earned.
   const [tourClaim] = useState(() => peekTourDone());
   useEffect(() => {
     // Keyed on the user id, not just on mount: Google sign-in is a full page

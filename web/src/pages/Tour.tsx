@@ -4,7 +4,6 @@ import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
 import riverSceneNight from '../assets/bridge-river-scene-night.svg';
 import riverScene from '../assets/bridge-river-scene.svg';
-import { BridgeMark } from '../components/ds/BridgeMark';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -21,7 +20,6 @@ import { CallText } from '../components/game/CallText';
 import { ContractLabel } from '../components/game/ContractLabel';
 import { DealDiagram } from '../components/game/DealDiagram';
 import { GlossaryProse } from '../components/game/GlossaryProse';
-import { SpecimenField } from '../components/game/SpecimenField';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import {
   CLAIM_ANNOUNCE_HOLD_MS,
@@ -46,9 +44,9 @@ import { BiddingPhase, PlayPhase } from './Board';
  * before you commit, grades after), and the house philosophy (a small,
  * unhurried club; judgment over luck).
  *
- * It opens as the toll office's printed pamphlet — a cover and two short
- * panels (the club philosophy, then duplicate as a specimen ledger) with a
- * perforation-dot pager and an honest skip on every page.
+ * It opens on one screen: the toll office's welcome, the practice ticket for
+ * Board №0, and an honest skip (see the Stage type for what used to be here
+ * and why it went).
  *
  * The spine is Board №0, a captured practice deal (onboarding/board0.ts)
  * replayed through Board.tsx's own exported BiddingPhase/PlayPhase — the
@@ -67,8 +65,8 @@ import { BiddingPhase, PlayPhase } from './Board';
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Every line of the tour's own voice — pamphlet body copy and the tollkeeper's
- * narration — under the tour's glossary link policy (onboarding/script.ts's
+ * Every line of the tour's own voice — the welcome screen's copy and the
+ * tollkeeper's narration — under the tour's glossary link policy (onboarding/script.ts's
  * TOUR_LINKS). A first crossing is where the words get met for the first time,
  * so the one screen in the app that says "dummy", "trumps" and "matchpoints"
  * to someone who has never seen them had better be able to define them.
@@ -95,7 +93,22 @@ const GUIDED_FORCED_DELAY_MS = 6000;
 // there's no narration line to read, just the fastForward copy repeating.
 const AUTO_STEP_DELAY_MS = 420;
 
-type Stage = 'cover' | 'bridge' | 'ledger' | 'offer' | 'board' | 'postmark';
+/**
+ * One welcome screen, the board, the postmark.
+ *
+ * There used to be a four-page pamphlet here: a cover, a philosophy panel
+ * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER), and the
+ * practice offer. The landing page now makes those middle two arguments to the
+ * same person a moment earlier — same headings, same titles, and they shared
+ * the SpecimenField component outright — and since a new account reaches this
+ * gate by signing in FROM that page, the pamphlet was reading them their own
+ * welcome mat twice. What it kept was the welcome and the offer, merged here.
+ *
+ * Duplicate itself is no longer argued in prose before the deal: the field
+ * reveal at the end teaches it where it actually lands, with the three house
+ * personas' real results on the very cards the player just held.
+ */
+type Stage = 'welcome' | 'board' | 'postmark';
 
 export default function Tour() {
   const { me, refresh } = useMe();
@@ -109,7 +122,7 @@ export default function Tour() {
   // rendered by App's arrival gate in place of the routes. The gate unmounts
   // on refresh(); a routed visit has to navigate out itself.
   const routed = useLocation().pathname === '/tour';
-  const [stage, setStage] = useState<Stage>('cover');
+  const [stage, setStage] = useState<Stage>('welcome');
   const [busy, setBusy] = useState(false);
 
   // Skipping and finishing both stamp the visit server-side (idempotent,
@@ -144,7 +157,7 @@ export default function Tour() {
   // Deliberately NOT catching setOnboarded separately: a failed stamp leaves
   // the gate closed, so navigating to a freshly-placed board would show the
   // tour at a board URL until the next reload. Let it fall into the catch
-  // below and land back at the pamphlet's own exit instead.
+  // below and land back at the welcome screen's own exit instead.
   const playTheToll = async () => {
     if (busy) return;
     setBusy(true);
@@ -165,22 +178,28 @@ export default function Tour() {
     }
   };
 
-  if (stage === 'cover') {
+  if (stage === 'welcome') {
     return (
       <div className="tour-gate">
         <div className="tour-cover-head">
-          <span className="label-caps">{COPY.cover.dept}</span>
+          <span className="label-caps">{COPY.welcome.dept}</span>
           <InkStamp color="var(--accent)" rotate={-7}>
-            {COPY.cover.stamp}
+            {COPY.welcome.stamp}
           </InkStamp>
         </div>
         <div className="tour-cover-main">
-          <h1 className="tour-cover-title">{COPY.cover.title}</h1>
+          <h1 className="tour-cover-title">{COPY.welcome.title}</h1>
+          <div className="tour-welcome-ticket">
+            <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
+          </div>
+          <p className="tour-copy">
+            <TourProse text={COPY.welcome.body} />
+          </p>
           <p className="tour-aside">
-            <TourProse text={COPY.cover.aside} />
+            <TourProse text={COPY.welcome.aside} />
           </p>
           <div className="tour-gate-actions">
-            <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
+            <Button onClick={() => setStage('board')}>{COPY.welcome.begin}</Button>
           </div>
         </div>
         <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
@@ -190,78 +209,6 @@ export default function Tour() {
           <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
           <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
         </div>
-      </div>
-    );
-  }
-
-  if (stage === 'bridge') {
-    return (
-      <div className="tour-page">
-        <span className="label-caps tour-page-no">{COPY.bridgePanel.no}</span>
-        <h1 className="tour-title">{COPY.bridgePanel.title}</h1>
-        <p className="tour-copy">
-          <TourProse text={COPY.bridgePanel.body1} />
-        </p>
-        <p className="tour-copy">
-          <TourProse text={COPY.bridgePanel.body2} />
-        </p>
-        <hr className="tour-rule" />
-        <p className="tour-aside">
-          <TourProse text={COPY.bridgePanel.aside} />
-        </p>
-        <div className="tour-page-foot">
-          <BridgeMark variant="footer" width={150} />
-        </div>
-        <div className="tour-gate-actions">
-          <Button onClick={() => setStage('ledger')}>CONTINUE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === 'ledger') {
-    return (
-      <div className="tour-page">
-        <span className="label-caps tour-page-no">{COPY.ledgerPanel.no}</span>
-        <h1 className="tour-title">{COPY.ledgerPanel.title}</h1>
-        <SpecimenField className="tour-specimen" />
-        <p className="tour-copy">
-          <TourProse text={COPY.ledgerPanel.body1} />
-        </p>
-        <p className="tour-copy">
-          {/* "the game" here means bridge itself, not the scoring term */}
-          <TourProse text={COPY.ledgerPanel.body2} skip={['game']} />
-        </p>
-        <div className="tour-page-foot" />
-        <div className="tour-gate-actions">
-          <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === 'offer') {
-    return (
-      <div className="tour-offer">
-        <span className="label-caps tour-page-no">{COPY.offerNo}</span>
-        <div style={{ height: 18 }} />
-        <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
-        <h1 className="tour-title">{COPY.offerTitle}</h1>
-        <p className="tour-copy">
-          <TourProse text={COPY.offerBody} />
-        </p>
-        <div className="tour-offer-actions">
-          <Button onClick={() => setStage('board')}>PRACTICE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
       </div>
     );
   }
@@ -277,7 +224,7 @@ export default function Tour() {
   // which is what leaving actually means here. (The tour shell also hides that
   // button outright — see .tour-board .receipt in style.css — so this is a
   // belt-and-braces override, not the visible exit; the visible one is the
-  // pamphlet's SKIP THE TUTORIAL and, signed out, the postmark below.)
+  // welcome screen's SKIP THE TUTORIAL and, signed out, the postmark below.)
   return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} />;
 }
 

@@ -36,8 +36,9 @@ import type { TourBoard } from './board0';
  * prose, and it needs a different dial than the sitewide one:
  *
  * - `force` re-links the handful of words terms.ts marks `linkify: false`
- *   because they'd be a link farm in bid copy. In this pamphlet each appears
- *   about once, to someone who has never seen it before — "eight trumps
+ *   because they'd be a link farm in bid copy. Across the welcome screen and
+ *   the tollkeeper's narration each appears about once, to someone who has
+ *   never seen it before — "eight trumps
  *   between you" and "a choice of game" are precisely the sentences a first
  *   crossing should be able to look up.
  * - `skip` drops a match that reads in the wrong sense here: "you split the
@@ -71,38 +72,32 @@ export interface StepGuidance {
 }
 
 export const COPY = {
-  // ---- the pamphlet (concept A, panels ported from the concept board) ----
-  cover: {
+  /**
+   * The welcome — one screen, and the only thing standing between arriving and
+   * playing.
+   *
+   * It used to be a four-page pamphlet: this cover, a philosophy panel
+   * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER), and a
+   * separate practice offer. The landing page now makes the middle two
+   * arguments — word for word, down to the headings — and a new account
+   * arrives here by signing in from that very page, so the pamphlet was
+   * repeating the reader's last two minutes back at them. The cover and the
+   * offer are merged here; the rest is gone.
+   *
+   * Nothing in here argues duplicate any more. The field reveal at the end
+   * does that far better, with the house's real results on the cards the
+   * player has just finished holding (see fieldSay).
+   */
+  welcome: {
     dept: 'TOLL DIVISION · RICHMOND',
     stamp: 'EST. 1925',
     title: 'Welcome to the bridge.',
-    aside: 'A short pamphlet and one practice deal — three minutes, and you’ll know your way across.',
-    begin: 'READ THE PAMPHLET →',
+    body:
+      'One practice deal with the tollkeeper before your first real crossing. You’ll bid a hand, play a card or two, and learn to read the ledger.',
+    aside: 'Three minutes, and you’ll know your way across. Nothing here is scored.',
+    begin: 'WALK BOARD №0 →',
   },
   skip: 'SKIP THE TUTORIAL',
-  bridgePanel: {
-    no: 'I · THE BRIDGE',
-    title: 'A small club, one crossing at a time.',
-    body1:
-      'Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more.',
-    body2:
-      'The people you’re truly playing came before you, and will come after — each one meeting your same cards at their own pace.',
-    aside: 'Named for the 1925 toll bridge over the James River: a dime to cross, then a nickel, now fifty cents.',
-  },
-  ledgerPanel: {
-    no: 'II · THE LEDGER',
-    title: 'Everyone plays the same deals.',
-    body1:
-      'Bad cards are no excuse here — Margaret holds the same ones as you, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it.',
-    // "the game" here means bridge itself, not the scoring term — kept
-    // unlinked via the TourProse `skip` override at its call site.
-    body2: 'That’s duplicate: the luck is dealt out of the game, and judgment is what’s left.',
-  },
-
-  offerNo: 'III · THE PRACTICE',
-  offerTitle: 'A practice crossing.',
-  offerBody:
-    'Before your first real crossing, walk one deal with the tollkeeper. You’ll bid a hand, play a card or two, and learn to read the ledger.',
 
   offScriptCall: 'A fine thought — and its meaning is right there. But on this crossing, follow the tollkeeper.',
   offScriptCard: 'A fair card — but take the marked one this time. The meanings of your own experiments come later.',

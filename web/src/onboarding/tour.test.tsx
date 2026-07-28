@@ -163,27 +163,28 @@ describe('the first crossing (Tour)', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('reads the pamphlet: philosophy panel, then duplicate as a specimen ledger', async () => {
+  // One screen between arriving and playing. The philosophy panel and the
+  // specimen-ledger panel that used to sit here said what the landing page now
+  // says word for word — and a new account reaches this gate by signing in
+  // from that page, so they were the reader's own last two minutes replayed.
+  it('opens on a single welcome screen that goes straight to the board', async () => {
     const user = userEvent.setup();
     renderWithMe(<Tour />, { me: meFreshCrosser });
-    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-    // I · THE BRIDGE — the club philosophy and the naming story
-    // "robot" is a glossary link now, so the sentence is split across elements
-    expect(screen.getByRole('button', { name: 'robot' })).toBeInTheDocument();
-    expect(screen.getByText(/of even temper/)).toBeInTheDocument();
-    expect(screen.getByText(/at their own pace/)).toBeInTheDocument();
-    expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    // II · THE LEDGER — one deal, three fates
-    expect(screen.getByText(/the luck is dealt out of the/)).toBeInTheDocument();
-    // "game" appears here in its everyday sense, not the scoring term — the
-    // ledger panel's TourProse call opts it out of TOUR_LINKS' sitewide force
-    expect(screen.queryByRole('button', { name: 'game' })).not.toBeInTheDocument();
-    expect(screen.getByText('Harold')).toBeInTheDocument();
-    expect(screen.getByText('Margaret')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    // III · THE PRACTICE — the board №0 offer
-    expect(screen.getByRole('button', { name: /practice/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
+    // "deal" is force-linked here (TOUR_LINKS), so the sentence is split across
+    // elements — match a run that doesn't cross the link
+    expect(screen.getByRole('button', { name: 'deal' })).toBeInTheDocument();
+    expect(screen.getByText(/with the tollkeeper before your first real crossing/)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing here is scored/)).toBeInTheDocument();
+    // the practice ticket for board №0 rides on this screen now, not a page later
+    expect(screen.getByText('№0')).toBeInTheDocument();
+    // and none of the landing page's argument is repeated here
+    expect(screen.queryByText(/of even temper/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the luck is dealt out of the/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Harold')).not.toBeInTheDocument();
+    // one tap in
+    await user.click(screen.getByRole('button', { name: /walk board/i }));
+    expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
   });
 
   it(
@@ -194,11 +195,8 @@ describe('the first crossing (Tour)', () => {
       const user = userEvent.setup();
       const { container, refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
 
-      // pamphlet: cover → the bridge → the ledger → the offer → the board
-      await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-      await user.click(await screen.findByRole('button', { name: /continue/i }));
-      await user.click(await screen.findByRole('button', { name: /continue/i }));
-      await user.click(await screen.findByRole('button', { name: /practice/i }));
+      // welcome → the board
+      await user.click(await screen.findByRole('button', { name: /walk board/i }));
 
       // decision 0 — the real bid box, meanings before commit
       const nt = await screen.findByRole('button', { name: '1NT' });
@@ -320,7 +318,7 @@ describe('the tour’s glossary links', () => {
   it('teaches the common words gameplay prose deliberately leaves unlinked', () => {
     expect(slugsIn(STEPS[2].say)).toContain('trump'); // "eight trumps between you"
     expect(slugsIn(STEPS[4].say)).toEqual(['dummy', 'trick']);
-    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge', 'game']);
+    expect(slugsIn(COPY.welcome.body)).toContain('deal');
     // and none of it leaks into the sitewide policy the rest of the app reads
     expect(segmentProse(STEPS[2].say).filter((s) => s.slug)).toHaveLength(0);
   });
@@ -347,7 +345,7 @@ describe('the tour’s glossary links', () => {
     expect(slugsIn(STEPS[2].say)).toContain('game');
   });
 
-  it('links the pamphlet’s body copy, and opens the sheet on a tap', async () => {
+  it('links the welcome screen’s body copy, and opens the sheet on a tap', async () => {
     const user = userEvent.setup();
     renderWithMe(
       <GlossaryProvider>
@@ -355,10 +353,9 @@ describe('the tour’s glossary links', () => {
       </GlossaryProvider>,
       { me: meFreshCrosser },
     );
-    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    await user.click(screen.getByRole('button', { name: 'duplicate' }));
-    expect(await screen.findByRole('dialog')).toHaveTextContent('Duplicate bridge');
+    await screen.findByText(/Welcome to the bridge/);
+    await user.click(screen.getByRole('button', { name: 'deal' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/deal/i);
   });
 
   // The tour reads without an account (App.tsx's isPublicPath) — it is the one
@@ -374,14 +371,11 @@ describe('the tour’s glossary links', () => {
       expect(apiMock.setOnboarded).not.toHaveBeenCalled();
     });
 
-    it('reads the whole pamphlet and reaches the practice offer', async () => {
+    it('goes from the welcome screen onto the real board UI', async () => {
       const user = userEvent.setup();
       renderWithMe(<Tour />, { me: meLoggedOut });
-      await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-      await user.click(screen.getByRole('button', { name: /continue/i }));
-      expect(screen.getByText('Harold')).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /continue/i }));
-      expect(screen.getByRole('button', { name: /practice/i })).toBeInTheDocument();
+      await user.click(await screen.findByRole('button', { name: /walk board/i }));
+      expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
     });
   });
 

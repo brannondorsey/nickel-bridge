@@ -15,10 +15,14 @@ Three deliberate deltas from the spec below, all by product decision during impl
    a **Jacoby transfer** — an *artificial* call, a sharper "bids are a code" lesson than
    the sketched limit raise — and South corrects partner's 3NT to 4♠ on the eight-card
    fit, making exactly. The pamphlet reference page (§ "left behind") is not yet built.
-4. **Concept A's pamphlet opens the tour** (added on review): the cover ("Welcome to the
-   bridge.") plus panels I · THE BRIDGE and II · THE LEDGER precede the practice-board
-   offer, replacing the booth-gate screen — the philosophy copy carried the concept
-   exploration and now leads the shipped flow.
+4. **Concept A's pamphlet opened the tour, then was cut back to one screen.** It shipped as
+   a cover ("Welcome to the bridge.") plus panels I · THE BRIDGE and II · THE LEDGER
+   before the practice-board offer, replacing the booth-gate screen. The public landing
+   page (`pages/Login.tsx`) later took over those two panels' argument — same headings,
+   same titles, a shared `SpecimenField` — and since a new account reaches the gate by
+   signing in *from* that page, the pamphlet was repeating what the reader had just read.
+   The cover and the offer are now merged into a single welcome screen; the two panels are
+   gone, and duplicate is taught only by the field reveal after the deal.
 5. **No time-of-day words in the shipped copy.** The ribbon lines sketched below say
    "tonight" (③a, ③e, ③f) and the tour shipped that way; a first crossing is walked at
    whatever hour the account is made, so the toll office can't know it's evening. Re-curate

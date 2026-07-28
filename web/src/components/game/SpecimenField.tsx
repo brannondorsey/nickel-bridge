@@ -12,11 +12,11 @@ import { signedScore } from '../../format';
  * board result uses, so a first-timer meets the ledger's shape here and
  * recognises it later.
  *
- * Shared by the first-crossing tour's II · THE LEDGER panel and the landing
- * page, which have to make the identical point to the identical person — one
- * before an account exists and one just after. Keeping the rows in one module
- * is also what keeps `Harold` and `Margaret` from drifting apart between the
- * two screens (onboarding/tour.test.tsx pins them).
+ * The landing page's II · THE LEDGER section. The first-crossing tour used to
+ * render this too, one screen later — which is exactly why the tour's pamphlet
+ * panels were cut: they made this same argument, in these same words, to
+ * someone who had just read it on the way in. Duplicate is now taught after
+ * the practice deal instead, by the genuine house field.
  */
 const SPECIMEN = [
   { who: 'You', contract: '4♠ by S =', score: 620, pct: 100, me: true },

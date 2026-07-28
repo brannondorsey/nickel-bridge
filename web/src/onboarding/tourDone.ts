@@ -3,8 +3,8 @@
  *
  * /tour reads without an account, so a visitor can finish the whole practice
  * board before they have one — and then sign in, land back on `/` as a brand-new
- * account with onboarded_at NULL, and be handed the same three-minute pamphlet
- * they just read (App.tsx's arrival gate). This flag is what closes that loop:
+ * account with onboarded_at NULL, and be handed the same practice board they
+ * just walked (App.tsx's arrival gate). This flag is what closes that loop:
  * the tour stamps it on the way out to the sign-in door, and App.tsx trades it
  * for the server-side POST /api/me/onboarded once a session exists.
  *

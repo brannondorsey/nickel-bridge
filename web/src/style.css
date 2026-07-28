@@ -3528,45 +3528,16 @@ a.stat-tile:hover {
   margin: auto 0;
 }
 
-/* Inner pamphlet panels (I · THE BRIDGE, II · THE LEDGER) */
-.tour-page {
-  flex: 1;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  padding: 26px 24px 12px;
-}
-.tour-page-no {
-  color: var(--ink);
-}
-.tour-page .tour-title {
-  text-align: left;
-  margin: 12px 0 0;
-}
-.tour-page .tour-copy {
-  text-align: left;
-  max-width: none;
-  margin: 12px 0 0;
-  font-size: 16px;
-}
-.tour-page .tour-aside {
-  text-align: left;
-  margin: 12px 0 0;
-}
-.tour-rule {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin: 16px 0 0;
-  width: 100%;
-}
-.tour-page-foot {
+/* The practice ticket, on the welcome screen itself now that the separate
+   offer page is gone. (.tour-page / .tour-rule / .tour-specimen went with the
+   two pamphlet panels the landing page had come to duplicate.) */
+.tour-welcome-ticket {
   display: flex;
   justify-content: center;
-  margin-top: auto;
-  padding: 18px 0 6px;
+  margin: 20px 0 4px;
 }
-.tour-specimen {
-  margin: 14px 0 2px;
+.tour-gate .tour-copy {
+  margin: 16px auto 0;
 }
 
 /* A term sheet's action link (terms.ts `action` — the ledger's easter-egg
