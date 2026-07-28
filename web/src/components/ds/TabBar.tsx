@@ -7,10 +7,15 @@ export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'TRAFFIC' | 'GLOSSARY'
  * Bottom tabs — Besley caps, inset 3px ink top bar marks the active tab.
  * The bar is a "turnstile" (approved nav pattern 1g), but a latent one: tabs
  * grow to share the full width and only overflow into a horizontal scroll —
- * with the right-edge paper fade + chevron and active-tab auto-centering —
- * when their labels genuinely can't fit. Five gates is where that starts to
- * bite at phone width — TRAFFIC engaged the scroll, which is the pattern
- * working as designed rather than a regression to fix with a hamburger.
+ * with a paper fade + chevron on whichever edge still has tabs past it, and
+ * active-tab auto-centering — when their labels genuinely can't fit. Five
+ * gates is where that starts to bite at phone width; the answer is the scroll
+ * working properly, not a hamburger.
+ *
+ * The tab padding is deliberately generous enough that when the row does
+ * overflow it overflows OBVIOUSLY. Five gates at the old padding cleared the
+ * viewport by about fifteen pixels on a common phone, which reads as a
+ * mis-rendered label rather than as something you can drag.
  *
  * Active is decided per-tab, by comparing `pathname` against that tab's own
  * link — not by which route "family" the page belongs to — so STATS only
@@ -28,18 +33,29 @@ export function TabBar({ myId, pathname }: { myId: number; pathname: string }) {
     { name: 'GLOSSARY', to: '/glossary', active: pathname === '/glossary' || pathname.startsWith('/glossary/') },
   ];
 
-  // The fade/chevron only makes sense when the row actually overflows, which
-  // is measured rather than assumed — it depends on the shell width in play.
-  const [overflows, setOverflows] = useState(false);
+  // A fade belongs on an edge only when there is actually something past it.
+  // Measured on scroll as well as resize: the bar auto-centers the active tab
+  // below, so it very often opens already pinned to one end — and a chevron
+  // pointing at nothing, over a tab that is fully scrolled into view, reads as
+  // a permanently clipped label rather than as an invitation to scroll.
+  const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
     const measure = () => {
-      const el = scrollRef.current;
-      setOverflows(el ? el.scrollWidth > el.clientWidth : false);
+      const max = el.scrollWidth - el.clientWidth;
+      // A pixel of slack, because fractional layout widths mean scrollLeft
+      // rarely lands exactly on 0 or on max.
+      setEdges({ left: el.scrollLeft > 1, right: el.scrollLeft < max - 1 });
     };
     measure();
+    el.addEventListener('scroll', measure, { passive: true });
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [pathname]);
 
   // Center the active tab whenever navigation moves it. jsdom has no
   // scrollIntoView, hence the feature guard.
@@ -59,7 +75,12 @@ export function TabBar({ myId, pathname }: { myId: number; pathname: string }) {
           </Link>
         ))}
       </div>
-      {overflows ? (
+      {edges.left ? (
+        <div className="tabbar-fade tabbar-fade-left" aria-hidden="true">
+          ‹
+        </div>
+      ) : null}
+      {edges.right ? (
         <div className="tabbar-fade" aria-hidden="true">
           ›
         </div>

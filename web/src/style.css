@@ -977,9 +977,13 @@ a.ds-btn-secondary:hover {
 }
 .tabbar a {
   /* grow to share the row, never shrink below the label — overflow (and the
-     turnstile scroll + fade) only happens when the labels can't fit */
+     turnstile scroll + fade) only happens when the labels can't fit.
+     The horizontal padding is deliberately roomy: because these grow to fill,
+     it costs nothing on a bar that fits, and it makes the bar that DOESN'T fit
+     overflow by enough to read as scrollable. At 10px the five gates cleared a
+     412px phone by fifteen pixels, which looks like a clipped label. */
   flex: 1 0 auto;
-  padding: 15px 10px;
+  padding: 15px 16px;
   text-align: center;
   font-family: var(--font-label);
   font-weight: 700;
@@ -1008,6 +1012,17 @@ a.ds-btn-secondary:hover {
   font-weight: 700;
   font-size: 11px;
   color: var(--muted);
+}
+/* Mirrored, and shown only while there are tabs left of the viewport — the
+   bar auto-centers the active tab, so it frequently opens pinned to one end
+   and needs the affordance on that side rather than always on the right. */
+.tabbar-fade-left {
+  right: auto;
+  left: 0;
+  background: linear-gradient(to left, transparent, var(--paper) 70%);
+  justify-content: flex-start;
+  padding-right: 0;
+  padding-left: 3px;
 }
 
 /* ---- SignInBar (takes the TabBar's slot for logged-out glossary readers) ---- */

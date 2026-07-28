@@ -247,20 +247,54 @@ describe('TabBar', () => {
     expect(screen.queryByText('›')).not.toBeInTheDocument();
   });
 
-  it('shows the right-edge fade + chevron once the tabs overflow their row', () => {
+  /**
+   * jsdom has no layout, so the scroll metrics are stubbed. Position within the
+   * scroll is what decides which chevron shows: one pointing at nothing, laid
+   * over a tab that is already fully scrolled into view, reads as a clipped
+   * label rather than as an invitation to drag.
+   */
+  const withScroll = (scrollLeft: number, run: () => void) => {
     Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, value: 600 });
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 });
+    Object.defineProperty(HTMLElement.prototype, 'scrollLeft', { configurable: true, value: scrollLeft });
     try {
-      render(
-        <MemoryRouter initialEntries={['/leaderboard']}>
-          <TabBar myId={1} pathname="/leaderboard" />
-        </MemoryRouter>,
-      );
-      expect(screen.getByText('›')).toBeInTheDocument();
+      run();
     } finally {
-      delete (HTMLElement.prototype as { scrollWidth?: unknown }).scrollWidth;
-      delete (HTMLElement.prototype as { clientWidth?: unknown }).clientWidth;
+      for (const k of ['scrollWidth', 'clientWidth', 'scrollLeft']) {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[k];
+      }
     }
+  };
+
+  const renderBar = () =>
+    render(
+      <MemoryRouter initialEntries={['/leaderboard']}>
+        <TabBar myId={1} pathname="/leaderboard" />
+      </MemoryRouter>,
+    );
+
+  it('points only forward at the start of the scroll', () => {
+    withScroll(0, () => {
+      renderBar();
+      expect(screen.getByText('›')).toBeInTheDocument();
+      expect(screen.queryByText('‹')).not.toBeInTheDocument();
+    });
+  });
+
+  it('points only back once scrolled to the end, so the last tab reads clean', () => {
+    withScroll(200, () => {
+      renderBar();
+      expect(screen.getByText('‹')).toBeInTheDocument();
+      expect(screen.queryByText('›')).not.toBeInTheDocument();
+    });
+  });
+
+  it('points both ways in the middle', () => {
+    withScroll(100, () => {
+      renderBar();
+      expect(screen.getByText('‹')).toBeInTheDocument();
+      expect(screen.getByText('›')).toBeInTheDocument();
+    });
   });
 
   it('auto-centers the active tab on navigation', () => {
