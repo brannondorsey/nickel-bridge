@@ -88,7 +88,7 @@ const deep = JSON.parse(readFileSync(resolve(root, 'src/glossary/deep.json'), 'u
  * make impossible. seo.ts is dependency-free and Node/DOM-free precisely so
  * this import costs nothing — same native type-stripping as terms.ts above.
  */
-const { SITE_ROUTES, covers, isDisallowed } = await import(resolve(root, '../server/src/seo.ts'));
+const { SITE_ROUTES, covers, crawlerDisallow } = await import(resolve(root, '../server/src/seo.ts'));
 
 /**
  * Every page this run wrote, in the order it wrote them. The sitemap is built
@@ -412,11 +412,22 @@ const rank = (pathname) => {
 };
 const paths = [...emitted].sort((a, b) => rank(a) - rank(b));
 
-const disallowed = paths.filter((p) => isDisallowed(p));
+// Name the Disallow line that caught each page, not just the page. Usually it
+// is the page's own route (flip the flag, or stop prerendering); but robots.txt
+// matches by prefix, so a NEW indexed route can also be caught by a DIFFERENT
+// row's shorter path — an indexed /tours would be blocked by /tour's line, and
+// the fix there is an anchored rule or a rename, not a flag. Guessing wrong
+// costs whoever hits this an hour.
+const disallowed = paths
+  .map((p) => ({ p, by: crawlerDisallow().find((d) => p.startsWith(d)) }))
+  .filter((x) => x.by);
 if (disallowed.length) {
   throw new Error(
-    `prerendered pages are Disallow'd in robots.txt: ${disallowed.join(', ')} — ` +
-      `flip the route to indexed: true in server/src/seo.ts, or stop prerendering it`,
+    `prerendered pages are Disallow'd in robots.txt: ` +
+      `${disallowed.map((x) => `${x.p} (by "Disallow: ${x.by}")`).join(', ')} — ` +
+      `if that Disallow came from the page's own route, flip it to indexed: true in ` +
+      `server/src/seo.ts or stop prerendering it; if it came from another route's ` +
+      `prefix, that page cannot be indexed under this URL at all`,
   );
 }
 const unlisted = paths.filter((p) => !SITE_ROUTES.some((r) => r.indexed && covers(r.path, p)));
