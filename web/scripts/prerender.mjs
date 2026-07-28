@@ -314,9 +314,9 @@ const homeBody = `<article class="pr">
         That is duplicate bridge: the luck is dealt out of the game, and judgment is what is left.</p>
       <h2>Read the bid before you make it</h2>
       <p>Tap any call and the house tells you what it promises — the point range, the shape, whether it is
-        conventional — before you commit to anything. A robot’s call reads the same way, so the auction is
-        never a code you are shut out of. Then, once you have bid, a mark against the call the house would
-        have made, in Standard American Yellow Card.</p>
+        conventional — before you commit to anything. The robots’ calls explain themselves the same way, so
+        the auction is never a code you cannot read. And once you do commit, your bid is graded against the
+        one the house would have chosen, in Standard American Yellow Card.</p>
       <h2>Boards are tickets. Playing is paying the toll.</h2>
       <p>Every board prints a receipt — the score itemized line by line, overtricks and insult and all —
         and then shows you what the rest of the field did with the same cards. Results are cancelled with a

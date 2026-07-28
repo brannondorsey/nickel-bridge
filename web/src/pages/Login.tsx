@@ -109,7 +109,7 @@ export default function Login() {
         <h2 className="landing-title">Read the bid before you make it.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it’s conventional — before you commit to anything. A robot’s call reads the same way, so the auction is never a code you’re shut out of. Then, once you’ve bid, a mark against the call the house would have made."
+            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it’s conventional — before you commit to anything. The robots’ calls explain themselves the same way, so the auction is never a code you can’t read. And once you do commit, your bid is graded against the one the house would have chosen."
             {...LANDING_LINKS}
           />
         </p>
