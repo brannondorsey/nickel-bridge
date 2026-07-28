@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 // route list out of it. `?raw` is Vite's own mechanism — web has no
 // @types/node, so node:fs is not an option here.
 import appSource from './App.tsx?raw';
-import { SITE_ROUTES, isDisallowed, samplePath } from '../../server/src/seo';
+import { SITE_ROUTES, covers, isDisallowed, samplePath } from '../../server/src/seo';
 import { isPublicPath } from './App';
 
 describe('the route table matches the app it describes', () => {
@@ -70,9 +70,7 @@ describe('the route table matches the app it describes', () => {
     for (const route of declared) {
       // /players/:id stands for a real id; the table matches by prefix.
       const pathname = route.replace(/:[^/]+/g, 'sample');
-      const covered = SITE_ROUTES.some((r) =>
-        r.path.endsWith('/*') ? pathname.startsWith(r.path.slice(0, -1)) : pathname === r.path,
-      );
+      const covered = SITE_ROUTES.some((r) => covers(r.path, pathname));
       expect(covered, `${route} has no row in SITE_ROUTES (server/src/seo.ts)`).toBe(true);
     }
   });

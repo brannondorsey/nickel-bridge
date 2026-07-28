@@ -91,6 +91,17 @@ export const SITE_ROUTES: readonly SiteRoute[] = [
 ];
 
 /**
+ * Does a route row cover this URL path? `/x/*` covers everything under `/x/`;
+ * `/x` is exact. Exported because both consumers need the table's matching
+ * semantics — the prerender's sitemap checks and the App.tsx cross-check —
+ * and two hand-rolled copies of this rule is the very drift the table exists
+ * to prevent.
+ */
+export function covers(routePath: string, pathname: string): boolean {
+  return routePath.endsWith('/*') ? pathname.startsWith(routePath.slice(0, -1)) : pathname === routePath;
+}
+
+/**
  * The robots.txt path for a route: `/x/*` disallows the prefix `/x/`, `/x`
  * disallows `/x` (and, by robots.txt's prefix semantics, anything starting
  * with it — which is what we want for `/leaderboard`).

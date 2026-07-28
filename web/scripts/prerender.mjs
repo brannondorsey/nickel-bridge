@@ -88,11 +88,7 @@ const deep = JSON.parse(readFileSync(resolve(root, 'src/glossary/deep.json'), 'u
  * make impossible. seo.ts is dependency-free and Node/DOM-free precisely so
  * this import costs nothing — same native type-stripping as terms.ts above.
  */
-const { SITE_ROUTES, isDisallowed } = await import(resolve(root, '../server/src/seo.ts'));
-
-/** Table semantics: `/x/*` covers everything under /x/, `/x` is exact. */
-const covers = (routePath, pathname) =>
-  routePath.endsWith('/*') ? pathname.startsWith(routePath.slice(0, -1)) : pathname === routePath;
+const { SITE_ROUTES, covers, isDisallowed } = await import(resolve(root, '../server/src/seo.ts'));
 
 /**
  * Every page this run wrote, in the order it wrote them. The sitemap is built
