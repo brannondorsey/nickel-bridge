@@ -3870,52 +3870,44 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   padding: 36px 24px;
-  border-top: 1px solid var(--line);
-}
-.landing-panel:first-of-type {
-  border-top: 0;
+  border-top: 1px solid var(--ink);
+  /* opaque, because a stacked card has to hide the one it slides over */
+  background: var(--paper);
 }
 
-/* Each fold rises as it is scrolled to — the intro sequence's gesture
-   (cubic-bezier(.2,.7,.2,1), no bounce), driven by scroll position instead of
-   a timer, so it tracks the reader's own thumb rather than playing at them.
-   Scroll-driven timelines are progressive enhancement in two layers, and both
-   guards matter: @supports keeps the `from` state's opacity: 0 from ever
-   applying in a browser that can't run the timeline (which would leave the
-   whole pitch invisible), and no-preference keeps it off for readers who asked
-   for stillness — they get the finished state, which is just the page.
-
-   `entry` runs from the panel's top edge touching the viewport bottom to it
-   fully entered, so a fold settles as it arrives at reading height. Nothing can
-   end up stuck hidden: a panel scrolled past its range renders at the end state
-   (verified at the page bottom, where the footer's own range completes), and a
-   browser without view() support never applies the `from` state at all — which
-   is the whole reason the @supports guard wraps the animation rather than just
-   the timeline property. */
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .landing-panel,
-    .landing-foot {
-      /* linear, deliberately — NOT the intro's cubic-bezier(.2,.7,.2,1). That
-         curve is for a rise that plays on a clock and has to settle by itself;
-         mapped onto scroll it front-loads so hard the fold is ~90% resolved
-         within a fifth of its range, i.e. over before the reader sees it. Here
-         the thumb supplies the easing, and a 1:1 mapping is what makes the
-         panel feel attached to it. No bounce either way, per the brand rules. */
-      animation: nbLandingFold linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 70%;
-    }
+/* The stack: each fold pins at the top and the next slides up over it, like
+   sheets of the pamphlet being laid down one on the next.
+ *
+ * This replaces an earlier scroll-timeline fade (animation-timeline: view()),
+ * which was invisible to anyone whose browser lacks that feature — Chromium
+ * only, at time of writing. Sticky positioning is layout, not animation: it
+ * works everywhere, needs no JS, and is a far stronger read than a 20px fade.
+ *
+ * Every panel sticks at the same top: 0 and they share one containing block
+ * (.landing), so an already-pinned card simply stays there while the next one
+ * covers it — later siblings paint over earlier ones by DOM order, no z-index
+ * needed. The card backgrounds above are what make that read as a stack rather
+ * than as overlapping text.
+ *
+ * The min-height guard is the safety rail, not a nicety. A sticky card taller
+ * than the viewport would pin its top at 0 with its own lower half permanently
+ * below the fold and unreachable by scrolling. The tallest panel measures
+ * ~451px, so 600px of viewport leaves real headroom for larger text settings;
+ * below that — landscape phones, short windows — the cards fall back to plain
+ * document flow, which is exactly the page as it reads without this effect.
+ *
+ * Kept out of reduced-motion, too: cards passing over one another is the sort
+ * of scroll-coupled movement that request is usually asking to be spared. */
+@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
+  .landing-panel {
+    position: sticky;
+    top: 0;
   }
-}
-@keyframes nbLandingFold {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+  /* The foot is the bottom of the deck and never pins, but it still slides
+     over the last pinned card, so it needs the same opaque backing. */
+  .landing-foot {
+    position: relative;
+    background: var(--paper);
   }
 }
 .landing-no {
@@ -3976,11 +3968,12 @@ a.stat-tile:hover {
 
 /* V — the three doors that need no account. The whole page exists to arrive
    here, so it gets the inset call-to-action surface. */
-/* No padding-bottom override: it used to add the breathing room that
-   .landing-panel itself now has on every fold. */
+/* Keeps .landing-panel's ink border rather than the quieter surface line: it's
+   a card in the stack like the others, and its leading edge has to read the
+   same as theirs as it slides over IV. No padding-bottom override either — it
+   used to add the breathing room every fold now has. */
 .landing-doors {
   background: var(--surface);
-  border-top: 1px solid var(--surface-line);
 }
 .landing-door-actions {
   display: flex;
