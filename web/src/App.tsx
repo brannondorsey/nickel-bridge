@@ -6,6 +6,7 @@ import { Loading } from './components/ds/Loading';
 import { SignInBar } from './components/ds/SignInBar';
 import { TabBar } from './components/ds/TabBar';
 import { GlossaryProvider } from './glossary/GlossaryContext';
+import Activity from './pages/Activity';
 import Board from './pages/Board';
 import CreateHandle from './pages/CreateHandle';
 import Glossary from './pages/Glossary';
@@ -39,6 +40,7 @@ function inTabScope(pathname: string): boolean {
   return (
     pathname === '/' ||
     pathname === '/leaderboard' ||
+    pathname === '/activity' ||
     pathname.startsWith('/players/') ||
     isGlossaryPath(pathname)
   );
@@ -266,6 +268,11 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Lobby />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              {/* Gated, unlike the ladder beside it: when real people sit down
+                  to play and for how long is a behavioural record. Signed out
+                  this falls through to the landing page, and seo.ts's row says
+                  public: false to match — seo.test.ts holds the two together. */}
+              <Route path="/activity" element={<Activity />} />
               <Route path="/players/:id" element={<Player />} />
               <Route path="/glossary" element={<Glossary />} />
               <Route path="/glossary/:slug" element={<Glossary />} />

@@ -278,6 +278,45 @@ export interface DemoScenario {
   category: string;
 }
 
+/**
+ * The activity feed's raw material (server/src/activity.ts).
+ *
+ * These arrive as flat, ungrouped events carrying UTC unix seconds, because
+ * the feed groups by the VIEWER's calendar day and time of day and the server
+ * has no timezone for anyone. pages/activityFeed.ts does that grouping.
+ */
+export type ActivityEvent =
+  | { kind: 'board'; userId: number; at: number }
+  | { kind: 'joined'; userId: number; at: number }
+  | {
+      kind: 'crossing';
+      userId: number;
+      at: number;
+      tournamentId: number;
+      tournamentName: string;
+      pct: number;
+      rank: number;
+      of: number;
+      /** null when the tournament rated nobody (< 2 human finishers) — never 0 */
+      eloDelta: number | null;
+    }
+  | {
+      kind: 'milestone';
+      userId: number;
+      at: number;
+      milestone: 'first-crossing' | 'entered-ladder' | 'peak-rating';
+      /** the new rating, on 'peak-rating' only */
+      value?: number;
+    };
+
+export interface ActivityResponse {
+  /** window start, unix seconds — a day wider than the 7 the feed renders */
+  since: number;
+  /** every user id referenced by an event; keys are stringified by JSON */
+  players: Record<string, { handle: string; picture: string | null }>;
+  events: ActivityEvent[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -350,6 +389,7 @@ export const api = {
        */
       yourRatedTournaments: number | null;
     }>('/api/leaderboard'),
+  activity: () => request<ActivityResponse>('/api/activity'),
 };
 
 // ---- shared card/call helpers (mirror @bridge/core conventions) ----

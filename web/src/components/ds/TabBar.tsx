@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'GLOSSARY';
+export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'TRAFFIC' | 'GLOSSARY';
 
 /**
  * Bottom tabs — Besley caps, inset 3px ink top bar marks the active tab.
  * The bar is a "turnstile" (approved nav pattern 1g), but a latent one: tabs
  * grow to share the full width and only overflow into a horizontal scroll —
  * with the right-edge paper fade + chevron and active-tab auto-centering —
- * when their labels genuinely can't fit. Today's four gates fit at phone
- * width; Learn/Clubs later will engage the scroll without a hamburger.
+ * when their labels genuinely can't fit. Five gates is where that starts to
+ * bite at phone width — TRAFFIC engaged the scroll, which is the pattern
+ * working as designed rather than a regression to fix with a hamburger.
  *
  * Active is decided per-tab, by comparing `pathname` against that tab's own
  * link — not by which route "family" the page belongs to — so STATS only
@@ -23,11 +24,12 @@ export function TabBar({ myId, pathname }: { myId: number; pathname: string }) {
     { name: 'TOURNEYS', to: '/', active: pathname === '/' },
     { name: 'STATS', to: `/players/${myId}`, active: pathname === `/players/${myId}` },
     { name: 'RANKINGS', to: '/leaderboard', active: pathname === '/leaderboard' },
+    { name: 'TRAFFIC', to: '/activity', active: pathname === '/activity' },
     { name: 'GLOSSARY', to: '/glossary', active: pathname === '/glossary' || pathname.startsWith('/glossary/') },
   ];
 
-  // The fade/chevron only makes sense when the row actually overflows —
-  // at the full 430px shell width today's four tabs fit without scrolling.
+  // The fade/chevron only makes sense when the row actually overflows, which
+  // is measured rather than assumed — it depends on the shell width in play.
   const [overflows, setOverflows] = useState(false);
   useEffect(() => {
     const measure = () => {

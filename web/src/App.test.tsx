@@ -326,6 +326,22 @@ describe('App — authenticated', () => {
     expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
   });
 
+  it('serves Traffic on /activity with its tab active', async () => {
+    stampVisit();
+    apiMock.activity.mockResolvedValue({ since: 0, players: {}, events: [] });
+    renderApp('/activity');
+    expect(await screen.findByText('The traffic')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'TRAFFIC' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps Traffic behind the gate — signed out it falls through to the landing page', async () => {
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/activity');
+    await screen.findByText(/PLAY THE TOLL/i);
+    expect(screen.queryByText('The traffic')).not.toBeInTheDocument();
+    expect(apiMock.activity).not.toHaveBeenCalled();
+  });
+
   it('shows the tab bar on someone else\'s profile, but does not claim STATS is active there', async () => {
     stampVisit();
     apiMock.playerStats.mockResolvedValue({

@@ -5,6 +5,7 @@ import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { recentActivity } from './activity.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { PUBLIC_ORIGIN } from './config.js';
@@ -26,6 +27,13 @@ import {
   PROVISIONAL_MIN_TOURNAMENTS,
   visibleStandings,
 } from './tournaments.js';
+
+/**
+ * How far back GET /api/activity reaches. One day wider than the seven the
+ * feed renders, so the oldest local day the client keeps is never a partial
+ * one — see the route's doc comment.
+ */
+const ACTIVITY_WINDOW_S = 8 * 86400;
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -209,6 +217,22 @@ export async function buildApp(): Promise<FastifyInstance> {
       provisionalMin,
       yourRatedTournaments,
     });
+  });
+
+  /**
+   * The activity feed ("TRAFFIC"). Gated, unlike the ladder next to it: the
+   * ladder is a bounded list of handles and ratings, while this is when real
+   * people sit down to play and for how long. That is a behavioural record,
+   * and it stays behind the toll gate.
+   *
+   * Eight days, not the seven the UI shows. The client groups by ITS OWN local
+   * calendar day (the server has no timezone for anyone — see activity.ts), so
+   * a day of slack guarantees the oldest rendered day is a whole one rather
+   * than a stub clipped by the viewer's UTC offset.
+   */
+  app.get('/api/activity', (req, reply) => {
+    if (!requireUserWithHandle(req, reply)) return;
+    return reply.send(recentActivity(Math.floor(Date.now() / 1000) - ACTIVITY_WINDOW_S));
   });
 
   /**
