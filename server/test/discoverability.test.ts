@@ -68,12 +68,18 @@ describe('robots.txt', () => {
   // time precisely because it's the top-level route whose path shares no
   // prefix with the others.
   //
-  // /leaderboard, /players/ and /tour are here for a second reason now: they
-  // read WITHOUT an account (App.tsx's isPublicPath) but none of them is
+  // /leaderboard, /players/ and /tour are here for a second reason: they read
+  // WITHOUT an account (App.tsx's isPublicPath) but none of them is
   // prerendered, so a crawler that doesn't run JavaScript gets the SPA shell —
   // an empty #root wearing the home page's title, description and OG tags.
-  // Public is not the same decision as indexable. Prerender one of them and it
-  // may come off this list, in the same change that adds it to the sitemap.
+  // Public is not the same decision as indexable.
+  //
+  // The list is DERIVED now, from SITE_ROUTES in src/seo.ts — flipping a route
+  // to indexed: true takes it off here and puts it in the sitemap in one edit,
+  // and neither list can be changed alone. Spelling the expected paths out
+  // literally is the point of this test: it's the second opinion that makes an
+  // accidental edit to that table show up as a failure rather than as a
+  // quietly different robots.txt.
   it('disallows every route that has nothing worth indexing', async () => {
     const app = await productionApp();
     const { body } = await app.inject({ method: 'GET', url: '/robots.txt' });

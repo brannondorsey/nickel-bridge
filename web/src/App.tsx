@@ -77,9 +77,14 @@ function isGlossaryPath(pathname: string): boolean {
  * covers profiles: nothing here WRITES, nothing here is scoped to the VIEWER,
  * and nothing here exposes live board state. A player's record is genuinely
  * someone's data — public by decision, and kept out of the search index by
- * robots.txt rather than by an auth wall (see server/src/app.ts).
+ * robots.txt rather than by an auth wall (see server/src/seo.ts).
+ *
+ * Exported for src/seo.test.ts, which holds this function and that route
+ * table to each other: the table's `public` column is what robots.txt and the
+ * sitemap are derived from, and it is only true if it says what this gate
+ * actually does.
  */
-function isPublicPath(pathname: string): boolean {
+export function isPublicPath(pathname: string): boolean {
   return (
     pathname === '/' ||
     pathname === '/tour' ||
