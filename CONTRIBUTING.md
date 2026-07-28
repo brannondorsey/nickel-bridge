@@ -68,7 +68,11 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 on PR previews + the permanent demo app — see "Demo mode" below),
                 logging.ts (the request-log serializer: Fastify's default line plus
                 Fly-Client-IP and user agent, so "who woke the machine" is answerable —
-                see "Machine time is bought by the request" below)
+                see "Machine time is bought by the request" below),
+                seo.ts (SITE_ROUTES: the one table of which URLs are public and which
+                are indexed — robots.txt is derived from it, the sitemap is checked
+                against it, and web imports it too; dependency-free on purpose, see
+                "Discoverability" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
@@ -96,9 +100,13 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 scripts/prerender.mjs (a BUILD STEP, not an offline generator
                 like tools/'s — `build` runs it after `vite build` to prerender the
                 glossary into dist/glossary-static/ and the landing page into
-                dist/home-static/, plus sitemap.xml; it lives here rather
+                dist/home-static/, plus sitemap.xml built from exactly those pages
+                and checked against server/src/seo.ts; it lives here rather
                 than in tools/ because .dockerignore drops the root-level tools/ and
                 scripts/, see "Discoverability" below),
+                seo.test.ts (the drift guard between that table and App.tsx's
+                isPublicPath — the only test that imports across the workspace
+                boundary, and the reason App.tsx exports the gate),
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 components/ds/ (design-system pieces, incl. SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
@@ -207,7 +215,7 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 | Var | Default | Purpose (where it's read) |
 | --- | --- | --- |
 | `PORT` | `3000` | listen port (`server/src/index.ts`) |
-| `BASE_URL` | `http://localhost:3000` | public origin, parsed **only** in `config.ts` (see below); feeds the OAuth redirect + secure-cookie flag (`auth.ts`) and `robots.txt`'s `Sitemap:` line (`app.ts`). Set but not an absolute http(s) URL ⇒ the server refuses to boot; unset ⇒ boots with a warning |
+| `BASE_URL` | `http://localhost:3000` | public origin, parsed **only** in `config.ts` (see below); feeds the OAuth redirect + secure-cookie flag (`auth.ts`) and `robots.txt`'s `Sitemap:` line (`seo.ts`, called from `app.ts`). Set but not an absolute http(s) URL ⇒ the server refuses to boot; unset ⇒ boots with a warning |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth (`auth.ts`) |
 | `DEV_AUTH` | off | `1` enables `POST /auth/dev` name-only login (`auth.ts`) — **never on the production app** (previews + the demo app are deliberate exceptions) |
 | `DEMO` | off | `1` enables demo mode: `GET /demo` auto-login, `/api/demo/*` scenario + reset routes, boot seeding (`demo.ts`, `auth.ts` for the `/api/me` flag, `index.ts` for the seed gate) — **never on the production app** (CI enforces this, see invariant 5; previews + the demo app are deliberate exceptions) |
@@ -663,8 +671,13 @@ decide — and the pieces only make sense together.
 
 **Discoverability: what gets INDEXED is a separate decision.** The app is client-rendered,
 so a crawler that doesn't run JS (Bing, DuckDuckGo, most social and LLM crawlers) sees an
-empty `#root`. Only prerendered pages are worth indexing, and `robots.txt` in
-`server/src/app.ts` reflects exactly that:
+empty `#root`. Only prerendered pages are worth indexing, and that decision is written
+down once, in `SITE_ROUTES` in **`server/src/seo.ts`** — one row per URL space, with a
+`public` column (readable signed out) and an `indexed` one (prerendered + in the sitemap).
+Both machine-readable outputs are derived from it, so they cannot drift apart:
+`robots.txt`'s `Disallow` list is every row with `indexed: false` (`robotsTxt()`, called
+by `app.ts`), and `web/scripts/prerender.mjs` imports the same table to check the sitemap
+it emits. See "keeping it that way" at the end of this section.
 
 - **The glossary is prerendered**, and it's the app's best long-tail surface: ~125 curated
   terms, each a page someone might land on from "what is a squeeze in bridge".
@@ -689,8 +702,8 @@ empty `#root`. Only prerendered pages are worth indexing, and `robots.txt` in
   prerendered, so a crawler would get the SPA shell — an empty `#root` wearing the HOME
   page's title, description and OG tags — i.e. thin near-duplicates competing with `/`.
   `/players/` has a second reason: being able to look someone up is a different thing from
-  being findable by name in a search engine. Prerender one of them and it may come off the
-  list, in the same change that adds it to the sitemap.
+  being findable by name in a search engine. Prerender one of them and flipping its
+  `indexed` flag takes it off the `Disallow` list and puts it in the sitemap at once.
 - **Both glossary URL forms answer the same way.** `/glossary?term=<slug>` serves that
   term's page, not the ledger index — it's the glossary's live sheet mechanism and the URL
   the app leaves a reader on (`Glossary.tsx` normalizes the path form into it with a
@@ -717,10 +730,27 @@ throws if either goes missing, so a rename fails the build rather than silently 
 `<link rel="canonical">`: it's served for every unprerendered route, so a static canonical
 would tell crawlers that every deep link "is really" the home page. Prerendered pages
 carry their own correct self-canonical (safe there, since each answers for exactly one
-URL); everything else self-canonicalizes by default. **The sitemap must list only URLs
-that are both public and prerendered** — a sitemap entry for a `Disallow`ed URL is a
-contradiction a crawler will report back to you — so adding a new indexable route means
-touching `web/scripts/prerender.mjs` and `robots.txt` together.
+URL); everything else self-canonicalizes by default.
+
+**Keeping it that way.** The sitemap must list only URLs that are both public and
+prerendered — a sitemap entry for a `Disallow`ed URL is a contradiction a crawler reports
+back at you weeks later — and it is now built from the pages the prerender run actually
+wrote, never a list kept beside them. Three checks hold the rest together, and each one
+fails a build or a test rather than shipping a quiet lie:
+
+- `web/scripts/prerender.mjs` throws if a page it emitted is `Disallow`ed, if a page
+  matches no `indexed` row, or if an `indexed` row produced no page. So flipping a flag
+  without prerendering (or prerendering without flipping) fails `npm run build`, CI, and
+  the Docker image.
+- `web/src/seo.test.ts` holds `SITE_ROUTES`' `public` column against `App.tsx`'s
+  `isPublicPath` — the one link no derivation can check, since that gate is app behaviour
+  rather than metadata. It also reads the `<Route path=…>` list out of `App.tsx` source,
+  so **adding any route fails this test until the table has an answer for it**.
+- `server/test/discoverability.test.ts` spells the expected `Disallow` paths out literally,
+  as a second opinion on the derived list.
+
+So: adding an indexable route means adding a row with `indexed: true` and prerendering it;
+the sitemap and `robots.txt` follow on their own.
 
 ## Invariants — do not break
 

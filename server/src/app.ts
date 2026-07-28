@@ -12,6 +12,7 @@ import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
+import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
 import {
   boardDifficulty,
@@ -255,45 +256,16 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   }
 
-  app.get('/robots.txt', (_req, reply) => {
-    const body = throwawayOrigin
-      ? 'User-agent: *\nDisallow: /\n'
-      : [
-          'User-agent: *',
-          'Allow: /',
-          // Three different reasons to keep a crawler out, and they're worth
-          // keeping straight — public and indexable are not the same thing.
-          //
-          // /api/, /auth/, /t/ and /scenarios still need an account (or are
-          // machine endpoints): a crawler gets the landing page or a 401, so
-          // there is nothing to index and it burns budget that should go to
-          // the glossary.
-          //
-          // /players/ IS readable without an account now. It stays out of the
-          // index anyway: these are real people's handles, ratings and daily
-          // activity, and being able to look one up is a different thing from
-          // being findable by name in a search engine.
-          //
-          // /leaderboard and /tour are public too, and excluded for a third
-          // reason — neither is prerendered, so a crawler that doesn't run JS
-          // gets the SPA shell: an empty #root carrying the HOME page's exact
-          // title, description and OG tags. Indexing those is two thin
-          // near-duplicates competing with / itself. Prerender either one and
-          // it can come off this list (and go into the sitemap, which must
-          // never list a URL disallowed here).
-          'Disallow: /api/',
-          'Disallow: /auth/',
-          'Disallow: /t/',
-          'Disallow: /players/',
-          'Disallow: /leaderboard',
-          'Disallow: /scenarios',
-          'Disallow: /tour',
-          '',
-          `Sitemap: ${PUBLIC_ORIGIN}/sitemap.xml`,
-          '',
-        ].join('\n');
-    return reply.type('text/plain; charset=utf-8').send(body);
-  });
+  // The Disallow list is not written here: it is derived from SITE_ROUTES in
+  // seo.ts, the one table that also builds the sitemap (via
+  // web/scripts/prerender.mjs) and is cross-checked against App.tsx's sign-in
+  // gate. Three files that had to agree, with nothing checking that they did
+  // — the reasoning for each route now lives beside it in that table.
+  app.get('/robots.txt', (_req, reply) =>
+    reply
+      .type('text/plain; charset=utf-8')
+      .send(robotsTxt({ throwaway: throwawayOrigin, origin: PUBLIC_ORIGIN })),
+  );
 
   // ---- static SPA ----
   const here = dirname(fileURLToPath(import.meta.url));

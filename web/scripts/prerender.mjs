@@ -30,11 +30,12 @@
  * WHAT IS NOT PRERENDERED, and deliberately: /leaderboard, /players/:id and
  * /tour are readable without an account now, but there is nothing durable to
  * put in the HTML — live personal records, or a board that only exists once
- * JavaScript runs. robots.txt (server/src/app.ts) keeps all three out of the
- * index rather than let them compete with / while carrying its metadata.
- * Public and indexable are separate decisions; if one of them ever earns a
- * real static page, prerender it here AND take it off that Disallow list AND
- * add it to the sitemap below, in one change.
+ * JavaScript runs. They carry `indexed: false` in server/src/seo.ts's route
+ * table, which is what puts them behind a Disallow in robots.txt and keeps
+ * them out of the sitemap; public and indexable are separate decisions.
+ * If one of them ever earns a real static page: flip that flag and prerender
+ * it here. The sitemap follows on its own, and the checks at the bottom of
+ * this file fail the build if you do only one of the two.
  *
  * HOW. Each page is web/dist/index.html with exactly two substitutions:
  *   1. the <!-- seo:start --> … <!-- seo:end --> span in <head> is replaced
@@ -52,7 +53,9 @@
  *
  *   node scripts/prerender.mjs          # from web/, after `vite build`
  *
- * Also emits web/dist/sitemap.xml, so the URL list has exactly one source.
+ * Also emits web/dist/sitemap.xml — from the pages this run actually wrote,
+ * never a hand-kept list, and checked against server/src/seo.ts's route table
+ * before it is written. See "the sitemap" at the bottom of this file.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -77,6 +80,28 @@ const ORIGIN = 'https://bridge.brannon.online';
 
 const { TERMS, THEME_CHIP } = await import(resolve(root, 'src/glossary/terms.ts'));
 const deep = JSON.parse(readFileSync(resolve(root, 'src/glossary/deep.json'), 'utf8'));
+
+/**
+ * The site's route table, imported across the workspace boundary on purpose:
+ * it is the same list the server derives robots.txt from, and a sitemap that
+ * disagrees with robots.txt is the exact drift this arrangement exists to
+ * make impossible. seo.ts is dependency-free and Node/DOM-free precisely so
+ * this import costs nothing — same native type-stripping as terms.ts above.
+ */
+const { SITE_ROUTES, covers, crawlerDisallow } = await import(resolve(root, '../server/src/seo.ts'));
+
+/**
+ * Every page this run wrote, in the order it wrote them. The sitemap is built
+ * from this at the end, so "prerendered a page and forgot the sitemap" is not
+ * a state this script can reach.
+ */
+const emitted = [];
+
+/** Write a prerendered page and record its URL for the sitemap. */
+function emit(pathname, file, html) {
+  writeFileSync(file, html);
+  emitted.push(pathname);
+}
 
 const shell = readFileSync(join(dist, 'index.html'), 'utf8');
 const SEO_SPAN = /<!--\s*seo:start[\s\S]*?seo:end\s*-->/;
@@ -247,7 +272,11 @@ for (const t of TERMS) {
     ],
   };
 
-  writeFileSync(join(outDir, `${t.slug}.html`), page({ head: head({ title, description, url, jsonLd }), body }));
+  emit(
+    `/glossary/${t.slug}`,
+    join(outDir, `${t.slug}.html`),
+    page({ head: head({ title, description, url, jsonLd }), body }),
+  );
 }
 
 // ---- the glossary index ----
@@ -274,7 +303,8 @@ const indexBody = `<article class="pr">
       ${ATTRIBUTION}
     </article>`;
 
-writeFileSync(
+emit(
+  '/glossary',
   join(outDir, 'index.html'),
   page({
     head: head({
@@ -328,7 +358,8 @@ const homeBody = `<article class="pr">
       <p class="pr-cta"><a href="/">Play duplicate bridge at Nickel Bridge →</a></p>
     </article>`;
 
-writeFileSync(
+emit(
+  '/',
   join(homeDir, 'index.html'),
   page({
     head: head({
@@ -356,12 +387,65 @@ writeFileSync(
   }),
 );
 
-// ---- sitemap ----
-// Only URLs that are BOTH public and prerendered. /leaderboard, /players/:id
-// and /tour are public but Disallow'd in robots.txt (see the note at the top
-// of this file), and a sitemap entry for a disallowed URL is a contradiction
-// a crawler will report back to you.
-const urls = [`${ORIGIN}/`, indexUrl, ...TERMS.map((t) => `${ORIGIN}/glossary/${t.slug}`)];
+// ---- the sitemap ----
+//
+// Built from the pages this run wrote — not a list kept alongside them — and
+// then checked, three ways, against server/src/seo.ts's route table. The
+// checks throw, so a disagreement fails `npm run build` (and CI, and the
+// Docker image) rather than shipping a sitemap that quietly lies:
+//
+//   1. nothing in the sitemap may be Disallow'd in robots.txt. That is a
+//      contradiction a crawler reports back at you weeks later, and it is the
+//      shape a well-meaning "make /leaderboard public" change takes.
+//   2. nothing may be prerendered under a route the table doesn't mark
+//      indexed — a page with no way in is either dead weight or a missing
+//      table row.
+//   3. every route the table DOES mark indexed must have produced at least
+//      one page. Flipping `indexed: true` without prerendering anything is
+//      how you promise a crawler a page and hand it the empty SPA shell.
+//
+// Sorted by the table's own order (front door, ledger index, then terms) so
+// the file's shape follows the site's, and stays stable across builds.
+const rank = (pathname) => {
+  const i = SITE_ROUTES.findIndex((r) => covers(r.path, pathname));
+  return i === -1 ? SITE_ROUTES.length : i;
+};
+const paths = [...emitted].sort((a, b) => rank(a) - rank(b));
+
+// Name the Disallow line that caught each page, not just the page. Usually it
+// is the page's own route (flip the flag, or stop prerendering); but robots.txt
+// matches by prefix, so a NEW indexed route can also be caught by a DIFFERENT
+// row's shorter path — an indexed /tours would be blocked by /tour's line, and
+// the fix there is an anchored rule or a rename, not a flag. Guessing wrong
+// costs whoever hits this an hour.
+const disallowed = paths
+  .map((p) => ({ p, by: crawlerDisallow().find((d) => p.startsWith(d)) }))
+  .filter((x) => x.by);
+if (disallowed.length) {
+  throw new Error(
+    `prerendered pages are Disallow'd in robots.txt: ` +
+      `${disallowed.map((x) => `${x.p} (by "Disallow: ${x.by}")`).join(', ')} — ` +
+      `if that Disallow came from the page's own route, flip it to indexed: true in ` +
+      `server/src/seo.ts or stop prerendering it; if it came from another route's ` +
+      `prefix, that page cannot be indexed under this URL at all`,
+  );
+}
+const unlisted = paths.filter((p) => !SITE_ROUTES.some((r) => r.indexed && covers(r.path, p)));
+if (unlisted.length) {
+  throw new Error(
+    `prerendered pages match no indexed route in server/src/seo.ts: ${unlisted.join(', ')} — ` +
+      `add the route to SITE_ROUTES with indexed: true`,
+  );
+}
+const empty = SITE_ROUTES.filter((r) => r.indexed && !paths.some((p) => covers(r.path, p)));
+if (empty.length) {
+  throw new Error(
+    `routes marked indexed in server/src/seo.ts but never prerendered: ${empty.map((r) => r.path).join(', ')} — ` +
+      `prerender them here, or mark them indexed: false (which also Disallow's them in robots.txt)`,
+  );
+}
+
+const urls = paths.map((p) => `${ORIGIN}${p}`);
 writeFileSync(
   join(dist, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n` +
