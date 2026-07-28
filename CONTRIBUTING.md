@@ -564,7 +564,12 @@ and neither is incidental:
 Milestones (`first-crossing`, `entered-ladder`, `peak-rating`) derive from one player's own
 history. "Passed X on the ladder" is deliberately absent: it needs the ladder's order
 reconstructed at two points in time, and the same recompute that can restate a delta can
-reorder the pair. The one new index in the schema, `idx_boards_updated`, exists for this
+reorder the pair. `entered-ladder` takes the provisional quota as an **argument** rather than
+reading `PROVISIONAL_MIN_TOURNAMENTS`, because `DEMO=1` relaxes it to
+`DEMO_PROVISIONAL_MIN_TOURNAMENTS` and the seeder's bots never reach the production 4 —
+hardcoding it made the milestone unreachable in exactly the environment built to click-test
+it. `app.ts`'s `provisionalMin()` is the one place that env is read, shared with
+`/api/leaderboard`; `activity.ts`, `stats.ts` and `tournaments.ts` touch no env at all. The one new index in the schema, `idx_boards_updated`, exists for this
 query — every other board sweep starts from a user or a tournament, not a time window.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,

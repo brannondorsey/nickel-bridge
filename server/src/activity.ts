@@ -1,5 +1,5 @@
 import { db, BOARDS_PER_TOURNAMENT } from './db.js';
-import { PROVISIONAL_MIN_TOURNAMENTS, standings } from './tournaments.js';
+import { standings } from './tournaments.js';
 
 /**
  * The activity feed ("TRAFFIC") — who else has been on the bridge lately.
@@ -155,8 +155,15 @@ interface CrossingRow {
  * wipe-and-replay that ordering is not stable: the same recompute that can
  * restate a delta can also reorder the pair. A milestone that quietly stops
  * being true is worse than no milestone.
+ *
+ * `provisionalMin` is passed in rather than read from the constant, because
+ * DEMO=1 relaxes it (DEMO_PROVISIONAL_MIN_TOURNAMENTS) and the seeder's bots
+ * never reach the production quota — hardcoding it made 'entered-ladder'
+ * unreachable in exactly the environment built for click-testing this screen.
+ * app.ts owns that env read for the same reason /api/leaderboard does; nothing
+ * in this module or stats.ts or tournaments.ts touches process.env.
  */
-function milestonesFor(userId: number, sinceUnix: number): ActivityEvent[] {
+function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number): ActivityEvent[] {
   const crossings = stmtAllCrossings.all(userId, BOARDS_PER_TOURNAMENT) as {
     tournament_id: number;
     finished_at: number;
@@ -174,7 +181,7 @@ function milestonesFor(userId: number, sinceUnix: number): ActivityEvent[] {
   const series = stmtEloSeries.all(userId) as { tournament_id: number; before: number; after: number }[];
 
   // The crossing that took them over the provisional quota and onto the ladder.
-  const ladder = series[PROVISIONAL_MIN_TOURNAMENTS - 1];
+  const ladder = series[provisionalMin - 1];
   const ladderAt = ladder ? finishedAt.get(ladder.tournament_id) : undefined;
   if (ladderAt !== undefined && ladderAt >= sinceUnix) {
     out.push({ kind: 'milestone', userId, at: ladderAt, milestone: 'entered-ladder' });
@@ -203,7 +210,7 @@ function milestonesFor(userId: number, sinceUnix: number): ActivityEvent[] {
  * ungrouped: the client owns both, because both depend on a timezone this
  * process does not have.
  */
-export function recentActivity(sinceUnix: number): ActivityPayload {
+export function recentActivity(sinceUnix: number, provisionalMin: number): ActivityPayload {
   const events: ActivityEvent[] = [];
   const userIds = new Set<number>();
 
@@ -256,7 +263,7 @@ export function recentActivity(sinceUnix: number): ActivityPayload {
   // Milestones hang off crossings, so only players who finished something in
   // the window can have earned one.
   for (const userId of new Set(crossings.map((c) => c.user_id))) {
-    events.push(...milestonesFor(userId, sinceUnix));
+    events.push(...milestonesFor(userId, sinceUnix, provisionalMin));
   }
 
   const players: Record<number, ActivityPlayer> = {};

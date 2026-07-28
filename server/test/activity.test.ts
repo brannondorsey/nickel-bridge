@@ -145,6 +145,26 @@ describe('GET /api/activity', () => {
     expect(milestones.map((m) => m.milestone)).toContain('first-crossing');
   });
 
+  it('honours the provisional quota it is given, so demo and production agree', async () => {
+    const client = new TestClient(app, 'ActivityLadder');
+    await client.login();
+    await crossOnce(client);
+
+    const { recentActivity } = await import('../src/activity.js');
+    const since = Math.floor(Date.now() / 1000) - 8 * 86400;
+    const id = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityLadder'`).get() as { id: number }).id;
+    const ladderFor = (quota: number) =>
+      recentActivity(since, quota).events.filter(
+        (e) => e.kind === 'milestone' && e.userId === id && e.milestone === 'entered-ladder',
+      );
+
+    // The quota is a real input, not a baked-in constant: DEMO=1 relaxes it to
+    // 1 because the seeder's bots never reach the production 4, and hardcoding
+    // it made this milestone unreachable in demo and on every PR preview.
+    expect(ladderFor(1)).toHaveLength(1);
+    expect(ladderFor(4)).toHaveLength(0);
+  });
+
   it('never mentions a player who has not picked a handle', async () => {
     // /auth/dev creates the account; skipping /api/handle leaves it nameless.
     const res = await app.inject({ method: 'POST', url: '/auth/dev', payload: { name: 'Nameless' } });

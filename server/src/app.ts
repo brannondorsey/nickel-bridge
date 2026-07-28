@@ -35,6 +35,20 @@ import {
  */
 const ACTIVITY_WINDOW_S = 8 * 86400;
 
+/**
+ * The provisional rating quota in force for this deployment.
+ *
+ * DEMO=1 (previews + the permanent demo app) relaxes it, because the boot
+ * seeder plays each bot through at most 2 tournaments — well under the
+ * production quota — see DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment.
+ * Both the ladder and the activity feed's 'entered-ladder' milestone hang off
+ * this one number, so it lives here once rather than as a ternary per route:
+ * the feed originally hardcoded the production constant and the milestone was
+ * silently unreachable in demo as a result.
+ */
+const provisionalMin = () =>
+  process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
+
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
   // serializeRequestLog adds the caller's identity (Fly-Client-IP + user agent) to
@@ -178,11 +192,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // able to see. Only `yourRatedTournaments` consults the caller.
   app.get('/api/leaderboard', (req, reply) => {
     const user = optionalUser(req);
-    // DEMO=1 (previews + the permanent demo app) relaxes the quota so the
-    // boot seeder's ambient tournaments — at most 2 per bot, see
-    // DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment — still populate a
-    // visible leaderboard; off (the production quota applies) everywhere else.
-    const provisionalMin = process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
+    const quota = provisionalMin();
     const rows = db
       .prepare(
         `SELECT id, handle, picture, elo, rated_tournaments, played_tournaments FROM (
@@ -194,7 +204,7 @@ export async function buildApp(): Promise<FastifyInstance> {
            FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
          ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all(provisionalMin) as { id: number }[];
+      .all(quota) as { id: number }[];
     const movement = leaderboardMovement();
     // null, not 0, when nobody is signed in: the client renders a "you'll join
     // the field once you've completed N crossings — x of N so far" note off
@@ -214,7 +224,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({
       leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
       house,
-      provisionalMin,
+      provisionalMin: quota,
       yourRatedTournaments,
     });
   });
@@ -232,7 +242,7 @@ export async function buildApp(): Promise<FastifyInstance> {
    */
   app.get('/api/activity', (req, reply) => {
     if (!requireUserWithHandle(req, reply)) return;
-    return reply.send(recentActivity(Math.floor(Date.now() / 1000) - ACTIVITY_WINDOW_S));
+    return reply.send(recentActivity(Math.floor(Date.now() / 1000) - ACTIVITY_WINDOW_S, provisionalMin()));
   });
 
   /**

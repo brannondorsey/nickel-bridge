@@ -166,7 +166,26 @@ function result(c: Extract<ActivityEvent, { kind: 'crossing' }>): string {
 }
 
 /**
- * The italic line under a name. One or two clauses after the board count —
+ * Boards in a crossing. Mirrors the server's BOARDS_PER_TOURNAMENT (db.ts);
+ * packages/core is deliberately not a web dependency, so the handful of
+ * constants the client needs are mirrored rather than imported.
+ */
+const BOARDS_PER_CROSSING = 4;
+
+/**
+ * Boards this run played that its finished crossings don't account for — a
+ * tournament started and left unfinished in that part of the day.
+ *
+ * Goes negative in the opposite, equally normal case: someone who finishes a
+ * crossing on the first board of a session has one board and one crossing, and
+ * nothing needs saying about it. Only a positive remainder is worth a clause.
+ */
+function orphanBoards(run: Run): number {
+  return run.boards - run.crossings.length * BOARDS_PER_CROSSING;
+}
+
+/**
+ * The italic line under a name. Two or three clauses after the board count —
  * more than that and it stops being a sentence and starts being a table.
  */
 export function runSentence(run: Run): string {
@@ -174,24 +193,34 @@ export function runSentence(run: Run): string {
 
   const boards = plural(run.boards, 'board');
   const milestone = run.milestones[0];
+  // "6 boards · finished №41" can't both be true of one crossing, which is
+  // exactly four boards. Name the remainder so every board is accounted for.
+  const orphan = orphanBoards(run);
+  // The   is load-bearing: at phone width this clause wraps, and a plain
+  // space let the line break after the count, leaving "…3rd of 5 · 2" hanging
+  // at the end of a line where it reads as a pair of numbers rather than the
+  // start of a phrase.
+  const rest = run.crossings.length > 0 && orphan > 0 ? ` · ${orphan}\u00a0into another` : '';
 
   if (milestone) {
     const word = MILESTONE_WORDS[milestone.milestone];
     if (milestone.milestone === 'peak-rating' && milestone.value !== undefined) {
-      return `${boards} · ${word} — ${milestone.value}`;
+      return `${boards} · ${word} — ${milestone.value}${rest}`;
     }
     // A milestone earned on a single crossing keeps that crossing's result:
     // "first crossing finished" alone throws away the more interesting half of
     // the sentence. With several crossings there's no one result to attach.
-    return run.crossings.length === 1 ? `${boards} · ${word} — ${result(run.crossings[0])}` : `${boards} · ${word}`;
+    return run.crossings.length === 1
+      ? `${boards} · ${word} — ${result(run.crossings[0])}${rest}`
+      : `${boards} · ${word}${rest}`;
   }
   if (run.crossings.length === 1) {
     const c = run.crossings[0];
-    return `${boards} · finished №${crossingNo(c)} — ${result(c)}`;
+    return `${boards} · finished №${crossingNo(c)} — ${result(c)}${rest}`;
   }
   if (run.crossings.length > 1) {
     const best = Math.max(...run.crossings.map((c) => c.pct));
-    return `${boards} · ${plural(run.crossings.length, 'crossing')}, best ${best}%`;
+    return `${boards} · ${plural(run.crossings.length, 'crossing')}, best ${best}%${rest}`;
   }
   return `${boards} · nothing finished yet`;
 }
