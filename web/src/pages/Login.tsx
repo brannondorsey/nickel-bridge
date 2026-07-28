@@ -59,7 +59,7 @@ export default function Login() {
         // leave the whole pitch unread.
         cue={
           <a className="label-caps landing-cue" href="#landing-pitch">
-            WHAT THIS IS <span aria-hidden="true">▼</span>
+            WHAT IS THIS? <span aria-hidden="true">▼</span>
           </a>
         }
       />
@@ -69,13 +69,18 @@ export default function Login() {
         <h2 className="landing-title">A small club, one crossing at a time.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text="Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more. Four deals to a crossing, and nobody waiting on you to finish."
+            text="Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more."
+            {...LANDING_LINKS}
+          />
+        </p>
+        <p className="landing-copy">
+          <GlossaryProse
+            text="The people you’re truly playing came before you, and will come after — each one meeting your same cards at their own pace."
             {...LANDING_LINKS}
           />
         </p>
         <p className="landing-aside">
-          Named for the 1925 toll bridge over the James River: a dime to cross, then a nickel, now fifty cents. The name
-          stuck anyway.
+          Named for the 1925 toll bridge over the James River: a dime to cross, then a nickel, now fifty cents.
         </p>
       </section>
 
@@ -85,14 +90,14 @@ export default function Login() {
         <SpecimenField className="landing-specimen" />
         <p className="landing-copy">
           <GlossaryProse
-            text="Bad cards are no excuse here — everyone who crosses holds exactly what you held, whenever they get around to it. You're scored against what they did with it, not against the luck of the deal."
+            text="Bad cards are no excuse here — Margaret holds the same ones as you, whenever she gets around to them. You’re scored on what you did with the deal, against everyone who held it."
             {...LANDING_LINKS}
           />
         </p>
         <p className="landing-copy">
           {/* "the game" is bridge itself here, not the scoring term */}
           <GlossaryProse
-            text="That's duplicate: the luck is dealt out of the game, and judgment is what's left."
+            text="That’s duplicate: the luck is dealt out of the game, and judgment is what’s left."
             {...LANDING_LINKS}
             skip={['game']}
           />
@@ -104,7 +109,7 @@ export default function Login() {
         <h2 className="landing-title">Read the bid before you make it.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it's conventional — before you commit to it. Tap a robot's call and it does the same. Then, after you bid, a grade against the engine's own choice."
+            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it’s conventional — before you commit to anything. A robot’s call reads the same way, so the auction is never a code you’re shut out of. Then, once you’ve bid, a mark against the call the house would have made."
             {...LANDING_LINKS}
           />
         </p>
@@ -114,7 +119,7 @@ export default function Login() {
               <CallText call={DEMO_CALL} />
             </b>
             <StarGrade stars={3} />
-            <span>Excellent — the robot's choice too</span>
+            <span>Excellent — the robot’s choice too</span>
           </div>
           <p className="landing-grade-meaning">
             <GlossaryProse text="15–17 HCP, balanced. No five-card major." {...LANDING_LINKS} />
@@ -133,7 +138,7 @@ export default function Login() {
         </div>
         <p className="landing-copy">
           <GlossaryProse
-            text="Every board prints a receipt — the score itemized line by line, overtricks and insult and all — and then shows you the whole field on that deal. Results are cancelled with a postmark, wins and losses alike, and the ledger of crossings keeps the running rating."
+            text="Every board prints a receipt — the score itemized line by line, overtricks and insult and all — and then shows you what the rest of the field did with the same cards. Results are cancelled with a postmark, wins and losses alike, and the ledger of crossings keeps your running rating."
             {...LANDING_LINKS}
           />
         </p>
@@ -144,7 +149,7 @@ export default function Login() {
         <h2 className="landing-title">Reading the ledger is free.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text={`So is the practice board. Walk one deal with the tollkeeper — bid it, play it, read the receipt — and see whether this is a club you'd like to cross into. No account, and no record kept of practice boards.`}
+            text="So is the practice board. Walk one deal with the tollkeeper — bid it, play it, read the receipt — and see for yourself whether the bridge is worth crossing. No account needed, and the tollkeeper keeps no record of practice boards."
             {...LANDING_LINKS}
           />
         </p>
@@ -154,14 +159,14 @@ export default function Login() {
             THE GLOSSARY — {TERMS.length} TERMS
           </Button>
           <Button variant="secondary" to="/leaderboard">
-            THE FIELD — WHO'S CROSSED
+            THE FIELD — WHO’S CROSSED
           </Button>
         </div>
       </section>
 
       <footer className="landing-foot">
         <BridgeMark variant="footer" width={180} />
-        <p className="landing-aside">When you're ready, the gate is here.</p>
+        <p className="landing-aside">When you’re ready, the gate is here.</p>
         {/* A distinct label, not just for variety: two buttons reading
             "PLAY THE TOLL →" on one page are two things a screen reader (and
             every test that reaches for one by name) cannot tell apart. */}

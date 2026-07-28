@@ -306,24 +306,25 @@ const homeBody = `<article class="pr">
       <p>${esc(homeDesc)}</p>
       <h2>A small club, one crossing at a time</h2>
       <p>Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is
-        a robot of even temper; your opponents, two more. Four deals to a crossing, and nobody waiting on
-        you to finish.</p>
+        a robot of even temper; your opponents, two more. The people you are truly playing came before you,
+        and will come after — each one meeting your same cards at their own pace.</p>
       <h2>Everyone plays the same deals</h2>
       <p>Bad cards are no excuse here — everyone who crosses holds exactly what you held, whenever they
-        get around to it. You are scored against what they did with it, not against the luck of the deal.
+        get around to it. You are scored on what you did with the deal, against everyone who held it.
         That is duplicate bridge: the luck is dealt out of the game, and judgment is what is left.</p>
       <h2>Read the bid before you make it</h2>
       <p>Tap any call and the house tells you what it promises — the point range, the shape, whether it is
-        conventional — before you commit to it. Tap a robot’s call and it does the same. Then, after you
-        bid, a grade against the engine’s own choice, in Standard American Yellow Card.</p>
+        conventional — before you commit to anything. A robot’s call reads the same way, so the auction is
+        never a code you are shut out of. Then, once you have bid, a mark against the call the house would
+        have made, in Standard American Yellow Card.</p>
       <h2>Boards are tickets. Playing is paying the toll.</h2>
       <p>Every board prints a receipt — the score itemized line by line, overtricks and insult and all —
-        and then shows you the whole field on that deal. Results are cancelled with a postmark, and the
-        ledger of crossings keeps the running rating.</p>
+        and then shows you what the rest of the field did with the same cards. Results are cancelled with a
+        postmark, and the ledger of crossings keeps your running rating.</p>
       <h2>Before you sign anything</h2>
       <p>Reading the ledger is free: a <a href="/glossary">glossary of ${TERMS.length} bridge terms</a> in
         plain language, no account needed. So is the practice board — walk one deal with the tollkeeper,
-        bid it, play it, read the receipt.</p>
+        bid it, play it, read the receipt. The tollkeeper keeps no record of practice boards.</p>
       <p class="pr-cta"><a href="/">Play duplicate bridge at Nickel Bridge →</a></p>
     </article>`;
 
