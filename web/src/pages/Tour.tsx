@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
-import riverSceneNight from '../assets/bridge-river-scene-night.svg';
-import riverScene from '../assets/bridge-river-scene.svg';
-import { BridgeMark } from '../components/ds/BridgeMark';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
 import { FlipDigits } from '../components/ds/FlipDigits';
@@ -13,6 +10,7 @@ import { Loading } from '../components/ds/Loading';
 import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Postmark } from '../components/ds/Postmark';
+import { SignInActions } from '../components/ds/SignInActions';
 import { StarGrade } from '../components/ds/StarGrade';
 import { TicketStub } from '../components/ds/TicketStub';
 import { CallInspector } from '../components/game/CallInspector';
@@ -35,6 +33,7 @@ import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { postmarkDate, signedScore, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
 import { COPY, TOUR_LINKS, guidanceFor } from '../onboarding/script';
+import { stampTourDone } from '../onboarding/tourDone';
 import { BiddingPhase, PlayPhase } from './Board';
 
 /**
@@ -43,9 +42,8 @@ import { BiddingPhase, PlayPhase } from './Board';
  * before you commit, grades after), and the house philosophy (a small,
  * unhurried club; judgment over luck).
  *
- * It opens as the toll office's printed pamphlet — a cover and two short
- * panels (the club philosophy, then duplicate as a specimen ledger) with a
- * perforation-dot pager and an honest skip on every page.
+ * It opens on the deal itself — see the Stage type for what used to precede
+ * it and why that went.
  *
  * The spine is Board №0, a captured practice deal (onboarding/board0.ts)
  * replayed through Board.tsx's own exported BiddingPhase/PlayPhase — the
@@ -64,8 +62,8 @@ import { BiddingPhase, PlayPhase } from './Board';
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Every line of the tour's own voice — pamphlet body copy and the tollkeeper's
- * narration — under the tour's glossary link policy (onboarding/script.ts's
+ * Every line of the tour's own voice — the tollkeeper's narration — under
+ * the tour's glossary link policy (onboarding/script.ts's
  * TOUR_LINKS). A first crossing is where the words get met for the first time,
  * so the one screen in the app that says "dummy", "trumps" and "matchpoints"
  * to someone who has never seen them had better be able to define them.
@@ -92,23 +90,44 @@ const GUIDED_FORCED_DELAY_MS = 6000;
 // there's no narration line to read, just the fastForward copy repeating.
 const AUTO_STEP_DELAY_MS = 420;
 
-type Stage = 'cover' | 'bridge' | 'ledger' | 'offer' | 'board' | 'postmark';
-
-/** Panel II's illustration: one deal, three fates — the whole idea in a table. */
-const SPECIMEN = [
-  { who: 'You', contract: '4♠ by S =', score: 620, pct: 100, me: true },
-  { who: 'Harold', contract: '3♠ by S +1', score: 170, pct: 50, me: false },
-  { who: 'Margaret', contract: '4♠ by S −1', score: -100, pct: 0, me: false },
-];
+/**
+ * The board, then the postmark. Nothing in front of them.
+ *
+ * There used to be a four-page pamphlet here — a cover, a philosophy panel
+ * (I · THE BRIDGE), duplicate as a specimen ledger (II · THE LEDGER) and a
+ * practice offer — then, briefly, a single welcome screen merged from the
+ * first and last of those. Both were redundant by the time a reader arrived.
+ *
+ * The landing page makes the philosophy and duplicate arguments in its own
+ * sections I and II (word for word, down to a shared SpecimenField), and its
+ * section V then promises the practice board in the same breath as the CTA:
+ * "walk one deal with the tollkeeper — bid it, play it, read the receipt". A
+ * welcome screen restating that is the reader's own last ten seconds handed
+ * back. And it is not a minority path: the automatic gate fires for a new
+ * account arriving at `/`, which is where signing in FROM the landing page
+ * returns them, so essentially every first-timer came through that pitch.
+ *
+ * So the tour opens on the deal itself. The tollkeeper's first line is the
+ * framing ("Your hand, counted: fifteen high card points…"), the board head
+ * already carries the PRACTICE №0 ticket, and SKIP THE TUTORIAL moved to the
+ * narration ribbon — which is sticky, so unlike the pamphlet's fine print it
+ * is now reachable at every moment of the deal rather than only before it.
+ */
+type Stage = 'board' | 'postmark';
 
 export default function Tour() {
   const { me, refresh } = useMe();
   const navigate = useNavigate();
+  // The tour reads without an account (App.tsx's isPublicPath): the practice
+  // board is a captured replay, so nothing on this screen needs a session —
+  // but both doors out of it did. Signed out, skipping is just leaving, and
+  // finishing ends at the gate rather than at a real table.
+  const authed = Boolean(me?.user);
   // Mounted at the /tour route (a Glossary or Exhibit Hall replay) vs.
   // rendered by App's arrival gate in place of the routes. The gate unmounts
   // on refresh(); a routed visit has to navigate out itself.
   const routed = useLocation().pathname === '/tour';
-  const [stage, setStage] = useState<Stage>('cover');
+  const [stage, setStage] = useState<Stage>('board');
   const [busy, setBusy] = useState(false);
 
   // Skipping and finishing both stamp the visit server-side (idempotent,
@@ -118,8 +137,16 @@ export default function Tour() {
   // here every skip/continue control on the page — all `disabled={busy}` —
   // would stay wedged for the rest of the session, since a failed call never
   // flips onboardedAt and App.tsx keeps rendering this same Tour instance.
+  //
+  // Signed out there is no gate to stamp and no session to stamp it with, so
+  // leaving is just leaving: firing a POST that can only 401 would be noise
+  // in the console and a pointless wait on the way to the landing page.
   const skip = async () => {
     if (busy) return;
+    if (!authed) {
+      navigate('/');
+      return;
+    }
     setBusy(true);
     try {
       await api.setOnboarded();
@@ -135,7 +162,7 @@ export default function Tour() {
   // Deliberately NOT catching setOnboarded separately: a failed stamp leaves
   // the gate closed, so navigating to a freshly-placed board would show the
   // tour at a board URL until the next reload. Let it fall into the catch
-  // below and land back at the pamphlet's own exit instead.
+  // below and land back on the practice board, whose ribbon carries the exit.
   const playTheToll = async () => {
     if (busy) return;
     setBusy(true);
@@ -156,154 +183,84 @@ export default function Tour() {
     }
   };
 
-  if (stage === 'cover') {
-    return (
-      <div className="tour-gate">
-        <div className="tour-cover-head">
-          <span className="label-caps">{COPY.cover.dept}</span>
-          <InkStamp color="var(--accent)" rotate={-7}>
-            {COPY.cover.stamp}
-          </InkStamp>
-        </div>
-        <div className="tour-cover-main">
-          <h1 className="tour-cover-title">{COPY.cover.title}</h1>
-          <p className="tour-aside">
-            <TourProse text={COPY.cover.aside} />
-          </p>
-          <div className="tour-gate-actions">
-            <Button onClick={() => setStage('bridge')}>{COPY.cover.begin}</Button>
-          </div>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-        <div className="tour-scene">
-          <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
-          <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
-        </div>
-      </div>
-    );
-  }
-
-  if (stage === 'bridge') {
-    return (
-      <div className="tour-page">
-        <span className="label-caps tour-page-no">{COPY.bridgePanel.no}</span>
-        <h1 className="tour-title">{COPY.bridgePanel.title}</h1>
-        <p className="tour-copy">
-          <TourProse text={COPY.bridgePanel.body1} />
-        </p>
-        <p className="tour-copy">
-          <TourProse text={COPY.bridgePanel.body2} />
-        </p>
-        <hr className="tour-rule" />
-        <p className="tour-aside">
-          <TourProse text={COPY.bridgePanel.aside} />
-        </p>
-        <div className="tour-page-foot">
-          <BridgeMark variant="footer" width={150} />
-        </div>
-        <div className="tour-gate-actions">
-          <Button onClick={() => setStage('ledger')}>CONTINUE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === 'ledger') {
-    return (
-      <div className="tour-page">
-        <span className="label-caps tour-page-no">{COPY.ledgerPanel.no}</span>
-        <h1 className="tour-title">{COPY.ledgerPanel.title}</h1>
-        <PerforatedPanel heading="THE FIELD — ONE DEAL, THREE CROSSINGS" className="tour-specimen">
-          <table className="fieldtable num">
-            <tbody>
-              {SPECIMEN.map((r) => (
-                <tr key={r.who} className={r.me ? 'me' : ''}>
-                  <td className="fieldtable-name">{r.who}</td>
-                  <td className="fieldtable-contract">
-                    <ContractLabel label={r.contract} /> · {signedScore(r.score)}
-                  </td>
-                  <td className="fieldtable-pct">
-                    <PctBar pct={r.pct} width={56} /> <b className="fieldtable-pctnum">{r.pct}</b>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </PerforatedPanel>
-        <p className="tour-copy">
-          <TourProse text={COPY.ledgerPanel.body1} />
-        </p>
-        <p className="tour-copy">
-          {/* "the game" here means bridge itself, not the scoring term */}
-          <TourProse text={COPY.ledgerPanel.body2} skip={['game']} />
-        </p>
-        <div className="tour-page-foot" />
-        <div className="tour-gate-actions">
-          <Button onClick={() => setStage('offer')}>CONTINUE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === 'offer') {
-    return (
-      <div className="tour-offer">
-        <span className="label-caps tour-page-no">{COPY.offerNo}</span>
-        <div style={{ height: 18 }} />
-        <TicketStub label="PRACTICE" value="№0" edgeText="ADMIT ONE" width={200} />
-        <h1 className="tour-title">{COPY.offerTitle}</h1>
-        <p className="tour-copy">
-          <TourProse text={COPY.offerBody} />
-        </p>
-        <div className="tour-offer-actions">
-          <Button onClick={() => setStage('board')}>PRACTICE →</Button>
-        </div>
-        <button type="button" className="label-caps tour-skip" onClick={skip} disabled={busy}>
-          {COPY.skip}
-        </button>
-      </div>
-    );
-  }
-
   if (stage === 'postmark') {
-    return (
-      <div className="tour-postmark">
-        <div className="tour-postmark-stamp">
-          <Postmark size={128} arcTop="NICKEL BRIDGE" arcBottom="FIRST CROSSING" line1="№0" line2={postmarkDate(Date.now() / 1000)} />
-        </div>
-        <h1 className="tour-title">{COPY.doneTitle}</h1>
-        <p className="tour-copy">
-          <TourProse text={COPY.doneBody} />
-        </p>
-        <p className="tour-aside">
-          <TourProse text={COPY.doneAside} />
-        </p>
-        <div className="tour-offer-actions">
-          <Button onClick={playTheToll} busy={busy} busyLabel="FINDING A TABLE…">
-            PLAY THE TOLL →
-          </Button>
-          <button type="button" className="label-caps tour-quietlink" onClick={skip} disabled={busy}>
-            TO THE LOBBY INSTEAD
-          </button>
-        </div>
-      </div>
-    );
+    return <TourPostmark authed={authed} busy={busy} onPlay={playTheToll} onSkip={skip} />;
   }
 
   // onLeave: the practice board's receipt carries the shared "Back to lobby"
   // secondary action, which is an ordinary <Link to="/"> on a live board — but
   // the tour renders in place of the routes, so it would change the URL and
   // leave the tester staring at the same receipt. Route it through skip(),
-  // which is what leaving actually means here.
-  return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} />;
+  // which is what leaving actually means here. (The tour shell also hides that
+  // button outright — see .tour-board .receipt in style.css — so this is a
+  // belt-and-braces override, not the visible exit; the visible one is the
+  // ribbon's SKIP THE TUTORIAL and, signed out, the postmark below.)
+  return <PracticeBoard onDone={() => setStage('postmark')} onLeave={skip} busy={busy} />;
+}
+
+/**
+ * The last page: the crossing is stamped, and the tour hands over.
+ *
+ * Its own component so a test can reach it without walking all thirteen
+ * decisions of board №0 first — that walk is a 30-second case, and the two
+ * doors here are exactly what changed when the tour went public.
+ *
+ * Signed in, the primary action places you into a real tournament. Signed
+ * out, it IS the sign-up: this is the one moment in the whole unauthenticated
+ * experience where asking for an account buys the visitor something they have
+ * just been shown the value of. The secondary door changes with it — someone
+ * who has never signed in has no lobby to be sent back to, so they're offered
+ * the ledger, which they can read right now.
+ */
+export function TourPostmark({
+  authed,
+  busy,
+  onPlay,
+  onSkip,
+}: {
+  authed: boolean;
+  busy: boolean;
+  onPlay: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="tour-postmark">
+      <div className="tour-postmark-stamp">
+        <Postmark size={128} arcTop="NICKEL BRIDGE" arcBottom="FIRST CROSSING" line1="№0" line2={postmarkDate(Date.now() / 1000)} />
+      </div>
+      <h1 className="tour-title">{COPY.doneTitle}</h1>
+      <p className="tour-copy">
+        <TourProse text={COPY.doneBody} />
+      </p>
+      <p className="tour-aside">
+        <TourProse text={authed ? COPY.doneAside : COPY.doneAsideAnon} />
+      </p>
+      <div className="tour-offer-actions">
+        {authed ? (
+          <>
+            <Button onClick={onPlay} busy={busy} busyLabel="FINDING A TABLE…">
+              PLAY THE TOLL →
+            </Button>
+            <button type="button" className="label-caps tour-quietlink" onClick={onSkip} disabled={busy}>
+              TO THE LOBBY INSTEAD
+            </button>
+          </>
+        ) : (
+          <>
+            {/* stampTourDone before the redirect: OAuth takes this browser off
+                to Google and brings it back as a brand-new account with
+                onboarded_at NULL, which is precisely the state App.tsx's
+                arrival gate exists to catch. Without the claim, finishing the
+                tour is rewarded with the tour. */}
+            <SignInActions onSignIn={stampTourDone} />
+            <Link className="label-caps tour-quietlink" to="/glossary">
+              READ THE LEDGER INSTEAD
+            </Link>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -318,11 +275,31 @@ export default function Tour() {
  * announces mutations inside a live region it is already watching, and a
  * region swapped out for a fresh, already-populated one is routinely missed.
  */
-function Tollkeeper({ text, skip }: { text: string; skip?: readonly string[] }) {
+function Tollkeeper({
+  text,
+  skip,
+  onSkip,
+  busy,
+}: {
+  text: string;
+  skip?: readonly string[];
+  onSkip: () => void;
+  busy: boolean;
+}) {
   return (
     <div className="tour-narr" role="status">
       <span key={text} className="tour-narr-wash" aria-hidden="true" />
-      <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
+      <div className="tour-narr-head">
+        <span className="label-caps tour-narr-who">THE TOLLKEEPER</span>
+        {/* The way out, and the only one now that nothing precedes the board.
+            It lives in the ribbon because the ribbon is sticky: the pamphlet's
+            fine print could only be reached before the deal started, this can
+            be reached at any point during it. Outside the role="status" text
+            so a live-region announcement never reads the control. */}
+        <button type="button" className="label-caps tour-narr-skip" onClick={onSkip} disabled={busy}>
+          {COPY.skip}
+        </button>
+      </div>
       <p>
         <TourProse text={text} skip={skip} />
       </p>
@@ -341,7 +318,7 @@ function Tollkeeper({ text, skip }: { text: string; skip?: readonly string[] }) 
  * the same ClaimOverlay + stageClaimSteps fast-forward the live board does,
  * instead of the flat cut a multi-trick jump would otherwise fall back to.
  */
-function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () => void }) {
+function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave: () => void; busy: boolean }) {
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -599,7 +576,7 @@ function PracticeBoard({ onDone, onLeave }: { onDone: () => void; onLeave: () =>
   return (
     <div className={`board-page tour-board${view.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <TourHead view={view} />
-      <Tollkeeper text={narration} skip={displayGuidance?.skip} />
+      <Tollkeeper text={narration} skip={displayGuidance?.skip} onSkip={onLeave} busy={busy} />
       {done ? (
         resultView === 'receipt' ? (
           <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} onLeave={onLeave} />

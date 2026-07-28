@@ -108,6 +108,22 @@ describe('TermSheet', () => {
     expect(within(dialog).getByRole('button', { name: 'follow suit' })).toBeInTheDocument();
   });
 
+  // The action link used to be hidden without a session, because /tour was
+  // gated and the door led back to a sign-in screen. /tour reads without an
+  // account now, so it shows for everyone — and these cases render TermSheet
+  // bare, with no MeContext at all, which is exactly the signed-out shape.
+  it('offers the first-crossing door, session or not', () => {
+    render(
+      <MemoryRouter>
+        <TermSheet slug="first-crossing" onOpenTerm={vi.fn()} onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: /walk it again/i })).toHaveAttribute(
+      'href',
+      '/tour',
+    );
+  });
+
   it('renders a graceful sheet for an unknown slug', () => {
     render(<TermSheet slug="no-such-term" onOpenTerm={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole('dialog')).toHaveTextContent(/Not in the ledger/);

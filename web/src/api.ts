@@ -332,10 +332,23 @@ export const api = {
         /** rank movement since the previous rated tournament; null without a prior snapshot */
         movement: number | null;
       }[];
+      /**
+       * The benchmark house personas — beside the ladder, never on it (they
+       * don't rate, so there's nothing to rank them by). Their profiles are
+       * the only ones readable without an account, so this is how a
+       * signed-out visitor finds one.
+       */
+      house: { id: number; handle: string; picture: string | null }[];
       /** rated tournaments needed before a player shows up in `leaderboard` */
       provisionalMin: number;
-      /** the signed-in user's own rated-tournament count, even if below provisionalMin */
-      yourRatedTournaments: number;
+      /**
+       * The signed-in user's own rated-tournament count, even if below
+       * provisionalMin — null when nobody is signed in. The ladder itself is
+       * public, so this is the one field that has an anonymous case, and it
+       * has to be distinguishable from a real 0: 0 means "you have played
+       * nothing yet", null means there is no you.
+       */
+      yourRatedTournaments: number | null;
     }>('/api/leaderboard'),
 };
 

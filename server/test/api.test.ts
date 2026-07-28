@@ -137,6 +137,39 @@ describe('handle (first-login username)', () => {
     expect(judyView.provisionalMin).toBe(4);
   });
 
+  // The ladder reads without an account (App.tsx's isPublicPath) — it's the
+  // social proof a visitor who hasn't signed up should be able to see. Only
+  // the "…and where do you sit?" field has an anonymous case, and it must come
+  // back null rather than 0: the client prints a "you'll join the field once
+  // you've completed N crossings — x of N so far" note off that number, and 0
+  // would say that to somebody with no record to be provisional about.
+  it('serves the leaderboard to a caller with no session, minus the you-shaped field', async () => {
+    const anon = new TestClient(app, 'LurkerAnon');
+    const res = await anon.raw('GET', '/api/leaderboard');
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.yourRatedTournaments).toBeNull();
+    expect(body.provisionalMin).toBe(4);
+    // the ladder itself is identical to what a signed-in caller sees
+    expect(body.leaderboard).toEqual((await alice.get('/api/leaderboard')).leaderboard);
+  });
+
+  // Play is still the toll: opening the game up to anonymous callers is
+  // exactly what this change must NOT do.
+  it('still refuses every gated endpoint without a session', async () => {
+    const anon = new TestClient(app, 'LurkerGated');
+    for (const [method, url] of [
+      ['POST', '/api/play'],
+      ['GET', '/api/tournaments'],
+      ['GET', '/api/tournaments/1'],
+      ['GET', '/api/tournaments/1/boards/1'],
+      ['POST', '/api/me/onboarded'],
+      ['POST', '/api/handle'],
+    ] as const) {
+      expect((await anon.raw(method, url)).statusCode, `${method} ${url}`).toBe(401);
+    }
+  });
+
   it('rejects invalid handles', async () => {
     const grace = new TestClient(app, 'Grace');
     await grace.post('/auth/dev', { name: grace.name });

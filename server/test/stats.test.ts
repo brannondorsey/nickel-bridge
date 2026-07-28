@@ -29,12 +29,34 @@ async function completeTournament(players: TestClient[]): Promise<number> {
 }
 
 describe('player stats', () => {
-  it('requires auth and 404s on unknown or garbage ids', async () => {
-    const anon = new TestClient(app, 'Anon');
-    expect((await anon.raw('GET', '/api/users/1/stats')).statusCode).toBe(401);
+  it('404s on unknown or garbage ids', async () => {
     expect((await alice.raw('GET', '/api/users/999999/stats')).statusCode).toBe(404);
     expect((await alice.raw('GET', '/api/users/abc/stats')).statusCode).toBe(404);
   });
+
+  // A person's record needs an account: handle, avatar, account age, a
+  // day-by-day activity heatmap, rivalries, every tournament played. Served
+  // anonymously, a sequential id walk is a roster dump, and there's no rate
+  // limiting in this app to slow one down.
+  //
+  // The 401 has to be UNIFORM — a real person's id and an id nobody has must
+  // answer identically — or the walk still maps which accounts exist even
+  // though it can't read them.
+  it('refuses a human profile to a caller with no session, indistinguishably from an unknown id', async () => {
+    const anon = new TestClient(app, 'Anon');
+    const real = await anon.raw('GET', `/api/users/${await userId(alice)}/stats`);
+    const nobody = await anon.raw('GET', '/api/users/999999/stats');
+    expect(real.statusCode).toBe(401);
+    expect(nobody.statusCode).toBe(401);
+    expect(real.body).toEqual(nobody.body);
+    // and nothing of hers leaked in the refusal
+    expect(real.body).not.toContain('Alice');
+  });
+
+  // (The house personas are the exception to that refusal — they're the reason
+  // the route is reachable without an account at all. Covered in
+  // ai-players.test.ts, which is the suite that has personas: freshDbEnv sets
+  // AI_PLAYERS=0 here.)
 
   it('404s on a signed-in user who never claimed a handle, instead of leaking a blank-name profile', async () => {
     const ghost = new TestClient(app, 'StatsGhost');

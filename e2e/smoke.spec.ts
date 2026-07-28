@@ -272,3 +272,55 @@ test('player stats page is reachable for self and others', async ({ page, contex
   await expect(page).toHaveURL(/\/players\/\d+/);
   await expect(page.locator('.player-hero')).toBeVisible();
 });
+
+/**
+ * The unauthenticated pass: what someone who has never signed in can reach.
+ *
+ * The point of the landing page and the public tour is that a visitor gets a
+ * real look at the game before the toll is asked, so the thing to guard here
+ * is that none of it quietly depends on a session — a 401 in the middle of the
+ * practice board is invisible to the unit suites, which mock the API away.
+ * Runs in its own context so no cookie from the tests above leaks in.
+ */
+test('a visitor with no account can read the pitch and walk the practice deal', async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+
+  await page.goto('/');
+  // the splash is still the hero, and the pitch is under it
+  await expect(page.getByTestId('splash')).toBeVisible();
+  await expect(page.getByText('Everyone plays the same deals.')).toBeVisible();
+
+  // the three doors that need no account
+  await page.getByRole('link', { name: /the field/i }).click();
+  await expect(page).toHaveURL(/\/leaderboard$/);
+  await expect(page.locator('.rank-head')).toBeVisible();
+  await expect(page.locator('.signinbar')).toBeVisible();
+
+  // …and the one profile a visitor can open: a house persona. Real players'
+  // records need an account, which is why the ladder's own rows don't link
+  // here and this panel does.
+  await page.locator('.rank-house .rank-row-house').first().click();
+  await expect(page).toHaveURL(/\/players\/\d+$/);
+  await expect(page.locator('.player-hero')).toBeVisible();
+  await expect(page.locator('.house-tag').first()).toBeVisible();
+  // owner-only controls stay off someone else's profile, signed out most of all
+  await expect(page.getByRole('button', { name: /sign out/i })).toHaveCount(0);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: /walk a practice deal/i }).click();
+  await expect(page).toHaveURL(/\/tour$/);
+
+  // straight onto the real board UI — bid box, hand, HCP badge, all of it
+  // rendered from the captured deal with no server board behind it
+  await expect(page.locator('.bidbox')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.hcp-badge').first()).toBeVisible();
+  await expect(page.locator('.tour-narr')).toBeVisible();
+
+  // and play is still the toll: a shared board link invites, it doesn't open.
+  // Asserted on the landing page itself rather than on a named sign-in button —
+  // WHICH door exists depends on the deployment's credentials (this harness has
+  // DEV_AUTH and no Google), which is exactly what SignInActions resolves.
+  await page.goto('/t/1/b/1');
+  await expect(page.getByText('Everyone plays the same deals.')).toBeVisible();
+  await expect(page.locator('.bidbox')).toHaveCount(0);
+});

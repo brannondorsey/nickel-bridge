@@ -499,4 +499,15 @@ export const leaderboardRows = [
 
 // meFixture (id 1, Margaret) already has 10 rated tournaments — past the
 // provisional quota, so the "you'll join the field" note stays hidden by default.
-export const leaderboardResponse = { leaderboard: leaderboardRows, provisionalMin: 4, yourRatedTournaments: 10 };
+export const houseRows = [
+  { id: 901, handle: 'The Novice', picture: null },
+  { id: 902, handle: 'The Regular', picture: null },
+  { id: 903, handle: 'The Shark', picture: null },
+];
+
+export const leaderboardResponse = {
+  leaderboard: leaderboardRows,
+  house: houseRows,
+  provisionalMin: 4,
+  yourRatedTournaments: 10 as number | null,
+};

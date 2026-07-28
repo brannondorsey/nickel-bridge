@@ -458,7 +458,7 @@ export const TERMS: GlossaryTerm[] = [
     // own — the onboarding tour, filed where a curious member will find it.
     slug: 'first-crossing',
     term: 'First crossing',
-    def: 'Every member’s first walk over the bridge: the toll office’s pamphlet, then practice board №0 with the tollkeeper. Nothing scored, nothing rated — and the ledger keeps no record of practice boards.',
+    def: 'Every member’s first walk over the bridge: the toll office’s welcome, then practice board №0 with the tollkeeper. Nothing scored, nothing rated — and the ledger keeps no record of practice boards.',
     themes: ['table'],
     aliases: ['app tour', 'tour', 'tutorial', 'onboarding', 'practice board'],
     linkify: false,

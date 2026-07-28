@@ -383,10 +383,36 @@ input {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 100dvh;
+  /* svh, NOT dvh — this one is load-bearing for scrolling.
+   *
+   * dvh tracks the *current* viewport, and on mobile the viewport grows as the
+   * URL bar retracts, which is exactly what the first downward scroll does. The
+   * hero has little content, so its min-height is what sizes it: measured on a
+   * 390-wide phone, a toolbar retract from 844 to 916 grew the hero by 72px and
+   * pushed the river scene — and every landing card under it — 72px further
+   * down the document, mid-scroll. That is the stutter; the page was moving
+   * against the thumb.
+   *
+   * svh is the *small* viewport (toolbar shown), a fixed number that never
+   * changes during a scroll. lvh would be wrong in the other direction: the
+   * hero would start taller than the screen and push the bridge below the fold
+   * at load. */
+  min-height: 100svh;
   overflow: hidden;
   background: var(--paper);
   padding-bottom: 130px;
+}
+/* The fallback for browsers with neither svh nor dvh — they never had the
+   stutter, but without this they get min-height: auto and no hero at all.
+   It has to be its own @supports rule rather than a second declaration in the
+   block above: esbuild collapses duplicate properties in one rule and silently
+   drops the fallback. And it has to sit BEFORE .splash-auto, or its equal
+   specificity would win on source order and give the overlay a height it
+   deliberately doesn't want. */
+@supports not (min-height: 100svh) {
+  .splash {
+    min-height: 100vh;
+  }
 }
 /* auto mode: overlay above the app; its exit fade reveals Home beneath. */
 .splash-auto {
@@ -3153,6 +3179,17 @@ a.stat-tile:hover {
   font-style: italic;
   color: var(--muted);
 }
+/* A caveat that belongs to a whole panel rather than one row — said once at
+   the top of SIGNED OUT instead of repeated in every description. */
+.exhibit-panel-note {
+  margin: 0 0 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-quiet);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--muted);
+}
 .exhibit-reset-armed {
   border-color: var(--negative);
   color: var(--negative);
@@ -3476,163 +3513,7 @@ a.stat-tile:hover {
 
 /* ---- The first crossing (pages/Tour.tsx + web/src/onboarding) ---- */
 
-/* The pamphlet cover ("So you've come to cross.") over the river scene */
-.tour-gate {
-  position: relative;
-  flex: 1;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
-  background: var(--paper);
-  padding: 24px 24px 170px;
-}
-.tour-cover-head {
-  position: absolute;
-  top: 22px;
-  left: 24px;
-  right: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.tour-cover-head .label-caps {
-  color: var(--ink);
-}
-.tour-cover-title {
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 30px;
-  line-height: 1.18;
-  margin: 0;
-}
-.tour-cover-main .tour-aside {
-  text-align: left;
-  margin: 10px 0 0;
-}
-/* center the cover's content while the quiet skip settles at the page foot,
-   just above the river scene — fine print, apart from the real action */
-.tour-cover-main {
-  margin: auto 0;
-}
-
-/* Inner pamphlet panels (I · THE BRIDGE, II · THE LEDGER) */
-.tour-page {
-  flex: 1;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  padding: 26px 24px 12px;
-}
-.tour-page-no {
-  color: var(--ink);
-}
-.tour-page .tour-title {
-  text-align: left;
-  margin: 12px 0 0;
-}
-.tour-page .tour-copy {
-  text-align: left;
-  max-width: none;
-  margin: 12px 0 0;
-  font-size: 16px;
-}
-.tour-page .tour-aside {
-  text-align: left;
-  margin: 12px 0 0;
-}
-.tour-rule {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin: 16px 0 0;
-  width: 100%;
-}
-.tour-page-foot {
-  display: flex;
-  justify-content: center;
-  margin-top: auto;
-  padding: 18px 0 6px;
-}
-.tour-specimen {
-  margin: 14px 0 2px;
-}
-
-/* A term sheet's action link (terms.ts `action` — the ledger's easter-egg
-   terms, currently only First crossing → /tour). */
-.gloss-action {
-  display: inline-block;
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  margin-top: 12px;
-  padding: 4px 0;
-}
-
-/* The quiet skip: fine print at each pamphlet page's foot — always in the
-   same place, never competing with the page's one real action. */
-.tour-skip {
-  appearance: none;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  align-self: center;
-  color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  padding: 14px 18px;
-}
-
-.tour-gate-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 18px;
-}
-.tour-aside {
-  font-style: italic;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--muted);
-  text-align: center;
-  margin: 4px 0 0;
-}
-.tour-scene {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-}
-.tour-scene img {
-  display: block;
-  width: 100%;
-  height: 146px;
-  object-fit: cover;
-  object-position: bottom;
-}
-/* same static day/night asset swap as .splash-bridge (see its comment) */
-.tour-scene img.night-scene {
-  display: none;
-}
-[data-theme='night'] .tour-scene img.day-scene {
-  display: none;
-}
-[data-theme='night'] .tour-scene img.night-scene {
-  display: block;
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme]) .tour-scene img.day-scene {
-    display: none;
-  }
-  html:not([data-theme]) .tour-scene img.night-scene {
-    display: block;
-  }
-}
-
-/* Offer + postmark interstitials share the auth-screen posture */
-.tour-offer,
+/* The postmark interstitial, in the auth-screen posture */
 .tour-postmark {
   flex: 1;
   min-height: 100dvh;
@@ -3655,7 +3536,6 @@ a.stat-tile:hover {
   font-size: 15.5px;
   line-height: 1.5;
 }
-.tour-offer .tour-aside,
 .tour-postmark .tour-aside {
   margin-top: 10px;
 }
@@ -3709,6 +3589,32 @@ a.stat-tile:hover {
   background: var(--surface-inset, var(--surface));
   border-bottom: 1px solid var(--line);
   padding: 9px 16px 10px;
+}
+/* The skip sits opposite the run-in label, on the ribbon's own line, so the
+   narration below keeps its full measure. */
+.tour-narr-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Fine print, not a peer of the tollkeeper's own label: an honest way out
+   should be findable without competing with the narration for attention.
+   Smaller and lighter than .label-caps, and it keeps the underline so it still
+   reads as something to tap. */
+.tour-narr-skip {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  flex: none;
+  padding: 2px 0 2px 8px;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.75;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .tour-narr .tour-narr-who {
   display: block;
@@ -3775,4 +3681,223 @@ a.stat-tile:hover {
    action (Board's "Back to lobby") stays hidden inside the tour shell. */
 .tour-board .receipt .board-actions .ds-btn-secondary {
   display: none;
+}
+
+/* The house panel on Rankings: two columns, not the ladder's four — personas
+   have no rank and no rating to show, only a door into their record. */
+.rank-house {
+  margin: 14px 16px 0;
+}
+.rank-row-house {
+  grid-template-columns: 1fr auto;
+}
+.rank-row-house .rank-name {
+  font-style: italic;
+  color: var(--muted);
+}
+.rank-house-cue {
+  color: var(--muted);
+}
+
+/* The signed-out stand-in for a person's profile (pages/Player.tsx). */
+.stats-gated {
+  margin: 24px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  padding: 18px 16px 20px;
+  text-align: center;
+}
+.stats-gated-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---- Landing (pages/Login.tsx — what a visitor without an account gets) ----
+
+   The splash hero is untouched: it's still `.splash`, still 100dvh, and
+   `.splash-auto` (the returning-visitor overlay) is the same element with six
+   properties swapped. So nothing here may add a rule to bare `.splash` — every
+   landing rule hangs off `.landing`, and the hero simply becomes the first
+   child of a taller page instead of the whole of a short one.
+
+   `.shell` is already a flex column at min-height 100dvh, so appending
+   siblings under a `flex: 1` hero works without touching the frame. */
+.landing {
+  display: flex;
+  flex-direction: column;
+}
+/* The hero stops claiming the leftover height once there's a page under it —
+   without this it grows to swallow the sections and they never come into view
+   on a short viewport. */
+.landing .splash {
+  flex: none;
+}
+
+/* The "there is more below" cue. Sits above the river scene rather than in the
+   splash stack, so the hero's own composition (wordmark, rule, actions, pitch)
+   is untouched — and it fades in last, after the CTA has had its moment. */
+.landing-cue {
+  position: absolute;
+  /* clear of the river scene, which is 146px tall at bottom: 0 — the cue must
+     never print over the bridge linework */
+  bottom: 162px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px;
+  animation: nbSubIn 0.6s ease-out 1.4s both;
+}
+.landing-cue span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+/* Each panel is a page of the pamphlet, and the rule between two of them is a
+   fold — so it needs air on BOTH sides. The bottom padding is what was missing:
+   every child in here carries top margin only (.landing-copy, .landing-aside),
+   so a panel's last line sat flush against the next panel's rule while its own
+   label had 30px above it. Symmetric, and roomier than the old top value. */
+/* Asymmetric on purpose, now that the cards stack. The bottom padding is the
+   runway the *next* card's edge travels through: with it too tight, that edge
+   arrives on the previous card's last line and reads as encroachment rather
+   than as one sheet settling over another. Top padding only has to keep the
+   card's own label off its leading edge, so it stays smaller. */
+.landing-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 40px 24px 68px;
+  border-top: 1px solid var(--ink);
+  /* opaque, because a stacked card has to hide the one it slides over */
+  background: var(--paper);
+}
+
+/* The stack: each fold pins at the top and the next slides up over it, like
+   sheets of the pamphlet being laid down one on the next.
+ *
+ * This replaces an earlier scroll-timeline fade (animation-timeline: view()),
+ * which was invisible to anyone whose browser lacks that feature — Chromium
+ * only, at time of writing. Sticky positioning is layout, not animation: it
+ * works everywhere, needs no JS, and is a far stronger read than a 20px fade.
+ *
+ * Every panel sticks at the same top: 0 and they share one containing block
+ * (.landing), so an already-pinned card simply stays there while the next one
+ * covers it — later siblings paint over earlier ones by DOM order, no z-index
+ * needed. The card backgrounds above are what make that read as a stack rather
+ * than as overlapping text.
+ *
+ * The min-height guard is the safety rail, not a nicety. A sticky card taller
+ * than the viewport would pin its top at 0 with its own lower half permanently
+ * below the fold and unreachable by scrolling. The tallest panel measures
+ * ~451px, so 600px of viewport leaves real headroom for larger text settings;
+ * below that — landscape phones, short windows — the cards fall back to plain
+ * document flow, which is exactly the page as it reads without this effect.
+ *
+ * Kept out of reduced-motion, too: cards passing over one another is the sort
+ * of scroll-coupled movement that request is usually asking to be spared. */
+@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
+  .landing-panel {
+    position: sticky;
+    top: 0;
+  }
+  /* The foot is the bottom of the deck and never pins, but it still slides
+     over the last pinned card, so it needs the same opaque backing. */
+  .landing-foot {
+    position: relative;
+    background: var(--paper);
+  }
+}
+.landing-no {
+  color: var(--ink);
+}
+.landing-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 12px 0 0;
+}
+.landing-copy {
+  margin: 12px 0 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.landing-aside {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+.landing-specimen {
+  margin: 16px 0 2px;
+}
+
+/* III — one graded call, shown the way the board really prints it */
+.landing-grade {
+  margin: 16px 0 2px;
+}
+.landing-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+}
+.landing-grade-call {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 17px;
+}
+.landing-grade-meaning {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* IV — the motif row: a ticket and a cancellation, side by side */
+.landing-motifs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 18px 0 2px;
+}
+
+/* V — the three doors that need no account. The whole page exists to arrive
+   here, so it gets the inset call-to-action surface. */
+/* Keeps .landing-panel's ink border rather than the quieter surface line: it's
+   a card in the stack like the others, and its leading edge has to read the
+   same as theirs as it slides over IV. No padding-bottom override either — it
+   used to add the breathing room every fold now has. */
+.landing-doors {
+  background: var(--surface);
+}
+.landing-door-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.landing-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--ink);
+  padding: 26px 24px 32px;
+}
+.landing-foot .landing-aside {
+  text-align: center;
+  margin: 2px 0 0;
+}
+.landing-foot-cta {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
 }

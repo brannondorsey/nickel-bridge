@@ -91,18 +91,23 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 sheet itself, Attribution.tsx the shared CC BY-SA credit block — see
                 "The glossary" below),
                 index.html (the SPA shell — holds the site-wide SEO block between its
-                seo:start/seo:end markers, which the glossary prerender replaces per
-                page, plus the pre-paint night-mode script),
-                scripts/prerender-glossary.mjs (a BUILD STEP, not an offline generator
+                seo:start/seo:end markers, which the prerender replaces per page, plus
+                the pre-paint night-mode script),
+                scripts/prerender.mjs (a BUILD STEP, not an offline generator
                 like tools/'s — `build` runs it after `vite build` to prerender the
-                glossary into dist/glossary-static/ + sitemap.xml; it lives here rather
+                glossary into dist/glossary-static/ and the landing page into
+                dist/home-static/, plus sitemap.xml; it lives here rather
                 than in tools/ because .dockerignore drops the root-level tools/ and
                 scripts/, see "Discoverability" below),
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 components/ds/ (design-system pieces, incl. SignInBar — the logged-out
-                glossary's bottom bar, standing in for the TabBar) + components/game/ (auction, bid box,
+                bottom bar standing in for the TabBar, and SignInActions — the ONE place
+                that resolves which sign-in doors a deployment has) + components/game/
+                (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
-                GlossaryProse.tsx — SuitText + tappable glossary terms),
+                GlossaryProse.tsx — SuitText + tappable glossary terms,
+                SpecimenField.tsx — the "one deal, three crossings" table the tour and
+                the landing page share),
                 src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype;
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
@@ -386,7 +391,14 @@ neither wake it nor keep it awake. `server/src/logging.ts` therefore logs `clien
 default fields; `remoteAddress` deliberately still means the proxy. A line with no `clientIp`
 came from flyd, not the internet. Note the SPA fallback above returns **200** for every
 unmatched path, so scanner probes do not show up as 404s — the user agent is the honest
-signal, not the status code. Historical machine time comes from Fly's Prometheus
+signal, not the status code. This pulls directly against the discoverability work above,
+which exists to get `/` and the glossary crawled: every one of those visits is a wake, and
+they are the wakes we *want*. `robots.txt` is the lever for the rest — a route that isn't
+prerendered has nothing to offer a crawler and should stay `Disallow`ed, which is why
+`/leaderboard`, `/players/` and `/tour` are on that list despite reading without an
+account. On the API side, `app.ts`'s interactive-request hook gates on `hasSession` rather
+than the `/api/` prefix, so anonymous polling of the public reads can't also park the AI
+personas' background play. Historical machine time comes from Fly's Prometheus
 (`fly_instance_up`, scraped every 15s; the metric is simply absent while suspended). Query it
 with `Authorization: FlyV1 <token>` — not `Bearer` — and derive uptime from raw samples
 rather than `count_over_time`, which gets downsampled over long ranges and badly under-reports.
@@ -434,15 +446,32 @@ tournaments deliberately never get AI rows, so a canned exhibit couldn't show th
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash and the automatic first-crossing tour
 (`App.tsx`) — the tour is click-testable from its FRONT DOOR gallery row, which opens
-`/tour`. **Shipping a new
+`/tour`.
+One more group is client-only and unlike all the others: **SIGNED OUT** (`Scenarios.tsx`'s
+`SIGNED_OUT`) really ends the Inspector session — `api.logout()`, then a hard
+`location.assign`, so the app boots as a first-time visitor's browser would with no stale
+`me` to flash the signed-in variant. It has to: the landing page's live links, the tour's
+ending toll gate, the ladder's unlinked human rows and a refused profile are all decided by
+whether `me.user` is genuinely null, and no overlay can fake that. The way back is `/demo`,
+said once on the panel rather than in every row. **Shipping a new
 hard-to-reach or delta-driven UI state ⇒ add or update an exhibit in `scenarios.ts`** (mine
-the recipe with the tool, label it from the tester's point of view) — the drift-guard test
+the recipe with the tool, label it from the tester's point of view) — or, for a state that
+needs no server board, a client-only row like those two groups. The drift-guard test
 keeps existing exhibits honest, but only this rule keeps the gallery covering new features.
 
-**The first crossing (onboarding):** a new account gets the toll office's pamphlet before
-the app — a cover ("Welcome to the bridge."), the philosophy panel (I · THE BRIDGE), and
-duplicate as a specimen ledger (II · THE LEDGER), a quiet "skip the tutorial" fine-print
-link at the foot of every page — then the tollkeeper's practice board. `users.onboarded_at`
+**The first crossing (onboarding):** a new account goes straight onto the tollkeeper's
+practice board — nothing precedes it. It used to be a four-page pamphlet (cover, a
+philosophy panel I · THE BRIDGE, duplicate as a specimen ledger II · THE LEDGER, then a
+practice offer), and briefly a single welcome screen merged from the first and last of
+those. Both were redundant by the time anyone read them: the landing page makes the
+philosophy and duplicate arguments in its own sections I and II — word for word, down to
+the headings and a shared `SpecimenField` — and its section V promises the practice board
+in the same breath as the CTA that leads here. Nor is that a minority path; the gate fires
+for a new account arriving at `/`, which is exactly where signing in from the landing page
+returns them. Duplicate is argued only after the deal now, by the field reveal, with the
+house personas' real results on the cards just played. **`COPY.skip` moved to the
+tollkeeper's narration ribbon** — sticky, so unlike the pamphlet's fine print the way out
+is reachable at every moment of the deal rather than only before it starts. `users.onboarded_at`
 NULL makes `App.tsx` render `pages/Tour.tsx` in place of the routes, but only when the
 session *arrived* at the main app (`/`, captured once at mount): a deep-link arrival goes
 straight to its destination and meets the tour on a later home arrival instead, and
@@ -482,7 +511,7 @@ exactly as the engine emitted it). Narration lives in `onboarding/script.ts`, ha
 against the capture — `onboarding/tour.test.tsx` is the drift guard that forces re-curation
 if the capture is regenerated onto a different line (including the field outcomes
 `COPY.fieldSay` names by hand). Every line of the tour's own voice
-(pamphlet body copy and the tollkeeper's ribbon, but not its display type) renders through
+(the tollkeeper's ribbon, but not its display type) renders through
 `GlossaryProse` under `script.ts`'s `TOUR_LINKS` policy, so the words a first-timer is
 meeting for the first time open the term sheet — which means the gate-rendered tour needs
 its own `GlossaryProvider` in `App.tsx`, since it renders in place of the routes the app-wide
@@ -561,38 +590,118 @@ tabs share the width while they fit, and only overflow into the horizontal scrol
 fade + chevron, active tab auto-centers) once the gates outgrow it — so future gates fit
 without a hamburger.
 
-**Discoverability: the glossary is the front door from search.** Everything else in the
-app needs an account, so a crawler saw exactly one URL — a login splash carrying ~20 words
-of deliberately cryptic copy. Three pieces changed that, and they only make sense together:
+**The unauthenticated experience.** For a long time a visitor saw exactly one screen: a
+login splash carrying ~20 words of deliberately cryptic copy, then Google OAuth. That is
+also all a crawler saw. Both problems have the same fix — let people in far enough to
+decide — and the pieces only make sense together.
 
-- **The routes are public.** `isGlossaryPath` in `App.tsx` renders `/glossary` and
-  `/glossary/:slug` for a signed-out visitor instead of `<Login />`, with `ds/SignInBar`
-  in the TabBar's slot (every other tab needs an account). Nothing is un-gated but static
-  reference data — no board state, no standings, nothing user-scoped. `TermSheet` hides a
-  term's `action` link when signed out, since those point at gated screens (`/tour`).
-- **They're prerendered.** The app is client-rendered, so a crawler that doesn't run JS
-  (Bing, DuckDuckGo, most social and LLM crawlers) still saw an empty `#root`.
-  `web/scripts/prerender-glossary.mjs` runs after `vite build` and emits one static page per
-  core term into `web/dist/glossary-static/`, each a copy of the built `index.html` with
-  the `seo:start`/`seo:end` head span swapped and `#root` filled. The module script is
-  copied through untouched, so a human following a search result still boots the ordinary
-  SPA over it (React clears `#root` on mount — the markup is a fallback, never a second
-  copy of the UI to maintain). `app.ts` serves those files ahead of the SPA fallback, by
+- **`isPublicPath` in `App.tsx`** is the list: `/`, `/tour`, `/leaderboard`,
+  `/players/:id`, `/glossary`, `/glossary/:slug`. A signed-out visitor gets those routes
+  rendered for real, with `ds/SignInBar` in the TabBar's slot on the content ones
+  (`wantsSignInBar` excludes `/` and `/tour`, which carry their own ask). Anything else
+  falls through to the landing page — a shared board link should invite, not 404. The
+  invariant is no longer "nothing user-scoped": profiles ARE someone's data. It is that
+  **nothing here writes, nothing is scoped to the VIEWER, and no live board state leaks.**
+- **`pages/Login.tsx` is the landing page.** The `<Splash>` stays exactly as it was — the
+  toll gate is the brand, and `.splash-auto`, the returning-visitor overlay, is the same
+  component — and the pitch scrolls below it. Never add a rule to bare `.splash`;
+  `.splash-auto` overrides only six properties, so everything else leaks into it. Landing
+  rules hang off `.landing`. The page ends on the three doors that need no account, which
+  is the only place they're advertised.
+- **Navigating resets the scroll offset** (`App.tsx`). A router navigation swaps the DOM
+  without touching the window, which nothing noticed while every signed-out screen was a
+  single 100dvh splash: a document shorter than the offset clamps back to the top on its
+  own. A landing page several screens tall doesn't, so the glossary's `PLAY THE TOLL`
+  dropped a reader who had scrolled the term list *below* the hero — sign-in included —
+  and read as a dead button. The reset skips POP (back/forward is the one case where the
+  old offset is the right answer, and the browser restores it already) and anything that
+  leaves the path alone, since a term sheet is a `?term=` push on the route you're
+  already reading.
+- **The tour is playable signed out.** `pages/Tour.tsx` replays a captured deal
+  (`onboarding/board0.json`) through the real board UI, so it never needed a server board
+  — only its two exits did. Signed out, skipping just leaves, and the postmark's
+  `PLAY THE TOLL →` becomes the sign-in itself. `TermSheet` no longer hides a term's
+  `action` link, since its one destination (`/tour`) is public now.
+- **The tour survives sign-in.** OAuth returns to `/`, which is exactly where the
+  first-crossing gate fires — so finishing the tour would be rewarded with the tour.
+  `onboarding/tourDone.ts` (`nb:tourDone`, alongside `nb:lastVisit` and `nb:theme`) is the
+  claim: stamped on the way out to the gate, traded by `App.tsx` for
+  `POST /api/me/onboarded` once a session exists. Three details are load-bearing, not
+  defensive — the read is **non-destructive** (StrictMode double-invokes the `useState`
+  initializer), it's read at **mount into state** (an effect would flash the tour's
+  board first), and the claim **expires** (~1h, or an abandoned OAuth silently skips
+  onboarding for whoever signs in on that browser next). The suppression flag is
+  write-once for the session and never flipped back: clearing it when the stamp lands
+  would re-open the gate for the render or two before the refreshed `me` arrives.
+- **The leaderboard is public**, resolved with `optionalUser` (`auth.ts`) rather than
+  `requireUserWithHandle`. Its one viewer-dependent field, `yourRatedTournaments`, returns
+  **`null`** and not `0` — the client prints a "x of N crossings so far" note off it, which
+  would be a lie told to somebody with no record. Signed out, the ladder's rows don't link:
+  every one would lead to the same sign-in wall (see the next point), and a page of those
+  is a page of dead ends.
+- **Profiles are public for the HOUSE only.** `GET /api/users/:id/stats` serves an
+  anonymous caller when `users.kind = 'ai'` and refuses otherwise. The personas are
+  synthetic — nobody's record, and the one populated profile a visitor can read before
+  signing up — while a human's profile is handle, avatar, account age, a day-by-day
+  activity heatmap, rivalries and every tournament played. Served anonymously that turns a
+  sequential id walk into a roster dump, and this app has no rate limiting to slow one
+  down. Two details are load-bearing: the 401 is **uniform** (an unknown id answers exactly
+  like a real person's, so the walk can't even map which accounts exist), and the
+  kind check runs through `profileKind()` **before** `playerStats()`, so a walk can't drive
+  the full stats query pile for every id it tries. The personas are reachable at all
+  because `/api/leaderboard` returns them in a `house` array beside the ladder — they never
+  rate, so they can't be ranked on it. `Player.tsx` renders an explanation rather than
+  "Player not found" for a refusal, since the uniform 401 means the client genuinely
+  doesn't know which it was.
+- **`app.ts`'s interactive-request hook gates on `hasSession`**, not the `/api/` prefix:
+  without that, a scraper polling the public leaderboard would park the AI personas'
+  background play indefinitely.
+- **A per-user "hide my profile from anonymous traffic" setting is the agreed escape hatch
+  if the remaining exposure (handles + Elo on the public ladder) becomes a problem; it does
+  not exist yet.** There is no rate limiting anywhere in this codebase either — a
+  deliberate call, not an oversight, since what stays public is a single bounded list.
+
+**Discoverability: what gets INDEXED is a separate decision.** The app is client-rendered,
+so a crawler that doesn't run JS (Bing, DuckDuckGo, most social and LLM crawlers) sees an
+empty `#root`. Only prerendered pages are worth indexing, and `robots.txt` in
+`server/src/app.ts` reflects exactly that:
+
+- **The glossary is prerendered**, and it's the app's best long-tail surface: ~125 curated
+  terms, each a page someone might land on from "what is a squeeze in bridge".
+  `web/scripts/prerender.mjs` runs after `vite build` and emits one static page per core
+  term into `web/dist/glossary-static/`, each a copy of the built `index.html` with the
+  `seo:start`/`seo:end` head span swapped and `#root` filled. The module script is copied
+  through untouched, so a human following a search result still boots the ordinary SPA
+  over it (React clears `#root` on mount — the markup is a fallback, never a second copy
+  of the UI to maintain). `app.ts` serves those files ahead of the SPA fallback, by
   membership in a `Set` of emitted filenames rather than by joining the raw slug onto a
   path. Deep-reference entries deliberately get no page of their own: they're close
   paraphrases of Wikipedia's glossary, so indexable prose for them would be thin,
   duplicative content competing with the source we adapted.
-- **Both URL forms answer the same way.** `/glossary?term=<slug>` serves that term's page,
-  not the ledger index — it's the glossary's live sheet mechanism and the URL the app
-  leaves a reader on (`Glossary.tsx` normalizes the path form into it with a `replace`), so
-  it's the form that actually gets shared. Without this the server disagreed with the
-  client about what `?term=` meant, and a shared definition unfurled as the whole glossary.
-  The term page's self-canonical then hands the link back to `/glossary/<slug>`, which
-  stays the canonical form and the one in the sitemap. An unknown `?term=` is not an error
-  (it falls back to the index, 200); an unknown *path* slug is, and answers `404` with the
-  SPA shell — browsers render a 404 body, so the app still boots and shows its own
-  not-in-the-ledger sheet, while ~780 guessable deep-reference slugs stop looking like
-  real pages to a crawler.
+- **The landing page is prerendered too**, into `web/dist/home-static/` — its OWN
+  directory, because the `Set` above is built by listing `glossary-static/`, so a
+  `home.html` in there would silently also answer to `/glossary/home`. `app.ts` owns
+  `GET /` for it, which is why `fastifyStatic` is registered with **`index: false`**:
+  `@fastify/static` registers a route for the prefix itself, not just `prefix + '*'`, so
+  `app.get('/')` alongside the default is `FST_ERR_DUPLICATED_ROUTE` at boot — not a
+  route-priority contest like `/glossary` wins against the wildcard.
+- **`/leaderboard`, `/players/` and `/tour` are public but `Disallow`ed.** None is
+  prerendered, so a crawler would get the SPA shell — an empty `#root` wearing the HOME
+  page's title, description and OG tags — i.e. thin near-duplicates competing with `/`.
+  `/players/` has a second reason: being able to look someone up is a different thing from
+  being findable by name in a search engine. Prerender one of them and it may come off the
+  list, in the same change that adds it to the sitemap.
+- **Both glossary URL forms answer the same way.** `/glossary?term=<slug>` serves that
+  term's page, not the ledger index — it's the glossary's live sheet mechanism and the URL
+  the app leaves a reader on (`Glossary.tsx` normalizes the path form into it with a
+  `replace`), so it's the form that actually gets shared. Without this the server
+  disagreed with the client about what `?term=` meant, and a shared definition unfurled as
+  the whole glossary. The term page's self-canonical then hands the link back to
+  `/glossary/<slug>`, which stays the canonical form and the one in the sitemap. An
+  unknown `?term=` is not an error (it falls back to the index, 200); an unknown *path*
+  slug is, and answers `404` with the SPA shell — browsers render a 404 body, so the app
+  still boots and shows its own not-in-the-ledger sheet, while ~780 guessable
+  deep-reference slugs stop looking like real pages to a crawler.
 - **Throwaway origins stay out of the index.** The demo app and every PR preview serve a
   byte-identical build from their own hostnames, so without this the index fills with
   duplicates that outrank production and hand searchers a database that gets wiped.
@@ -604,11 +713,14 @@ of deliberately cryptic copy. Three pieces changed that, and they only make sens
 Two things to keep in mind when editing. `web/index.html` must keep its `seo:start`/
 `seo:end` markers and its `<div id="root"></div>` exactly as they are — the prerender
 throws if either goes missing, so a rename fails the build rather than silently shipping
-125 pages of generic metadata. And the shell deliberately carries **no**
+126 pages of generic metadata. And the shell deliberately carries **no**
 `<link rel="canonical">`: it's served for every unprerendered route, so a static canonical
 would tell crawlers that every deep link "is really" the home page. Prerendered pages
-carry their own correct self-canonical; everything else self-canonicalizes by default.
-Adding a new public route means adding it to the sitemap in `web/scripts/prerender-glossary.mjs`.
+carry their own correct self-canonical (safe there, since each answers for exactly one
+URL); everything else self-canonicalizes by default. **The sitemap must list only URLs
+that are both public and prerendered** — a sitemap entry for a `Disallow`ed URL is a
+contradiction a crawler will report back to you — so adding a new indexable route means
+touching `web/scripts/prerender.mjs` and `robots.txt` together.
 
 ## Invariants — do not break
 

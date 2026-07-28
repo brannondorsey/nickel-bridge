@@ -17,6 +17,21 @@ import { StandingDetail, standings } from './tournaments.js';
 const stmtUser = db.prepare(
   `SELECT id, handle, picture, elo, created_at, kind FROM users WHERE id = ? AND handle IS NOT NULL`,
 );
+const stmtProfileKind = db.prepare(`SELECT kind FROM users WHERE id = ? AND handle IS NOT NULL`);
+
+/**
+ * Whose profile is this — a person's, the house's, or nobody's?
+ *
+ * Split out from playerStats because app.ts has to answer "may this caller see
+ * it?" BEFORE building it. The house personas' profiles are public (they're
+ * calibration content, not anyone's record) and everyone else's needs a
+ * session, and running the full stats build first would let an anonymous
+ * id-walk drive that whole query pile for every id it tries, 401 or not.
+ */
+export function profileKind(userId: number): 'human' | 'ai' | null {
+  const row = stmtProfileKind.get(userId) as { kind: 'human' | 'ai' } | undefined;
+  return row?.kind ?? null;
+}
 // elo_history is wiped and replayed in tournament-id order on every recompute,
 // so its rows carry no timestamp — tournament_id IS the rating timeline.
 // finished_at (the user's last completed board of the tournament) is only a label.

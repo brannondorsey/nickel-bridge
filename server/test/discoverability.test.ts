@@ -30,6 +30,11 @@ beforeAll(async () => {
   mkdirSync(join(webDist, 'glossary-static'));
   writeFileSync(join(webDist, 'glossary-static', 'index.html'), '<!doctype html>THE LEDGER INDEX');
   writeFileSync(join(webDist, 'glossary-static', 'finesse.html'), '<!doctype html>FINESSE PAGE');
+  // Its own directory, not a file in glossary-static/: that directory is
+  // listed to build the set of servable term pages, so a home page inside it
+  // would also answer to /glossary/home.
+  mkdirSync(join(webDist, 'home-static'));
+  writeFileSync(join(webDist, 'home-static', 'index.html'), '<!doctype html>THE LANDING PAGE');
   process.env.WEB_DIST = webDist;
 });
 
@@ -56,20 +61,28 @@ describe('robots.txt', () => {
     await app.close();
   });
 
-  // Every route that renders the login splash for a signed-out visitor belongs
-  // here: they're all the same thin page under different URLs. Enumerated so
-  // the list can't drift out of step with App.tsx's auth branch again —
-  // /leaderboard was missed the first time precisely because it's the one
-  // gated top-level route whose path doesn't share a prefix with the others.
-  it('disallows every gated top-level route', async () => {
+  // Two kinds of entry on this list, and conflating them is how it drifts.
+  //
+  // Gated routes are here because a crawler gets the landing page or a 401 —
+  // the same thin page under different URLs. /leaderboard was missed the first
+  // time precisely because it's the top-level route whose path shares no
+  // prefix with the others.
+  //
+  // /leaderboard, /players/ and /tour are here for a second reason now: they
+  // read WITHOUT an account (App.tsx's isPublicPath) but none of them is
+  // prerendered, so a crawler that doesn't run JavaScript gets the SPA shell —
+  // an empty #root wearing the home page's title, description and OG tags.
+  // Public is not the same decision as indexable. Prerender one of them and it
+  // may come off this list, in the same change that adds it to the sitemap.
+  it('disallows every route that has nothing worth indexing', async () => {
     const app = await productionApp();
     const { body } = await app.inject({ method: 'GET', url: '/robots.txt' });
     for (const path of ['/api/', '/auth/', '/t/', '/players/', '/leaderboard', '/scenarios', '/tour']) {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
-    // ...and nothing public: the glossary is the whole point, and / is the
-    // only indexable non-glossary page there is.
+    // ...and nothing that IS prerendered: those are the whole point.
     expect(body).not.toContain('Disallow: /glossary');
+    expect(body).not.toMatch(/^Disallow: \/$/m);
     await app.close();
   });
 
@@ -104,6 +117,44 @@ describe('noindex header', () => {
       const res = await app.inject({ method: 'GET', url });
       expect(res.headers['x-robots-tag'], url).toBe('noindex, nofollow');
     }
+    await app.close();
+  });
+});
+
+// The site's front door is the URL most likely to be crawled, linked and
+// unfurled, and until now it served an empty #root to every agent that can't
+// run JavaScript. Registering GET / is also the one route that can collide
+// with @fastify/static (it registers the prefix itself, not just prefix + '*'),
+// so a boot-time FST_ERR_DUPLICATED_ROUTE would fail this whole suite — which
+// is the point of testing it here, where WEB_DIST is real.
+describe('prerendered landing page', () => {
+  it('serves the static landing page at /, not the empty SPA shell', async () => {
+    const app = await productionApp();
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.body).toContain('THE LANDING PAGE');
+    await app.close();
+  });
+
+  // It lives outside glossary-static/ precisely so it can't become a second
+  // URL for the front page, filed under the ledger.
+  it('does not leak in as a glossary term', async () => {
+    const app = await productionApp();
+    const res = await app.inject({ method: 'GET', url: '/glossary/home' });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain('THE LANDING PAGE');
+    await app.close();
+  });
+
+  // index: false on the static plugin is what frees up `/`; every other file
+  // is still served by name, and unmatched routes still fall to the shell.
+  it('still serves ordinary static files and the SPA fallback', async () => {
+    const app = await productionApp();
+    expect((await app.inject({ method: 'GET', url: '/index.html' })).body).toContain('<div id="root">');
+    const spa = await app.inject({ method: 'GET', url: '/t/12/b/1' });
+    expect(spa.statusCode).toBe(200);
+    expect(spa.body).toContain('<div id="root">');
     await app.close();
   });
 });

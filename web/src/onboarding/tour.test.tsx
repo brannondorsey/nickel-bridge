@@ -2,8 +2,8 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { claimAnnouncement, stageClaimSteps } from '../components/game/playAnim';
-import Tour from '../pages/Tour';
-import { meFreshCrosser } from '../test/fixtures';
+import Tour, { TourPostmark } from '../pages/Tour';
+import { meFreshCrosser, meLoggedOut } from '../test/fixtures';
 import { GlossaryProvider } from '../glossary/GlossaryContext';
 import { apiMock, renderWithMe } from '../test/utils';
 import board0 from './board0.json';
@@ -11,6 +11,7 @@ import { type TourBoard, loadTourBoard } from './board0';
 import { segmentProse } from '../glossary/linkify';
 import { TERM_BY_SLUG } from '../glossary/terms';
 import { COPY, STEPS, TOUR_LINKS, guidanceFor } from './script';
+import { peekTourDone } from './tourDone';
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -129,16 +130,6 @@ describe('first-crossing script ↔ capture drift guard', () => {
 });
 
 describe('the first crossing (Tour)', () => {
-  it('skips in-world from the pamphlet cover, stamping the visit', async () => {
-    apiMock.setOnboarded.mockResolvedValue({ ok: true });
-    const user = userEvent.setup();
-    const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
-    expect(await screen.findByText(/Welcome to the bridge/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
-    await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-  });
-
   it('a failed setOnboarded never wedges "skip the tutorial" — busy always resets (PR #87 review)', async () => {
     // A thrown setOnboarded (session hiccup, transient network failure) is
     // swallowed so the gate never traps anyone — but if a stale build never
@@ -149,7 +140,8 @@ describe('the first crossing (Tour)', () => {
     apiMock.setOnboarded.mockRejectedValueOnce(new Error('network hiccup'));
     const user = userEvent.setup();
     const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
-    const skipBtn = await screen.findByRole('button', { name: /skip the tutorial/i });
+    await screen.findByRole('button', { name: '1NT' });
+    const skipBtn = screen.getByRole('button', { name: /skip the tutorial/i });
     await user.click(skipBtn);
     await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalledTimes(1));
     // the failed call still calls refresh() (App.tsx re-renders the same
@@ -162,27 +154,34 @@ describe('the first crossing (Tour)', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('reads the pamphlet: philosophy panel, then duplicate as a specimen ledger', async () => {
-    const user = userEvent.setup();
+  // Nothing precedes the deal. Everything that used to — the philosophy panel,
+  // the specimen ledger, and then the welcome screen merged from the cover and
+  // the offer — restated what the landing page says on the way in, and the
+  // automatic gate fires for accounts that signed in FROM that page.
+  it('opens on the deal itself, with no screen in front of it', async () => {
     renderWithMe(<Tour />, { me: meFreshCrosser });
-    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-    // I · THE BRIDGE — the club philosophy and the naming story
-    // "robot" is a glossary link now, so the sentence is split across elements
-    expect(screen.getByRole('button', { name: 'robot' })).toBeInTheDocument();
-    expect(screen.getByText(/of even temper/)).toBeInTheDocument();
-    expect(screen.getByText(/at their own pace/)).toBeInTheDocument();
-    expect(screen.getByText(/a dime to cross, then a nickel, now fifty cents/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    // II · THE LEDGER — one deal, three fates
-    expect(screen.getByText(/the luck is dealt out of the/)).toBeInTheDocument();
-    // "game" appears here in its everyday sense, not the scoring term — the
-    // ledger panel's TourProse call opts it out of TOUR_LINKS' sitewide force
-    expect(screen.queryByRole('button', { name: 'game' })).not.toBeInTheDocument();
-    expect(screen.getByText('Harold')).toBeInTheDocument();
-    expect(screen.getByText('Margaret')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    // III · THE PRACTICE — the board №0 offer
-    expect(screen.getByRole('button', { name: /practice/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
+    // the tollkeeper's first line is the framing
+    expect(screen.getByText(/THE TOLLKEEPER/)).toBeInTheDocument();
+    // the practice identity rides on the board head, as it always did
+    expect(screen.getByText('№0')).toBeInTheDocument();
+    // and none of the landing page's argument is repeated
+    expect(screen.queryByText(/Welcome to the bridge/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/of even temper/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the luck is dealt out of the/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Harold')).not.toBeInTheDocument();
+  });
+
+  // The pamphlet's fine print was the only way out, and it only existed before
+  // the deal began. The ribbon is sticky, so this one is reachable throughout.
+  it('keeps a way out on the board itself, in the sticky ribbon', async () => {
+    apiMock.setOnboarded.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    const { refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
+    await screen.findByRole('button', { name: '1NT' });
+    await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
+    await waitFor(() => expect(apiMock.setOnboarded).toHaveBeenCalled());
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   it(
@@ -192,12 +191,6 @@ describe('the first crossing (Tour)', () => {
       apiMock.setOnboarded.mockResolvedValue({ ok: true });
       const user = userEvent.setup();
       const { container, refresh } = renderWithMe(<Tour />, { me: meFreshCrosser });
-
-      // pamphlet: cover → the bridge → the ledger → the offer → the board
-      await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-      await user.click(await screen.findByRole('button', { name: /continue/i }));
-      await user.click(await screen.findByRole('button', { name: /continue/i }));
-      await user.click(await screen.findByRole('button', { name: /practice/i }));
 
       // decision 0 — the real bid box, meanings before commit
       const nt = await screen.findByRole('button', { name: '1NT' });
@@ -319,7 +312,6 @@ describe('the tour’s glossary links', () => {
   it('teaches the common words gameplay prose deliberately leaves unlinked', () => {
     expect(slugsIn(STEPS[2].say)).toContain('trump'); // "eight trumps between you"
     expect(slugsIn(STEPS[4].say)).toEqual(['dummy', 'trick']);
-    expect(slugsIn(COPY.ledgerPanel.body2)).toEqual(['duplicate-bridge', 'game']);
     // and none of it leaks into the sitewide policy the rest of the app reads
     expect(segmentProse(STEPS[2].say).filter((s) => s.slug)).toHaveLength(0);
   });
@@ -346,7 +338,7 @@ describe('the tour’s glossary links', () => {
     expect(slugsIn(STEPS[2].say)).toContain('game');
   });
 
-  it('links the pamphlet’s body copy, and opens the sheet on a tap', async () => {
+  it('links the tollkeeper’s narration, and opens the sheet on a tap', async () => {
     const user = userEvent.setup();
     renderWithMe(
       <GlossaryProvider>
@@ -354,10 +346,58 @@ describe('the tour’s glossary links', () => {
       </GlossaryProvider>,
       { me: meFreshCrosser },
     );
-    await user.click(await screen.findByRole('button', { name: /read the pamphlet/i }));
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-    await user.click(screen.getByRole('button', { name: 'duplicate' }));
-    expect(await screen.findByRole('dialog')).toHaveTextContent('Duplicate bridge');
+    // step 0's line: "fifteen high card points (HCP), evenly spread"
+    await user.click(await screen.findByRole('button', { name: 'high card points' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/high card point/i);
+  });
+
+  // The tour reads without an account (App.tsx's isPublicPath) — it is the one
+  // thing a visitor can actually DO before being asked for one, so none of it
+  // may depend on a session. The board itself never did; the two doors out
+  // of it did.
+  describe('walked without an account', () => {
+    it('skips straight out, without a POST that could only 401', async () => {
+      const user = userEvent.setup();
+      renderWithMe(<Tour />, { me: meLoggedOut });
+      await screen.findByRole('button', { name: '1NT' });
+      await user.click(screen.getByRole('button', { name: /skip the tutorial/i }));
+      expect(apiMock.setOnboarded).not.toHaveBeenCalled();
+    });
+
+    it('lands straight on the real board UI', async () => {
+      renderWithMe(<Tour />, { me: meLoggedOut });
+      expect(await screen.findByRole('button', { name: '1NT' })).toBeInTheDocument();
+    });
+  });
+
+  // The last page is the payoff, and signed out it is also the sign-up: the
+  // one moment where asking for an account buys the visitor something they
+  // have just been shown. Rendered directly — reaching it through the board
+  // costs a 30-second walk, and what changed is only these two doors.
+  describe('the postmark, as a gate', () => {
+    it('asks for the account there, and records the walk before the redirect', async () => {
+      const user = userEvent.setup();
+      renderWithMe(<TourPostmark authed={false} busy={false} onPlay={vi.fn()} onSkip={vi.fn()} />, {
+        me: meLoggedOut,
+      });
+      expect(screen.getByText(/nor of anyone who only came to look/)).toBeInTheDocument();
+      // no lobby to be sent back to — the ledger is what they can read now
+      expect(screen.getByRole('link', { name: /read the ledger instead/i })).toHaveAttribute('href', '/glossary');
+      expect(peekTourDone()).toBe(false);
+      await user.click(screen.getByRole('link', { name: /play the toll/i }));
+      // stamped on the way out, so signing in doesn't hand them this same tour
+      expect(peekTourDone()).toBe(true);
+    });
+
+    it('sends a signed-in finisher to a real table instead', async () => {
+      const onPlay = vi.fn();
+      const user = userEvent.setup();
+      renderWithMe(<TourPostmark authed busy={false} onPlay={onPlay} onSkip={vi.fn()} />, { me: meFreshCrosser });
+      await user.click(screen.getByRole('button', { name: /play the toll/i }));
+      expect(onPlay).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /to the lobby instead/i })).toBeInTheDocument();
+      expect(peekTourDone()).toBe(false);
+    });
   });
 
   it('leaves display type alone — no dotted underlines through the headlines', () => {
