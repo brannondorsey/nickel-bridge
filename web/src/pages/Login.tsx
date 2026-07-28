@@ -66,7 +66,7 @@ export default function Login() {
 
       <section className="landing-panel" id="landing-pitch">
         <span className="label-caps landing-no">I · THE BRIDGE</span>
-        <h2 className="landing-title">A small club, one crossing at a time.</h2>
+        <h2 className="landing-title">A small club, completely free.</h2>
         <p className="landing-copy">
           <GlossaryProse
             text="Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is a robot of even temper; your opponents, two more."

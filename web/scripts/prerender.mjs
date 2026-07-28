@@ -304,7 +304,7 @@ const homeDesc =
 const homeBody = `<article class="pr">
       <h1>Nickel Bridge</h1>
       <p>${esc(homeDesc)}</p>
-      <h2>A small club, one crossing at a time</h2>
+      <h2>A small club, completely free</h2>
       <p>Nickel Bridge is a club for learning bridge by playing it. You sit South, always. Your partner is
         a robot of even temper; your opponents, two more. The people you are truly playing came before you,
         and will come after — each one meeting your same cards at their own pace.</p>
