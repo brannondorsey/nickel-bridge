@@ -244,7 +244,7 @@ describe('runSentence', () => {
     expect(runSentence(emptyRun({ boards: 1 }))).toBe('1 board · nothing finished yet');
   });
 
-  describe('boards the crossings do not account for', () => {
+  describe('board counts the crossings do not account for', () => {
     const crossing = (over: Record<string, unknown> = {}) =>
       ({
         kind: 'crossing',
@@ -259,46 +259,34 @@ describe('runSentence', () => {
         ...over,
       }) as const;
 
-    it('names the leftovers when a run started a crossing it did not finish', () => {
+    it('stays brief when a run started a crossing it did not finish', () => {
+      // Six boards can't be one crossing, which is exactly four — the other two
+      // are a tournament left unfinished. A clause accounting for the
+      // difference was tried and cut; the line reports what someone did, not a
+      // balance sheet.
       expect(runSentence(emptyRun({ boards: 6, crossings: [crossing()] }))).toBe(
-        '6 boards · finished №41 — 62%, 2nd of 5 · 2\u00a0into another',
+        '6 boards · finished №41 — 62%, 2nd of 5',
+      );
+      expect(runSentence(emptyRun({ boards: 10, crossings: [crossing(), crossing({ pct: 55 })] }))).toBe(
+        '10 boards · 2 crossings, best 62%',
       );
     });
 
-    it('says nothing when the boards divide exactly into the crossings', () => {
+    it('stays brief when a crossing finished on this run’s first board', () => {
+      // The mismatch runs the other way too — the other three boards were
+      // played in an earlier block. Equally ordinary, equally unremarked.
+      expect(runSentence(emptyRun({ boards: 1, crossings: [crossing()] }))).toBe(
+        '1 board · finished №41 — 62%, 2nd of 5',
+      );
+    });
+
+    it('reads the same when the boards do divide exactly', () => {
       expect(runSentence(emptyRun({ boards: 4, crossings: [crossing()] }))).toBe(
         '4 boards · finished №41 — 62%, 2nd of 5',
       );
       expect(runSentence(emptyRun({ boards: 8, crossings: [crossing(), crossing({ pct: 55 })] }))).toBe(
         '8 boards · 2 crossings, best 62%',
       );
-    });
-
-    it('says nothing when a crossing finished on this run’s first board', () => {
-      // The remainder goes negative here — the other three boards were played
-      // in an earlier block. Perfectly normal, and nothing to announce.
-      expect(runSentence(emptyRun({ boards: 1, crossings: [crossing()] }))).toBe(
-        '1 board · finished №41 — 62%, 2nd of 5',
-      );
-    });
-
-    it('applies to the multi-crossing and milestone branches too', () => {
-      expect(runSentence(emptyRun({ boards: 10, crossings: [crossing(), crossing({ pct: 55 })] }))).toBe(
-        '10 boards · 2 crossings, best 62% · 2\u00a0into another',
-      );
-      expect(
-        runSentence(
-          emptyRun({
-            boards: 6,
-            crossings: [crossing()],
-            milestones: [{ kind: 'milestone', userId: 7, at: 0, milestone: 'entered-rankings' }],
-          }),
-        ),
-      ).toBe('6 boards · entered the rankings — 62%, 2nd of 5 · 2\u00a0into another');
-    });
-
-    it('never claims leftovers when nothing was finished at all', () => {
-      expect(runSentence(emptyRun({ boards: 6 }))).toBe('6 boards · nothing finished yet');
     });
   });
 });

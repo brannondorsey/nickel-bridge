@@ -578,6 +578,11 @@ long sitting can set a new best repeatedly and the events arrive oldest-first. T
 index in the schema, `idx_boards_updated`, exists for this query — every other board sweep
 starts from a user or a tournament, not a time window.
 
+A row's board count and its crossings deliberately don't reconcile — six boards with one
+crossing finished means a tournament was left unfinished, one board with a crossing means it
+was finished on that run's first board — and a clause accounting for the difference was tried
+and cut. The line reports what someone did, not a balance sheet.
+
 The day strip's mark heights are **logarithmic** (`MARK_FULL_BOARDS`, `activityFeed.ts`), which
 is the only way to keep a four-board crossing clearly visible while a five-tournament sitting
 still reads taller than a three-tournament one — a linear scale either flattens ordinary
