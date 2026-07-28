@@ -109,7 +109,7 @@ export default function Login() {
         <h2 className="landing-title">Read the bid before you make it.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it’s conventional — before you commit to anything. The robots’ calls explain themselves the same way, so the auction is never a code you can’t read. And once you do commit, your bid is graded against the one the house would have chosen."
+            text="Tap any call and the house tells you what it promises — the point range, the shape, whether it’s conventional — before you commit to anything. The robots’ calls explain themselves the same way. And once you do commit, your bid is graded against the one the house would have chosen."
             {...LANDING_LINKS}
           />
         </p>
@@ -149,7 +149,7 @@ export default function Login() {
         <h2 className="landing-title">The ledger is open to anyone.</h2>
         <p className="landing-copy">
           <GlossaryProse
-            text="So is the practice board. Walk one deal with the tollkeeper — bid it, play it, read the receipt — and see for yourself whether the bridge is worth crossing. No account needed, and the tollkeeper keeps no record of practice boards."
+            text="So is the practice board. Walk one deal with the tollkeeper — bid it, play it, read the receipt. No account needed, and the tollkeeper keeps no record of practice boards."
             {...LANDING_LINKS}
           />
         </p>
