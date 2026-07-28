@@ -383,10 +383,36 @@ input {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 100dvh;
+  /* svh, NOT dvh — this one is load-bearing for scrolling.
+   *
+   * dvh tracks the *current* viewport, and on mobile the viewport grows as the
+   * URL bar retracts, which is exactly what the first downward scroll does. The
+   * hero has little content, so its min-height is what sizes it: measured on a
+   * 390-wide phone, a toolbar retract from 844 to 916 grew the hero by 72px and
+   * pushed the river scene — and every landing card under it — 72px further
+   * down the document, mid-scroll. That is the stutter; the page was moving
+   * against the thumb.
+   *
+   * svh is the *small* viewport (toolbar shown), a fixed number that never
+   * changes during a scroll. lvh would be wrong in the other direction: the
+   * hero would start taller than the screen and push the bridge below the fold
+   * at load. */
+  min-height: 100svh;
   overflow: hidden;
   background: var(--paper);
   padding-bottom: 130px;
+}
+/* The fallback for browsers with neither svh nor dvh — they never had the
+   stutter, but without this they get min-height: auto and no hero at all.
+   It has to be its own @supports rule rather than a second declaration in the
+   block above: esbuild collapses duplicate properties in one rule and silently
+   drops the fallback. And it has to sit BEFORE .splash-auto, or its equal
+   specificity would win on source order and give the overlay a height it
+   deliberately doesn't want. */
+@supports not (min-height: 100svh) {
+  .splash {
+    min-height: 100vh;
+  }
 }
 /* auto mode: overlay above the app; its exit fade reveals Home beneath. */
 .splash-auto {
