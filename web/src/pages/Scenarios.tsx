@@ -291,6 +291,20 @@ export default function Scenarios() {
             </div>
             <div className="exhibit-row">
               <div className="exhibit-row-text">
+                <b>The traffic, last seven days</b>
+                <span className="exhibit-row-desc">
+                  The activity feed: an hours rule per day with a mark for every run, and who crossed under it. The
+                  ambient field is backdated across 35 days, so only the youngest tournaments land inside the
+                  window — which makes this the exhibit for the empty-day treatment as much as the busy one. The
+                  red rule on today marks the current minute.
+                </span>
+              </div>
+              <Button variant="secondary" onClick={() => navigate('/activity')}>
+                ENTER →
+              </Button>
+            </div>
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
                 <b>A well-traveled stats page</b>
                 <span className="exhibit-row-desc">
                   Rating trend, matchpoint history, bid-accuracy trend, and the percentile panel — all with real

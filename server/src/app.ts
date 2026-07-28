@@ -5,6 +5,7 @@ import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { recentActivity } from './activity.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { PUBLIC_ORIGIN } from './config.js';
@@ -26,6 +27,27 @@ import {
   PROVISIONAL_MIN_TOURNAMENTS,
   visibleStandings,
 } from './tournaments.js';
+
+/**
+ * How far back GET /api/activity reaches. One day wider than the seven the
+ * feed renders, so the oldest local day the client keeps is never a partial
+ * one — see the route's doc comment.
+ */
+const ACTIVITY_WINDOW_S = 8 * 86400;
+
+/**
+ * The provisional rating quota in force for this deployment.
+ *
+ * DEMO=1 (previews + the permanent demo app) relaxes it, because the boot
+ * seeder plays each bot through at most 2 tournaments — well under the
+ * production quota — see DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment.
+ * Both the ladder and the activity feed's 'entered-rankings' milestone hang off
+ * this one number, so it lives here once rather than as a ternary per route:
+ * the feed originally hardcoded the production constant and the milestone was
+ * silently unreachable in demo as a result.
+ */
+const provisionalMin = () =>
+  process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -170,11 +192,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // able to see. Only `yourRatedTournaments` consults the caller.
   app.get('/api/leaderboard', (req, reply) => {
     const user = optionalUser(req);
-    // DEMO=1 (previews + the permanent demo app) relaxes the quota so the
-    // boot seeder's ambient tournaments — at most 2 per bot, see
-    // DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment — still populate a
-    // visible leaderboard; off (the production quota applies) everywhere else.
-    const provisionalMin = process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
+    const quota = provisionalMin();
     const rows = db
       .prepare(
         `SELECT id, handle, picture, elo, rated_tournaments, played_tournaments FROM (
@@ -186,7 +204,7 @@ export async function buildApp(): Promise<FastifyInstance> {
            FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
          ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all(provisionalMin) as { id: number }[];
+      .all(quota) as { id: number }[];
     const movement = leaderboardMovement();
     // null, not 0, when nobody is signed in: the client renders a "you'll join
     // the field once you've completed N crossings — x of N so far" note off
@@ -206,9 +224,25 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({
       leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
       house,
-      provisionalMin,
+      provisionalMin: quota,
       yourRatedTournaments,
     });
+  });
+
+  /**
+   * The activity feed ("TRAFFIC"). Gated, unlike the ladder next to it: the
+   * ladder is a bounded list of handles and ratings, while this is when real
+   * people sit down to play and for how long. That is a behavioural record,
+   * and it stays behind the toll gate.
+   *
+   * Eight days, not the seven the UI shows. The client groups by ITS OWN local
+   * calendar day (the server has no timezone for anyone — see activity.ts), so
+   * a day of slack guarantees the oldest rendered day is a whole one rather
+   * than a stub clipped by the viewer's UTC offset.
+   */
+  app.get('/api/activity', (req, reply) => {
+    if (!requireUserWithHandle(req, reply)) return;
+    return reply.send(recentActivity(Math.floor(Date.now() / 1000) - ACTIVITY_WINDOW_S, provisionalMin()));
   });
 
   /**

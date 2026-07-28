@@ -511,3 +511,103 @@ export const leaderboardResponse = {
   provisionalMin: 4,
   yourRatedTournaments: 10 as number | null,
 };
+
+// ---- activity feed ----
+
+/**
+ * Every timestamp below is anchored in LOCAL time on purpose.
+ *
+ * The feed groups by the viewer's calendar day and by timeGreeting()'s hour
+ * cutoffs, so a fixture built from a UTC instant would land in a different day
+ * or block depending on where the suite runs. Building them with the local
+ * Date constructor makes "Jul 23, 9:41 PM, evening" true in every timezone,
+ * and ACTIVITY_NOW below is the matching local "now" tests should pass in.
+ */
+const at = (day: number, hour: number, minute: number) => Math.floor(new Date(2026, 6, day, hour, minute).getTime() / 1000);
+
+/** Thu Jul 23 2026, 10:20 PM local — after every event in activityResponse. */
+export const ACTIVITY_NOW = new Date(2026, 6, 23, 22, 20);
+
+export const activityResponse = {
+  since: at(15, 0, 0),
+  players: {
+    '1': { handle: 'Margaret', picture: null },
+    '7': { handle: 'Alice', picture: null },
+    '8': { handle: 'Bob', picture: null },
+  },
+  events: [
+    // Alice: an evening run of 8 boards across two crossings, one of which rated.
+    ...[at(23, 19, 5), at(23, 19, 20), at(23, 19, 40), at(23, 20, 5)].map((t) => ({
+      kind: 'board' as const,
+      userId: 7,
+      at: t,
+    })),
+    ...[at(23, 20, 30), at(23, 20, 50), at(23, 21, 20), at(23, 21, 41)].map((t) => ({
+      kind: 'board' as const,
+      userId: 7,
+      at: t,
+    })),
+    {
+      kind: 'crossing' as const,
+      userId: 7,
+      at: at(23, 20, 5),
+      tournamentId: 40,
+      tournamentName: 'Tournament #40',
+      pct: 55.5,
+      rank: 3,
+      of: 5,
+      eloDelta: null, // nobody else finished it — unrated, and must not print as 0
+    },
+    {
+      kind: 'crossing' as const,
+      userId: 7,
+      at: at(23, 21, 41),
+      tournamentId: 41,
+      tournamentName: 'Tournament #41',
+      pct: 62,
+      rank: 2,
+      of: 5,
+      eloDelta: 26,
+    },
+    // Bob joined this evening and hasn't played a board.
+    { kind: 'joined' as const, userId: 8, at: at(23, 19, 15) },
+    // Margaret (meFixture, "you"): an afternoon run that lost rating.
+    ...[at(23, 16, 10), at(23, 16, 20), at(23, 16, 30), at(23, 16, 38)].map((t) => ({
+      kind: 'board' as const,
+      userId: 1,
+      at: t,
+    })),
+    {
+      kind: 'crossing' as const,
+      userId: 1,
+      at: at(23, 16, 38),
+      tournamentId: 39,
+      tournamentName: 'Tournament #39',
+      pct: 47,
+      rank: 4,
+      of: 5,
+      eloDelta: -11,
+    },
+    // Yesterday morning: Alice's very first crossing, carrying a milestone.
+    ...[at(22, 7, 30), at(22, 7, 40), at(22, 7, 50), at(22, 7, 58)].map((t) => ({
+      kind: 'board' as const,
+      userId: 7,
+      at: t,
+    })),
+    {
+      kind: 'crossing' as const,
+      userId: 7,
+      at: at(22, 7, 58),
+      tournamentId: 38,
+      tournamentName: 'Tournament #38',
+      pct: 68,
+      rank: 1,
+      of: 4,
+      eloDelta: 19,
+    },
+    { kind: 'milestone' as const, userId: 7, at: at(22, 7, 58), milestone: 'first-crossing' as const },
+  ],
+};
+
+/** The cold start: a signed-in player looking at a week nobody crossed. */
+export const activityEmpty = { since: at(15, 0, 0), players: {}, events: [] };

@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS elo_history (
 CREATE INDEX IF NOT EXISTS idx_boards_tournament ON boards(tournament_id, board_no);
 CREATE INDEX IF NOT EXISTS idx_boards_user ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+-- Every other board sweep in the codebase is scoped to one user or one
+-- tournament, so idx_boards_user (user-first) serves them. The activity feed
+-- (activity.ts) is the one query that starts from a time window and spans all
+-- users, and it would otherwise scan the whole table on every load.
+CREATE INDEX IF NOT EXISTS idx_boards_updated ON boards(updated_at);
 `);
 
 // Migration: `handle`/`handle_key` were added after the initial schema, so existing

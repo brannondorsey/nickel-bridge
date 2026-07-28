@@ -24,6 +24,14 @@ export function shortDateUTC(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/** unix seconds → "9:41p" / "7:58a", in the viewer's own timezone. */
+export function clockTime(unixSeconds: number): string {
+  const d = new Date(unixSeconds * 1000);
+  const h = d.getHours();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(d.getMinutes()).padStart(2, '0')}${h < 12 ? 'a' : 'p'}`;
+}
+
 /** Time-of-day word for the Home greeting. */
 export function timeGreeting(hour: number): 'morning' | 'afternoon' | 'evening' {
   if (hour >= 5 && hour < 12) return 'morning';

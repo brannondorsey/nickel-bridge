@@ -1,0 +1,284 @@
+import type { ActivityEvent, ActivityResponse } from '../api';
+import { timeGreeting } from '../format';
+
+/**
+ * Turning the activity feed's flat events into what the screen renders.
+ *
+ * Everything here is pure and lives outside the component on purpose: all of
+ * it is timezone- and clock-dependent, and that is exactly the part worth
+ * testing against fixed timestamps rather than eyeballing.
+ *
+ * THE VIEWER'S CLOCK IS THE ONLY CLOCK. The server stores UTC seconds and
+ * knows nobody's timezone, so a day here is the viewer's calendar day
+ * (getFullYear/getMonth/getDate, never toISOString, which would silently be
+ * UTC) and the part of the day comes from timeGreeting() — reused unchanged
+ * from the Home greeting so the two can never drift into disagreeing about
+ * when evening starts. The consequence is deliberate and worth stating: a
+ * player in Tokyo playing at midnight lands in a European viewer's afternoon.
+ * The alternative is asking every player for a timezone.
+ */
+
+export const FEED_DAYS = 7;
+
+/** Part of the day, on timeGreeting's 5 / 12 / 18 cutoffs. */
+export type Block = 'morning' | 'afternoon' | 'evening';
+
+/** One player's activity within one part of one day — the unit of a feed row. */
+export interface Run {
+  userId: number;
+  handle: string;
+  block: Block;
+  /** latest event in the run, unix seconds — what the row's clock time shows */
+  at: number;
+  boards: number;
+  /** summed over the run's crossings; null when none of them rated */
+  eloDelta: number | null;
+  crossings: Extract<ActivityEvent, { kind: 'crossing' }>[];
+  milestones: Extract<ActivityEvent, { kind: 'milestone' }>[];
+  joined: boolean;
+}
+
+export interface Day {
+  /** local calendar day, 'YYYY-MM-DD' */
+  dateKey: string;
+  /** midnight local, unix seconds — what the strip measures hours from */
+  startsAt: number;
+  runs: Run[];
+}
+
+/** Local 'YYYY-MM-DD'. Deliberately not toISOString(), which is UTC. */
+export function localDateKey(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** "Today" / "Yesterday" / "Saturday", for the day heading. */
+export function dayLabel(dateKey: string, now: Date): string {
+  const today = localDateKey(now);
+  if (dateKey === today) return 'Today';
+  const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (dateKey === localDateKey(y)) return 'Yesterday';
+  const [yr, mo, dy] = dateKey.split('-').map(Number);
+  return new Date(yr, mo - 1, dy).toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+/** "Thu · Jul 23", the right-hand side of the day heading. */
+export function dayDate(dateKey: string): string {
+  const [yr, mo, dy] = dateKey.split('-').map(Number);
+  return new Date(yr, mo - 1, dy)
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .replace(',', ' ·');
+}
+
+/**
+ * Flat events → days → runs, newest first.
+ *
+ * The server sends a day more than we render (see its route comment) so that
+ * the oldest day here is a whole one rather than a stub clipped by the
+ * viewer's offset from UTC; the trim to FEED_DAYS happens here, against local
+ * midnights, which is the only place that can know where they fall.
+ */
+export function groupRuns(data: ActivityResponse, now: Date = new Date()): Day[] {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const oldest = new Date(midnight);
+  oldest.setDate(oldest.getDate() - (FEED_DAYS - 1));
+  const oldestMs = oldest.getTime();
+
+  // keyed 'YYYY-MM-DD|block|userId' — the row's identity
+  const runs = new Map<string, Run>();
+  const days = new Map<string, Day>();
+
+  for (const e of data.events) {
+    const when = new Date(e.at * 1000);
+    if (when.getTime() < oldestMs) continue;
+    const player = data.players[String(e.userId)];
+    if (!player) continue;
+
+    const dateKey = localDateKey(when);
+    const block = timeGreeting(when.getHours());
+    const key = `${dateKey}|${block}|${e.userId}`;
+
+    if (!days.has(dateKey)) {
+      const [yr, mo, dy] = dateKey.split('-').map(Number);
+      days.set(dateKey, { dateKey, startsAt: new Date(yr, mo - 1, dy).getTime() / 1000, runs: [] });
+    }
+    let run = runs.get(key);
+    if (!run) {
+      run = {
+        userId: e.userId,
+        handle: player.handle,
+        block,
+        at: e.at,
+        boards: 0,
+        eloDelta: null,
+        crossings: [],
+        milestones: [],
+        joined: false,
+      };
+      runs.set(key, run);
+      days.get(dateKey)!.runs.push(run);
+    }
+    run.at = Math.max(run.at, e.at);
+
+    if (e.kind === 'board') run.boards += 1;
+    else if (e.kind === 'joined') run.joined = true;
+    else if (e.kind === 'milestone') run.milestones.push(e);
+    else {
+      run.crossings.push(e);
+      // null + null stays null (nothing rated); null + n becomes n. Summing
+      // through a null as if it were 0 would print "+0" for an unrated
+      // crossing, which is a different claim from "this didn't rate".
+      if (e.eloDelta !== null) run.eloDelta = (run.eloDelta ?? 0) + e.eloDelta;
+    }
+  }
+
+  // Fill in the days nobody played. A gap in the week is information — dropping
+  // them would make the bridge look busier than it is.
+  for (let i = 0; i < FEED_DAYS; i++) {
+    const d = new Date(midnight);
+    d.setDate(d.getDate() - i);
+    const key = localDateKey(d);
+    if (!days.has(key)) days.set(key, { dateKey: key, startsAt: d.getTime() / 1000, runs: [] });
+  }
+
+  return [...days.values()]
+    .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+    .map((d) => ({ ...d, runs: d.runs.sort((a, b) => b.at - a.at) }));
+}
+
+const MILESTONE_WORDS: Record<Extract<ActivityEvent, { kind: 'milestone' }>['milestone'], string> = {
+  'first-crossing': 'first crossing finished',
+  'entered-rankings': 'entered the rankings',
+  'peak-rating': 'a new best rating',
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** "Tournament #12" → "12", matching format.ts's tournamentNo. */
+function crossingNo(c: Extract<ActivityEvent, { kind: 'crossing' }>): string {
+  return c.tournamentName.match(/#(\d+)/)?.[1] ?? String(c.tournamentId);
+}
+
+/** "62%, 2nd of 5" — how a single crossing finished. */
+function result(c: Extract<ActivityEvent, { kind: 'crossing' }>): string {
+  return `${c.pct}%, ${ordinalLower(c.rank)} of ${c.of}`;
+}
+
+type Milestone = Extract<ActivityEvent, { kind: 'milestone' }>;
+
+/**
+ * Which milestone a row announces when one run earned several.
+ *
+ * Order is by weight, not by when it happened: arriving on the rankings is the
+ * bigger news than a new best, and a first crossing is bigger than either.
+ *
+ * The peak case is the one that actually needs deciding. A long sitting can set
+ * a new best several times over, and the events arrive oldest-first — taking
+ * milestones[0] printed the FIRST peak, a number the player had already beaten
+ * by the end of the block. Announce the highest, which is also the one they
+ * finished on.
+ */
+function pickMilestone(milestones: Milestone[]): Milestone | undefined {
+  if (!milestones.length) return undefined;
+  return (
+    milestones.find((m) => m.milestone === 'first-crossing') ??
+    milestones.find((m) => m.milestone === 'entered-rankings') ??
+    milestones.reduce((a, b) => ((b.value ?? 0) > (a.value ?? 0) ? b : a))
+  );
+}
+
+/**
+ * The italic line under a name. Two clauses at most — the board count, then
+ * one thing about it. More than that and it stops being a sentence and starts
+ * being a table.
+ *
+ * The board count and the crossings deliberately don't have to reconcile: six
+ * boards with one crossing finished means a tournament was started and left
+ * unfinished, and one board with a crossing means it was finished on this
+ * run's first board. Both are ordinary, and an extra clause accounting for the
+ * difference was tried and cut — the line reports what someone did, not a
+ * balance sheet.
+ */
+export function runSentence(run: Run): string {
+  if (run.joined && run.boards === 0) return 'paid the first toll — no boards yet';
+
+  const boards = plural(run.boards, 'board');
+  const milestone = pickMilestone(run.milestones);
+  if (milestone) {
+    const word = MILESTONE_WORDS[milestone.milestone];
+    if (milestone.milestone === 'peak-rating' && milestone.value !== undefined) {
+      return `${boards} · ${word} — ${milestone.value}`;
+    }
+    // A milestone earned on a single crossing keeps that crossing's result:
+    // "first crossing finished" alone throws away the more interesting half of
+    // the sentence. With several crossings there's no one result to attach.
+    return run.crossings.length === 1
+      ? `${boards} · ${word} — ${result(run.crossings[0])}`
+      : `${boards} · ${word}`;
+  }
+  if (run.crossings.length === 1) {
+    const c = run.crossings[0];
+    return `${boards} · finished №${crossingNo(c)} — ${result(c)}`;
+  }
+  if (run.crossings.length > 1) {
+    const best = Math.max(...run.crossings.map((c) => c.pct));
+    return `${boards} · ${plural(run.crossings.length, 'crossing')}, best ${best}%`;
+  }
+  return `${boards} · nothing finished yet`;
+}
+
+/** 2 → "2nd". Lowercase, because this one sits inside a sentence. */
+function ordinalLower(n: number): string {
+  const r100 = n % 100;
+  const r10 = n % 10;
+  const suffix = r100 >= 11 && r100 <= 13 ? 'th' : r10 === 1 ? 'st' : r10 === 2 ? 'nd' : r10 === 3 ? 'rd' : 'th';
+  return `${n}${suffix}`;
+}
+
+/** One tick on a day strip. */
+export interface Mark {
+  /** 0–1 across the day, midnight to midnight */
+  x: number;
+  /** 0–1 of the strip's full mark height */
+  height: number;
+  /** a join has no boards behind it and is drawn quiet */
+  kind: 'run' | 'join';
+}
+
+/**
+ * Boards at which a mark reaches full height — six crossings, a long sitting.
+ *
+ * The scale below it is LOGARITHMIC, not linear, and that is the whole point.
+ * Four boards is the common case and has to stay clearly visible, while five
+ * tournaments should still read taller than three. A linear scale can't do
+ * both: pick a low ceiling and everything past three crossings pegs the top,
+ * pick a high one and an ordinary evening shrinks to a speck.
+ *
+ * Fixed rather than per-day, so a busy Saturday genuinely looks busier than a
+ * quiet Tuesday instead of every day being normalised to look the same.
+ */
+export const MARK_FULL_BOARDS = 24;
+
+/** A one-board run still has to read as a mark, not a speck. */
+const MARK_MIN_HEIGHT = 0.3;
+/** Shorter than any real run, so a join is told apart by height and not only
+ *  by its quieter colour — the same glyph-not-colour rule the deltas follow. */
+const MARK_JOIN_HEIGHT = 0.18;
+
+export function stripMarks(day: Day): Mark[] {
+  return day.runs.map((run) => {
+    const x = Math.min(1, Math.max(0, (run.at - day.startsAt) / 86400));
+    if (run.boards === 0) return { x, height: MARK_JOIN_HEIGHT, kind: 'join' as const };
+    const scaled = Math.log1p(run.boards) / Math.log1p(MARK_FULL_BOARDS);
+    return { x, height: Math.max(MARK_MIN_HEIGHT, Math.min(1, scaled)), kind: 'run' as const };
+  });
+}
+
+/** Plain-language summary of a day, for the strip's screen-reader label. */
+export function stripLabel(day: Day, label: string): string {
+  if (!day.runs.length) return `${label}: nobody crossed.`;
+  const players = new Set(day.runs.map((r) => r.userId)).size;
+  const boards = day.runs.reduce((n, r) => n + r.boards, 0);
+  return `${label}: ${plural(players, 'player')}, ${plural(boards, 'board')}.`;
+}

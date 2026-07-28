@@ -85,6 +85,10 @@ export const SITE_ROUTES: readonly SiteRoute[] = [
   // Nothing to index, and fetching them burns crawl budget that should go to
   // the glossary.
   { path: '/t/*', public: false, indexed: false, spa: true },
+  // When real people sit down to play, and for how long. The ladder next to it
+  // is public because it's a bounded list of handles and ratings; this is a
+  // behavioural record, and it stays behind the gate.
+  { path: '/activity', public: false, indexed: false, spa: true },
   { path: '/scenarios', public: false, indexed: false, spa: true },
   { path: '/api/*', public: false, indexed: false, spa: false },
   { path: '/auth/*', public: false, indexed: false, spa: false },
