@@ -41,7 +41,7 @@ const ACTIVITY_WINDOW_S = 8 * 86400;
  * DEMO=1 (previews + the permanent demo app) relaxes it, because the boot
  * seeder plays each bot through at most 2 tournaments — well under the
  * production quota — see DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment.
- * Both the ladder and the activity feed's 'entered-ladder' milestone hang off
+ * Both the ladder and the activity feed's 'entered-rankings' milestone hang off
  * this one number, so it lives here once rather than as a ternary per route:
  * the feed originally hardcoded the production constant and the milestone was
  * silently unreachable in demo as a result.

@@ -561,16 +561,28 @@ and neither is incidental:
   rated nobody reports `eloDelta: null`, never `0` — the display collapses both to an em dash,
   matching the ladder's `Movement`, but the data keeps them apart.
 
-Milestones (`first-crossing`, `entered-ladder`, `peak-rating`) derive from one player's own
+Milestones (`first-crossing`, `entered-rankings`, `peak-rating`) derive from one player's own
 history. "Passed X on the ladder" is deliberately absent: it needs the ladder's order
 reconstructed at two points in time, and the same recompute that can restate a delta can
-reorder the pair. `entered-ladder` takes the provisional quota as an **argument** rather than
+reorder the pair. `entered-rankings` takes the provisional quota as an **argument** rather than
 reading `PROVISIONAL_MIN_TOURNAMENTS`, because `DEMO=1` relaxes it to
 `DEMO_PROVISIONAL_MIN_TOURNAMENTS` and the seeder's bots never reach the production 4 —
 hardcoding it made the milestone unreachable in exactly the environment built to click-test
 it. `app.ts`'s `provisionalMin()` is the one place that env is read, shared with
-`/api/leaderboard`; `activity.ts`, `stats.ts` and `tournaments.ts` touch no env at all. The one new index in the schema, `idx_boards_updated`, exists for this
-query — every other board sweep starts from a user or a tournament, not a time window.
+`/api/leaderboard`; `activity.ts`, `stats.ts` and `tournaments.ts` touch no env at all. Note it
+means **rated** tournaments, not played ones — a crossing only rates you when a second human
+finishes the same field — so the milestone is named for the screen a player lands on rather
+than for a number of games. One run can earn several milestones; `pickMilestone` ranks them by
+weight (first crossing, then the rankings, then a peak) and takes the **highest** peak, since a
+long sitting can set a new best repeatedly and the events arrive oldest-first. The one new
+index in the schema, `idx_boards_updated`, exists for this query — every other board sweep
+starts from a user or a tournament, not a time window.
+
+The day strip's mark heights are **logarithmic** (`MARK_FULL_BOARDS`, `activityFeed.ts`), which
+is the only way to keep a four-board crossing clearly visible while a five-tournament sitting
+still reads taller than a three-tournament one — a linear scale either flattens ordinary
+evenings or pegs the ceiling by the third crossing. A mark is one *run*, not one crossing, so
+five tournaments in a single evening is a single tall mark.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

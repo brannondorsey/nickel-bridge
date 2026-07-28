@@ -185,10 +185,10 @@ describe('runSentence', () => {
       runSentence(
         emptyRun({
           boards: 4,
-          milestones: [{ kind: 'milestone', userId: 7, at: 0, milestone: 'entered-ladder' }],
+          milestones: [{ kind: 'milestone', userId: 7, at: 0, milestone: 'entered-rankings' }],
         }),
       ),
-    ).toBe('4 boards · entered the ladder');
+    ).toBe('4 boards · entered the rankings');
     // ...but a milestone earned on one crossing keeps that crossing's result,
     // rather than throwing away the more interesting half of the sentence.
     expect(
@@ -220,6 +220,24 @@ describe('runSentence', () => {
         }),
       ),
     ).toBe('4 boards · a new best rating — 1502');
+  });
+
+  it('announces the highest of several new bests, not the first', () => {
+    // A long sitting can set a new best several times over, and the events
+    // arrive oldest-first. Printing 1210 would name a number they had already
+    // beaten by the end of the block.
+    const peak = (value: number) => ({ kind: 'milestone', userId: 7, at: 0, milestone: 'peak-rating', value }) as const;
+    expect(runSentence(emptyRun({ boards: 20, milestones: [peak(1210), peak(1244), peak(1263)] }))).toBe(
+      '20 boards · a new best rating — 1263',
+    );
+  });
+
+  it('ranks milestones by weight, not by when they happened', () => {
+    const ms = [
+      { kind: 'milestone', userId: 7, at: 0, milestone: 'peak-rating', value: 1263 },
+      { kind: 'milestone', userId: 7, at: 0, milestone: 'entered-rankings' },
+    ] as const;
+    expect(runSentence(emptyRun({ boards: 20, milestones: [...ms] }))).toBe('20 boards · entered the rankings');
   });
 
   it('is honest about a run that finished nothing, and counts one board singular', () => {
@@ -273,10 +291,10 @@ describe('runSentence', () => {
           emptyRun({
             boards: 6,
             crossings: [crossing()],
-            milestones: [{ kind: 'milestone', userId: 7, at: 0, milestone: 'entered-ladder' }],
+            milestones: [{ kind: 'milestone', userId: 7, at: 0, milestone: 'entered-rankings' }],
           }),
         ),
-      ).toBe('6 boards · entered the ladder — 62%, 2nd of 5 · 2\u00a0into another');
+      ).toBe('6 boards · entered the rankings — 62%, 2nd of 5 · 2\u00a0into another');
     });
 
     it('never claims leftovers when nothing was finished at all', () => {
@@ -286,32 +304,56 @@ describe('runSentence', () => {
 });
 
 describe('stripMarks', () => {
-  it('places a mark by its local time of day and scales height by boards', () => {
+  /** One run of `boards` boards, all at 6 PM, on 23 Jul. */
+  const markFor = (boards: number) => {
     const days = groupRuns(
-      oneUser([
-        { kind: 'board', userId: 7, at: unix(2026, 6, 23, 18, 0) },
-        { kind: 'board', userId: 7, at: unix(2026, 6, 23, 18, 0) },
-      ]),
+      oneUser(
+        Array.from({ length: boards }, (_, i) => ({
+          kind: 'board' as const,
+          userId: 7,
+          at: unix(2026, 6, 23, 18, i),
+        })),
+      ),
       ACTIVITY_NOW,
     );
-    const [mark] = stripMarks(days.find((d) => d.dateKey === '2026-07-23')!);
+    return stripMarks(days.find((d) => d.dateKey === '2026-07-23')!)[0];
+  };
+
+  it('places a mark by its local time of day', () => {
+    // One board, so the mark sits exactly on the hour — markFor spreads longer
+    // runs a minute apart and the mark follows the run's LAST board.
+    const mark = markFor(1);
     expect(mark.x).toBeCloseTo(18 / 24, 5);
-    expect(mark.height).toBeCloseTo(2 / MARK_FULL_BOARDS < 0.3 ? 0.3 : 2 / MARK_FULL_BOARDS, 5);
     expect(mark.kind).toBe('run');
   });
 
   it('draws a join as a quiet mark rather than a run of boards', () => {
     const days = groupRuns(oneUser([{ kind: 'joined', userId: 7, at: unix(2026, 6, 23, 19, 15) }]), ACTIVITY_NOW);
-    expect(stripMarks(days.find((d) => d.dateKey === '2026-07-23')!)[0].kind).toBe('join');
+    const [mark] = stripMarks(days.find((d) => d.dateKey === '2026-07-23')!);
+    expect(mark.kind).toBe('join');
+    // Shorter than any real run, so it is told apart by height and not only by
+    // colour — no board count can produce a mark this small.
+    expect(mark.height).toBeLessThan(markFor(1).height);
   });
 
   it('caps a marathon at full height instead of overrunning the rule', () => {
-    const events = Array.from({ length: 40 }, (_, i) => ({
-      kind: 'board' as const,
-      userId: 7,
-      at: unix(2026, 6, 23, 13, i),
-    }));
-    const days = groupRuns(oneUser(events), ACTIVITY_NOW);
-    expect(stripMarks(days.find((d) => d.dateKey === '2026-07-23')!)[0].height).toBe(1);
+    expect(markFor(MARK_FULL_BOARDS).height).toBe(1);
+    expect(markFor(MARK_FULL_BOARDS * 2).height).toBe(1);
+  });
+
+  // The log scale exists to do two things a linear one can't do at once, so
+  // these are the properties worth pinning rather than the exact numbers.
+  it('keeps an ordinary crossing clearly visible', () => {
+    expect(markFor(4).height).toBeGreaterThan(0.45);
+  });
+
+  it('still separates a long sitting from a merely busy one', () => {
+    expect(markFor(20).height).toBeGreaterThan(markFor(12).height);
+    expect(markFor(12).height).toBeGreaterThan(markFor(8).height);
+    expect(markFor(8).height).toBeGreaterThan(markFor(4).height);
+  });
+
+  it('never lets a single board fall below the floor', () => {
+    expect(markFor(1).height).toBe(0.3);
   });
 });

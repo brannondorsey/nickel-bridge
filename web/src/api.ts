@@ -304,7 +304,7 @@ export type ActivityEvent =
       kind: 'milestone';
       userId: number;
       at: number;
-      milestone: 'first-crossing' | 'entered-ladder' | 'peak-rating';
+      milestone: 'first-crossing' | 'entered-rankings' | 'peak-rating';
       /** the new rating, on 'peak-rating' only */
       value?: number;
     };

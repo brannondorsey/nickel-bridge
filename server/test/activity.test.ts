@@ -155,7 +155,7 @@ describe('GET /api/activity', () => {
     const id = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityLadder'`).get() as { id: number }).id;
     const ladderFor = (quota: number) =>
       recentActivity(since, quota).events.filter(
-        (e) => e.kind === 'milestone' && e.userId === id && e.milestone === 'entered-ladder',
+        (e) => e.kind === 'milestone' && e.userId === id && e.milestone === 'entered-rankings',
       );
 
     // The quota is a real input, not a baked-in constant: DEMO=1 relaxes it to

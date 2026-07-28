@@ -149,7 +149,7 @@ export function groupRuns(data: ActivityResponse, now: Date = new Date()): Day[]
 
 const MILESTONE_WORDS: Record<Extract<ActivityEvent, { kind: 'milestone' }>['milestone'], string> = {
   'first-crossing': 'first crossing finished',
-  'entered-ladder': 'entered the ladder',
+  'entered-rankings': 'entered the rankings',
   'peak-rating': 'a new best rating',
 };
 
@@ -184,6 +184,29 @@ function orphanBoards(run: Run): number {
   return run.boards - run.crossings.length * BOARDS_PER_CROSSING;
 }
 
+type Milestone = Extract<ActivityEvent, { kind: 'milestone' }>;
+
+/**
+ * Which milestone a row announces when one run earned several.
+ *
+ * Order is by weight, not by when it happened: arriving on the rankings is the
+ * bigger news than a new best, and a first crossing is bigger than either.
+ *
+ * The peak case is the one that actually needs deciding. A long sitting can set
+ * a new best several times over, and the events arrive oldest-first — taking
+ * milestones[0] printed the FIRST peak, a number the player had already beaten
+ * by the end of the block. Announce the highest, which is also the one they
+ * finished on.
+ */
+function pickMilestone(milestones: Milestone[]): Milestone | undefined {
+  if (!milestones.length) return undefined;
+  return (
+    milestones.find((m) => m.milestone === 'first-crossing') ??
+    milestones.find((m) => m.milestone === 'entered-rankings') ??
+    milestones.reduce((a, b) => ((b.value ?? 0) > (a.value ?? 0) ? b : a))
+  );
+}
+
 /**
  * The italic line under a name. Two or three clauses after the board count —
  * more than that and it stops being a sentence and starts being a table.
@@ -192,7 +215,7 @@ export function runSentence(run: Run): string {
   if (run.joined && run.boards === 0) return 'paid the first toll — no boards yet';
 
   const boards = plural(run.boards, 'board');
-  const milestone = run.milestones[0];
+  const milestone = pickMilestone(run.milestones);
   // "6 boards · finished №41" can't both be true of one crossing, which is
   // exactly four boards. Name the remainder so every board is accounted for.
   const orphan = orphanBoards(run);
@@ -244,18 +267,31 @@ export interface Mark {
 }
 
 /**
- * Boards at which a mark reaches full height. Fixed rather than per-day, so
- * that a busy Saturday actually looks busier than a quiet Tuesday instead of
- * every day being normalised to look the same.
+ * Boards at which a mark reaches full height — six crossings, a long sitting.
+ *
+ * The scale below it is LOGARITHMIC, not linear, and that is the whole point.
+ * Four boards is the common case and has to stay clearly visible, while five
+ * tournaments should still read taller than three. A linear scale can't do
+ * both: pick a low ceiling and everything past three crossings pegs the top,
+ * pick a high one and an ordinary evening shrinks to a speck.
+ *
+ * Fixed rather than per-day, so a busy Saturday genuinely looks busier than a
+ * quiet Tuesday instead of every day being normalised to look the same.
  */
-export const MARK_FULL_BOARDS = 12;
+export const MARK_FULL_BOARDS = 24;
+
+/** A one-board run still has to read as a mark, not a speck. */
+const MARK_MIN_HEIGHT = 0.3;
+/** Shorter than any real run, so a join is told apart by height and not only
+ *  by its quieter colour — the same glyph-not-colour rule the deltas follow. */
+const MARK_JOIN_HEIGHT = 0.18;
 
 export function stripMarks(day: Day): Mark[] {
   return day.runs.map((run) => {
     const x = Math.min(1, Math.max(0, (run.at - day.startsAt) / 86400));
-    if (run.boards === 0) return { x, height: 0.25, kind: 'join' as const };
-    // A floor, so a single-board run is still visibly a mark and not a speck.
-    return { x, height: Math.max(0.3, Math.min(1, run.boards / MARK_FULL_BOARDS)), kind: 'run' as const };
+    if (run.boards === 0) return { x, height: MARK_JOIN_HEIGHT, kind: 'join' as const };
+    const scaled = Math.log1p(run.boards) / Math.log1p(MARK_FULL_BOARDS);
+    return { x, height: Math.max(MARK_MIN_HEIGHT, Math.min(1, scaled)), kind: 'run' as const };
   });
 }
 

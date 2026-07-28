@@ -62,7 +62,7 @@ export type ActivityEvent =
       kind: 'milestone';
       userId: number;
       at: number;
-      milestone: 'first-crossing' | 'entered-ladder' | 'peak-rating';
+      milestone: 'first-crossing' | 'entered-rankings' | 'peak-rating';
       /** the new rating, on 'peak-rating' only */
       value?: number;
     };
@@ -158,7 +158,7 @@ interface CrossingRow {
  *
  * `provisionalMin` is passed in rather than read from the constant, because
  * DEMO=1 relaxes it (DEMO_PROVISIONAL_MIN_TOURNAMENTS) and the seeder's bots
- * never reach the production quota — hardcoding it made 'entered-ladder'
+ * never reach the production quota — hardcoding it made 'entered-rankings'
  * unreachable in exactly the environment built for click-testing this screen.
  * app.ts owns that env read for the same reason /api/leaderboard does; nothing
  * in this module or stats.ts or tournaments.ts touches process.env.
@@ -184,7 +184,7 @@ function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number
   const ladder = series[provisionalMin - 1];
   const ladderAt = ladder ? finishedAt.get(ladder.tournament_id) : undefined;
   if (ladderAt !== undefined && ladderAt >= sinceUnix) {
-    out.push({ kind: 'milestone', userId, at: ladderAt, milestone: 'entered-ladder' });
+    out.push({ kind: 'milestone', userId, at: ladderAt, milestone: 'entered-rankings' });
   }
 
   // A new personal best. The first rated crossing is skipped on purpose — it
