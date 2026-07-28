@@ -3866,10 +3866,15 @@ a.stat-tile:hover {
    every child in here carries top margin only (.landing-copy, .landing-aside),
    so a panel's last line sat flush against the next panel's rule while its own
    label had 30px above it. Symmetric, and roomier than the old top value. */
+/* Asymmetric on purpose, now that the cards stack. The bottom padding is the
+   runway the *next* card's edge travels through: with it too tight, that edge
+   arrives on the previous card's last line and reads as encroachment rather
+   than as one sheet settling over another. Top padding only has to keep the
+   card's own label off its leading edge, so it stays smaller. */
 .landing-panel {
   display: flex;
   flex-direction: column;
-  padding: 36px 24px;
+  padding: 40px 24px 68px;
   border-top: 1px solid var(--ink);
   /* opaque, because a stacked card has to hide the one it slides over */
   background: var(--paper);
