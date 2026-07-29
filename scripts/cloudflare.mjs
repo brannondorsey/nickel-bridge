@@ -300,73 +300,110 @@ async function purge() {
 /**
  * Health of the things that fail silently and late.
  *
- * The certificate is the sharp one. Fly validates custom-domain certs over TLS-ALPN by
- * default, and proxying the record through Cloudflare breaks exactly that — with no symptom
- * until the current certificate expires weeks later. `acmeDnsConfigured` is the flag that
- * says a DNS-01 fallback exists; without it, a proxied host is on a countdown.
+ * The certificate is the sharp one, and the trap is specific: Fly validates custom-domain
+ * certs over TLS-ALPN by default, and Cloudflare terminates TLS, so the moment the record
+ * goes orange that method stops working — with no symptom until the current certificate
+ * expires weeks later. Fly's documented fix is `fly certs setup <host>` plus the
+ * `_fly-ownership` TXT record, after which Let's Encrypt validates over HTTP-01 *through*
+ * the proxy. Note it is specifically NOT DNS-01: Cloudflare's Universal SSL inserts its own
+ * hidden `_acme-challenge` TXT records, which collide with Fly's.
+ *
+ * So this checks the OUTCOME (is the certificate renewing?) rather than the mechanism, plus
+ * the one combination that is definitely broken — proxied with TLS-ALPN as the only
+ * configured method. Checking "is DNS-01 configured?" was the earlier version of this and it
+ * was wrong twice over: it failed a correctly configured HTTP-01 setup, and it recommended
+ * the one method Fly warns against on Cloudflare.
  */
 async function audit() {
   let failed = false;
+  const fail = (msg) => {
+    console.log(`::error::${msg}`);
+    failed = true;
+  };
 
-  const flyToken = process.env.FLY_API_TOKEN;
-  if (!flyToken) {
-    console.log('· cert: skipped (FLY_API_TOKEN not set)');
-  } else {
-    const q = `query($a:String!,$h:String!){app(name:$a){certificate(hostname:$h){
-      acmeDnsConfigured acmeAlpnConfigured dnsValidationInstructions issued{nodes{expiresAt}}}}}`;
-    const res = await fetch('https://api.fly.io/graphql', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${flyToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: q, variables: { a: process.env.FLY_APP ?? 'nickel-bridge', h: HOST } }),
-    }).then((r) => r.json());
-    const cert = res?.data?.app?.certificate;
-    if (!cert) {
-      console.log('::error::cert: could not read certificate state from Fly');
-      failed = true;
-    } else {
-      const soonest = (cert.issued?.nodes ?? [])
-        .map((n) => new Date(n.expiresAt))
-        .sort((a, b) => a - b)[0];
-      const days = soonest ? Math.floor((soonest - Date.now()) / 86_400_000) : null;
-      console.log(`· cert: expires in ${days} days (alpn=${cert.acmeAlpnConfigured} dns=${cert.acmeDnsConfigured})`);
-      if (!cert.acmeDnsConfigured) {
-        console.log('::error::cert has no DNS-01 validation configured — renewal will fail behind the Cloudflare proxy.');
-        console.log(`  fix: ${cert.dnsValidationInstructions} (as a DNS-only record)`);
-        failed = true;
-      }
-      if (days !== null && days < 21) {
-        console.log(`::error::cert expires in ${days} days and has not renewed`);
-        failed = true;
-      }
-    }
-  }
-
-  // Does the edge actually absorb the crawler surface? A MISS twice running means the rule
-  // is not doing the one job it exists for.
+  // Edge first: whether the host is proxied decides how to read the certificate state.
+  let proxied = false;
   for (const path of ['/robots.txt', '/']) {
     const url = `https://${HOST}${path}`;
-    let status = 'unknown';
+    let status = null;
     for (let i = 0; i < 2; i++) {
       const r = await fetch(url, { headers: { 'User-Agent': 'nickel-bridge-edge-audit' } });
-      status = r.headers.get('cf-cache-status') ?? 'none';
+      status = r.headers.get('cf-cache-status');
+      if (r.headers.get('cf-ray')) proxied = true;
     }
-    console.log(`· ${path}: cf-cache-status=${status}`);
-    if (status === 'none') {
-      console.log(`::error::${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
-      failed = true;
+    console.log(`· ${path}: cf-cache-status=${status ?? 'none'}`);
+    if (!status) {
+      fail(`${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
     } else if (!['HIT', 'EXPIRED', 'REVALIDATED', 'UPDATING', 'STALE'].includes(status)) {
-      console.log(`::error::${url} returned ${status} on a second consecutive fetch — it is still waking Fly`);
-      failed = true;
+      fail(`${url} returned ${status} on a second consecutive fetch — it is still waking Fly`);
     }
   }
 
-  // /api must never be cacheable, and this is cheap to keep honest from the outside.
+  // Session-scoped responses must never be cacheable, and this stays honest from outside.
   const api = await fetch(`https://${HOST}/api/me`);
   const apiStatus = api.headers.get('cf-cache-status');
   console.log(`· /api/me: cf-cache-status=${apiStatus ?? 'none'}`);
   if (apiStatus && !['BYPASS', 'DYNAMIC'].includes(apiStatus)) {
-    console.log(`::error::/api/me returned cf-cache-status=${apiStatus} — session-scoped responses must never cache`);
-    failed = true;
+    fail(`/api/me returned cf-cache-status=${apiStatus} — session-scoped responses must never cache`);
+  }
+
+  const flyToken = process.env.FLY_API_TOKEN;
+  if (!flyToken) {
+    console.log('· cert: skipped (FLY_API_TOKEN not set)');
+    if (failed) process.exitCode = 1;
+    return;
+  }
+
+  const q = `query($a:String!,$h:String!){app(name:$a){certificate(hostname:$h){
+    isConfigured source clientStatus validationErrors{message}
+    isAcmeAlpnConfigured isAcmeHttpConfigured isAcmeDnsConfigured
+    issued{nodes{expiresAt}}}}}`;
+  const res = await fetch('https://api.fly.io/graphql', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${flyToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: q, variables: { a: process.env.FLY_APP ?? 'nickel-bridge', h: HOST } }),
+  }).then((r) => r.json());
+
+  const cert = res?.data?.app?.certificate;
+  if (!cert) {
+    fail('cert: could not read certificate state from Fly');
+    process.exitCode = 1;
+    return;
+  }
+
+  const methods = [
+    cert.isAcmeAlpnConfigured && 'tls-alpn',
+    cert.isAcmeHttpConfigured && 'http-01',
+    cert.isAcmeDnsConfigured && 'dns-01',
+  ].filter(Boolean);
+  const soonest = (cert.issued?.nodes ?? []).map((n) => new Date(n.expiresAt)).sort((a, b) => a - b)[0];
+  const days = soonest ? Math.floor((soonest - Date.now()) / 86_400_000) : null;
+  console.log(
+    `· cert: ${days} days left, source=${cert.source}, status=${cert.clientStatus}, validation=[${methods.join(',') || 'none'}]`,
+  );
+
+  for (const e of cert.validationErrors ?? []) fail(`cert validation: ${e.message}`);
+
+  // An imported Cloudflare Origin Certificate never auto-renews, so it needs more warning.
+  const threshold = cert.source === 'fly' ? 21 : 45;
+  if (days !== null && days < threshold) {
+    fail(
+      cert.source === 'fly'
+        ? `cert expires in ${days} days and has not renewed — check \`fly certs check ${HOST}\``
+        : `imported cert expires in ${days} days and does NOT auto-renew — re-import it`,
+    );
+  }
+
+  if (cert.source === 'fly') {
+    if (!methods.length) {
+      fail(`cert has no working ACME validation method — renewal cannot happen. Run \`fly certs check ${HOST}\`.`);
+    } else if (proxied && methods.length === 1 && methods[0] === 'tls-alpn') {
+      // The specific broken combination: Cloudflare terminates TLS, so TLS-ALPN can't validate.
+      fail(
+        `cert validates only over TLS-ALPN, which cannot work behind Cloudflare's proxy. ` +
+          `Run \`fly certs setup ${HOST}\` and add the _fly-ownership TXT record so HTTP-01 validates through the proxy.`,
+      );
+    }
   }
 
   if (failed) process.exitCode = 1;

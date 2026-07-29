@@ -440,13 +440,18 @@ information leak, not a stale page. `deploy-production` runs `--apply` then `--p
 weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates until that
 secret exists.
 
-Two things about proxying a Fly app that fail silently and late. Fly validates custom-domain
-certs over **TLS-ALPN**, which the proxy breaks — so a DNS-01 fallback
-(`_acme-challenge.<host>` CNAME, DNS-only) must exist *before* the record goes orange, or the
-cert stops renewing with no symptom until it expires; `--audit` fails on a missing fallback or
-under 21 days left. And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s
-`force_https = true` is an infinite redirect loop. Note also that once proxied, `Fly-Client-IP`
-becomes Cloudflare's edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
+Two things about proxying a Fly app that fail silently and late, both per
+[Fly's Cloudflare guide](https://fly.io/docs/networking/understanding-cloudflare/). Fly
+validates custom-domain certs over **TLS-ALPN**, and Cloudflare terminates TLS, so going
+orange breaks renewal with no symptom until the current cert expires. The fix is
+`fly certs setup <host>` plus the **`_fly-ownership` TXT** record, after which Let's Encrypt
+validates over **HTTP-01 through the proxy** — specifically *not* DNS-01, whose
+`_acme-challenge` records collide with the hidden ones Cloudflare's Universal SSL inserts.
+`--audit` therefore checks the outcome (days to expiry, `validationErrors`) plus the one
+combination that is definitely broken: proxied with TLS-ALPN as the only configured method.
+And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s `force_https = true` is
+an infinite redirect loop. Note also that once proxied, `Fly-Client-IP` becomes Cloudflare's
+edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
