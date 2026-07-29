@@ -77,6 +77,19 @@ describe('serializeRequestLog', () => {
     expect(log.clientIp).toBe('203.0.113.7');
   });
 
+  // Behind a CDN, Fly-Client-IP is the CDN's edge address, not the visitor's — preferring
+  // it would silently replace every logged caller with a Cloudflare IP.
+  it('prefers CF-Connecting-IP over Fly-Client-IP when a CDN is in front', () => {
+    const log = serializeRequestLog(
+      request({
+        'cf-connecting-ip': '203.0.113.7',
+        'fly-client-ip': '172.68.0.11',
+        'x-forwarded-for': '203.0.113.7, 172.68.0.11',
+      }),
+    );
+    expect(log.clientIp).toBe('203.0.113.7');
+  });
+
   it('prefers Fly-Client-IP over X-Forwarded-For', () => {
     const log = serializeRequestLog(
       request({ 'fly-client-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.9' }),

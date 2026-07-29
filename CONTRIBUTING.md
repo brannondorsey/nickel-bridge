@@ -147,6 +147,8 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
+                cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
+                --plan/--apply/--check/--purge/--audit, see "The edge" below),
                 og-image.mjs (regenerates the checked-in social share card
                 web/public/og-image.png — offline, no running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
@@ -414,6 +416,37 @@ personas' background play. Historical machine time comes from Fly's Prometheus
 (`fly_instance_up`, scraped every 15s; the metric is simply absent while suspended). Query it
 with `Authorization: FlyV1 <token>` — not `Bearer` — and derive uptime from raw samples
 rather than `count_over_time`, which gets downsampled over long ranges and badly under-reports.
+
+**The edge (Cloudflare) is derived from `seo.ts`, like everything else that answers "is this
+URL crawlable?"** The measurement behind it: production ran 20.1 h/day and the demo app —
+which has *no human users* — burned 1.8 h/day, and every crawler observed in a day of
+instrumented logs (SemrushBot, YandexBot, ClaudeBot, AggregatoreBot, link-preview fetchers)
+touched only `/robots.txt`, `/`, `/sitemap.xml` or `/og-image.png`. **`robots.txt` cannot fix
+this and it is worth knowing why:** ClaudeBot fetched the demo app's robots.txt, read
+`Disallow: /`, obeyed it, and left — and that one compliant request still cost seven minutes
+of dedicated CPU, because a bot has to reach the origin to learn it is unwelcome. Disallowing
+a crawler takes a visit from 127 requests to 1, never to 0. Only an edge that answers those
+paths without touching Fly does that.
+
+`scripts/cloudflare.mjs` builds the rules from `SITE_ROUTES`: **bypass** is every `spa: false`
+row, **cached** is every `indexed: true` row plus the static files no router row covers. So
+adding an indexed route starts caching it and adding an API route starts bypassing it, with no
+edit here — the same reason robots.txt and the sitemap are derived. Its invariants run on
+*every* invocation, including the `--plan` CI runs on each PR, and the load-bearing one is that
+nothing session-scoped can reach the cache set: `boardView` redacts hidden hands per player, so
+a cached `/api` response is one player's view of the deal served to another. That is an
+information leak, not a stale page. `deploy-production` runs `--apply` then `--purge`;
+`.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health)
+weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates until that
+secret exists.
+
+Two things about proxying a Fly app that fail silently and late. Fly validates custom-domain
+certs over **TLS-ALPN**, which the proxy breaks — so a DNS-01 fallback
+(`_acme-challenge.<host>` CNAME, DNS-only) must exist *before* the record goes orange, or the
+cert stops renewing with no symptom until it expires; `--audit` fails on a missing fallback or
+under 21 days left. And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s
+`force_https = true` is an infinite redirect loop. Note also that once proxied, `Fly-Client-IP`
+becomes Cloudflare's edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you

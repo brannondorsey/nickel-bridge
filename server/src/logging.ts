@@ -59,12 +59,22 @@ function headerText(raw: string | string[] | undefined): string | undefined {
 }
 
 /**
- * The visitor's own address. Fly sets `Fly-Client-IP` on everything it proxies, which is
- * why it is preferred outright; `X-Forwarded-For` is the fallback for any other front end
- * (a CDN placed in front of the app, or local dev behind a proxy) and is a client-to-proxy
- * chain, so the first entry is the one that actually made the request.
+ * The visitor's own address, from the innermost proxy outward.
+ *
+ * Order matters, and gets this exactly backwards if you reason from "Fly is our host, so
+ * trust Fly's header". Fly sets `Fly-Client-IP` to whoever connected to *Fly* — and once a
+ * CDN sits in front, that is the CDN's edge, not the visitor. So a Cloudflare-proxied
+ * deployment logging `Fly-Client-IP` would record Cloudflare IPs for every request and
+ * quietly lose the one field this module exists to provide. `CF-Connecting-IP` is set by
+ * Cloudflare to the real client and stripped from inbound requests, so it is both more
+ * specific and no less trustworthy — check it first, and fall back outward from there.
+ *
+ * `X-Forwarded-For` is last: it is a client-to-proxy chain, so the first entry is the
+ * originating request, and it covers any other front end (or local dev behind a proxy).
  */
 function clientIp(headers: Headers): string | undefined {
+  const cfConnectingIp = headerText(headers['cf-connecting-ip']);
+  if (cfConnectingIp) return cfConnectingIp;
   const flyClientIp = headerText(headers['fly-client-ip']);
   if (flyClientIp) return flyClientIp;
   const forwarded = headerText(headers['x-forwarded-for']);
