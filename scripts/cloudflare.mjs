@@ -41,12 +41,14 @@
  *   node scripts/cloudflare.mjs --purge    # drop the cached HTML surface (run after a deploy)
  *   node scripts/cloudflare.mjs --audit    # cert + cache health; fails on anything actionable
  *
+ * --purge and --audit take `--host=<one of SITES>` to act on a single deployment; without it
+ * they cover every host. Deploys always pass it, since production and demo ship separately.
+ *
  * ENV
  *   CLOUDFLARE_API_TOKEN  zone scoped: Zone:Read, Zone Settings:Edit, Cache Rules:Edit,
  *                         Cache Purge:Purge. Not needed for --plan.
  *   FLY_API_TOKEN         --audit only, to read the certificate's validation state.
  *   CF_ZONE_NAME          default 'brannon.online'
- *   SITE_HOST             default 'bridge.brannon.online'
  */
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +58,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Imported from source across the workspace boundary, exactly as web/scripts/prerender.mjs
 // does it: seo.ts is dependency-free and Node/DOM-free so native type-stripping is enough.
 const { SITE_ROUTES } = await import(resolve(root, 'server/src/seo.ts'));
+// Same native type-stripping, same reason: the glossary term pages are prerendered from
+// this list, so a purge built from anything else would drift from what the build emitted.
+const { TERMS } = await import(resolve(root, 'web/src/glossary/terms.ts'));
 
 const ZONE_NAME = process.env.CF_ZONE_NAME ?? 'brannon.online';
 const API = 'https://api.cloudflare.com/client/v4';
@@ -206,14 +211,31 @@ export function buildRules() {
  * Every URL --purge drops: the cached HTML a deploy actually changes. Hashed /assets/* are
  * deliberately absent — a new build emits new filenames, so there is nothing stale to drop.
  *
+ * The ~125 glossary term pages have to be enumerated rather than skipped, and the reason is
+ * sharper than staleness. Each prerendered page is a copy of the built shell, so it embeds
+ * that build's hashed asset filenames — which means EVERY deploy invalidates all of them,
+ * and a term page left cached for its full day would be serving `<script src>` pointing at
+ * an asset the new build deleted. Not a stale definition: a broken page. `SITE_ROUTES` has
+ * no per-slug rows to expand (`/glossary/*` is one wildcard row), so the slugs come from
+ * terms.ts — the same source the prerender builds those pages from, imported the same way.
+ *
  * Scoped to one host by `--host=`, because production and the demo app deploy independently
  * and purging the other one's pages on every push would throw away good cache entries.
  */
 export function purgeUrls(hosts = HOSTS) {
-  const indexed = SITE_ROUTES.filter((r) => r.indexed && !r.path.endsWith('/*')).map((r) => r.path);
-  const paths = [...new Set([...indexed, '/index.html', '/sitemap.xml', '/robots.txt'])];
+  const exact = SITE_ROUTES.filter((r) => r.indexed && !r.path.endsWith('/*')).map((r) => r.path);
+  const terms = TERMS.map((t) => `/glossary/${t.slug}`);
+  const paths = [...new Set([...exact, ...terms, '/index.html', '/sitemap.xml', '/robots.txt'])];
   return hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
 }
+
+/**
+ * Cloudflare takes at most 30 URLs per purge call on Free/Pro/Business (500 on Enterprise),
+ * so the list is chunked. Host-scoped purges land ~5 calls, comfortably inside the free
+ * plan's 25-token burst; purging every host at once would be ~9 and is only ever a manual
+ * operation, so a small delay between calls keeps it under the 5/minute refill too.
+ */
+const PURGE_BATCH = 30;
 
 /** `--host=x` narrows host-scoped commands; absent means every host in SITES. */
 function selectedHosts() {
@@ -338,11 +360,16 @@ async function check() {
 }
 
 async function purge() {
-  const files = purgeUrls(selectedHosts());
+  const hosts = selectedHosts();
+  const files = purgeUrls(hosts);
   const id = await zoneId();
-  await cf(`/zones/${id}/purge_cache`, { method: 'POST', body: JSON.stringify({ files }) });
-  console.log(`purged ${files.length} urls:`);
-  for (const f of files) console.log(`  - ${f}`);
+  for (let i = 0; i < files.length; i += PURGE_BATCH) {
+    const batch = files.slice(i, i + PURGE_BATCH);
+    await cf(`/zones/${id}/purge_cache`, { method: 'POST', body: JSON.stringify({ files: batch }) });
+    console.log(`  purged ${batch.length} (${i + batch.length}/${files.length})`);
+    if (i + PURGE_BATCH < files.length) await new Promise((r) => setTimeout(r, 1500));
+  }
+  console.log(`purged ${files.length} urls across ${hosts.join(', ')}`);
 }
 
 /**

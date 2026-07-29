@@ -38,6 +38,7 @@ export type RequestLog = {
   remoteAddress?: string;
   remotePort?: number;
   clientIp?: string;
+  clientIpSource?: string;
   userAgent?: string;
   referer?: string;
 };
@@ -59,26 +60,46 @@ function headerText(raw: string | string[] | undefined): string | undefined {
 }
 
 /**
- * The visitor's own address, from the innermost proxy outward.
+ * The visitor's own address, from the innermost proxy outward — and which header said so.
  *
- * Order matters, and gets this exactly backwards if you reason from "Fly is our host, so
- * trust Fly's header". Fly sets `Fly-Client-IP` to whoever connected to *Fly* — and once a
- * CDN sits in front, that is the CDN's edge, not the visitor. So a Cloudflare-proxied
- * deployment logging `Fly-Client-IP` would record Cloudflare IPs for every request and
- * quietly lose the one field this module exists to provide. `CF-Connecting-IP` is set by
- * Cloudflare to the real client and stripped from inbound requests, so it is both more
- * specific and no less trustworthy — check it first, and fall back outward from there.
+ * Order matters, and gets this backwards if you reason from "Fly is our host, so trust Fly's
+ * header". Fly sets `Fly-Client-IP` to whoever connected to *Fly*, which once a CDN sits in
+ * front is the CDN's edge rather than the visitor — so a Cloudflare-proxied deployment
+ * reading only that header would log Cloudflare IPs for every request and lose the one field
+ * this module exists to provide. `CF-Connecting-IP` carries the real client there.
  *
- * `X-Forwarded-For` is last: it is a client-to-proxy chain, so the first entry is the
- * originating request, and it covers any other front end (or local dev behind a proxy).
+ * **None of these headers are authenticated, and `CF-Connecting-IP` is only stripped at
+ * Cloudflare's own edge — for traffic that actually passes through it.** Plenty here does
+ * not: every PR preview answers on `nickel-bridge-pr-N.fly.dev` and is never fronted by
+ * Cloudflare, and production and demo keep answering on their own `.fly.dev` names even once
+ * the custom domain is proxied. On any of those, a client can simply set `CF-Connecting-IP`
+ * itself. So this pairs it with `CF-Ray` — the same signal scripts/cloudflare.mjs's audit
+ * uses to decide whether a host is really proxied — which raises forgery from one header to
+ * two and nothing more. It is a consistency check, not a trust boundary.
+ *
+ * What makes that acceptable is `clientIpSource`: every line records which header produced
+ * the value, so a `cf-connecting-ip` source on a request that had no business carrying one
+ * is visible rather than silently authoritative. `fly-client-ip` is the only entry Fly
+ * guarantees. **Nothing may make a security decision on any of this** — it is diagnostics,
+ * and it is why this returns a labelled value instead of a bare string. If it ever does back
+ * a decision, the real fix is checking `Fly-Client-IP` against Cloudflare's published edge
+ * ranges, which is a different and much larger commitment.
+ *
+ * `X-Forwarded-For` is last: a client-to-proxy chain, so the first entry is the originating
+ * request, covering any other front end (or local dev behind a proxy).
  */
-function clientIp(headers: Headers): string | undefined {
-  const cfConnectingIp = headerText(headers['cf-connecting-ip']);
-  if (cfConnectingIp) return cfConnectingIp;
+type ClientIp = { ip?: string; source?: string };
+
+function clientIp(headers: Headers): ClientIp {
+  if (headerText(headers['cf-ray'])) {
+    const cfConnectingIp = headerText(headers['cf-connecting-ip']);
+    if (cfConnectingIp) return { ip: cfConnectingIp, source: 'cf-connecting-ip' };
+  }
   const flyClientIp = headerText(headers['fly-client-ip']);
-  if (flyClientIp) return flyClientIp;
-  const forwarded = headerText(headers['x-forwarded-for']);
-  return forwarded?.split(',')[0]?.trim() || undefined;
+  if (flyClientIp) return { ip: flyClientIp, source: 'fly-client-ip' };
+  const forwarded = headerText(headers['x-forwarded-for'])?.split(',')[0]?.trim();
+  if (forwarded) return { ip: forwarded, source: 'x-forwarded-for' };
+  return {};
 }
 
 /**
@@ -91,6 +112,7 @@ function clientIp(headers: Headers): string | undefined {
  * would otherwise silently vanish from the logs of anything that does.
  */
 export function serializeRequestLog(req: FastifyRequest): RequestLog {
+  const { ip, source } = clientIp(req.headers);
   return {
     method: req.method,
     url: req.url,
@@ -98,7 +120,8 @@ export function serializeRequestLog(req: FastifyRequest): RequestLog {
     host: req.host,
     remoteAddress: req.ip,
     remotePort: req.socket?.remotePort,
-    clientIp: clientIp(req.headers),
+    clientIp: ip,
+    clientIpSource: source,
     userAgent: headerText(req.headers['user-agent']),
     referer: headerText(req.headers.referer),
   };
