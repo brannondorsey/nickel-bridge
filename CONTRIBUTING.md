@@ -148,7 +148,7 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
-                --plan/--apply/--check/--purge/--audit, see "The edge" below),
+                --plan/--apply/--check/--purge[--force]/--audit, see "The edge" below),
                 og-image.mjs (regenerates the checked-in social share card
                 web/public/og-image.png — offline, no running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)

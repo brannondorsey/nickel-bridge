@@ -234,8 +234,9 @@ deploy).
 6. Point the production domain at the app: `fly certs add bridge.brannon.online --app
    nickel-bridge`, add a **DNS-only** (unproxied) CNAME `bridge → nickel-bridge.fly.dev` at
    the DNS host, and wait for `fly certs check bridge.brannon.online --app nickel-bridge` to
-   go green. (Fly terminates TLS itself; a proxied/orange-cloud Cloudflare record breaks cert
-   issuance.)
+   go green. Start DNS-only: Fly validates certs over TLS-ALPN by default, which a proxying
+   CDN breaks. Proxying is supported, but only after the extra step in
+   "Putting Cloudflare in front" below — do that deliberately, not as part of this step.
 7. Register `https://bridge.brannon.online/auth/google/callback` as an authorized redirect URI
    (see "Google sign-in setup" above), then set the production app's real secrets — **only**
    on the production app, never on a preview app:
@@ -248,10 +249,46 @@ deploy).
    away). After that first deploy, run `fly certs add demo.bridge.brannon.online --app
    nickel-bridge-demo`, add a **DNS-only** (unproxied) CNAME `demo.bridge →
    nickel-bridge-demo.fly.dev`, and wait for `fly certs check demo.bridge.brannon.online
-   --app nickel-bridge-demo` to go green.
+   --app nickel-bridge-demo` to go green. Same caveat as step 6: start DNS-only, and see
+   "Putting Cloudflare in front" before proxying.
 
 Once `FLY_API_TOKEN` is set, the very next PR and the next merge to `main` will deploy
 automatically — there's no separate manual first deploy to do.
+
+### Putting Cloudflare in front (optional, and why you'd want to)
+
+`auto_stop_machines = 'suspend'` means **any** request wakes a dedicated `performance-1x` core
+and holds it for Fly's whole idle window (~6-8 min). A crawler that fetches one file costs the
+same as a real visit, so a steady trickle of them keeps the machine up permanently: production
+was measured at 20.1 h/day, and the demo app — which has *no human users* — at 1.8 h/day.
+`robots.txt` cannot fix that, because a bot has to reach the origin to read it. Only an edge
+that answers those paths without touching Fly can. `scripts/cloudflare.mjs` is that edge,
+derived from `server/src/seo.ts`; see [CONTRIBUTING.md](CONTRIBUTING.md) "The edge" for the
+design and the invariants.
+
+This is **off until you set the secret** — merging the code changes nothing. To turn it on:
+
+1. Mint a Cloudflare API token scoped to the one zone, with exactly:
+   *Zone* → **Zone**:Read, **Cache Rules**:Edit, **Config Rules**:Edit, **Cache Purge**:Purge,
+   **Zone Settings**:Read. Add it as the repo secret `CLOUDFLARE_API_TOKEN`. (Config Rules is
+   easy to miss and is what sets the per-host SSL mode. Zone Settings is read-only on purpose —
+   nothing here writes a zone-wide setting, because the zone is shared with unrelated hosts.)
+2. Switch cert validation off TLS-ALPN, which the proxy breaks:
+   `fly certs setup <host> --app <app>` prints a `_fly-ownership` TXT record — add it, then run
+   `fly certs check <host> --app <app>`. You want `isAcmeHttpConfigured: true`; Fly caches that
+   flag and only recomputes it on re-validation, so the `certs check` is what flips it. Do
+   **not** add the `_acme-challenge` DNS-01 record Fly also offers: DNS-01 collides with
+   Cloudflare's Universal SSL.
+3. Let a deploy run `--apply` **while the record is still DNS-only**. The SSL mode our hosts
+   need comes from a Configuration Rule, so until that rule exists a proxied host falls back to
+   the zone default — and if that default is Flexible, `force_https = true` makes an infinite
+   redirect loop the cache would then pin at the edge.
+4. *Then* flip the record to proxied (orange cloud).
+5. Verify: `node scripts/cloudflare.mjs --audit` should go green, and
+   `curl -sI https://<host>/api/me | grep cf-cache-status` must say `BYPASS` — session-scoped
+   responses must never cache.
+
+Order matters: 2 before 4, and 3 before 4.
 
 ### Environment variables
 
