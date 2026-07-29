@@ -48,6 +48,34 @@ function ThemeSwitch() {
   );
 }
 
+/**
+ * How many tournaments the three sparkline panels look back over. The server
+ * sends every series unbounded (stats.ts's pctSeries/eloSeries/accuracySeries),
+ * so this is purely a display window — raising it costs no query and no payload.
+ *
+ * The ceiling is the chart's tap layer, not the data: Sparkline gives every
+ * point a full-height invisible button in a flex row across a ~326px plot, so
+ * the per-point target is 326/n — 46px at 7, 33px at 10, 13px at 25, and an
+ * untappable 3px at 100. 25 is the last value that stays usable on the 390px
+ * phone viewport (and keeps the keyboard tab order to 75 stops across three
+ * charts). Going wider than this means replacing the per-point buttons with a
+ * single scrubber or binned tap zones, not just changing this number.
+ */
+const CHART_TOURNAMENTS = 25;
+
+/**
+ * Smoothing window for the bid-accuracy trend overlay, as a fraction of the
+ * points on screen rather than a fixed count. A trailing mean only reads as a
+ * trend while it stays wide relative to the series: the previous
+ * `min(5, ceil(n / 2))` was exactly half the points at the 10-tournament
+ * lookback, but the cap meant that at 25 a 5-point mean tracks the raw line
+ * closely enough to say nothing. Dropping the cap keeps the same shape at any
+ * lookback and yields the identical window for every 3 <= n <= 10, where the
+ * cap never bound. Floored at 2 so the overlay is never a dashed copy of the
+ * line it sits under.
+ */
+const trendWindow = (n: number) => Math.max(2, Math.ceil(n / 2));
+
 const GRADE_ROWS = [
   { stars: 3, key: 'excellent' },
   { stars: 2, key: 'good' },
@@ -256,18 +284,18 @@ export default function Player() {
     year: 'numeric',
   });
 
-  const last10 = <T,>(xs: T[]) => xs.slice(-10);
-  const pctPoints = last10(stats.pctSeries).map((p) => ({
+  const recent = <T,>(xs: T[]) => xs.slice(-CHART_TOURNAMENTS);
+  const pctPoints = recent(stats.pctSeries).map((p) => ({
     label: p.tournamentName,
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.pct,
   }));
-  const eloPoints = last10(stats.eloSeries).map((p) => ({
+  const eloPoints = recent(stats.eloSeries).map((p) => ({
     label: p.tournamentName,
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.elo,
   }));
-  const accPoints = last10(stats.accuracySeries.filter((p) => p.accuracy !== null)).map((p) => ({
+  const accPoints = recent(stats.accuracySeries.filter((p) => p.accuracy !== null)).map((p) => ({
     label: p.tournamentName,
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.accuracy!,
@@ -400,7 +428,7 @@ export default function Player() {
           >
             <Sparkline
               points={accPoints}
-              trendWindow={Math.min(5, Math.ceil(accPoints.length / 2))}
+              trendWindow={trendWindow(accPoints.length)}
               leftCaption={ago(accPoints.length)}
               rightCaption="latest · - - trend"
               format={(v) => `${Math.round(v)}%`}

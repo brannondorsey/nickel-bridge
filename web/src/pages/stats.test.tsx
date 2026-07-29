@@ -46,6 +46,28 @@ describe('Stats', () => {
     expect(screen.getByText('BID ACCURACY')).toBeInTheDocument();
   });
 
+  it('caps the sparkline lookback at 25 tournaments, keeping the most recent ones', async () => {
+    // 40 tournaments' worth of history — the server sends every series
+    // unbounded, so the trailing window is entirely the client's call.
+    apiMock.playerStats.mockResolvedValue({
+      ...playerStatsFull,
+      pctSeries: Array.from({ length: 40 }, (_, i) => ({
+        tournamentId: i + 1,
+        tournamentName: `Tournament #${i + 1}`,
+        finishedAt: 1_780_000_000 + i * 86_400,
+        pct: 50,
+        boards: 4,
+        fieldSize: 8,
+      })),
+    });
+    renderStats();
+    expect(await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS')).toBeInTheDocument();
+    // the tail, not the head: #16..#40 are plotted and #15 is off the left edge
+    expect(screen.getByRole('button', { name: 'Tournament #40' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tournament #16' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tournament #15' })).not.toBeInTheDocument();
+  });
+
   it('shows the toll log with the window total baked into the heading', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
