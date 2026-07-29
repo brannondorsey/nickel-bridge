@@ -536,9 +536,18 @@ async function auditSite(site, fail) {
       bad(`${host} cert has no working ACME validation method — renewal cannot happen.`);
     } else if (proxied && methods.length === 1 && methods[0] === 'tls-alpn') {
       // The specific broken combination: Cloudflare terminates TLS, so TLS-ALPN can't validate.
+      //
+      // These isAcme*Configured flags are a cache — Fly only recomputes them when it
+      // re-validates, so a correctly configured host reads stale here until something pokes
+      // it. That is not hypothetical: demo.bridge.brannon.online sat at [tls-alpn] with its
+      // _fly-ownership TXT already published and live in DNS, and a single `fly certs check`
+      // flipped it to [tls-alpn,http-01]. So lead with the re-check: it is the cheaper and
+      // more likely fix, and doing it first turns a confusing false alarm into one command.
       bad(
-        `${host} cert validates only over TLS-ALPN, which cannot work behind Cloudflare's proxy. ` +
-          `Run \`fly certs setup ${host} --app ${app}\` and add the _fly-ownership TXT record.`,
+        `${host} cert validates only over TLS-ALPN, which cannot work behind Cloudflare's proxy.\n` +
+          `  If the _fly-ownership TXT is already published, this flag is just stale — run:\n` +
+          `    fly certs check ${host} --app ${app}\n` +
+          `  If it is genuinely missing, get it from \`fly certs setup ${host} --app ${app}\` first.`,
       );
     }
   }
