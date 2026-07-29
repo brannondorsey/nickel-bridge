@@ -83,7 +83,17 @@ describe('robots.txt', () => {
   it('disallows every route that has nothing worth indexing', async () => {
     const app = await productionApp();
     const { body } = await app.inject({ method: 'GET', url: '/robots.txt' });
-    for (const path of ['/api/', '/auth/', '/t/', '/players/', '/leaderboard', '/scenarios', '/tour', '/activity']) {
+    for (const path of [
+      '/api/',
+      '/auth/',
+      '/t/',
+      '/players/',
+      '/leaderboard',
+      '/scenarios',
+      '/tour',
+      '/activity',
+      '/settings',
+    ]) {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
     // ...and nothing that IS prerendered: those are the whole point.

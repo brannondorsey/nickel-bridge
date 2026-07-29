@@ -78,8 +78,11 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
-                pages/ (Board.tsx is the gameplay UI; sign-out, the night-mode switch AND
-                the sparklines' LOOKBACK switch (nb:lookback) live on the Stats page —
+                prefs.ts (the other device-local preferences — today just
+                nb:fastForward, the claim replay's pacing — see "The settings gate" below),
+                pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
+                where night mode, claim fast-forward, ladder listing and sign-out live;
+                the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
                 see "The profile sparklines" below; Scenarios.tsx is the demo-mode gallery;
                 Glossary.tsx is the glossary screen; Tour.tsx is the first-crossing
                 onboarding tour; Activity.tsx is the TRAFFIC feed, with all of its
@@ -783,7 +786,7 @@ Deliberately low luminance contrast against `--panel` — the card reads by its 
 glyphs, not a bright rectangle, the opposite trade-off from the daytime card. The
 `BridgeMark` glyph/footer stays fully pinned (already `var(--verdigris)`, lifted to its
 night value like any other token). Default is `prefers-color-scheme`, no
-attribute set; the Stats page's Day/Night/Adaptive/System switch (`theme.ts`, `nb:theme`
+attribute set; the settings gate's Day/Night/Adaptive/System switch (`theme.ts`, `nb:theme`
 in localStorage) sets `data-theme` explicitly to override it, or clears it for "System".
 "Adaptive" is also an explicit override (there's no media query for time-of-day): it
 resolves to night on a fixed local-time window, `ADAPTIVE_NIGHT_START_HOUR`–
@@ -797,6 +800,34 @@ paint — keep it in sync with `theme.ts` by hand, since it has to run before th
 graph loads. The `@media (prefers-color-scheme: dark)` copy of the night token block is
 scoped to `:not([data-theme])` so it never fights an explicit override — if you add a new
 base token, add it to both the `[data-theme="night"]` block and that media copy.
+
+**The settings gate** (`web/src/pages/Settings.tsx`, the sixth tab) is one perforated panel
+of identical rows — tracked-caps label, the italic aside that says what the setting does,
+then a full-width `.pref-switch` segmented lever. Four segments for appearance, two for a
+switch: the SAME component at different arities, deliberately, which is why the design
+system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
+which is the ledger and now holds nothing that isn't a record of play.
+
+Two of the three rows never leave the browser (`theme.ts`'s `nb:theme`, `prefs.ts`'s
+`nb:fastForward`); the third is account state (`users.ladder_listed`), and the footer says
+so once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+
+- **Fast forward settled tricks** (default on) is a *pacing* preference and cannot be
+  anything else. When `advanceRobots` resolves a claim it has already played every
+  remaining card (`resolveClaim`, `game.ts`) — the response arrives with the board finished
+  — so nobody chooses a card in that tail under either setting. On replays it at
+  `CLAIM_SPEEDUP_FACTOR`, off at ordinary play pacing (`stageClaimSteps`' default), and
+  under `prefers-reduced-motion` there is no replay to pace, so the setting is inert.
+  Letting a player actually *play* the settled tail would mean not claiming for that user,
+  which is a server change with a real fairness cost — see the note under invariant 1.
+- **Name on the ladder** (default on) governs whether `/api/leaderboard` includes this
+  player for an **anonymous** caller. That is the whole of it because the ladder is the
+  whole anonymous surface: profiles already refuse a signed-out caller for every human and
+  the activity feed is gated. A signed-in caller always sees the full field — the people
+  you are matchpointed against can see who is in it. Ranks come from array position
+  (`Leaderboard.tsx`), so an omitted player leaves no gap; a signed-out visitor's #3 can
+  differ from a signed-in one's, which beats a hole in the numbering advertising that
+  somebody opted out.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,
@@ -893,9 +924,10 @@ decide — and the pieces only make sense together.
 - **`app.ts`'s interactive-request hook gates on `hasSession`**, not the `/api/` prefix:
   without that, a scraper polling the public leaderboard would park the AI personas'
   background play indefinitely.
-- **A per-user "hide my profile from anonymous traffic" setting is the agreed escape hatch
-  if the remaining exposure (handles + Elo on the public ladder) becomes a problem; it does
-  not exist yet.** There is no rate limiting anywhere in this codebase either — a
+- **The escape hatch for the remaining exposure (handles + Elo on the public ladder) now
+  exists: "Name on the ladder" on the settings gate** (`users.ladder_listed`, default on,
+  see "The settings gate" above), which drops a player from `/api/leaderboard` for
+  anonymous callers only. There is still no rate limiting anywhere in this codebase — a
   deliberate call, not an oversight, since what stays public is a single bounded list.
 
 **Discoverability: what gets INDEXED is a separate decision.** The app is client-rendered,
@@ -1002,7 +1034,21 @@ the sitemap and `robots.txt` follow on their own.
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that
-   reordering and the score is unchanged — before accepting a new fixture. The demo-mode
+   reordering and the score is unchanged — before accepting a new fixture.
+   **Claims are why "fast forward settled tricks" is a pacing setting and not a play one,
+   and there is an open question underneath them.** The claim gate is a TRUE-DD judgment
+   (`solveFutureTricks` sees all four hands and assumes best play by everyone) and
+   `resolveClaim` then plays the tail true-DD "at every difficulty" — but at beginner and
+   intermediate the robots would have played that tail through `chooseCardSampled`, i.e.
+   fallibly. So a position is only "settled" against a perfect opponent, and claiming
+   quietly upgrades the robots for the rest of the hand, deleting whatever the human would
+   have gained from an endgame mistake; the tier calibration, measured over full play, never
+   saw those tails. That is uniform today — everyone's boards claim — and it is exactly why
+   a per-user "don't claim for me" toggle was NOT built: it would hand two players on the
+   identical board different robots because of a checkbox, and feed that into matchpoints
+   and Elo. Whether the gate itself should consult the tier is unresolved and worth
+   measuring; changing it is a deliberate robot change under this invariant.
+   The demo-mode
    scenario recipes in `server/src/scenarios.ts` are replay-sensitive the same way: a
    deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive
    the action lists with `node tools/find_scenarios.mjs` and re-curate the copy by hand.

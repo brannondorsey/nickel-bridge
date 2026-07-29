@@ -27,6 +27,7 @@ const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture 
 const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
 const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id = ?`);
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
+const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -201,6 +202,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             elo: user.elo,
             difficulty: user.difficulty,
             onboardedAt: user.onboarded_at,
+            ladderListed: user.ladder_listed !== 0,
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -223,6 +225,27 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.send({
       user: { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty },
     });
+  });
+
+  /**
+   * Ladder listing: whether a visitor without an account sees this player on
+   * /leaderboard (the settings tab's "Name on the ladder").
+   *
+   * Scoped deliberately narrowly. It is not a general "make me private" flag,
+   * because there is nothing else to hide: /api/users/:id/stats already
+   * refuses an anonymous caller for every human, and the activity feed is
+   * signed-in only, so the ladder is the entire anonymous surface. And it
+   * never applies to a signed-in caller — the field you are matchpointed
+   * against can always see who is in it, or the standings would be quoting
+   * ranks against a roster that doesn't match the ladder.
+   */
+  app.post('/api/me/ladder-listing', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    const { listed } = (req.body ?? {}) as { listed?: unknown };
+    if (typeof listed !== 'boolean') return reply.code(400).send({ error: 'listed must be a boolean' });
+    stmtSetLadderListed.run(listed ? 1 : 0, user.id);
+    return reply.send({ ladderListed: listed });
   });
 
   // First-crossing tour completion (or skip). Idempotent — the stamp is

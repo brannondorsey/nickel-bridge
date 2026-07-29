@@ -104,6 +104,18 @@ if (!userColumns.has('onboarded_at')) {
   db.exec(`ALTER TABLE users ADD COLUMN onboarded_at INTEGER`);
   db.exec(`UPDATE users SET onboarded_at = unixepoch()`);
 }
+// Migration: `ladder_listed` — may a visitor without an account see this
+// player on /leaderboard? The ladder is the ONLY thing about a human that
+// reads signed out (profiles refuse an anonymous caller, the activity feed is
+// gated), so this one flag is the whole of "can I be seen by someone who
+// hasn't signed in". Defaults to 1, which is exactly the behaviour every
+// existing account already had — this adds a way out, it doesn't change what
+// happens to anyone who ignores it. Signed-in players always see the full
+// ladder: the setting is about strangers, not about hiding from the field you
+// are being scored against.
+if (!userColumns.has('ladder_listed')) {
+  db.exec(`ALTER TABLE users ADD COLUMN ladder_listed INTEGER NOT NULL DEFAULT 1`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -154,6 +166,8 @@ export interface UserRow {
   kind: 'human' | 'ai';
   /** unix seconds when the first-crossing tour was completed or skipped; NULL = show it */
   onboarded_at: number | null;
+  /** 1 = a signed-out visitor may see this player on /leaderboard; 0 = the ladder omits them for anonymous callers only */
+  ladder_listed: number;
   elo: number;
   created_at: number;
 }

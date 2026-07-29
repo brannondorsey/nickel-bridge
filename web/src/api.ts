@@ -8,6 +8,8 @@ export interface Me {
     elo: number;
     /** unix seconds when the first-crossing tour was completed or skipped; null = show it */
     onboardedAt: number | null;
+    /** shown on /leaderboard to visitors without an account (settings: "Name on the ladder") */
+    ladderListed: boolean;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -336,6 +338,11 @@ export const api = {
     request<{ user: Me['user'] }>('/api/handle', { method: 'POST', body: JSON.stringify({ handle }) }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
+  setLadderListing: (listed: boolean) =>
+    request<{ ladderListed: boolean }>('/api/me/ladder-listing', {
+      method: 'POST',
+      body: JSON.stringify({ listed }),
+    }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),

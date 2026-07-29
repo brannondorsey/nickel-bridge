@@ -22,7 +22,7 @@ import { makeBid } from '../api';
 export const meFixture: Me = {
   // onboardedAt set: the established player — App gates a null stamp into the
   // first-crossing tour (see meFreshCrosser).
-  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, onboardedAt: 1700000000 },
+  user: { id: 1, handle: 'Margaret', picture: null, elo: 1487, onboardedAt: 1700000000, ladderListed: true },
   devAuth: true,
   googleAuth: true,
 };

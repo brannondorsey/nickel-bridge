@@ -189,7 +189,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Public (see App.tsx's isPublicPath): the ladder is the same for everyone,
   // and it's the social proof a visitor who hasn't signed up yet should be
-  // able to see. Only `yourRatedTournaments` consults the caller.
+  // able to see. Two things consult the caller: `yourRatedTournaments`, and
+  // whether the rows are filtered — an anonymous caller doesn't see players
+  // who turned "Name on the ladder" off (users.ladder_listed, see auth.ts).
+  // The omission is silent by design: ranks are rendered from position in
+  // this array (Leaderboard.tsx), so a hidden player leaves no gap to notice,
+  // and a signed-out visitor's #3 can differ from a signed-in one's. The
+  // alternative — holding the numbering and leaving a hole — would advertise
+  // that somebody is hiding, which is the thing the setting exists to avoid.
   app.get('/api/leaderboard', (req, reply) => {
     const user = optionalUser(req);
     const quota = provisionalMin();
@@ -201,10 +208,11 @@ export async function buildApp(): Promise<FastifyInstance> {
                   (SELECT COUNT(DISTINCT b.tournament_id) FROM boards b
                     JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
                     WHERE b.user_id = u.id) AS played_tournaments
-           FROM users u WHERE u.handle IS NOT NULL AND u.kind = 'human'
+           FROM users u
+            WHERE u.handle IS NOT NULL AND u.kind = 'human' AND (? = 1 OR u.ladder_listed = 1)
          ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all(quota) as { id: number }[];
+      .all(user ? 1 : 0, quota) as { id: number }[];
     const movement = leaderboardMovement();
     // null, not 0, when nobody is signed in: the client renders a "you'll join
     // the field once you've completed N crossings — x of N so far" note off
