@@ -38,7 +38,8 @@
  *   node scripts/cloudflare.mjs --plan     # print desired config, check invariants (no token)
  *   node scripts/cloudflare.mjs --apply    # reconcile Cloudflare to it (idempotent)
  *   node scripts/cloudflare.mjs --check    # fail if live config has drifted from desired
- *   node scripts/cloudflare.mjs --purge    # drop the cached HTML surface (run after a deploy)
+ *   node scripts/cloudflare.mjs --purge    # drop cached pages the deploy actually changed
+ *   node scripts/cloudflare.mjs --purge --force   # ...or all of them, no comparison
  *   node scripts/cloudflare.mjs --audit    # cert + cache health; fails on anything actionable
  *
  * --purge and --audit take `--host=<one of SITES>` to act on a single deployment; without it
@@ -543,17 +544,83 @@ async function check() {
   console.log(`✓ Cloudflare cache + config rules match seo.ts for ${HOSTS.join(', ')}.`);
 }
 
+/**
+ * Should this URL be purged? Compares what the edge is serving against what the origin now
+ * serves, and answers TRUE on any doubt.
+ *
+ * The asymmetry drives the whole design: purging something unchanged costs one cold fill,
+ * while skipping something that DID change serves a page referencing asset hashes the new
+ * build deleted — broken, and for up to the full 30-day TTL. So every error path, non-200,
+ * and unreadable body resolves to "purge". The only way to skip is a byte-identical match.
+ *
+ * Origin truth comes from `<app>.fly.dev`, which is never proxied, so it cannot be answered
+ * from the very cache we are trying to evaluate. That matters because robots.txt is generated
+ * at runtime from seo.ts rather than built into web/dist — there is no local artifact to
+ * compare against — and because it needs no cache-busting query trick, whose reliability
+ * would depend on Cloudflare's default extension list rather than on our own rule.
+ */
+async function shouldPurge(site, path) {
+  try {
+    const [edge, origin] = await Promise.all([
+      fetch(`https://${site.host}${path}`, { headers: { 'User-Agent': 'nickel-bridge-purge-check' } }),
+      fetch(`https://${site.app}.fly.dev${path}`, { headers: { 'User-Agent': 'nickel-bridge-purge-check' } }),
+    ]);
+    if (!edge.ok || !origin.ok) return true;
+    const [a, b] = await Promise.all([edge.arrayBuffer(), origin.arrayBuffer()]);
+    if (a.byteLength !== b.byteLength) return true;
+    const x = new Uint8Array(a);
+    const y = new Uint8Array(b);
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** Run an async mapper over items with bounded concurrency. */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i], i);
+    }),
+  );
+  return out;
+}
+
 async function purge() {
-  const hosts = selectedHosts();
-  const files = purgeUrls(hosts);
+  const sites = SITES.filter((s) => selectedHosts().includes(s.host));
+  const force = process.argv.includes('--force');
   const id = await zoneId();
+
+  let files = [];
+  for (const site of sites) {
+    const paths = purgeUrls([site.host]).map((u) => new URL(u).pathname);
+    if (force) {
+      files.push(...paths.map((p) => `https://${site.host}${p}`));
+      continue;
+    }
+    // A deploy that changed no web output leaves every one of these byte-identical, and
+    // purging them would throw away a warm cache for nothing — which is the single biggest
+    // lever on origin wakes, since a cold fill costs ~10 min of machine time per PoP.
+    const verdicts = await mapLimit(paths, 8, (p) => shouldPurge(site, p));
+    const stale = paths.filter((_, i) => verdicts[i]);
+    console.log(`${site.host}: ${stale.length}/${paths.length} urls differ from origin`);
+    files.push(...stale.map((p) => `https://${site.host}${p}`));
+  }
+
+  if (!files.length) {
+    console.log('nothing to purge — the edge already matches the origin.');
+    return;
+  }
   for (let i = 0; i < files.length; i += PURGE_BATCH) {
     const batch = files.slice(i, i + PURGE_BATCH);
     await cf(`/zones/${id}/purge_cache`, { method: 'POST', body: JSON.stringify({ files: batch }) });
     console.log(`  purged ${batch.length} (${i + batch.length}/${files.length})`);
     if (i + PURGE_BATCH < files.length) await new Promise((r) => setTimeout(r, 1500));
   }
-  console.log(`purged ${files.length} urls across ${hosts.join(', ')}`);
+  console.log(`purged ${files.length} urls across ${sites.map((s) => s.host).join(', ')}`);
 }
 
 /**

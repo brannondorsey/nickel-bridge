@@ -461,6 +461,21 @@ Free plan allows. The zone default is read and reported, never written. `always_
 deliberately unmanaged for the same reason — zone-only, no per-host equivalent, and worth one
 saved redirect at most; a scoped Redirect Rule is the way if it is ever wanted.
 
+**`--purge` only drops what actually changed.** Most deploys touch no web output, so the built
+`index.html`, the prerendered pages and the generated `robots.txt` come out byte-identical —
+and purging them throws away a warm cache for nothing. That is the biggest remaining lever on
+origin wakes, because a cold fill costs a full idle window *per PoP* (Cloudflare's cache is
+per-PoP), and with ~13 PoPs and ~3 deploys/day it is the purge rate, not the TTL, that bounds
+the hit rate. So every URL is compared against origin truth — fetched from `<app>.fly.dev`,
+which is never proxied and so cannot be answered from the cache being evaluated — and only the
+differing ones are purged. `robots.txt` is why that comparison runs against the origin rather
+than `web/dist`: it is generated at runtime from `seo.ts`, so no build artifact exists to
+diff. The comparison is deliberately **fail-safe** — a non-200, an unreachable host, a length
+mismatch or any thrown error all resolve to "purge" — because purging something unchanged
+costs one cold fill, while skipping something that *did* change serves a page referencing
+asset hashes the new build deleted, for up to the full 30-day TTL. `--purge --force` skips
+the comparison entirely.
+
 Exactly one job may write the zone-wide ruleset. While demo is the only host, `deploy-demo`
 owns `--apply` plus its own `--purge --host=…`, and `deploy-production`'s Cloudflare steps are
 commented out; when production joins, `--apply` moves back to `deploy-production` and
