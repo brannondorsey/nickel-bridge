@@ -444,6 +444,13 @@ is measurable there without a real player ever meeting a mis-cached page. Uncomm
 one row is the whole prod change; rules, invariants, purge list and audit are all derived per
 host.
 
+**Deploying a phase entrypoint is a PUT — it replaces that phase's whole ruleset, zone-wide.**
+On a shared zone that is destructive with no undo, so every managed rule carries a
+`[nickel-bridge]` prefix and `--apply` preflights *both* phases and refuses to write either if
+it finds a rule without it, naming what it would have deleted. Adding a Cache or Configuration
+Rule for one of the zone's other hostnames by hand will therefore stop the deploy rather than
+be silently reconciled away — move it into this script, or keep it out of these two phases.
+
 **Nothing here writes a zone-wide setting**, and that is deliberate: `brannon.online` is a
 shared zone carrying ten other proxied hostnames on origins this repo knows nothing about, so
 PATCHing `/settings/ssl` to reconcile one app would reach every one of them — and moving an

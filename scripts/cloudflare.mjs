@@ -44,6 +44,20 @@
  * --purge and --audit take `--host=<one of SITES>` to act on a single deployment; without it
  * they cover every host. Deploys always pass it, since production and demo ship separately.
  *
+ * RUNBOOK ORDERING. `--apply` must land BEFORE a record goes orange. The SSL mode our hosts
+ * need comes from a Configuration Rule, so until that rule exists a proxied host falls back
+ * to the zone default — and if that default is Flexible, fly.toml's `force_https = true`
+ * makes an infinite redirect loop that the cache rule would then pin at the edge for a day.
+ * Merge first, let deploy-demo run `--apply` while the record is still grey (the rules are
+ * inert with no traffic matching them), and only then flip the cloud.
+ *
+ * KNOWN LIMITATION: query strings. Cloudflare's default cache key includes the query string
+ * and custom cache keys are Enterprise-only, so `/?utm_source=…` — a real caller in the logs
+ * — is its own cache entry: a MISS that still wakes Fly, and one purgeUrls() can never drop,
+ * since purge-by-URL is exact match and prefix purge is also Enterprise. `/`'s day-long edge
+ * TTL is therefore the exposure window for a stale shell behind any query string. Accepted
+ * rather than solved; `purge_everything` would reach the zone's ten other hostnames.
+ *
  * ENV
  *   CLOUDFLARE_API_TOKEN  zone scoped, on brannon.online only:
  *                           Zone:Read            resolve the zone id
@@ -104,6 +118,17 @@ const IMMUTABLE_PREFIX = '/assets/';
  */
 const STATIC_FILES = ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.svg'];
 
+/**
+ * Paths that must never cache but that SITE_ROUTES does not describe.
+ *
+ * `/demo` is registered by registerDemoRoutes, not the SPA router, so it has no row in the
+ * table — and it is `GET /demo` → startSession() → Set-Cookie → 302, on the one app this
+ * config currently fronts. Cloudflare would not cache it by default (extensionless, 302,
+ * Set-Cookie), but "the default saves us" is exactly the reliance this script exists to
+ * remove: a cached /demo hands one visitor's Inspector session to the next.
+ */
+const STATIC_BYPASS = ['/demo'];
+
 const YEAR = 31_536_000;
 const DAY = 86_400;
 
@@ -123,6 +148,11 @@ function matcherSet(paths) {
     else exacts.push(m.exact);
   }
   return { exacts, prefixes };
+}
+
+/** A concrete URL a route row stands for, so wildcard rows can be probed like exact ones. */
+function samplePath(routePath) {
+  return routePath.endsWith('/*') ? `${routePath.slice(0, -1)}probe` : routePath;
 }
 
 /** Does this matcher set cover a URL path? Mirrors seo.ts's `covers` semantics. */
@@ -152,7 +182,7 @@ function expression({ exacts, prefixes }) {
  * rules by last-match-wins and that is an easy thing to get subtly wrong.
  */
 export function buildRules() {
-  const bypass = matcherSet(SITE_ROUTES.filter((r) => !r.spa).map((r) => r.path));
+  const bypass = matcherSet([...SITE_ROUTES.filter((r) => !r.spa).map((r) => r.path), ...STATIC_BYPASS]);
   const cached = matcherSet([
     ...SITE_ROUTES.filter((r) => r.indexed).map((r) => r.path),
     ...STATIC_FILES,
@@ -172,6 +202,7 @@ export function buildRules() {
     '/auth/google',
     '/auth/google/callback',
     '/auth/logout',
+    '/demo',
   ];
   for (const p of MUST_BYPASS) {
     if (setMatches(cached, p) || setMatches(immutable, p)) {
@@ -181,7 +212,18 @@ export function buildRules() {
       throw new Error(`INVARIANT: ${p} is not covered by the bypass rule.`);
     }
   }
-  // The gated SPA routes must not be cached either — they are live data behind the gate.
+  // Derived, not sampled: EVERY non-public row in the table must stay out of the cache set.
+  // The hardcoded probes above are worth keeping for the paths whose shape matters, but on
+  // their own they only cover routes that existed when they were written — adding
+  // `{ path: '/settings', public: false, indexed: true }` slipped straight past them.
+  for (const r of SITE_ROUTES) {
+    if (r.public) continue;
+    const sample = samplePath(r.path);
+    if (setMatches(cached, sample)) {
+      throw new Error(`INVARIANT: ${r.path} is not public but would be CACHED (probed as ${sample}).`);
+    }
+  }
+  // The public-but-unindexed rows are live data, and must not be cached either.
   for (const p of ['/t/29/b/2', '/activity', '/scenarios', '/leaderboard', '/players/7']) {
     if (setMatches(cached, p)) throw new Error(`INVARIANT: ${p} would be CACHED but is not indexed prose.`);
   }
@@ -192,13 +234,13 @@ export function buildRules() {
 
   return [
     {
-      description: 'Never cache the private surface (derived from seo.ts spa:false)',
+      description: `${RULE_TAG} Never cache the private surface (derived from seo.ts spa:false)`,
       expression: expression(bypass),
       action: 'set_cache_settings',
       action_parameters: { cache: false },
     },
     {
-      description: 'Content-hashed assets are immutable',
+      description: `${RULE_TAG} Content-hashed assets are immutable`,
       expression: expression(immutable),
       action: 'set_cache_settings',
       action_parameters: {
@@ -208,12 +250,19 @@ export function buildRules() {
       },
     },
     {
-      description: 'Crawler-facing surface (derived from seo.ts indexed:true) — stops the wakes',
+      description: `${RULE_TAG} Crawler-facing surface (derived from seo.ts indexed:true) — stops the wakes`,
       expression: expression(cached),
       action: 'set_cache_settings',
       action_parameters: {
         cache: true,
-        edge_ttl: { mode: 'override_origin', default: DAY },
+        edge_ttl: {
+          mode: 'override_origin',
+          default: DAY,
+          // /glossary/<unknown-slug> answers 404 and is covered by the same prefix. Those
+          // URLs cannot be enumerated for purge, so a day-long 404 would outlive the typo
+          // that caused it — and a newly added term would 404 at the edge until tomorrow.
+          status_code_ttl: [{ status_code_range: { from: 400, to: 499 }, value: 300 }],
+        },
         // Short on purpose: the edge TTL is what suppresses origin wakes, while a long
         // browser TTL would strand a deploy in someone's tab. Purge handles the edge.
         browser_ttl: { mode: 'override_origin', default: 300 },
@@ -240,7 +289,9 @@ export function buildRules() {
 export function purgeUrls(hosts = HOSTS) {
   const exact = SITE_ROUTES.filter((r) => r.indexed && !r.path.endsWith('/*')).map((r) => r.path);
   const terms = TERMS.map((t) => `/glossary/${t.slug}`);
-  const paths = [...new Set([...exact, ...terms, '/index.html', '/sitemap.xml', '/robots.txt'])];
+  // STATIC_FILES are cached but unhashed, so a re-run of og-image.mjs (or a favicon edit)
+  // would otherwise sit stale at the edge for a full day.
+  const paths = [...new Set([...exact, ...terms, '/index.html', ...STATIC_FILES])];
   return hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
 }
 
@@ -295,6 +346,17 @@ async function zoneId() {
 const CACHE_PHASE = 'http_request_cache_settings';
 const CONFIG_PHASE = 'http_config_settings';
 
+/**
+ * Marker on every rule this script owns.
+ *
+ * Deploying a phase entrypoint is a PUT — it REPLACES the whole ruleset for that phase,
+ * zone-wide. On a shared zone that is a foot-gun with no undo: brannon.online carries ten
+ * other proxied hostnames, and a cache rule somebody added for one of them would be deleted
+ * by our first --apply, silently and with no record of what it was. So every managed rule
+ * carries this prefix, and putRuleset() refuses to write when it finds a rule that does not.
+ */
+const RULE_TAG = '[nickel-bridge]';
+
 /** Compare only the fields we manage, so Cloudflare's server-side additions aren't "drift". */
 const shape = (r) => ({
   description: r.description,
@@ -302,6 +364,46 @@ const shape = (r) => ({
   action: r.action,
   action_parameters: r.action_parameters,
 });
+
+/** Read a phase entrypoint's rules, treating "no such ruleset yet" as empty. */
+async function liveRules(id, phase) {
+  try {
+    const rs = await cf(`/zones/${id}/rulesets/phases/${phase}/entrypoint`);
+    return rs.rules ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Refuse to touch a phase that holds rules this script does not own.
+ *
+ * The Rulesets API has no "merge" for an entrypoint: a PUT is the whole list. Refusing when
+ * an untagged rule is present is the only way to keep that from quietly deleting a rule this
+ * repo did not create. Adopting them instead would be worse — they would be reconciled away
+ * on the next run, one deploy later and further from the cause.
+ *
+ * Run across EVERY phase before writing ANY of them. Checking each phase just before its own
+ * write leaves a half-applied zone when the second one aborts, which is a worse state to
+ * debug than either extreme.
+ */
+async function assertPhaseOwned(id, phase) {
+  const foreign = (await liveRules(id, phase)).filter((r) => !(r.description ?? '').startsWith(RULE_TAG));
+  if (!foreign.length) return;
+  const list = foreign.map((r) => `    - ${r.description || '(no description)'}: ${r.expression}`).join('\n');
+  throw new Error(
+    `refusing to write the ${phase} ruleset: it holds ${foreign.length} rule(s) this script does not own.\n` +
+      `  A PUT replaces the entire phase, so applying would delete them:\n${list}\n` +
+      `  Move them into this script (tagged "${RULE_TAG}") or remove them by hand first.`,
+  );
+}
+
+async function writeRuleset(id, phase, rules) {
+  await cf(`/zones/${id}/rulesets/phases/${phase}/entrypoint`, {
+    method: 'PUT',
+    body: JSON.stringify({ rules }),
+  });
+}
 
 // ---------------------------------------------------------------- commands
 
@@ -330,7 +432,7 @@ export function buildConfigRules() {
   const hosts = `http.host in {${HOSTS.map((h) => JSON.stringify(h)).join(' ')}}`;
   return [
     {
-      description: 'SSL mode for the bridge apps only — never the zone default',
+      description: `${RULE_TAG} SSL mode for the bridge apps only — never the zone default`,
       expression: `(${hosts})`,
       action: 'set_config',
       action_parameters: { ssl: SSL_MODE },
@@ -359,49 +461,51 @@ async function apply() {
   const ssl = await cf(`/zones/${id}/settings/ssl`);
   console.log(`zone ssl default: ${ssl.value} (left as-is)`);
 
-  await cf(`/zones/${id}/rulesets/phases/${CONFIG_PHASE}/entrypoint`, {
-    method: 'PUT',
-    body: JSON.stringify({ rules: configRules }),
-  });
+  // Preflight both phases before writing either — see assertPhaseOwned.
+  for (const phase of [CONFIG_PHASE, CACHE_PHASE]) await assertPhaseOwned(id, phase);
+
+  await writeRuleset(id, CONFIG_PHASE, configRules);
   console.log(`config rules: applied ${configRules.length} (ssl=${SSL_MODE} for ${HOSTS.join(', ')})`);
 
-  await cf(`/zones/${id}/rulesets/phases/${CACHE_PHASE}/entrypoint`, {
-    method: 'PUT',
-    body: JSON.stringify({ rules }),
-  });
+  await writeRuleset(id, CACHE_PHASE, rules);
   console.log(`cache rules: applied ${rules.length} for ${HOSTS.join(', ')}`);
   for (const r of rules) console.log(`  - ${r.description}`);
 }
 
 async function check() {
-  const desired = buildRules().map(shape);
   const id = await zoneId();
-  let live = [];
-  try {
-    const rs = await cf(`/zones/${id}/rulesets/phases/${CACHE_PHASE}/entrypoint`);
-    live = (rs.rules ?? []).map(shape);
-  } catch {
-    live = [];
-  }
   const problems = [];
-  let liveConfig = [];
-  try {
-    const rs = await cf(`/zones/${id}/rulesets/phases/${CONFIG_PHASE}/entrypoint`);
-    liveConfig = (rs.rules ?? []).map(shape);
-  } catch {
-    liveConfig = [];
+
+  // Compare only the rules we own. Cloudflare returns server-side fields and may normalize
+  // expressions after a PUT, so whole-list equality against a live zone is a promise this
+  // cannot keep — and a permanently red weekly job is one nobody reads. Foreign rules are
+  // reported separately rather than as "drift", because the fix for them is not --apply.
+  for (const [phase, want] of [
+    [CONFIG_PHASE, buildConfigRules()],
+    [CACHE_PHASE, buildRules()],
+  ]) {
+    const live = await liveRules(id, phase);
+    const foreign = live.filter((r) => !(r.description ?? '').startsWith(RULE_TAG));
+    if (foreign.length) {
+      problems.push(
+        `${phase} holds ${foreign.length} rule(s) not owned by this script — --apply will refuse ` +
+          `until they are moved in or removed: ${foreign.map((r) => r.description || '(untitled)').join(', ')}`,
+      );
+    }
+    const ours = live.filter((r) => (r.description ?? '').startsWith(RULE_TAG)).map(shape);
+    if (JSON.stringify(ours) !== JSON.stringify(want.map(shape))) {
+      problems.push(`${phase}: our rules differ from the config derived from seo.ts`);
+      console.log(`--- live (${phase}, ours only) ---\n` + JSON.stringify(ours, null, 2));
+      console.log(`--- desired (${phase}) ---\n` + JSON.stringify(want.map(shape), null, 2));
+    }
   }
-  if (JSON.stringify(liveConfig) !== JSON.stringify(buildConfigRules().map(shape))) {
-    problems.push('config ruleset (per-host SSL mode) differs from desired');
-  }
-  if (JSON.stringify(live) !== JSON.stringify(desired)) {
-    problems.push('cache ruleset differs from the config derived from seo.ts');
-    console.log('--- live ---\n' + JSON.stringify(live, null, 2));
-    console.log('--- desired ---\n' + JSON.stringify(desired, null, 2));
-  }
+
+  const ssl = await cf(`/zones/${id}/settings/ssl`);
+  console.log(`zone ssl default: ${ssl.value} (not managed here — see SSL_MODE)`);
+
   if (problems.length) {
     for (const p of problems) console.log(`::error::${p}`);
-    console.log('\nRun: node scripts/cloudflare.mjs --apply');
+    console.log('\nIf these are drift in our own rules: node scripts/cloudflare.mjs --apply');
     process.exitCode = 1;
     return;
   }
@@ -464,19 +568,25 @@ async function auditSite(site, fail) {
     localFailed = true;
   };
 
+  const SERVED_FROM_CACHE = ['HIT', 'EXPIRED', 'REVALIDATED', 'UPDATING', 'STALE'];
   let proxied = false;
   for (const path of ['/robots.txt', '/']) {
     const url = `https://${host}${path}`;
-    let status = null;
-    for (let i = 0; i < 2; i++) {
+    // Anycast means consecutive requests can land on different edge servers, each with its
+    // own cache — so a lone MISS proves nothing. Ask a few times and accept any cache hit;
+    // only a run of pure misses means the rule is not doing its job.
+    const seen = [];
+    for (let i = 0; i < 4; i++) {
       const r = await fetch(url, { headers: { 'User-Agent': 'nickel-bridge-edge-audit' } });
-      status = r.headers.get('cf-cache-status');
+      seen.push(r.headers.get('cf-cache-status'));
       if (r.headers.get('cf-ray')) proxied = true;
     }
-    console.log(`· ${path}: cf-cache-status=${status ?? 'none'}`);
-    if (!status) bad(`${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
-    else if (!['HIT', 'EXPIRED', 'REVALIDATED', 'UPDATING', 'STALE'].includes(status))
-      bad(`${url} returned ${status} on a second consecutive fetch — it is still waking Fly`);
+    console.log(`· ${path}: cf-cache-status=${seen.map((x) => x ?? 'none').join(',')}`);
+    if (!seen.some(Boolean)) {
+      bad(`${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
+    } else if (!seen.some((x) => SERVED_FROM_CACHE.includes(x))) {
+      bad(`${url} never served from cache across ${seen.length} fetches — it is still waking Fly`);
+    }
   }
 
   // Session-scoped responses must never be cacheable, and this stays honest from outside.

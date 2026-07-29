@@ -9,7 +9,10 @@ name: Edge upkeep
 #     none, until crawlers are hitting the origin again and machine time creeps back up.
 #   - The certificate stops renewing. Fly validates custom-domain certs over TLS-ALPN, and
 #     proxying the record through Cloudflare breaks precisely that. Symptom: none for weeks,
-#     then the site is down. `--audit` fails on a missing DNS-01 fallback or <21 days left.
+#     then the site is down. `--audit` fails on the outcome — days to expiry, validation
+#     errors — plus the one combination that cannot renew: proxied with TLS-ALPN as the only
+#     method. (NOT on "is DNS-01 configured": Fly validates through the proxy over HTTP-01
+#     via the _fly-ownership TXT record, and DNS-01 collides with Cloudflare Universal SSL.)
 #   - The record gets un-proxied (grey cloud) and everything quietly reaches Fly again.
 #     Symptom: no cf-cache-status header at all.
 #
