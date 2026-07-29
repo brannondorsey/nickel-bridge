@@ -442,12 +442,17 @@ information leak, not a stale page.
 proxy — demo has no human users at all and still burned 1.8 h/day on crawlers, so the effect
 is measurable there without a real player ever meeting a mis-cached page. Uncommenting that
 one row is the whole prod change; rules, invariants, purge list and audit are all derived per
-host. The two zone settings `--apply` holds, `ssl=strict` and `always_use_https`, are the
-exception: Cloudflare has no per-hostname SSL mode, so those move for **all** of
-`brannon.online` even while one host is listed. Unavoidable, and required — demo cannot be
-proxied without `ssl=strict`, since Flexible against `fly.toml`'s `force_https = true` is a
-redirect loop. (`always_use_https` earns its place on the same economics as the rest: a
-plain-HTTP bot request redirected at the edge never wakes Fly.)
+host.
+
+**Nothing here writes a zone-wide setting**, and that is deliberate: `brannon.online` is a
+shared zone carrying ten other proxied hostnames on origins this repo knows nothing about, so
+PATCHing `/settings/ssl` to reconcile one app would reach every one of them — and moving an
+HTTP-only origin to Full (strict) takes it down. The SSL mode demo genuinely needs (Flexible
+against `fly.toml`'s `force_https = true` is an infinite redirect loop) is set per-request by
+a **Configuration Rule** instead, `set_config` in the `http_config_settings` phase, which the
+Free plan allows. The zone default is read and reported, never written. `always_use_https` is
+deliberately unmanaged for the same reason — zone-only, no per-host equivalent, and worth one
+saved redirect at most; a scoped Redirect Rule is the way if it is ever wanted.
 
 Exactly one job may write the zone-wide ruleset. While demo is the only host, `deploy-demo`
 owns `--apply` plus its own `--purge --host=…`, and `deploy-production`'s Cloudflare steps are

@@ -45,8 +45,13 @@
  * they cover every host. Deploys always pass it, since production and demo ship separately.
  *
  * ENV
- *   CLOUDFLARE_API_TOKEN  zone scoped: Zone:Read, Zone Settings:Edit, Cache Rules:Edit,
- *                         Cache Purge:Purge. Not needed for --plan.
+ *   CLOUDFLARE_API_TOKEN  zone scoped, on brannon.online only:
+ *                           Zone:Read            resolve the zone id
+ *                           Cache Rules:Edit     the cache ruleset
+ *                           Config Rules:Edit    the per-host SSL mode (see SSL_MODE)
+ *                           Cache Purge:Purge    post-deploy purges
+ *                           Zone Settings:Read   reporting the zone default; never written
+ *                         Not needed for --plan.
  *   FLY_API_TOKEN         --audit only, to read the certificate's validation state.
  *   CF_ZONE_NAME          default 'brannon.online'
  */
@@ -79,10 +84,10 @@ const API = 'https://api.cloudflare.com/client/v4';
  * table is the same in both deployments (only robots.txt's *content* differs, via DEMO=1's
  * throwaway-origin branch), so a second rule shape would be a difference with no cause.
  *
- * NOTE the two zone settings in ZONE_SETTINGS are NOT per-host — Cloudflare has no
- * per-hostname SSL mode — so `--apply` moves them for all of brannon.online even while this
- * list holds one host. That is unavoidable and also required: demo cannot be proxied without
- * `ssl=strict`, since Flexible against fly.toml's `force_https = true` is a redirect loop.
+ * Everything here is scoped to these hosts, including the SSL mode — see SSL_MODE below for
+ * why that is done with a Configuration Rule instead of the zone setting. `brannon.online`
+ * carries ten other proxied hostnames belonging to unrelated projects, and nothing this
+ * script does may reach them.
  */
 const SITES = [
   // { host: 'bridge.brannon.online', app: 'nickel-bridge' }, // follow-up, after demo is proven
@@ -288,6 +293,7 @@ async function zoneId() {
 }
 
 const CACHE_PHASE = 'http_request_cache_settings';
+const CONFIG_PHASE = 'http_config_settings';
 
 /** Compare only the fields we manage, so Cloudflare's server-side additions aren't "drift". */
 const shape = (r) => ({
@@ -300,37 +306,64 @@ const shape = (r) => ({
 // ---------------------------------------------------------------- commands
 
 /**
- * Zone settings this config owns, with why each one is not merely a preference.
+ * SSL mode, scoped to our hosts by a Configuration Rule rather than set on the zone.
  *
- * `ssl: strict` — Flexible against fly.toml's `force_https = true` is an infinite redirect
- * loop, i.e. the difference between a working site and an outage.
- * `always_use_https` — recommended by Fly's Cloudflare guide, and it earns its place here on
- * the wake economics: a plain-HTTP bot request redirected at the edge never reaches Fly,
- * whereas letting the origin issue the 301 costs a full idle window.
+ * `brannon.online` is a shared zone with ten other proxied hostnames on origins this repo
+ * knows nothing about, and the zone's SSL mode is a single global switch — so PATCHing
+ * `/settings/ssl` to reconcile one app would reach every one of them. Moving an origin that
+ * only speaks HTTP to Full (strict) takes it down, and "we needed it for the bridge app" is
+ * no comfort to whatever else broke.
+ *
+ * A Configuration Rule sets the same thing per-request (`set_config`, `http_config_settings`
+ * phase, available on the Free plan with a 10-rule budget), so the zone default is left
+ * exactly as found. Demo genuinely needs it: Flexible against fly.toml's `force_https = true`
+ * is an infinite redirect loop, so this is the difference between a working site and an
+ * outage — but it is now that difference for our hosts alone.
+ *
+ * `always_use_https` is deliberately NOT managed. It is zone-only with no per-host
+ * equivalent, and it buys one saved redirect on plain-HTTP bot requests — not worth reaching
+ * across a shared zone for. If it is ever wanted, a scoped Redirect Rule is the way.
  */
-const ZONE_SETTINGS = { ssl: 'strict', always_use_https: 'on' };
+const SSL_MODE = 'strict';
+
+export function buildConfigRules() {
+  const hosts = `http.host in {${HOSTS.map((h) => JSON.stringify(h)).join(' ')}}`;
+  return [
+    {
+      description: 'SSL mode for the bridge apps only — never the zone default',
+      expression: `(${hosts})`,
+      action: 'set_config',
+      action_parameters: { ssl: SSL_MODE },
+    },
+  ];
+}
 
 async function plan() {
   const rules = buildRules();
+  const configRules = buildConfigRules();
   console.log(
-    JSON.stringify({ zone: ZONE_NAME, hosts: HOSTS, settings: ZONE_SETTINGS, rules, purge: purgeUrls() }, null, 2),
+    JSON.stringify({ zone: ZONE_NAME, hosts: HOSTS, configRules, rules, purge: purgeUrls() }, null, 2),
   );
-  console.log(`\n✓ ${rules.length} rules derived from seo.ts for ${HOSTS.length} hosts; all invariants hold.`);
+  console.log(`\n✓ ${rules.length} cache rules + ${configRules.length} config rule derived from seo.ts`);
+  console.log(`  for ${HOSTS.join(', ')}; all invariants hold. No zone-wide settings are touched.`);
 }
 
 async function apply() {
   const rules = buildRules();
+  const configRules = buildConfigRules();
   const id = await zoneId();
 
-  for (const [name, want] of Object.entries(ZONE_SETTINGS)) {
-    const cur = await cf(`/zones/${id}/settings/${name}`);
-    if (cur.value !== want) {
-      await cf(`/zones/${id}/settings/${name}`, { method: 'PATCH', body: JSON.stringify({ value: want }) });
-      console.log(`${name}: ${cur.value} → ${want}`);
-    } else {
-      console.log(`${name}: ${want} (unchanged)`);
-    }
-  }
+  // Read-only, and reported rather than reconciled: this is a shared zone, so the default is
+  // somebody else's to set. It only matters that it is not Flexible for OUR hosts, which the
+  // config rule below guarantees regardless of what it says.
+  const ssl = await cf(`/zones/${id}/settings/ssl`);
+  console.log(`zone ssl default: ${ssl.value} (left as-is)`);
+
+  await cf(`/zones/${id}/rulesets/phases/${CONFIG_PHASE}/entrypoint`, {
+    method: 'PUT',
+    body: JSON.stringify({ rules: configRules }),
+  });
+  console.log(`config rules: applied ${configRules.length} (ssl=${SSL_MODE} for ${HOSTS.join(', ')})`);
 
   await cf(`/zones/${id}/rulesets/phases/${CACHE_PHASE}/entrypoint`, {
     method: 'PUT',
@@ -351,9 +384,15 @@ async function check() {
     live = [];
   }
   const problems = [];
-  for (const [name, want] of Object.entries(ZONE_SETTINGS)) {
-    const cur = await cf(`/zones/${id}/settings/${name}`);
-    if (cur.value !== want) problems.push(`zone setting ${name} is "${cur.value}", expected "${want}"`);
+  let liveConfig = [];
+  try {
+    const rs = await cf(`/zones/${id}/rulesets/phases/${CONFIG_PHASE}/entrypoint`);
+    liveConfig = (rs.rules ?? []).map(shape);
+  } catch {
+    liveConfig = [];
+  }
+  if (JSON.stringify(liveConfig) !== JSON.stringify(buildConfigRules().map(shape))) {
+    problems.push('config ruleset (per-host SSL mode) differs from desired');
   }
   if (JSON.stringify(live) !== JSON.stringify(desired)) {
     problems.push('cache ruleset differs from the config derived from seo.ts');
@@ -366,7 +405,7 @@ async function check() {
     process.exitCode = 1;
     return;
   }
-  console.log(`✓ Cloudflare config matches seo.ts for ${HOSTS.join(', ')}; zone settings as expected.`);
+  console.log(`✓ Cloudflare cache + config rules match seo.ts for ${HOSTS.join(', ')}.`);
 }
 
 async function purge() {
