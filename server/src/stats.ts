@@ -73,7 +73,7 @@ const stmtAllDoneContracts = db.prepare(
    WHERE b.state = 'done' AND b.contract IS NOT NULL`,
 );
 
-const RIVAL_TOP_N = 5;
+const RIVAL_TOP_N = 10;
 
 /** head-to-head summary against one other player who has shared a field with this user. */
 export interface Rival {
