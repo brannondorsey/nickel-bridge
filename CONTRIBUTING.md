@@ -435,19 +435,28 @@ edit here — the same reason robots.txt and the sitemap are derived. Its invari
 *every* invocation, including the `--plan` CI runs on each PR, and the load-bearing one is that
 nothing session-scoped can reach the cache set: `boardView` redacts hidden hands per player, so
 a cached `/api` response is one player's view of the deal served to another. That is an
-information leak, not a stale page. It fronts **both** `bridge.brannon.online` and
-`demo.bridge.brannon.online` with one rule set — the demo app has no human users at all and
-still burned 1.8 h/day on crawlers, and the route table is identical in both deployments (only
-robots.txt's *content* differs, via `DEMO=1`'s throwaway-origin branch), so a separate rule
-shape would be a difference with no cause behind it. `--apply` also holds two zone settings:
-`ssl=strict` and `always_use_https` (a plain-HTTP bot request redirected at the edge never
-wakes Fly; letting the origin issue that 301 costs a full idle window).
+information leak, not a stale page.
 
-`deploy-production` runs `--apply` then `--purge --host=bridge.brannon.online`; `deploy-demo`
-runs only the demo-scoped purge, because the ruleset is zone-wide and two jobs writing the same
-entrypoint would race. `.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit`
-(cert + cache health, per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so
-none of it activates until that secret exists.
+**Staged rollout: `demo.bridge.brannon.online` only, for now.** The production row in
+`SITES` is commented out and goes in as a follow-up once demo is proven end to end behind the
+proxy — demo has no human users at all and still burned 1.8 h/day on crawlers, so the effect
+is measurable there without a real player ever meeting a mis-cached page. Uncommenting that
+one row is the whole prod change; rules, invariants, purge list and audit are all derived per
+host. The two zone settings `--apply` holds, `ssl=strict` and `always_use_https`, are the
+exception: Cloudflare has no per-hostname SSL mode, so those move for **all** of
+`brannon.online` even while one host is listed. Unavoidable, and required — demo cannot be
+proxied without `ssl=strict`, since Flexible against `fly.toml`'s `force_https = true` is a
+redirect loop. (`always_use_https` earns its place on the same economics as the rest: a
+plain-HTTP bot request redirected at the edge never wakes Fly.)
+
+Exactly one job may write the zone-wide ruleset. While demo is the only host, `deploy-demo`
+owns `--apply` plus its own `--purge --host=…`, and `deploy-production`'s Cloudflare steps are
+commented out; when production joins, `--apply` moves back to `deploy-production` and
+`deploy-demo` keeps only its purge. `--host` scoping stays either way, since the two apps
+deploy independently and purging the other's pages would discard good cache entries.
+`.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health,
+per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
+until that secret exists.
 
 Two things about proxying a Fly app that fail silently and late, both per
 [Fly's Cloudflare guide](https://fly.io/docs/networking/understanding-cloudflare/). Fly

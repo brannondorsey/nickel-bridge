@@ -68,14 +68,24 @@ const API = 'https://api.cloudflare.com/client/v4';
 /**
  * Every host fronted by this config, with the Fly app behind it.
  *
- * The demo app is here for the same reason production is, and arguably a better one: it has
- * no human users whatsoever and still burned 1.8 h/day answering crawlers. Its rules are
- * identical rather than special-cased — the route table is the same in both deployments
- * (only robots.txt's *content* differs, via DEMO=1's throwaway-origin branch), so a second
- * rule shape would be a difference with no cause behind it.
+ * STAGED ROLLOUT — the demo app only, for now. Production is commented out deliberately and
+ * goes in as a follow-up once demo has been verified end to end behind the proxy. Demo is
+ * the right place to prove it: it has no human users whatsoever and still burned 1.8 h/day
+ * answering crawlers, so the effect is measurable there without a real player ever seeing a
+ * mis-cached page. Uncommenting the row is the entire prod change — the rules, invariants,
+ * purge list and audit are all derived per host, so nothing else needs editing.
+ *
+ * When production is added, its rules will be identical rather than special-cased: the route
+ * table is the same in both deployments (only robots.txt's *content* differs, via DEMO=1's
+ * throwaway-origin branch), so a second rule shape would be a difference with no cause.
+ *
+ * NOTE the two zone settings in ZONE_SETTINGS are NOT per-host — Cloudflare has no
+ * per-hostname SSL mode — so `--apply` moves them for all of brannon.online even while this
+ * list holds one host. That is unavoidable and also required: demo cannot be proxied without
+ * `ssl=strict`, since Flexible against fly.toml's `force_https = true` is a redirect loop.
  */
 const SITES = [
-  { host: 'bridge.brannon.online', app: 'nickel-bridge' },
+  // { host: 'bridge.brannon.online', app: 'nickel-bridge' }, // follow-up, after demo is proven
   { host: 'demo.bridge.brannon.online', app: 'nickel-bridge-demo' },
 ];
 const HOSTS = SITES.map((s) => s.host);
