@@ -153,11 +153,23 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != ''
         with:
           node-version: 24
-      - name: Reconcile Cloudflare edge config and purge the demo app
+      - name: Reconcile Cloudflare edge config
+        id: cf_apply
         if: env.CLOUDFLARE_API_TOKEN != ''
+        continue-on-error: true
+        run: node scripts/cloudflare.mjs --apply
+      # Purge even when --apply refused. The refusal case is "the zone holds a rule this
+      # script does not own" — a human-intervention state, not a reason to also strand the
+      # HTML this deploy just changed behind a day-long edge TTL. The two are independent:
+      # one reconciles rules, the other drops content those rules already cached.
+      - name: Purge the demo app's cached pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node scripts/cloudflare.mjs --purge --host=demo.bridge.brannon.online
+      - name: Fail the deploy if the edge config could not be reconciled
+        if: env.CLOUDFLARE_API_TOKEN != '' && steps.cf_apply.outcome == 'failure'
         run: |
-          node scripts/cloudflare.mjs --apply
-          node scripts/cloudflare.mjs --purge --host=demo.bridge.brannon.online
+          echo "::error::cloudflare --apply failed (see the Reconcile step). The purge still ran."
+          exit 1
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).
