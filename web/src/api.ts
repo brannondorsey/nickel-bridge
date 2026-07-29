@@ -10,6 +10,8 @@ export interface Me {
     onboardedAt: number | null;
     /** shown on /leaderboard to visitors without an account (settings: "Name on the ladder") */
     ladderListed: boolean;
+    /** replay a claim's settled tricks compressed (settings: "Fast forward settled tricks") */
+    fastForward: boolean;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -338,10 +340,11 @@ export const api = {
     request<{ user: Me['user'] }>('/api/handle', { method: 'POST', body: JSON.stringify({ handle }) }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
-  setLadderListing: (listed: boolean) =>
-    request<{ ladderListed: boolean }>('/api/me/ladder-listing', {
+  /** Partial update of the account-backed settings; absent keys are left alone. */
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean }>('/api/me/prefs', {
       method: 'POST',
-      body: JSON.stringify({ listed }),
+      body: JSON.stringify(prefs),
     }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),

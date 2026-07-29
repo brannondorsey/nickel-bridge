@@ -182,7 +182,7 @@ describe('handle (first-login username)', () => {
       'Nina',
     );
 
-    expect((await nina.post('/api/me/ladder-listing', { listed: false })).ladderListed).toBe(false);
+    expect((await nina.post('/api/me/prefs', { ladderListed: false })).ladderListed).toBe(false);
     expect((await nina.get('/api/me')).user.ladderListed).toBe(false);
 
     // signed in — everyone, Nina included, still sees the full field
@@ -196,20 +196,37 @@ describe('handle (first-login username)', () => {
     expect(handles(anonBody)).toContain('Oscar');
 
     // and it is reversible
-    await nina.post('/api/me/ladder-listing', { listed: true });
+    await nina.post('/api/me/prefs', { ladderListed: true });
     expect(handles(JSON.parse((await new TestClient(app, 'Anon3').raw('GET', '/api/leaderboard')).body))).toContain(
       'Nina',
     );
   });
 
-  it('rejects a ladder-listing write that is not a boolean, and one with no session', async () => {
+  it('patches preferences one key at a time, and refuses anything it does not recognise', async () => {
     const pete = new TestClient(app, 'Pete');
     await pete.login();
-    expect((await pete.raw('POST', '/api/me/ladder-listing', { listed: 'yes' })).statusCode).toBe(400);
-    expect((await pete.raw('POST', '/api/me/ladder-listing', {})).statusCode).toBe(400);
-    expect((await new TestClient(app, 'AnonSet').raw('POST', '/api/me/ladder-listing', { listed: false })).statusCode).toBe(
-      401,
-    );
+
+    // defaults, and a partial patch leaves the untouched key alone
+    let me = await pete.get('/api/me');
+    expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+    expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
+      ladderListed: true,
+      fastForward: false,
+    });
+    await pete.post('/api/me/prefs', { ladderListed: false });
+    me = await pete.get('/api/me');
+    expect([me.user.ladderListed, me.user.fastForward]).toEqual([false, false]);
+
+    // an empty patch is a legal no-op; a bad type or an unknown key is not,
+    // so a typo can't look like a successful write
+    expect(await pete.post('/api/me/prefs', {})).toEqual({ ladderListed: false, fastForward: false });
+    expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
+    expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
+    expect((await pete.get('/api/me')).user.fastForward).toBe(false);
+
+    expect(
+      (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,
+    ).toBe(401);
   });
 
   // Play is still the toll: opening the game up to anonymous callers is

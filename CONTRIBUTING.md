@@ -78,8 +78,6 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
-                prefs.ts (the other device-local preferences — today just
-                nb:fastForward, the claim replay's pacing — see "The settings gate" below),
                 pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
                 where night mode, claim fast-forward, ladder listing and sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
@@ -808,19 +806,27 @@ switch: the SAME component at different arities, deliberately, which is why the 
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
 
-Two of the three rows never leave the browser (`theme.ts`'s `nb:theme`, `prefs.ts`'s
-`nb:fastForward`); the third is account state (`users.ladder_listed`), and the footer says
-so once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+**Where a preference lives is a decision, not an accident.** Both new rows are columns on
+`users` (`fast_forward`, `ladder_listed`), written through one partial-update endpoint,
+`POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is plain
+per-user booleans and still growing (`difficulty` is already a column waiting for a UI).
+Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't look
+like a successful write. Appearance is the ONE device-local row, and only because it has
+to be applied before first paint by the inline script in `index.html` — no round trip can
+answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer says that
+once rather than tagging rows. Each of the two new settings has one thing worth knowing:
 
-- **Fast forward settled tricks** (default on) is a *pacing* preference and cannot be
-  anything else. When `advanceRobots` resolves a claim it has already played every
+- **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
+  preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
   remaining card (`resolveClaim`, `game.ts`) — the response arrives with the board finished
   — so nobody chooses a card in that tail under either setting. On replays it at
   `CLAIM_SPEEDUP_FACTOR`, off at ordinary play pacing (`stageClaimSteps`' default), and
   under `prefers-reduced-motion` there is no replay to pace, so the setting is inert.
-  Letting a player actually *play* the settled tail would mean not claiming for that user,
-  which is a server change with a real fairness cost — see the note under invariant 1.
-- **Name on the ladder** (default on) governs whether `/api/leaderboard` includes this
+  `Board.tsx` reads it off `MeContext` (so does `Tour.tsx`, defaulting to on for the
+  signed-out visitor walking the practice deal). Letting a player actually *play* the
+  settled tail would mean not claiming for that user, which is a server change with a real
+  fairness cost — see the note under invariant 1.
+- **Name on the ladder** (`users.ladder_listed`, default on) governs whether `/api/leaderboard` includes this
   player for an **anonymous** caller. That is the whole of it because the ladder is the
   whole anonymous surface: profiles already refuse a signed-out caller for every human and
   the activity feed is gated. A signed-in caller always sees the full field — the people

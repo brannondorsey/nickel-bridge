@@ -4,7 +4,6 @@ import { api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
-import { readFastForward, storeFastForward } from '../prefs';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
 /**
@@ -16,12 +15,16 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * for the switches — so the screen reads as one printed form rather than as a
  * theme picker with toggles bolted under it.
  *
- * Where a preference LIVES is deliberately not visible here, and the rows are
- * ordered by it anyway: appearance and fast-forward are device-local
- * (localStorage, theme.ts and prefs.ts), while the ladder listing is account
- * state on the server. The footer says so once, quietly, rather than tagging
- * individual rows — someone reading this screen wants to know what changes,
- * not which storage answers for it.
+ * Everything here is account state (columns on `users`, written through
+ * POST /api/me/prefs) EXCEPT appearance, which is device-local because it has
+ * to be applied before first paint by the inline script in index.html — no
+ * server round trip can answer in time, and a person's screen at 11 PM is a
+ * property of the room they're in rather than of their account. The footer
+ * says that once rather than tagging individual rows.
+ *
+ * The two account switches are optimistic: they move under the finger and
+ * revert if the write is refused, since a switch that waits on a round trip
+ * before moving reads as a dead control on a slow connection.
  */
 
 const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
@@ -75,26 +78,27 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean };
+
 export default function Settings() {
   const { me, refresh } = useMe();
   const [theme, setTheme] = useState<ThemePref>(() => readThemePref());
-  const [fastForward, setFastForward] = useState(() => readFastForward());
-  // Seeded from the session and updated optimistically: the switch must move
-  // under the finger, and a failed write is reverted rather than left showing
-  // a listing state the server never accepted.
-  const [ladderListed, setLadderListed] = useState(me?.user?.ladderListed !== false);
-  const [ladderError, setLadderError] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<AccountPrefs>({
+    ladderListed: me?.user?.ladderListed !== false,
+    fastForward: me?.user?.fastForward !== false,
+  });
+  const [prefError, setPrefError] = useState<string | null>(null);
 
-  const changeLadder = async (listed: boolean) => {
-    const previous = ladderListed;
-    setLadderListed(listed);
-    setLadderError(null);
+  const change = async (patch: Partial<AccountPrefs>) => {
+    const previous = prefs;
+    setPrefs({ ...prefs, ...patch });
+    setPrefError(null);
     try {
-      await api.setLadderListing(listed);
+      await api.setPrefs(patch);
       refresh();
     } catch {
-      setLadderListed(previous);
-      setLadderError("That didn't save — try again.");
+      setPrefs(previous);
+      setPrefError("That didn't save — try again.");
     }
   };
 
@@ -126,12 +130,9 @@ export default function Settings() {
           >
             <PrefSwitch
               label="Fast forward settled tricks"
-              value={fastForward}
+              value={prefs.fastForward}
               options={OFF_ON}
-              onChange={(on) => {
-                setFastForward(on);
-                storeFastForward(on);
-              }}
+              onChange={(fastForward) => change({ fastForward })}
             />
           </SettingRow>
 
@@ -139,9 +140,14 @@ export default function Settings() {
             label="Name on the ladder"
             note="Show your handle and rating to visitors who are not signed in. Signed-in players see the rankings either way."
           >
-            <PrefSwitch label="Name on the ladder" value={ladderListed} options={OFF_ON} onChange={changeLadder} />
-            {ladderError ? <div className="notice-error settings-error">{ladderError}</div> : null}
+            <PrefSwitch
+              label="Name on the ladder"
+              value={prefs.ladderListed}
+              options={OFF_ON}
+              onChange={(ladderListed) => change({ ladderListed })}
+            />
           </SettingRow>
+          {prefError ? <div className="notice-error settings-error">{prefError}</div> : null}
         </PerforatedPanel>
 
         <div className="settings-foot">
@@ -155,7 +161,7 @@ export default function Settings() {
             Sign out
           </Button>
           <p className="settings-foot-note">
-            Appearance and fast-forward are kept on this device; your ladder listing travels with your account.
+            Appearance is kept on this device; the rest travels with your account.
           </p>
         </div>
       </div>

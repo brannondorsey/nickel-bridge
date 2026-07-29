@@ -32,7 +32,7 @@ function freshApiMock(): ApiMock {
     devLogin: stub(),
     setHandle: stub(),
     setOnboarded: stub(),
-    setLadderListing: stub(),
+    setPrefs: stub(),
     logout: stub(),
     play: stub(),
     tournaments: stub(),

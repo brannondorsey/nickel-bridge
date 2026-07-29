@@ -116,6 +116,17 @@ if (!userColumns.has('onboarded_at')) {
 if (!userColumns.has('ladder_listed')) {
   db.exec(`ALTER TABLE users ADD COLUMN ladder_listed INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `fast_forward` — replay a claim's settled tricks compressed
+// (1, the shipped behaviour) or at ordinary play pacing (0). Account state
+// rather than a localStorage flag like the theme: it says how this PERSON
+// wants to be shown a hand they no longer have decisions in, which doesn't
+// change because they picked up a different device. Night mode is the
+// exception, and only because it has to be applied before first paint by an
+// inline script (see "Night mode" in CONTRIBUTING.md) — no server round trip
+// can answer that in time.
+if (!userColumns.has('fast_forward')) {
+  db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -168,6 +179,8 @@ export interface UserRow {
   onboarded_at: number | null;
   /** 1 = a signed-out visitor may see this player on /leaderboard; 0 = the ladder omits them for anonymous callers only */
   ladder_listed: number;
+  /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
+  fast_forward: number;
   elo: number;
   created_at: number;
 }

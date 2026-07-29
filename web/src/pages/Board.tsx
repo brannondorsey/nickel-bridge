@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useMe } from '../App';
 import {
   AuctionEntry,
   BidEval,
@@ -51,7 +52,6 @@ import {
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
-import { readFastForward } from '../prefs';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
@@ -63,6 +63,10 @@ export default function Board() {
   const navigate = useNavigate();
   const tournamentId = Number(tid);
   const boardNo = Number(no);
+
+  // "Fast forward settled tricks" (settings gate) — account state, so it
+  // follows the player between devices; see runClaim below for what it paces.
+  const fastForward = useMe().me?.user?.fastForward !== false;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -217,14 +221,12 @@ export default function Board() {
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
-      // The settings tab's "Fast forward settled tricks" (prefs.ts) chooses
-      // the pacing of this replay and nothing else: the cards were played by
-      // the server before this response arrived either way, so off means
-      // "watch them at table speed", never "play them yourself". Read here
-      // rather than captured, so flipping the setting takes on the next claim
-      // without a reload.
+      // The settings tab's "Fast forward settled tricks" (users.fast_forward)
+      // chooses the pacing of this replay and nothing else: the cards were
+      // played by the server before this response arrived either way, so off
+      // means "watch them at table speed", never "play them yourself".
       if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, readFastForward() ? CLAIM_SPEEDUP_FACTOR : 1);
+        const steps = stageClaimSteps(prev, next, fastForward ? CLAIM_SPEEDUP_FACTOR : 1);
         if (steps.length) {
           scheduleSteps(prev, steps);
           const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
@@ -237,7 +239,7 @@ export default function Board() {
       cancelStaging();
       setBoard(next);
     },
-    [applyBoard, cancelStaging, scheduleSteps],
+    [applyBoard, cancelStaging, fastForward, scheduleSteps],
   );
 
   const load = useCallback(() => {
