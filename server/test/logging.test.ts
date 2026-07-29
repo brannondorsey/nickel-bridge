@@ -77,6 +77,42 @@ describe('serializeRequestLog', () => {
     expect(log.clientIp).toBe('203.0.113.7');
   });
 
+  // Behind a CDN, Fly-Client-IP is the CDN's edge address, not the visitor's — preferring
+  // it would silently replace every logged caller with a Cloudflare IP.
+  it('prefers CF-Connecting-IP over Fly-Client-IP when a CDN is genuinely in front', () => {
+    const log = serializeRequestLog(
+      request({
+        'cf-ray': '9a1b2c3d4e5f6789-EWR',
+        'cf-connecting-ip': '203.0.113.7',
+        'fly-client-ip': '172.68.0.11',
+        'x-forwarded-for': '203.0.113.7, 172.68.0.11',
+      }),
+    );
+    expect(log.clientIp).toBe('203.0.113.7');
+    expect(log.clientIpSource).toBe('cf-connecting-ip');
+  });
+
+  // A PR preview is never fronted by Cloudflare, and production keeps answering on its own
+  // .fly.dev name even once the custom domain is proxied — so a bare CF-Connecting-IP is
+  // just an attacker-supplied string, and must not displace the one Fly guarantees.
+  it('ignores a forged CF-Connecting-IP that arrives with no Cloudflare hop', () => {
+    const log = serializeRequestLog(
+      request({ 'cf-connecting-ip': '1.2.3.4', 'fly-client-ip': '198.51.100.9' }),
+    );
+    expect(log.clientIp).toBe('198.51.100.9');
+    expect(log.clientIpSource).toBe('fly-client-ip');
+  });
+
+  it('labels the source of every address it logs, so a suspect one is visible', () => {
+    expect(serializeRequestLog(request({ 'fly-client-ip': '198.51.100.9' })).clientIpSource).toBe(
+      'fly-client-ip',
+    );
+    expect(serializeRequestLog(request({ 'x-forwarded-for': '203.0.113.7' })).clientIpSource).toBe(
+      'x-forwarded-for',
+    );
+    expect(serializeRequestLog(request()).clientIpSource).toBeUndefined();
+  });
+
   it('prefers Fly-Client-IP over X-Forwarded-For', () => {
     const log = serializeRequestLog(
       request({ 'fly-client-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.9' }),

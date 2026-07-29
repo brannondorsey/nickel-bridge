@@ -147,6 +147,8 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
+                cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
+                --plan/--apply/--check/--purge[--force]/--audit, see "The edge" below),
                 og-image.mjs (regenerates the checked-in social share card
                 web/public/og-image.png — offline, no running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
@@ -414,6 +416,87 @@ personas' background play. Historical machine time comes from Fly's Prometheus
 (`fly_instance_up`, scraped every 15s; the metric is simply absent while suspended). Query it
 with `Authorization: FlyV1 <token>` — not `Bearer` — and derive uptime from raw samples
 rather than `count_over_time`, which gets downsampled over long ranges and badly under-reports.
+
+**The edge (Cloudflare) is derived from `seo.ts`, like everything else that answers "is this
+URL crawlable?"** The measurement behind it: production ran 20.1 h/day and the demo app —
+which has *no human users* — burned 1.8 h/day, and every crawler observed in a day of
+instrumented logs (SemrushBot, YandexBot, ClaudeBot, AggregatoreBot, link-preview fetchers)
+touched only `/robots.txt`, `/`, `/sitemap.xml` or `/og-image.png`. **`robots.txt` cannot fix
+this and it is worth knowing why:** ClaudeBot fetched the demo app's robots.txt, read
+`Disallow: /`, obeyed it, and left — and that one compliant request still cost seven minutes
+of dedicated CPU, because a bot has to reach the origin to learn it is unwelcome. Disallowing
+a crawler takes a visit from 127 requests to 1, never to 0. Only an edge that answers those
+paths without touching Fly does that.
+
+`scripts/cloudflare.mjs` builds the rules from `SITE_ROUTES`: **bypass** is every `spa: false`
+row, **cached** is every `indexed: true` row plus the static files no router row covers. So
+adding an indexed route starts caching it and adding an API route starts bypassing it, with no
+edit here — the same reason robots.txt and the sitemap are derived. Its invariants run on
+*every* invocation, including the `--plan` CI runs on each PR, and the load-bearing one is that
+nothing session-scoped can reach the cache set: `boardView` redacts hidden hands per player, so
+a cached `/api` response is one player's view of the deal served to another. That is an
+information leak, not a stale page.
+
+**Staged rollout: `demo.bridge.brannon.online` only, for now.** The production row in
+`SITES` is commented out and goes in as a follow-up once demo is proven end to end behind the
+proxy — demo has no human users at all and still burned 1.8 h/day on crawlers, so the effect
+is measurable there without a real player ever meeting a mis-cached page. Uncommenting that
+one row is the whole prod change; rules, invariants, purge list and audit are all derived per
+host.
+
+**Deploying a phase entrypoint is a PUT — it replaces that phase's whole ruleset, zone-wide.**
+On a shared zone that is destructive with no undo, so every managed rule carries a
+`[nickel-bridge]` prefix and `--apply` preflights *both* phases and refuses to write either if
+it finds a rule without it, naming what it would have deleted. Adding a Cache or Configuration
+Rule for one of the zone's other hostnames by hand will therefore stop the deploy rather than
+be silently reconciled away — move it into this script, or keep it out of these two phases.
+
+**Nothing here writes a zone-wide setting**, and that is deliberate: `brannon.online` is a
+shared zone carrying ten other proxied hostnames on origins this repo knows nothing about, so
+PATCHing `/settings/ssl` to reconcile one app would reach every one of them — and moving an
+HTTP-only origin to Full (strict) takes it down. The SSL mode demo genuinely needs (Flexible
+against `fly.toml`'s `force_https = true` is an infinite redirect loop) is set per-request by
+a **Configuration Rule** instead, `set_config` in the `http_config_settings` phase, which the
+Free plan allows. The zone default is read and reported, never written. `always_use_https` is
+deliberately unmanaged for the same reason — zone-only, no per-host equivalent, and worth one
+saved redirect at most; a scoped Redirect Rule is the way if it is ever wanted.
+
+**`--purge` only drops what actually changed.** Most deploys touch no web output, so the built
+`index.html`, the prerendered pages and the generated `robots.txt` come out byte-identical —
+and purging them throws away a warm cache for nothing. That is the biggest remaining lever on
+origin wakes, because a cold fill costs a full idle window *per PoP* (Cloudflare's cache is
+per-PoP), and with ~13 PoPs and ~3 deploys/day it is the purge rate, not the TTL, that bounds
+the hit rate. So every URL is compared against origin truth — fetched from `<app>.fly.dev`,
+which is never proxied and so cannot be answered from the cache being evaluated — and only the
+differing ones are purged. `robots.txt` is why that comparison runs against the origin rather
+than `web/dist`: it is generated at runtime from `seo.ts`, so no build artifact exists to
+diff. The comparison is deliberately **fail-safe** — a non-200, an unreachable host, a length
+mismatch or any thrown error all resolve to "purge" — because purging something unchanged
+costs one cold fill, while skipping something that *did* change serves a page referencing
+asset hashes the new build deleted, for up to the full 30-day TTL. `--purge --force` skips
+the comparison entirely.
+
+Exactly one job may write the zone-wide ruleset. While demo is the only host, `deploy-demo`
+owns `--apply` plus its own `--purge --host=…`, and `deploy-production`'s Cloudflare steps are
+commented out; when production joins, `--apply` moves back to `deploy-production` and
+`deploy-demo` keeps only its purge. `--host` scoping stays either way, since the two apps
+deploy independently and purging the other's pages would discard good cache entries.
+`.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health,
+per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
+until that secret exists.
+
+Two things about proxying a Fly app that fail silently and late, both per
+[Fly's Cloudflare guide](https://fly.io/docs/networking/understanding-cloudflare/). Fly
+validates custom-domain certs over **TLS-ALPN**, and Cloudflare terminates TLS, so going
+orange breaks renewal with no symptom until the current cert expires. The fix is
+`fly certs setup <host>` plus the **`_fly-ownership` TXT** record, after which Let's Encrypt
+validates over **HTTP-01 through the proxy** — specifically *not* DNS-01, whose
+`_acme-challenge` records collide with the hidden ones Cloudflare's Universal SSL inserts.
+`--audit` therefore checks the outcome (days to expiry, `validationErrors`) plus the one
+combination that is definitely broken: proxied with TLS-ALPN as the only configured method.
+And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s `force_https = true` is
+an infinite redirect loop. Note also that once proxied, `Fly-Client-IP` becomes Cloudflare's
+edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you

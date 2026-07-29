@@ -1,0 +1,71 @@
+name: Edge upkeep
+
+# The Cloudflare edge in front of bridge.brannon.online exists to stop crawler traffic from
+# waking a dedicated performance-1x core (see scripts/cloudflare.mjs for the measurements).
+# Everything it can get wrong fails silently and late, which is exactly why this is a
+# scheduled job rather than something noticed when the bill arrives:
+#
+#   - Cache rules edited in the dashboard drift from the config seo.ts derives. Symptom:
+#     none, until crawlers are hitting the origin again and machine time creeps back up.
+#   - The certificate stops renewing. Fly validates custom-domain certs over TLS-ALPN, and
+#     proxying the record through Cloudflare breaks precisely that. Symptom: none for weeks,
+#     then the site is down. `--audit` fails on the outcome — days to expiry, validation
+#     errors — plus the one combination that cannot renew: proxied with TLS-ALPN as the only
+#     method. (NOT on "is DNS-01 configured": Fly validates through the proxy over HTTP-01
+#     via the _fly-ownership TXT record, and DNS-01 collides with Cloudflare Universal SSL.)
+#   - The record gets un-proxied (grey cloud) and everything quietly reaches Fly again.
+#     Symptom: no cf-cache-status header at all.
+#
+# Weekly is the right cadence: the cert failure mode has ~60 days of warning and drift has no
+# deadline, so this only needs to beat those, not catch things quickly.
+
+on:
+  schedule:
+    - cron: '17 14 * * 1' # Mondays 14:17 UTC — off the hour, so it isn't queued behind the rush
+  workflow_dispatch: # so it can be run on demand after changing anything at the edge
+
+jobs:
+  upkeep:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Dormant until the edge is actually set up, so merging this doesn't produce a weekly
+      # red check on a repo that hasn't put Cloudflare in front of anything yet.
+      - name: Skip if the edge is not configured
+        id: gate
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN not set — edge not configured, nothing to keep up."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Drift and health are reported separately but neither short-circuits the other: if the
+      # ruleset has drifted AND the cert is expiring, one run should tell you both.
+      - name: Check config against seo.ts
+        if: steps.gate.outputs.configured == 'true'
+        id: drift
+        continue-on-error: true
+        run: node scripts/cloudflare.mjs --check
+
+      - name: Audit certificate and cache health
+        if: steps.gate.outputs.configured == 'true'
+        id: health
+        continue-on-error: true
+        run: node scripts/cloudflare.mjs --audit
+
+      - name: Fail if either check failed
+        if: steps.gate.outputs.configured == 'true'
+        run: |
+          drift='${{ steps.drift.outcome }}'
+          health='${{ steps.health.outcome }}'
+          echo "drift=$drift health=$health"
+          [ "$drift" = 'success' ] && [ "$health" = 'success' ]

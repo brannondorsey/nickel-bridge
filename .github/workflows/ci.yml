@@ -18,6 +18,11 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      # Derives the Cloudflare edge config from server/src/seo.ts and asserts its
+      # invariants — chiefly that nothing session-scoped can land in the cache set.
+      # No token needed, so it runs on every PR: a route-table edit that would cache
+      # /api fails here rather than at the edge.
+      - run: node scripts/cloudflare.mjs --plan
 
   e2e:
     runs-on: ubuntu-latest
@@ -121,6 +126,7 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP: nickel-bridge-demo
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -135,6 +141,35 @@ jobs:
           flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo.bridge.brannon.online" --app "$APP"
       - name: Deploy demo
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
+      # STAGED ROLLOUT: demo is the only host behind Cloudflare for now, so this job owns
+      # `--apply` as well as its own purge. The ruleset is zone-wide and exactly one job may
+      # write it — when production joins, `--apply` moves back to deploy-production and this
+      # job keeps only the purge. `--host` scoping stays either way, since the two apps deploy
+      # independently and purging the other one's pages would discard good cache entries.
+      #
+      # Both no-op without the secret, so merging this changes nothing until it is set:
+      #   gh secret set CLOUDFLARE_API_TOKEN --repo brannondorsey/nickel-bridge
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: 24
+      - name: Reconcile Cloudflare edge config
+        id: cf_apply
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        continue-on-error: true
+        run: node scripts/cloudflare.mjs --apply
+      # Purge even when --apply refused. The refusal case is "the zone holds a rule this
+      # script does not own" — a human-intervention state, not a reason to also strand the
+      # HTML this deploy just changed behind a day-long edge TTL. The two are independent:
+      # one reconciles rules, the other drops content those rules already cached.
+      - name: Purge the demo app's cached pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node scripts/cloudflare.mjs --purge --host=demo.bridge.brannon.online
+      - name: Fail the deploy if the edge config could not be reconciled
+        if: env.CLOUDFLARE_API_TOKEN != '' && steps.cf_apply.outcome == 'failure'
+        run: |
+          echo "::error::cloudflare --apply failed (see the Reconcile step). The purge still ran."
+          exit 1
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).
@@ -144,6 +179,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # Job-level so the steps below can gate on it: the `env` context in a step's own
+      # `if:` does not see env declared on that same step.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -161,3 +199,18 @@ jobs:
             exit 1
           fi
       - run: flyctl deploy --app nickel-bridge --config fly.toml --remote-only --ha=false
+      # STAGED ROLLOUT: production is not behind Cloudflare yet, so nothing to reconcile or
+      # purge here. deploy-demo owns `--apply` for now (the ruleset is zone-wide, so exactly
+      # one job may write it). Re-enable together with the bridge.brannon.online row in
+      # scripts/cloudflare.mjs's SITES, and drop `--apply` from deploy-demo in the same edit
+      # so ownership moves back here rather than being held in two places.
+      #
+      # - uses: actions/setup-node@v4
+      #   if: env.CLOUDFLARE_API_TOKEN != ''
+      #   with:
+      #     node-version: 24
+      # - name: Reconcile Cloudflare edge config and purge
+      #   if: env.CLOUDFLARE_API_TOKEN != ''
+      #   run: |
+      #     node scripts/cloudflare.mjs --apply
+      #     node scripts/cloudflare.mjs --purge --host=bridge.brannon.online
