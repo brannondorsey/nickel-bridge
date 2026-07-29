@@ -126,6 +126,7 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP: nickel-bridge-demo
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -140,6 +141,17 @@ jobs:
           flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo.bridge.brannon.online" --app "$APP"
       - name: Deploy demo
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
+      # Scoped with --host: production deploys independently, and purging its pages here
+      # would throw away cache entries this deploy did not invalidate. --apply is deliberately
+      # NOT run from this job — the ruleset is zone-wide, so deploy-production owns it and two
+      # jobs writing the same entrypoint would race.
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: 24
+      - name: Purge the demo app's cached pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node scripts/cloudflare.mjs --purge --host=demo.bridge.brannon.online
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).
@@ -181,4 +193,4 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: |
           node scripts/cloudflare.mjs --apply
-          node scripts/cloudflare.mjs --purge
+          node scripts/cloudflare.mjs --purge --host=bridge.brannon.online

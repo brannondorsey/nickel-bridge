@@ -435,10 +435,19 @@ edit here — the same reason robots.txt and the sitemap are derived. Its invari
 *every* invocation, including the `--plan` CI runs on each PR, and the load-bearing one is that
 nothing session-scoped can reach the cache set: `boardView` redacts hidden hands per player, so
 a cached `/api` response is one player's view of the deal served to another. That is an
-information leak, not a stale page. `deploy-production` runs `--apply` then `--purge`;
-`.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health)
-weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates until that
-secret exists.
+information leak, not a stale page. It fronts **both** `bridge.brannon.online` and
+`demo.bridge.brannon.online` with one rule set — the demo app has no human users at all and
+still burned 1.8 h/day on crawlers, and the route table is identical in both deployments (only
+robots.txt's *content* differs, via `DEMO=1`'s throwaway-origin branch), so a separate rule
+shape would be a difference with no cause behind it. `--apply` also holds two zone settings:
+`ssl=strict` and `always_use_https` (a plain-HTTP bot request redirected at the edge never
+wakes Fly; letting the origin issue that 301 costs a full idle window).
+
+`deploy-production` runs `--apply` then `--purge --host=bridge.brannon.online`; `deploy-demo`
+runs only the demo-scoped purge, because the ruleset is zone-wide and two jobs writing the same
+entrypoint would race. `.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit`
+(cert + cache health, per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so
+none of it activates until that secret exists.
 
 Two things about proxying a Fly app that fail silently and late, both per
 [Fly's Cloudflare guide](https://fly.io/docs/networking/understanding-cloudflare/). Fly

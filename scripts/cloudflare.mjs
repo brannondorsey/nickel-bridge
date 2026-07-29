@@ -58,8 +58,22 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { SITE_ROUTES } = await import(resolve(root, 'server/src/seo.ts'));
 
 const ZONE_NAME = process.env.CF_ZONE_NAME ?? 'brannon.online';
-const HOST = process.env.SITE_HOST ?? 'bridge.brannon.online';
 const API = 'https://api.cloudflare.com/client/v4';
+
+/**
+ * Every host fronted by this config, with the Fly app behind it.
+ *
+ * The demo app is here for the same reason production is, and arguably a better one: it has
+ * no human users whatsoever and still burned 1.8 h/day answering crawlers. Its rules are
+ * identical rather than special-cased — the route table is the same in both deployments
+ * (only robots.txt's *content* differs, via DEMO=1's throwaway-origin branch), so a second
+ * rule shape would be a difference with no cause behind it.
+ */
+const SITES = [
+  { host: 'bridge.brannon.online', app: 'nickel-bridge' },
+  { host: 'demo.bridge.brannon.online', app: 'nickel-bridge-demo' },
+];
+const HOSTS = SITES.map((s) => s.host);
 
 /** Vite content-hashes everything here, so a new build means a new filename. */
 const IMMUTABLE_PREFIX = '/assets/';
@@ -96,14 +110,20 @@ function setMatches({ exacts, prefixes }, pathname) {
   return exacts.includes(pathname) || prefixes.some((p) => pathname.startsWith(p));
 }
 
-/** Cloudflare Ruleset-engine expression for a matcher set, scoped to this host. */
+/**
+ * Cloudflare Ruleset-engine expression for a matcher set, scoped to our hosts.
+ *
+ * The host clause is not decoration: the zone is `brannon.online`, so an unscoped rule would
+ * silently apply to every other subdomain served from it.
+ */
 function expression({ exacts, prefixes }) {
   const parts = [];
   if (exacts.length) {
     parts.push(`http.request.uri.path in {${exacts.map((e) => JSON.stringify(e)).join(' ')}}`);
   }
   for (const p of prefixes) parts.push(`starts_with(http.request.uri.path, ${JSON.stringify(p)})`);
-  return `(http.host eq ${JSON.stringify(HOST)}) and (${parts.join(' or ')})`;
+  const hosts = `http.host in {${HOSTS.map((h) => JSON.stringify(h)).join(' ')}}`;
+  return `(${hosts}) and (${parts.join(' or ')})`;
 }
 
 /**
@@ -182,12 +202,26 @@ export function buildRules() {
   ];
 }
 
-/** Every URL --purge drops: the cached HTML that a deploy actually changes. */
-export function purgeUrls() {
+/**
+ * Every URL --purge drops: the cached HTML a deploy actually changes. Hashed /assets/* are
+ * deliberately absent — a new build emits new filenames, so there is nothing stale to drop.
+ *
+ * Scoped to one host by `--host=`, because production and the demo app deploy independently
+ * and purging the other one's pages on every push would throw away good cache entries.
+ */
+export function purgeUrls(hosts = HOSTS) {
   const indexed = SITE_ROUTES.filter((r) => r.indexed && !r.path.endsWith('/*')).map((r) => r.path);
-  return [...new Set([...indexed, '/index.html', '/sitemap.xml', '/robots.txt'])].map(
-    (p) => `https://${HOST}${p === '/' ? '/' : p}`,
-  );
+  const paths = [...new Set([...indexed, '/index.html', '/sitemap.xml', '/robots.txt'])];
+  return hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
+}
+
+/** `--host=x` narrows host-scoped commands; absent means every host in SITES. */
+function selectedHosts() {
+  const arg = process.argv.find((a) => a.startsWith('--host='));
+  if (!arg) return HOSTS;
+  const host = arg.slice('--host='.length);
+  if (!HOSTS.includes(host)) throw new Error(`--host=${host} is not one of: ${HOSTS.join(', ')}`);
+  return [host];
 }
 
 // ---------------------------------------------------------------- API plumbing
@@ -233,31 +267,44 @@ const shape = (r) => ({
 
 // ---------------------------------------------------------------- commands
 
+/**
+ * Zone settings this config owns, with why each one is not merely a preference.
+ *
+ * `ssl: strict` — Flexible against fly.toml's `force_https = true` is an infinite redirect
+ * loop, i.e. the difference between a working site and an outage.
+ * `always_use_https` — recommended by Fly's Cloudflare guide, and it earns its place here on
+ * the wake economics: a plain-HTTP bot request redirected at the edge never reaches Fly,
+ * whereas letting the origin issue the 301 costs a full idle window.
+ */
+const ZONE_SETTINGS = { ssl: 'strict', always_use_https: 'on' };
+
 async function plan() {
   const rules = buildRules();
-  console.log(JSON.stringify({ host: HOST, zone: ZONE_NAME, rules, purge: purgeUrls() }, null, 2));
-  console.log(`\n✓ ${rules.length} rules derived from seo.ts; all invariants hold.`);
+  console.log(
+    JSON.stringify({ zone: ZONE_NAME, hosts: HOSTS, settings: ZONE_SETTINGS, rules, purge: purgeUrls() }, null, 2),
+  );
+  console.log(`\n✓ ${rules.length} rules derived from seo.ts for ${HOSTS.length} hosts; all invariants hold.`);
 }
 
 async function apply() {
   const rules = buildRules();
   const id = await zoneId();
 
-  const ssl = await cf(`/zones/${id}/settings/ssl`);
-  if (ssl.value !== 'strict') {
-    // Flexible + fly.toml's `force_https = true` is an infinite redirect loop, so this is
-    // not a preference — it is the difference between a working site and an outage.
-    await cf(`/zones/${id}/settings/ssl`, { method: 'PATCH', body: JSON.stringify({ value: 'strict' }) });
-    console.log(`ssl: ${ssl.value} → strict`);
-  } else {
-    console.log('ssl: strict (unchanged)');
+  for (const [name, want] of Object.entries(ZONE_SETTINGS)) {
+    const cur = await cf(`/zones/${id}/settings/${name}`);
+    if (cur.value !== want) {
+      await cf(`/zones/${id}/settings/${name}`, { method: 'PATCH', body: JSON.stringify({ value: want }) });
+      console.log(`${name}: ${cur.value} → ${want}`);
+    } else {
+      console.log(`${name}: ${want} (unchanged)`);
+    }
   }
 
   await cf(`/zones/${id}/rulesets/phases/${CACHE_PHASE}/entrypoint`, {
     method: 'PUT',
     body: JSON.stringify({ rules }),
   });
-  console.log(`cache rules: applied ${rules.length}`);
+  console.log(`cache rules: applied ${rules.length} for ${HOSTS.join(', ')}`);
   for (const r of rules) console.log(`  - ${r.description}`);
 }
 
@@ -271,10 +318,11 @@ async function check() {
   } catch {
     live = [];
   }
-  const ssl = await cf(`/zones/${id}/settings/ssl`);
-
   const problems = [];
-  if (ssl.value !== 'strict') problems.push(`ssl mode is "${ssl.value}", expected "strict"`);
+  for (const [name, want] of Object.entries(ZONE_SETTINGS)) {
+    const cur = await cf(`/zones/${id}/settings/${name}`);
+    if (cur.value !== want) problems.push(`zone setting ${name} is "${cur.value}", expected "${want}"`);
+  }
   if (JSON.stringify(live) !== JSON.stringify(desired)) {
     problems.push('cache ruleset differs from the config derived from seo.ts');
     console.log('--- live ---\n' + JSON.stringify(live, null, 2));
@@ -286,11 +334,11 @@ async function check() {
     process.exitCode = 1;
     return;
   }
-  console.log('✓ Cloudflare config matches seo.ts, ssl=strict.');
+  console.log(`✓ Cloudflare config matches seo.ts for ${HOSTS.join(', ')}; zone settings as expected.`);
 }
 
 async function purge() {
-  const files = purgeUrls();
+  const files = purgeUrls(selectedHosts());
   const id = await zoneId();
   await cf(`/zones/${id}/purge_cache`, { method: 'POST', body: JSON.stringify({ files }) });
   console.log(`purged ${files.length} urls:`);
@@ -321,10 +369,28 @@ async function audit() {
     failed = true;
   };
 
-  // Edge first: whether the host is proxied decides how to read the certificate state.
+  for (const site of SITES.filter((s) => selectedHosts().includes(s.host))) {
+    console.log(`\n── ${site.host} (${site.app}) ──`);
+    const siteFailed = await auditSite(site, fail);
+    failed = failed || siteFailed;
+  }
+
+  if (failed) process.exitCode = 1;
+  else console.log('\n✓ edge healthy.');
+}
+
+/** Probe one host's edge, then read its certificate in light of whether it is proxied. */
+async function auditSite(site, fail) {
+  const { host, app } = site;
+  let localFailed = false;
+  const bad = (msg) => {
+    fail(msg);
+    localFailed = true;
+  };
+
   let proxied = false;
   for (const path of ['/robots.txt', '/']) {
-    const url = `https://${HOST}${path}`;
+    const url = `https://${host}${path}`;
     let status = null;
     for (let i = 0; i < 2; i++) {
       const r = await fetch(url, { headers: { 'User-Agent': 'nickel-bridge-edge-audit' } });
@@ -332,26 +398,22 @@ async function audit() {
       if (r.headers.get('cf-ray')) proxied = true;
     }
     console.log(`· ${path}: cf-cache-status=${status ?? 'none'}`);
-    if (!status) {
-      fail(`${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
-    } else if (!['HIT', 'EXPIRED', 'REVALIDATED', 'UPDATING', 'STALE'].includes(status)) {
-      fail(`${url} returned ${status} on a second consecutive fetch — it is still waking Fly`);
-    }
+    if (!status) bad(`${url} is not going through Cloudflare (no cf-cache-status) — is the record proxied?`);
+    else if (!['HIT', 'EXPIRED', 'REVALIDATED', 'UPDATING', 'STALE'].includes(status))
+      bad(`${url} returned ${status} on a second consecutive fetch — it is still waking Fly`);
   }
 
   // Session-scoped responses must never be cacheable, and this stays honest from outside.
-  const api = await fetch(`https://${HOST}/api/me`);
+  const api = await fetch(`https://${host}/api/me`);
   const apiStatus = api.headers.get('cf-cache-status');
   console.log(`· /api/me: cf-cache-status=${apiStatus ?? 'none'}`);
-  if (apiStatus && !['BYPASS', 'DYNAMIC'].includes(apiStatus)) {
-    fail(`/api/me returned cf-cache-status=${apiStatus} — session-scoped responses must never cache`);
-  }
+  if (apiStatus && !['BYPASS', 'DYNAMIC'].includes(apiStatus))
+    bad(`${host}/api/me returned cf-cache-status=${apiStatus} — session-scoped responses must never cache`);
 
   const flyToken = process.env.FLY_API_TOKEN;
   if (!flyToken) {
     console.log('· cert: skipped (FLY_API_TOKEN not set)');
-    if (failed) process.exitCode = 1;
-    return;
+    return localFailed;
   }
 
   const q = `query($a:String!,$h:String!){app(name:$a){certificate(hostname:$h){
@@ -361,14 +423,13 @@ async function audit() {
   const res = await fetch('https://api.fly.io/graphql', {
     method: 'POST',
     headers: { Authorization: `Bearer ${flyToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: q, variables: { a: process.env.FLY_APP ?? 'nickel-bridge', h: HOST } }),
+    body: JSON.stringify({ query: q, variables: { a: app, h: host } }),
   }).then((r) => r.json());
 
   const cert = res?.data?.app?.certificate;
   if (!cert) {
-    fail('cert: could not read certificate state from Fly');
-    process.exitCode = 1;
-    return;
+    bad(`${host}: could not read certificate state from Fly`);
+    return localFailed;
   }
 
   const methods = [
@@ -382,32 +443,30 @@ async function audit() {
     `· cert: ${days} days left, source=${cert.source}, status=${cert.clientStatus}, validation=[${methods.join(',') || 'none'}]`,
   );
 
-  for (const e of cert.validationErrors ?? []) fail(`cert validation: ${e.message}`);
+  for (const e of cert.validationErrors ?? []) bad(`${host} cert validation: ${e.message}`);
 
   // An imported Cloudflare Origin Certificate never auto-renews, so it needs more warning.
   const threshold = cert.source === 'fly' ? 21 : 45;
   if (days !== null && days < threshold) {
-    fail(
+    bad(
       cert.source === 'fly'
-        ? `cert expires in ${days} days and has not renewed — check \`fly certs check ${HOST}\``
-        : `imported cert expires in ${days} days and does NOT auto-renew — re-import it`,
+        ? `${host} cert expires in ${days} days and has not renewed — check \`fly certs check ${host}\``
+        : `${host} imported cert expires in ${days} days and does NOT auto-renew — re-import it`,
     );
   }
 
   if (cert.source === 'fly') {
     if (!methods.length) {
-      fail(`cert has no working ACME validation method — renewal cannot happen. Run \`fly certs check ${HOST}\`.`);
+      bad(`${host} cert has no working ACME validation method — renewal cannot happen.`);
     } else if (proxied && methods.length === 1 && methods[0] === 'tls-alpn') {
       // The specific broken combination: Cloudflare terminates TLS, so TLS-ALPN can't validate.
-      fail(
-        `cert validates only over TLS-ALPN, which cannot work behind Cloudflare's proxy. ` +
-          `Run \`fly certs setup ${HOST}\` and add the _fly-ownership TXT record so HTTP-01 validates through the proxy.`,
+      bad(
+        `${host} cert validates only over TLS-ALPN, which cannot work behind Cloudflare's proxy. ` +
+          `Run \`fly certs setup ${host} --app ${app}\` and add the _fly-ownership TXT record.`,
       );
     }
   }
-
-  if (failed) process.exitCode = 1;
-  else console.log('\n✓ edge healthy.');
+  return localFailed;
 }
 
 const MODES = { '--plan': plan, '--apply': apply, '--check': check, '--purge': purge, '--audit': audit };
