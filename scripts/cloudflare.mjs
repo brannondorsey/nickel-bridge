@@ -47,16 +47,22 @@
  * RUNBOOK ORDERING. `--apply` must land BEFORE a record goes orange. The SSL mode our hosts
  * need comes from a Configuration Rule, so until that rule exists a proxied host falls back
  * to the zone default — and if that default is Flexible, fly.toml's `force_https = true`
- * makes an infinite redirect loop that the cache rule would then pin at the edge for a day.
- * Merge first, let deploy-demo run `--apply` while the record is still grey (the rules are
+ * makes an infinite redirect loop that the cache rule would then pin at the edge for the
+ * full TTL. Merge first, let deploy-demo run `--apply` while the record is still grey (the rules are
  * inert with no traffic matching them), and only then flip the cloud.
  *
- * KNOWN LIMITATION: query strings. Cloudflare's default cache key includes the query string
- * and custom cache keys are Enterprise-only, so `/?utm_source=…` — a real caller in the logs
- * — is its own cache entry: a MISS that still wakes Fly, and one purgeUrls() can never drop,
- * since purge-by-URL is exact match and prefix purge is also Enterprise. `/`'s day-long edge
- * TTL is therefore the exposure window for a stale shell behind any query string. Accepted
- * rather than solved; `purge_everything` would reach the zone's ten other hostnames.
+ * KNOWN LIMITATION: query strings always reach the origin. Cloudflare's cache key includes
+ * the query string and custom cache keys are Enterprise, so a cached `/?utm_source=…` could
+ * never be purged (purge-by-URL is exact match; prefix purge is Enterprise too). Rather than
+ * carry an unpurgeable tail, the cache rule matches only an empty query — see NO_QUERY. So
+ * `/?anything` is a wake this does not suppress. That is the deliberate trade for being able
+ * to hold a month-long edge TTL safely, and it costs little: the crawler surface is path-form.
+ *
+ * WORTH KNOWING: Cloudflare's cache is per-PoP, so the edge TTL doubles as the revalidation
+ * interval for every data centre that sees traffic. Tiered Cache (Smart Topology, free on all
+ * plans) would collapse those into one upper-tier fetch and cut origin wakes further — but it
+ * is a ZONE-WIDE setting, so it is deliberately left for a human to enable rather than
+ * reached for from here. See the note on zone settings above.
  *
  * ENV
  *   CLOUDFLARE_API_TOKEN  zone scoped, on brannon.online only:
@@ -130,7 +136,7 @@ const STATIC_FILES = ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.
 const STATIC_BYPASS = ['/demo'];
 
 const YEAR = 31_536_000;
-const DAY = 86_400;
+const MONTH = 2_592_000;
 
 /** A route path from the table as a matcher part: `/x/*` is a prefix, anything else exact. */
 function asMatcher(path) {
@@ -166,15 +172,33 @@ function setMatches({ exacts, prefixes }, pathname) {
  * The host clause is not decoration: the zone is `brannon.online`, so an unscoped rule would
  * silently apply to every other subdomain served from it.
  */
-function expression({ exacts, prefixes }) {
+function expression({ exacts, prefixes }, extra) {
   const parts = [];
   if (exacts.length) {
     parts.push(`http.request.uri.path in {${exacts.map((e) => JSON.stringify(e)).join(' ')}}`);
   }
   for (const p of prefixes) parts.push(`starts_with(http.request.uri.path, ${JSON.stringify(p)})`);
   const hosts = `http.host in {${HOSTS.map((h) => JSON.stringify(h)).join(' ')}}`;
-  return `(${hosts}) and (${parts.join(' or ')})`;
+  return [`(${hosts})`, `(${parts.join(' or ')})`, ...(extra ? [extra] : [])].join(' and ');
 }
+
+/**
+ * Cache only the bare path, never a query-string variant.
+ *
+ * Cloudflare's cache key includes the query string and custom cache keys are Enterprise, so
+ * `/?utm_source=…` would otherwise be its own entry — and purge-by-URL is exact match, so
+ * nothing could ever drop it (prefix purge is Enterprise too). Every prerendered page embeds
+ * the build's hashed asset filenames, so a stale one serves `<script src>` pointing at an
+ * asset the next deploy deleted. Cached-and-unpurgeable is therefore a page that breaks and
+ * stays broken for the whole TTL, which is exactly what makes a long TTL unsafe.
+ *
+ * Excluding queries makes every cached entry a plain path, so purgeUrls() covers 100% of the
+ * cache and the TTL below can be long. The cost is that `/?anything` always reaches origin —
+ * but the crawler surface is path-form (the sitemap lists `/glossary/<slug>`), and the
+ * observed query-string callers were one-off scrapers whose params vary per request, so they
+ * would have missed the cache anyway.
+ */
+const NO_QUERY = 'http.request.uri.query eq ""';
 
 /**
  * The desired cache ruleset. Rules are mutually exclusive by construction, so their order
@@ -251,13 +275,20 @@ export function buildRules() {
     },
     {
       description: `${RULE_TAG} Crawler-facing surface (derived from seo.ts indexed:true) — stops the wakes`,
-      expression: expression(cached),
+      expression: expression(cached, NO_QUERY),
       action: 'set_cache_settings',
       action_parameters: {
         cache: true,
         edge_ttl: {
           mode: 'override_origin',
-          default: DAY,
+          // A month, not a day. Cloudflare's cache is per-PoP, so the TTL is also the
+          // revalidation interval for EVERY data centre that sees a crawler — and the logs
+          // show ~17 of them. At a day that is ~17 origin fetches daily from expiry alone,
+          // each buying a ~7 min idle window: roughly 2 h/day, most of what this exists to
+          // save. At a month it is ~17/month. Safe only because every cached entry is now a
+          // bare path (see NO_QUERY) and every one of them is in purgeUrls(), so a deploy
+          // invalidates the whole cache rather than leaving a long tail behind.
+          default: MONTH,
           // /glossary/<unknown-slug> answers 404 and is covered by the same prefix. Those
           // URLs cannot be enumerated for purge, so a day-long 404 would outlive the typo
           // that caused it — and a newly added term would 404 at the edge until tomorrow.
