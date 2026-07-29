@@ -33,7 +33,11 @@ const ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
-const base = (args.find((a) => !a.startsWith('--')) ?? 'https://bridge.brannon.online').replace(/\/+$/, '');
+// Kept unstripped alongside `base` so a rejection can quote what was actually
+// typed: stripping first turns "https://" into "https:", and an error naming a
+// string the operator never wrote sends them looking for the wrong typo.
+const rawBase = args.find((a) => !a.startsWith('--')) ?? 'https://bridge.brannon.online';
+const base = rawBase.replace(/\/+$/, '');
 
 const key = process.env.INDEXNOW_KEY;
 if (!key) {
@@ -45,7 +49,19 @@ if (!/^[a-zA-Z0-9-]{8,128}$/.test(key)) {
   process.exit(1);
 }
 
-const { host } = new URL(base);
+// The base URL is the one input that arrives as a bare CLI argument, so it's
+// the one most likely to be a typo. `new URL` throws a raw TypeError on
+// anything unparseable, which would be the only path here that reports itself
+// as a stack trace rather than a sentence.
+let host;
+try {
+  ({ host } = new URL(base));
+} catch {
+  console.error(
+    `${JSON.stringify(rawBase)} is not a URL. Pass an origin like https://bridge.brannon.online, or omit it for production.`,
+  );
+  process.exit(1);
+}
 const keyLocation = `${base}/${key}.txt`;
 
 /**
