@@ -94,16 +94,20 @@ const API = 'https://api.cloudflare.com/client/v4';
 /**
  * Every host fronted by this config, with the Fly app behind it.
  *
- * STAGED ROLLOUT — the demo app only, for now. Production is commented out deliberately and
- * goes in as a follow-up once demo has been verified end to end behind the proxy. Demo is
- * the right place to prove it: it has no human users whatsoever and still burned 1.8 h/day
- * answering crawlers, so the effect is measurable there without a real player ever seeing a
- * mis-cached page. Uncommenting the row is the entire prod change — the rules, invariants,
- * purge list and audit are all derived per host, so nothing else needs editing.
+ * Both are fronted now. Demo went first and was verified end to end behind the proxy — TLS
+ * clean, the crawler surface HITting, /api/me and /demo DYNAMIC, edge bytes identical to
+ * origin — before production followed; adding production was literally uncommenting its row,
+ * because the rules, invariants, purge list and audit are all derived per host.
  *
- * When production is added, its rules will be identical rather than special-cased: the route
- * table is the same in both deployments (only robots.txt's *content* differs, via DEMO=1's
- * throwaway-origin branch), so a second rule shape would be a difference with no cause.
+ * Their rules are identical rather than special-cased: the route table is the same in both
+ * deployments (only robots.txt's *content* differs, via DEMO=1's throwaway-origin branch), so
+ * a second rule shape would be a difference with no cause behind it.
+ *
+ * Note the asymmetry in what caching buys each one. Production takes ~1,364 requests/day
+ * across 13 PoPs, so repeat traffic per (PoP, purge-window) is high and the cache pays off.
+ * Demo takes ~43/day across 4 dominant PoPs and redeploys ~3x/day, so most crawl sessions are
+ * the first at their PoP since the last purge and MISS anyway — it earns perhaps 10-20% there.
+ * Demo is the debugging surface; production is where the machine time is.
  *
  * Everything here is scoped to these hosts, including the SSL mode — see SSL_MODE below for
  * why that is done with a Configuration Rule instead of the zone setting. `brannon.online`
@@ -111,7 +115,7 @@ const API = 'https://api.cloudflare.com/client/v4';
  * script does may reach them.
  */
 const SITES = [
-  // { host: 'bridge.brannon.online', app: 'nickel-bridge' }, // follow-up, after demo is proven
+  { host: 'bridge.brannon.online', app: 'nickel-bridge' },
   { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo' },
 ];
 const HOSTS = SITES.map((s) => s.host);

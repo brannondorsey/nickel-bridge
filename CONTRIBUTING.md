@@ -149,14 +149,20 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
                 --plan/--apply/--check/--purge[--force]/--audit, see "The edge" below),
-                og-image.mjs (regenerates the checked-in social share card
-                web/public/og-image.png — offline, no running instance needed)
+                fly-uptime.mjs (machine time per day from Fly's Prometheus — the metric
+                the edge work is judged by; read its header before trusting a number,
+                that API punishes two obvious approaches), og-image.mjs (regenerates the
+                checked-in social share card web/public/og-image.png — offline, no
+                running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
                 shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
                 difficulty-calibration-research.md — the research log behind today's values;
+                edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
+                verify a fronted host end to end, and how to measure whether it bought
+                machine time (see "The edge" below);
                 onboarding-design.md — the new-user onboarding ("first crossing") design
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
@@ -416,6 +422,10 @@ personas' background play. Historical machine time comes from Fly's Prometheus
 (`fly_instance_up`, scraped every 15s; the metric is simply absent while suspended). Query it
 with `Authorization: FlyV1 <token>` — not `Bearer` — and derive uptime from raw samples
 rather than `count_over_time`, which gets downsampled over long ranges and badly under-reports.
+Raw samples are age-dependent too (15s yesterday, 30s a few days back, 60s a week back, with
+samples dropped rather than merely thinned), so **two days at different resolutions are not
+comparable** and a before/after baseline has to be recorded while it is fresh.
+`scripts/fly-uptime.mjs` does all of that and prints the resolution it inferred per row.
 
 **The edge (Cloudflare) is derived from `seo.ts`, like everything else that answers "is this
 URL crawlable?"** The measurement behind it: production ran 20.1 h/day and the demo app —
@@ -437,12 +447,19 @@ nothing session-scoped can reach the cache set: `boardView` redacts hidden hands
 a cached `/api` response is one player's view of the deal served to another. That is an
 information leak, not a stale page.
 
-**Staged rollout: `demo-bridge.brannon.online` only, for now.** The production row in
-`SITES` is commented out and goes in as a follow-up once demo is proven end to end behind the
-proxy — demo has no human users at all and still burned 1.8 h/day on crawlers, so the effect
-is measurable there without a real player ever meeting a mis-cached page. Uncommenting that
-one row is the whole prod change; rules, invariants, purge list and audit are all derived per
-host.
+**Both hosts are fronted.** Demo went first and was verified end to end behind the proxy —
+clean TLS, the crawler surface HITting, `/api/me` and `/demo` `DYNAMIC`, edge bytes identical
+to origin, `--audit` green — and production followed. Adding production was literally
+uncommenting its row in `SITES`, because rules, invariants, purge list and audit are all
+derived per host.
+
+What caching buys each is very different, and worth knowing before reading too much into demo.
+Production takes ~1,364 requests/day across 13 PoPs, so repeat traffic per (PoP, purge-window)
+is high and the cache pays off. Demo takes ~43/day across 4 dominant PoPs and redeploys ~3×/day
+— and each deploy purges — so most crawl sessions are the first at their PoP since the last
+purge and MISS anyway, earning perhaps 10-20% there. **Demo is the debugging surface;
+production is where the machine time is.** It follows that the binding constraint is purge
+frequency against crawl frequency, not the TTL, which is why `--purge` compares before dropping.
 
 **Deploying a phase entrypoint is a PUT — it replaces that phase's whole ruleset, zone-wide.**
 On a shared zone that is destructive with no undo, so every managed rule carries a
@@ -476,13 +493,18 @@ costs one cold fill, while skipping something that *did* change serves a page re
 asset hashes the new build deleted, for up to the full 30-day TTL. `--purge --force` skips
 the comparison entirely.
 
-Exactly one job may write the zone-wide ruleset. While demo is the only host, `deploy-demo`
-owns `--apply` plus its own `--purge --host=…`, and `deploy-production`'s Cloudflare steps are
-commented out; when production joins, `--apply` moves back to `deploy-production` and
-`deploy-demo` keeps only its purge. `--host` scoping stays either way, since the two apps
-deploy independently and purging the other's pages would discard good cache entries.
+Exactly one job may write the zone-wide ruleset, and `deploy-production` is it: it runs
+`--apply` (as `continue-on-error`, then fails the job in a later step) plus
+`--purge --host=bridge.brannon.online`, while `deploy-demo` runs only
+`--purge --host=demo-bridge.brannon.online`. The purge is a *separate step* from `--apply` on
+purpose — a refused apply means the zone holds a rule this script does not own, which needs a
+human, and is no reason to also strand the HTML this deploy just changed behind a 30-day edge
+TTL. `--host` scoping matters because the two apps deploy independently and purging the other's
+pages would discard good cache entries.
 `.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health,
-per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
+per host) weekly. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
+how to verify a fronted host end to end, and how to measure whether the fronting actually
+bought machine time. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
 until that secret exists.
 
 **A fronted host must be one label below the apex.** Free Universal SSL is issued for
