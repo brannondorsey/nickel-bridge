@@ -1080,26 +1080,57 @@ a.ds-btn-secondary:hover {
 
 /* ---- Lookback window switch (Stats) ----
    One control above all three charts, never one per panel: three charts that can
-   disagree about which period they show is worse than no control at all. */
+   disagree about which period they show is worse than no control at all.
+
+   Deliberately NOT .theme-switch, though it does a similar job further down the
+   same screen. That one is a settings control that owns its row — four options at
+   flex: 1, 40px tall. This is chrome for the panels beneath it and has to stay out
+   of their way, so the buttons size to their labels and sit right-aligned against
+   the panel edge. 30px tall clears the 24px WCAG 2.5.8 target floor with room to
+   spare while staying well under the weight a primary control earns. */
 .lookback-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  /* same 16px horizontal inset as .chart-panel — the row has to line up with the
-     panels it scopes, not with the page edge */
-  margin: 22px 16px 0;
+  /* same 16px horizontal inset as .chart-panel — the row lines up with the panels
+     it scopes, not with the page edge — and sits nearer the charts below than the
+     panel above, so it reads as belonging to them */
+  margin: 18px 16px 0;
 }
-/* bind the control to the charts below it rather than the panel above: a bigger
-   gap over than under is what says "this belongs to these three" */
 .lookback-row + .chart-panel {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .lookback-label {
   color: var(--muted);
+  font-size: 9.5px;
   flex: none;
 }
 .lookback-switch {
-  flex: 1;
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  overflow: hidden;
+}
+.lookback-switch button {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  background: var(--panel);
+  color: var(--muted);
+  border: 0;
+  border-left: 1px solid var(--line);
+  min-height: 30px;
+  padding: 0 13px;
+  cursor: pointer;
+}
+.lookback-switch button:first-child {
+  border-left: 0;
+}
+.lookback-switch button.active {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
 }
 
 /* ---- DayGrid ---- */
