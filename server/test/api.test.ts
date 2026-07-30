@@ -154,6 +154,81 @@ describe('handle (first-login username)', () => {
     expect(body.leaderboard).toEqual((await alice.get('/api/leaderboard')).leaderboard);
   });
 
+  /**
+   * "Name on the ladder" (the settings tab): the ladder is the ONLY thing
+   * about a human that reads signed out, so this one flag is the whole of
+   * "can a stranger see me". It applies to anonymous callers only — the field
+   * you are matchpointed against always sees who is in it.
+   *
+   * Rated-tournament rows are inserted directly rather than played: the route
+   * hides anyone under PROVISIONAL_MIN_TOURNAMENTS (4), and playing sixteen
+   * boards to reach it would test the placement machinery, not this filter.
+   */
+  it('omits an unlisted player from the anonymous ladder only, and renumbers around them', async () => {
+    const nina = new TestClient(app, 'Nina');
+    const oscar = new TestClient(app, 'Oscar');
+    await nina.login();
+    await oscar.login();
+    const ninaId = (await nina.get('/api/me')).user.id;
+    const oscarId = (await oscar.get('/api/me')).user.id;
+
+    const { tournamentId } = await oscar.post('/api/play');
+    const rate = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    for (const id of [ninaId, oscarId]) for (let i = 0; i < 4; i++) rate.run(id, tournamentId, 1200, 1200);
+
+    const handles = (body: { leaderboard: { handle: string }[] }) => body.leaderboard.map((r) => r.handle);
+    expect(handles(await nina.get('/api/leaderboard'))).toContain('Nina');
+    expect(handles(JSON.parse((await new TestClient(app, 'Anon1').raw('GET', '/api/leaderboard')).body))).toContain(
+      'Nina',
+    );
+
+    expect((await nina.post('/api/me/prefs', { ladderListed: false })).ladderListed).toBe(false);
+    expect((await nina.get('/api/me')).user.ladderListed).toBe(false);
+
+    // signed in — everyone, Nina included, still sees the full field
+    expect(handles(await nina.get('/api/leaderboard'))).toContain('Nina');
+    expect(handles(await oscar.get('/api/leaderboard'))).toContain('Nina');
+
+    // signed out — she is simply absent, and the rows that remain are the
+    // ones the client numbers 1..n, so no gap advertises that she opted out
+    const anonBody = JSON.parse((await new TestClient(app, 'Anon2').raw('GET', '/api/leaderboard')).body);
+    expect(handles(anonBody)).not.toContain('Nina');
+    expect(handles(anonBody)).toContain('Oscar');
+
+    // and it is reversible
+    await nina.post('/api/me/prefs', { ladderListed: true });
+    expect(handles(JSON.parse((await new TestClient(app, 'Anon3').raw('GET', '/api/leaderboard')).body))).toContain(
+      'Nina',
+    );
+  });
+
+  it('patches preferences one key at a time, and refuses anything it does not recognise', async () => {
+    const pete = new TestClient(app, 'Pete');
+    await pete.login();
+
+    // defaults, and a partial patch leaves the untouched key alone
+    let me = await pete.get('/api/me');
+    expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+    expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
+      ladderListed: true,
+      fastForward: false,
+    });
+    await pete.post('/api/me/prefs', { ladderListed: false });
+    me = await pete.get('/api/me');
+    expect([me.user.ladderListed, me.user.fastForward]).toEqual([false, false]);
+
+    // an empty patch is a legal no-op; a bad type or an unknown key is not,
+    // so a typo can't look like a successful write
+    expect(await pete.post('/api/me/prefs', {})).toEqual({ ladderListed: false, fastForward: false });
+    expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
+    expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
+    expect((await pete.get('/api/me')).user.fastForward).toBe(false);
+
+    expect(
+      (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,
+    ).toBe(401);
+  });
+
   // Play is still the toll: opening the game up to anonymous callers is
   // exactly what this change must NOT do.
   it('still refuses every gated endpoint without a session', async () => {

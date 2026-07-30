@@ -15,38 +15,6 @@ import { StarGrade } from '../components/ds/StarGrade';
 import { GlossaryProse } from '../components/game/GlossaryProse';
 import { useGlossary } from '../glossary/GlossaryContext';
 import { shortDate, shortDateUTC } from '../format';
-import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
-
-const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
-  { pref: 'day', label: 'DAY' },
-  { pref: 'night', label: 'NIGHT' },
-  { pref: 'adaptive', label: 'ADAPT' },
-  { pref: 'system', label: 'SYSTEM' },
-];
-
-/** Day/Night/Adaptive/System segmented switch — the runtime override on top of the OS default. */
-function ThemeSwitch() {
-  const [pref, setPref] = useState<ThemePref>(() => readThemePref());
-  return (
-    <div className="theme-switch" role="group" aria-label="Appearance">
-      {THEME_OPTIONS.map((o) => (
-        <button
-          key={o.pref}
-          type="button"
-          className={o.pref === pref ? 'active' : ''}
-          aria-pressed={o.pref === pref}
-          onClick={() => {
-            setPref(o.pref);
-            storeThemePref(o.pref);
-            applyThemePref(o.pref);
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /**
  * The lookback window for the three sparkline panels — how many tournaments
@@ -265,7 +233,7 @@ function Tile({ label, value, sub, to }: { label: string; value: string; sub: st
 /** Stats: the turnstile rating hero, trend sparklines, and the bidding/play record. */
 export default function Player() {
   const { id } = useParams();
-  const { me, refresh } = useMe();
+  const { me } = useMe();
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [error, setError] = useState('');
   const [bidLedgerOpen, setBidLedgerOpen] = useState(false);
@@ -800,25 +768,10 @@ export default function Player() {
         </>
       )}
 
-      {isMe ? (
-        <PerforatedPanel heading="APPEARANCE" className="stats-appearance">
-          <ThemeSwitch />
-        </PerforatedPanel>
-      ) : null}
-
-      {isMe ? (
-        <div className="stats-footer">
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              await api.logout();
-              refresh();
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
-      ) : null}
+      {/* Appearance and sign-out used to live here, as the only two things on
+          your own profile that weren't a record of play. They are on the
+          settings gate now (pages/Settings.tsx) with the rest of them — this
+          page is the ledger, not the office. */}
     </div>
   );
 }

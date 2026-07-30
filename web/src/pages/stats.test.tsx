@@ -435,16 +435,18 @@ describe('Stats', () => {
     expect(screen.queryByText('RIVALRIES')).not.toBeInTheDocument();
   });
 
-  it('offers sign-out to the owner only', async () => {
+  // Sign-out and the appearance switch moved to the settings gate
+  // (pages/Settings.tsx, settings.test.tsx); this page is the ledger now, so
+  // neither belongs on it — on your own profile or anyone else's.
+  it('carries no sign-out or appearance control on any profile', async () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
-    apiMock.logout.mockResolvedValue({ ok: true });
-    const { refresh } = renderStats();
-    await userEvent.click(await screen.findByRole('button', { name: /sign out/i }));
-    expect(apiMock.logout).toHaveBeenCalled();
-    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+    renderStats();
+    await screen.findByText('TOURNAMENTS');
+    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('APPEARANCE')).not.toBeInTheDocument();
   });
 
-  it('hides sign-out on another player’s page and shows their identity', async () => {
+  it('shows another player’s identity', async () => {
     apiMock.playerStats.mockResolvedValue({
       ...playerStatsFull,
       user: { ...playerStatsFull.user, id: 7, handle: 'Alice' },
@@ -452,7 +454,6 @@ describe('Stats', () => {
     renderStats();
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     expect(screen.getByText(/Playing since/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
   });
 
   it('never links the TOPS tile on another player’s page — the board URL is viewer-scoped', async () => {

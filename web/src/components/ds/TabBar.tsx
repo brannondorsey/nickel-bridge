@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'TRAFFIC' | 'GLOSSARY';
+export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'TRAFFIC' | 'GLOSSARY' | 'SETTINGS';
 
 /**
  * Bottom tabs — Besley caps, inset 3px ink top bar marks the active tab.
@@ -9,8 +9,10 @@ export type TabName = 'TOURNEYS' | 'STATS' | 'RANKINGS' | 'TRAFFIC' | 'GLOSSARY'
  * grow to share the full width and only overflow into a horizontal scroll —
  * with a paper fade + chevron on whichever edge still has tabs past it, and
  * active-tab auto-centering — when their labels genuinely can't fit. Five
- * gates is where that starts to bite at phone width; the answer is the scroll
- * working properly, not a hamburger.
+ * gates is where that starts to bite at phone width, and SETTINGS (the sixth)
+ * puts the row properly past it: the bar scrolls on every phone now, which is
+ * what the pattern was built for. The answer is still the scroll working
+ * properly, not a hamburger.
  *
  * The tab padding is deliberately generous enough that when the row does
  * overflow it overflows OBVIOUSLY. Five gates at the old padding cleared the
@@ -31,6 +33,7 @@ export function TabBar({ myId, pathname }: { myId: number; pathname: string }) {
     { name: 'RANKINGS', to: '/leaderboard', active: pathname === '/leaderboard' },
     { name: 'TRAFFIC', to: '/activity', active: pathname === '/activity' },
     { name: 'GLOSSARY', to: '/glossary', active: pathname === '/glossary' || pathname.startsWith('/glossary/') },
+    { name: 'SETTINGS', to: '/settings', active: pathname === '/settings' },
   ];
 
   // A fade belongs on an edge only when there is actually something past it.

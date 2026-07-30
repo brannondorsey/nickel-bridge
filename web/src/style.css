@@ -1082,8 +1082,8 @@ a.ds-btn-secondary:hover {
    One control above all three charts, never one per panel: three charts that can
    disagree about which period they show is worse than no control at all.
 
-   Deliberately NOT .theme-switch, though it does a similar job further down the
-   same screen. That one is a settings control that owns its row — four options at
+   Deliberately NOT .pref-switch, though it does a similar job on the settings
+   gate. That one is a settings control that owns its row — four options at
    flex: 1, 40px tall. This is chrome for the panels beneath it and has to stay out
    of their way, so the buttons size to their labels and sit right-aligned against
    the panel edge. 30px tall clears the 24px WCAG 2.5.8 target floor with room to
@@ -2398,9 +2398,6 @@ a.board-row:hover {
 .stats-page .stats-bidding {
   margin: 12px 16px 0;
 }
-.stats-page .stats-appearance {
-  margin: 12px 16px 0;
-}
 .stats-page .stats-daygrid {
   margin: 12px 16px 0;
 }
@@ -2709,12 +2706,18 @@ a.stat-tile:hover {
   margin: 20px 16px 0;
 }
 
-/* ---- ThemeSwitch (Stats page) ---- */
-.theme-switch {
+/* ---- Settings ----
+   PrefSwitch is the one control the whole screen is built from: a full-width
+   segmented lever, n segments wide, the chosen one on the ink plate. Two
+   segments (an off/on switch) and four (appearance) are the same component at
+   different arities on purpose — it keeps the screen one printed form rather
+   than a theme picker with toggles under it, and it is why there is no
+   separate on/off toggle in the design system. */
+.pref-switch {
   display: flex;
   gap: 6px;
 }
-.theme-switch button {
+.pref-switch button {
   flex: 1;
   border: 1px solid var(--ink);
   background: var(--panel);
@@ -2729,10 +2732,71 @@ a.stat-tile:hover {
   letter-spacing: 0.14em;
   border-radius: var(--radius-btn);
 }
-.theme-switch button.active {
+.pref-switch button.active {
   background: var(--btn-primary-bg);
   border-color: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
+}
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 16px 20px;
+  gap: 12px;
+}
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 0;
+}
+/* Hairlines BETWEEN rows only — the panel's own border closes the ends. */
+.setting-row + .setting-row {
+  border-top: 1px solid var(--line-quiet);
+}
+.setting-row:first-child {
+  padding-top: 2px;
+}
+.setting-row:last-child {
+  padding-bottom: 2px;
+}
+.setting-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.setting-note {
+  margin: 0;
+  font-style: italic;
+  font-size: var(--text-caption);
+  line-height: 1.35;
+  color: var(--muted);
+}
+.settings-error {
+  margin-top: 2px;
+}
+.settings-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+.settings-foot-note {
+  margin: 0;
+  text-align: center;
+  font-style: italic;
+  font-size: var(--text-caption);
+  color: var(--muted);
 }
 
 /* ---- Tournament sheet + result ---- */

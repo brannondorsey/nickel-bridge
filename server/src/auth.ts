@@ -27,6 +27,8 @@ const stmtTouchUser = db.prepare(`UPDATE users SET email = ?, name = ?, picture 
 const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WHERE id = ?`);
 const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id = ?`);
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
+const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
+const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -201,6 +203,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             elo: user.elo,
             difficulty: user.difficulty,
             onboardedAt: user.onboarded_at,
+            ladderListed: user.ladder_listed !== 0,
+            fastForward: user.fast_forward !== 0,
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -223,6 +227,45 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.send({
       user: { id: user.id, handle: user.handle, picture: user.picture, elo: user.elo, difficulty },
     });
+  });
+
+  /**
+   * The settings gate's account-backed preferences (web/src/pages/Settings.tsx).
+   *
+   * One partial-update endpoint rather than a route per switch: these are
+   * plain per-user flags with no side effects, and the list will keep growing
+   * (difficulty already exists as a backend-only preference and wants a UI).
+   * Absent keys are left alone; a present key must be a boolean, so a typo'd
+   * field can't silently no-op.
+   *
+   * - ladderListed — whether a visitor WITHOUT an account sees this player on
+   *   /leaderboard. Deliberately narrow: it is not a general "make me
+   *   private" flag, because there is nothing else to hide (profiles already
+   *   refuse an anonymous caller for every human, the activity feed is
+   *   gated), and it never applies to a signed-in caller — the field you are
+   *   matchpointed against can always see who is in it.
+   * - fastForward — pacing of the claim replay. On the account and not in
+   *   localStorage because it describes the person, not the browser; see the
+   *   fast_forward migration in db.ts.
+   */
+  app.post('/api/me/prefs', (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const fields: [key: string, apply: (on: boolean) => void][] = [
+      ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
+      ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
+    ];
+    const known = new Set(fields.map(([key]) => key));
+    for (const key of Object.keys(body)) {
+      if (!known.has(key)) return reply.code(400).send({ error: `unknown preference: ${key}` });
+      if (typeof body[key] !== 'boolean') return reply.code(400).send({ error: `${key} must be a boolean` });
+    }
+    for (const [key, apply] of fields) {
+      if (key in body) apply(body[key] as boolean);
+    }
+    const row = stmtUserById.get(user.id) as UserRow;
+    return reply.send({ ladderListed: row.ladder_listed !== 0, fastForward: row.fast_forward !== 0 });
   });
 
   // First-crossing tour completion (or skip). Idempotent — the stamp is

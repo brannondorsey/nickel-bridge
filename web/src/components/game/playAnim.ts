@@ -23,19 +23,21 @@ export const GLIDE_MS = 260;
 export const ROBOT_GAP_MS = 450;
 export const HOLD_MS = 300;
 export const COLLECT_MS = 260;
-const STAMP_MS = 420;
+export const STAMP_MS = 420;
 
 // A forced (single-legal-card) turn auto-plays after this delay — just long
 // enough to register as a deliberate play (not an instant jump) without
 // making the player wait to see a card they had no choice over.
 export const AUTO_PLAY_DELAY_MS = 250;
 
-// A claim's fast-forward pacing: much shorter than ROBOT_GAP_MS/HOLD_MS+
-// STAMP_MS since a claim can span many tricks — the glide/collect beats
-// themselves (GLIDE_MS/COLLECT_MS) are untouched, only the gaps between
-// them compress (and compress further still under CLAIM_SPEEDUP_FACTOR,
-// see below). No separate hold beat or terminal stamp needed.
-const CLAIM_GAP_MS = 130;
+// The "Fast forward settled tricks" ON pacing: much shorter than
+// ROBOT_GAP_MS/HOLD_MS+STAMP_MS since a claim can span many tricks — the
+// glide/collect beats themselves (GLIDE_MS/COLLECT_MS) are untouched, only
+// the gaps between them compress (and compress further still under
+// CLAIM_SPEEDUP_FACTOR, see below). No separate hold beat or terminal stamp
+// needed. OFF pacing reuses stagePlaySteps' own ordinary-play gaps instead
+// (ROBOT_GAP_MS/HOLD_MS/COLLECT_MS/STAMP_MS) — see stageClaimSteps.
+export const CLAIM_GAP_MS = 130;
 export const CLAIM_TRICK_GAP_MS = 110;
 
 // Board.tsx no longer starts the fast-forward the instant a claim is
@@ -326,24 +328,34 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
 }
 
 /**
- * Stage a claim's fast-forward as timed snapshots, mirroring stagePlaySteps'
- * glide/collect beats but compressed and spanning up to 13 tricks instead of
- * at most one boundary. Kept separate from stagePlaySteps rather than
- * generalizing it: that function's single-trick-boundary assumption is
- * documented and load-bearing for ordinary play, and stretching it here
- * would risk destabilizing the common, well-tested path.
+ * Stage a claim's tail as timed snapshots, spanning up to 13 tricks instead
+ * of stagePlaySteps' single boundary. Kept separate from stagePlaySteps
+ * rather than generalizing it: that function's single-trick-boundary
+ * assumption is documented and load-bearing for ordinary play, and
+ * stretching it here would risk destabilizing the common, well-tested path
+ * — this instead loops the same per-card/per-trick shape stagePlaySteps
+ * uses for one boundary.
  *
  * Unlike stagePlaySteps, this does NOT end with the real `next` view — every
  * step keeps `state: 'playing'` so the board only flips to 'done' (and the
- * receipt takes over) once the whole fast-forward has played out. Board.tsx
- * owns that final hand-off, along with the announcement overlay it shows
+ * receipt takes over) once the whole tail has played out. Board.tsx owns
+ * that final hand-off, along with the announcement overlay it shows
  * beforehand, since those are plain timed UI state, not board-view
  * snapshots.
  *
- * `speedFactor` scales every computed gap (default 1 = base pacing); Board.tsx
- * passes CLAIM_SPEEDUP_FACTOR once the announcement has been dismissed.
+ * `fast` (the settings tab's "Fast forward settled tricks", default false so
+ * every call site opts in explicitly) picks which gap set every step uses:
+ * false replays at the SAME per-card/per-trick pacing (GLIDE_MS/ROBOT_GAP_MS/
+ * HOLD_MS/COLLECT_MS/STAMP_MS) stagePlaySteps uses for ordinary play — this
+ * really is table speed, not merely "the claim pacing without the extra
+ * speedup" (an earlier version conflated the two: CLAIM_GAP_MS/
+ * CLAIM_TRICK_GAP_MS were themselves already a compressed pace, so turning
+ * off just the CLAIM_SPEEDUP_FACTOR multiplier still played far faster than
+ * a real trick ever does). true uses CLAIM_GAP_MS/CLAIM_TRICK_GAP_MS scaled
+ * by CLAIM_SPEEDUP_FACTOR, both needed since a claim can span many tricks
+ * and nobody wants to wait through 13 of them at table speed.
  */
-export function stageClaimSteps(prev: BoardView, next: BoardView, speedFactor = 1): StagedStep[] {
+export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false): StagedStep[] {
   if (prev.state !== 'playing' || next.state !== 'done' || !next.claimed || !next.playHistory) return [];
   if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
 
@@ -393,8 +405,12 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, speedFactor = 
     const toPlay = ti === 0 ? trick.slice(prevTrick.length) : trick;
     toPlay.forEach((play, i) => {
       played += 1;
-      const baseDelay = ti === 0 && i === 0 ? 0 : i === 0 ? CLAIM_TRICK_GAP_MS : CLAIM_GAP_MS;
-      const delayBefore = Math.round(baseDelay * speedFactor);
+      const delayBefore =
+        ti === 0 && i === 0
+          ? 0
+          : i === 0
+            ? Math.round(fast ? CLAIM_TRICK_GAP_MS * CLAIM_SPEEDUP_FACTOR : STAMP_MS)
+            : Math.round(fast ? CLAIM_GAP_MS * CLAIM_SPEEDUP_FACTOR : GLIDE_MS + ROBOT_GAP_MS);
       steps.push({
         delayBefore,
         view: lockedView(next, {
@@ -413,18 +429,24 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, speedFactor = 
     doneCount += 1;
     if (winner % 2 === declParity) declCount += 1;
     else defCount += 1;
-    steps.push({
-      delayBefore: Math.round(CLAIM_GAP_MS * speedFactor),
-      view: lockedView(next, {
-        currentTrick: [],
-        completedTricks: doneCount,
-        declarerTricks: declCount,
-        defenderTricks: defCount,
-        handToPlay: winner,
-        hand: handAt(played),
-        dummyHand: dummyHandAt(played),
-      }),
+    const collected = lockedView(next, {
+      currentTrick: [],
+      completedTricks: doneCount,
+      declarerTricks: declCount,
+      defenderTricks: defCount,
+      handToPlay: winner,
+      hand: handAt(played),
+      dummyHand: dummyHandAt(played),
     });
+    if (fast) {
+      // one beat: the compressed pace has no separate hold/collect split
+      steps.push({ delayBefore: Math.round(CLAIM_GAP_MS * CLAIM_SPEEDUP_FACTOR), view: collected });
+    } else {
+      // table pace: the finished trick holds, then sweeps — the same two
+      // beats stagePlaySteps uses for an ordinary trick boundary
+      steps.push({ delayBefore: GLIDE_MS + HOLD_MS, view: collected });
+      steps.push({ delayBefore: COLLECT_MS + 80, view: collected });
+    }
   });
 
   return steps;

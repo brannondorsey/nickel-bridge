@@ -16,6 +16,7 @@ import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
+import Settings from './pages/Settings';
 import Tour from './pages/Tour';
 import Tournament from './pages/Tournament';
 import { clearTourDone, peekTourDone } from './onboarding/tourDone';
@@ -41,6 +42,7 @@ function inTabScope(pathname: string): boolean {
     pathname === '/' ||
     pathname === '/leaderboard' ||
     pathname === '/activity' ||
+    pathname === '/settings' ||
     pathname.startsWith('/players/') ||
     isGlossaryPath(pathname)
   );
@@ -273,6 +275,9 @@ export default function App() {
                   this falls through to the landing page, and seo.ts's row says
                   public: false to match — seo.test.ts holds the two together. */}
               <Route path="/activity" element={<Activity />} />
+              {/* One person's own preferences: gated, and seo.ts says
+                  public: false to match. */}
+              <Route path="/settings" element={<Settings />} />
               <Route path="/players/:id" element={<Player />} />
               <Route path="/glossary" element={<Glossary />} />
               <Route path="/glossary/:slug" element={<Glossary />} />

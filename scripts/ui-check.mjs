@@ -160,6 +160,11 @@ await page.waitForSelector('.sheet');
 await shot('16c-glossary-term-sheet');
 await page.click('[aria-label="Close"]');
 
+// 16d — the settings gate (appearance, fast-forward, ladder listing, sign-out)
+await page.click('.tabbar >> text=SETTINGS');
+await page.waitForSelector('.settings-panel');
+await shot('16d-settings', true);
+
 // 17 — desktop viewport (same session)
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.goto(base);

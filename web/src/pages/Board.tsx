@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useMe } from '../App';
 import {
   AuctionEntry,
   BidEval,
@@ -39,7 +40,6 @@ import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
-  CLAIM_SPEEDUP_FACTOR,
   ClaimAnnouncement,
   StagedStep,
   captureFanOriginIfVisible,
@@ -62,6 +62,10 @@ export default function Board() {
   const navigate = useNavigate();
   const tournamentId = Number(tid);
   const boardNo = Number(no);
+
+  // "Fast forward settled tricks" (settings gate) — account state, so it
+  // follows the player between devices; see runClaim below for what it paces.
+  const fastForward = useMe().me?.user?.fastForward !== false;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -184,11 +188,11 @@ export default function Board() {
 
   // Bracket a claim in two beats: the ClaimOverlay holds the board for
   // CLAIM_ANNOUNCE_HOLD_MS (tap/click/Escape dismisses early, via
-  // claimSkipRef/skipClaimAnnouncement above), THEN the fast-forward runs —
-  // at CLAIM_SPEEDUP_FACTOR pacing — before handing off to the real
-  // (state: 'done') `next` view. Splitting it this way (rather than the
-  // overlay popping up alongside cards already moving) is the whole point:
-  // the announcement can't be missed if nothing else on the board is
+  // claimSkipRef/skipClaimAnnouncement above), THEN the tail plays out —
+  // paced per the "Fast forward settled tricks" setting — before handing off
+  // to the real (state: 'done') `next` view. Splitting it this way (rather
+  // than the overlay popping up alongside cards already moving) is the whole
+  // point: the announcement can't be missed if nothing else on the board is
   // changing while it's up. Applies whether or not motion is on — even
   // without a fast-forward to animate afterward, the announcement still
   // deserves its full, deliberate, dismissible read before jumping straight
@@ -216,8 +220,12 @@ export default function Board() {
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
+      // The settings tab's "Fast forward settled tricks" (users.fast_forward)
+      // chooses the pacing of this replay and nothing else: the cards were
+      // played by the server before this response arrived either way, so off
+      // means "watch them at table speed", never "play them yourself".
       if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, CLAIM_SPEEDUP_FACTOR);
+        const steps = stageClaimSteps(prev, next, fastForward);
         if (steps.length) {
           scheduleSteps(prev, steps);
           const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
@@ -230,7 +238,7 @@ export default function Board() {
       cancelStaging();
       setBoard(next);
     },
-    [applyBoard, cancelStaging, scheduleSteps],
+    [applyBoard, cancelStaging, fastForward, scheduleSteps],
   );
 
   const load = useCallback(() => {

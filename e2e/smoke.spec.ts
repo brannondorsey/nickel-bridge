@@ -274,6 +274,35 @@ test('player stats page is reachable for self and others', async ({ page, contex
 });
 
 /**
+ * The settings gate. Night mode is the one preference with a second
+ * implementation to keep honest — the blocking inline script in
+ * web/index.html re-applies the stored choice before first paint, and it is
+ * hand-kept in sync with theme.ts — so this walks the real switch and then
+ * reloads, which is the only place that duplicate can be caught.
+ */
+test('settings apply a night-mode choice that survives a reload', async ({ page }) => {
+  await signInAndOnboard(page, `Settings ${Date.now()}`);
+
+  await page.click('.tabbar >> text=SETTINGS');
+  await expect(page).toHaveURL('/settings');
+  await page.getByRole('group', { name: 'Appearance' }).getByRole('button', { name: 'NIGHT' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'night');
+
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'night');
+
+  // the other two rows are account state, so they round-trip through the server
+  await page.getByRole('group', { name: 'Name on the ladder' }).getByRole('button', { name: 'OFF' }).click();
+  await page.getByRole('group', { name: 'Fast forward settled tricks' }).getByRole('button', { name: 'OFF' }).click();
+  await expect
+    .poll(async () => {
+      const { user } = await (await page.request.get('/api/me')).json();
+      return [user.ladderListed, user.fastForward];
+    })
+    .toEqual([false, false]);
+});
+
+/**
  * The unauthenticated pass: what someone who has never signed in can reach.
  *
  * The point of the landing page and the public tour is that a visitor gets a

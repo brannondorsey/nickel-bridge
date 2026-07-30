@@ -89,6 +89,8 @@ export const SITE_ROUTES: readonly SiteRoute[] = [
   // is public because it's a bounded list of handles and ratings; this is a
   // behavioural record, and it stays behind the gate.
   { path: '/activity', public: false, indexed: false, spa: true },
+  // One person's own preferences. Nothing to read here without their session.
+  { path: '/settings', public: false, indexed: false, spa: true },
   { path: '/scenarios', public: false, indexed: false, spa: true },
   { path: '/api/*', public: false, indexed: false, spa: false },
   { path: '/auth/*', public: false, indexed: false, spa: false },

@@ -21,7 +21,6 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import {
   CLAIM_ANNOUNCE_HOLD_MS,
-  CLAIM_SPEEDUP_FACTOR,
   ClaimAnnouncement,
   StagedStep,
   claimAnnouncement,
@@ -319,6 +318,9 @@ function Tollkeeper({
  * instead of the flat cut a multi-trick jump would otherwise fall back to.
  */
 function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave: () => void; busy: boolean }) {
+  // The tour is public, so there may be no account to have set this; the
+  // default matches the live board's.
+  const fastForward = useMe().me?.user?.fastForward !== false;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -434,8 +436,11 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
+      // Honours the settings gate's fast-forward the same way the live board
+      // does — and defaults to on for the signed-out visitor walking the
+      // practice deal, who has no account to have set it.
       if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, CLAIM_SPEEDUP_FACTOR);
+        const steps = stageClaimSteps(prev, next, fastForward);
         if (steps.length) {
           const totalMs = scheduleSteps(steps);
           await sleep(totalMs);
@@ -446,7 +451,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       clearTimers();
       setView(next);
     },
-    [applyTransition, scheduleSteps, clearTimers],
+    [applyTransition, scheduleSteps, clearTimers, fastForward],
   );
 
   const idxRef = useRef(idx);
