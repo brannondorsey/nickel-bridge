@@ -117,30 +117,38 @@ const SITES = [
 const HOSTS = SITES.map((s) => s.host);
 
 /**
- * Every fronted host must sit exactly one label below the zone apex.
+ * Every fronted host must be one Cloudflare can actually serve.
  *
- * Cloudflare's free Universal SSL covers the apex and *first-level* subdomains only — it is
- * issued for `brannon.online` and `*.brannon.online`, and a wildcard matches one label. So a
- * third-level name like `demo.bridge.brannon.online` has no edge certificate, and proxying it
- * fails the TLS handshake outright: the site is simply down, before any rule here is
- * consulted. That is not theoretical — it is exactly what happened when demo was first
- * flipped to orange, and it is why demo now lives at `demo-bridge.brannon.online`.
+ * Free Universal SSL is issued for `brannon.online` and `*.brannon.online`, and a wildcard
+ * matches exactly one label — so the apex and any single-label subdomain are covered, and a
+ * third-level name like `demo.bridge.brannon.online` is not. Proxying an uncovered name fails
+ * the TLS handshake outright: the site is simply down, before any rule here is consulted. That
+ * is not theoretical — it is what happened when demo was first flipped to orange, and it is
+ * why demo now lives at `demo-bridge.brannon.online`.
  *
  * Covering deeper names needs Advanced Certificate Manager or Total TLS, both paid, and both
  * costing more than the machine time this whole exercise saves. So the constraint is asserted
  * rather than documented: CI's `--plan` fails on a host that could not be served.
+ *
+ * Called from inside the mode dispatch rather than at module top level, so a tripped assertion
+ * gets the same `::error::` annotation as every other operational failure instead of an
+ * uncaught stack trace.
  */
-for (const { host } of SITES) {
-  if (!host.endsWith(`.${ZONE_NAME}`)) {
-    throw new Error(`INVARIANT: ${host} is not under the zone ${ZONE_NAME}.`);
-  }
-  const labels = host.slice(0, -(ZONE_NAME.length + 1)).split('.');
-  if (labels.length !== 1) {
-    throw new Error(
-      `INVARIANT: ${host} is ${labels.length} labels below ${ZONE_NAME}; free Universal SSL ` +
-        `covers only one, so proxying it would fail TLS. Use a single-label host ` +
-        `(e.g. ${labels.join('-')}.${ZONE_NAME}) or buy Advanced Certificate Manager.`,
-    );
+function assertFrontedHostsServable() {
+  for (const { host } of SITES) {
+    // The apex is zero labels below itself and is covered by Universal SSL directly.
+    if (host === ZONE_NAME) continue;
+    if (!host.endsWith(`.${ZONE_NAME}`)) {
+      throw new Error(`INVARIANT: ${host} is not under the zone ${ZONE_NAME}.`);
+    }
+    const labels = host.slice(0, -(ZONE_NAME.length + 1)).split('.');
+    if (labels.length !== 1) {
+      throw new Error(
+        `INVARIANT: ${host} is ${labels.length} labels below ${ZONE_NAME}; free Universal SSL ` +
+          `covers only one, so proxying it would fail TLS. Use a single-label host ` +
+          `(e.g. ${labels.join('-')}.${ZONE_NAME}) or buy Advanced Certificate Manager.`,
+      );
+    }
   }
 }
 
@@ -796,6 +804,7 @@ const mode = process.argv.find((a) => MODES[a]) ?? '--plan';
 // A stack trace is the wrong thing to hand a CI log: the causes here are all operational
 // (missing token, wrong zone, a tripped invariant) and each already carries a usable message.
 try {
+  assertFrontedHostsServable();
   await MODES[mode]();
 } catch (err) {
   console.error(`::error::cloudflare.mjs ${mode}: ${err.message}`);
