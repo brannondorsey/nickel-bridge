@@ -819,13 +819,20 @@ once rather than tagging rows. Each of the two new settings has one thing worth 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
   preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
   remaining card (`resolveClaim`, `game.ts`) — the response arrives with the board finished
-  — so nobody chooses a card in that tail under either setting. On replays it at
-  `CLAIM_SPEEDUP_FACTOR`, off at ordinary play pacing (`stageClaimSteps`' default), and
-  under `prefers-reduced-motion` there is no replay to pace, so the setting is inert.
-  `Board.tsx` reads it off `MeContext` (so does `Tour.tsx`, defaulting to on for the
-  signed-out visitor walking the practice deal). Letting a player actually *play* the
-  settled tail would mean not claiming for that user, which is a server change with a real
-  fairness cost — see the note under invariant 1.
+  — so nobody chooses a card in that tail under either setting. `stageClaimSteps`
+  (`playAnim.ts`) takes a `fast` boolean, not a bare speed multiplier, because the two modes
+  use genuinely different gap sets rather than one scaled by the other: on replays at
+  `CLAIM_GAP_MS`/`CLAIM_TRICK_GAP_MS` (compressed — a claim can span up to 13 tricks, and
+  nobody wants to sit through that many at table speed) scaled further by
+  `CLAIM_SPEEDUP_FACTOR`; off reuses `stagePlaySteps`' own ordinary-play gaps
+  (`GLIDE_MS`/`ROBOT_GAP_MS`/`HOLD_MS`/`COLLECT_MS`/`STAMP_MS`), so it's genuinely table
+  speed rather than merely the claim pacing with the extra multiplier removed — an earlier
+  version conflated the two, so off still looked like a fast-forward. Under
+  `prefers-reduced-motion` there is no replay to pace, so the setting is inert. `Board.tsx`
+  reads it off `MeContext` (so does `Tour.tsx`, defaulting to on for the signed-out visitor
+  walking the practice deal). Letting a player actually *play* the settled tail would mean
+  not claiming for that user, which is a server change with a real fairness cost — see the
+  note under invariant 1.
 - **Name on the ladder** (`users.ladder_listed`, default on) governs whether `/api/leaderboard` includes this
   player for an **anonymous** caller. That is the whole of it because the ladder is the
   whole anonymous surface: profiles already refuse a signed-out caller for every human and

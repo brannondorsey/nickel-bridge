@@ -21,7 +21,6 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import {
   CLAIM_ANNOUNCE_HOLD_MS,
-  CLAIM_SPEEDUP_FACTOR,
   ClaimAnnouncement,
   StagedStep,
   claimAnnouncement,
@@ -441,7 +440,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       // does — and defaults to on for the signed-out visitor walking the
       // practice deal, who has no account to have set it.
       if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, fastForward ? CLAIM_SPEEDUP_FACTOR : 1);
+        const steps = stageClaimSteps(prev, next, fastForward);
         if (steps.length) {
           const totalMs = scheduleSteps(steps);
           await sleep(totalMs);

@@ -40,7 +40,6 @@ import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
-  CLAIM_SPEEDUP_FACTOR,
   ClaimAnnouncement,
   StagedStep,
   captureFanOriginIfVisible,
@@ -189,11 +188,11 @@ export default function Board() {
 
   // Bracket a claim in two beats: the ClaimOverlay holds the board for
   // CLAIM_ANNOUNCE_HOLD_MS (tap/click/Escape dismisses early, via
-  // claimSkipRef/skipClaimAnnouncement above), THEN the fast-forward runs —
-  // at CLAIM_SPEEDUP_FACTOR pacing — before handing off to the real
-  // (state: 'done') `next` view. Splitting it this way (rather than the
-  // overlay popping up alongside cards already moving) is the whole point:
-  // the announcement can't be missed if nothing else on the board is
+  // claimSkipRef/skipClaimAnnouncement above), THEN the tail plays out —
+  // paced per the "Fast forward settled tricks" setting — before handing off
+  // to the real (state: 'done') `next` view. Splitting it this way (rather
+  // than the overlay popping up alongside cards already moving) is the whole
+  // point: the announcement can't be missed if nothing else on the board is
   // changing while it's up. Applies whether or not motion is on — even
   // without a fast-forward to animate afterward, the announcement still
   // deserves its full, deliberate, dismissible read before jumping straight
@@ -226,7 +225,7 @@ export default function Board() {
       // played by the server before this response arrived either way, so off
       // means "watch them at table speed", never "play them yourself".
       if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, fastForward ? CLAIM_SPEEDUP_FACTOR : 1);
+        const steps = stageClaimSteps(prev, next, fastForward);
         if (steps.length) {
           scheduleSteps(prev, steps);
           const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);

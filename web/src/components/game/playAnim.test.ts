@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
+  CLAIM_GAP_MS,
   CLAIM_SPEEDUP_FACTOR,
   CLAIM_TRICK_GAP_MS,
+  COLLECT_MS,
   GLIDE_MS,
   HOLD_MS,
   ROBOT_GAP_MS,
+  STAMP_MS,
   captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
@@ -363,10 +366,11 @@ describe('stageClaimSteps', () => {
     expect(stageClaimSteps(claimPrev, { ...claimNext, playHistory: undefined })).toEqual([]);
   });
 
-  it('stages every new trick card-by-card, ending fully tallied but NOT at the real done view', () => {
+  it('at table pace (the default), stages every new trick with the SAME beats stagePlaySteps uses', () => {
     const steps = stageClaimSteps(claimPrev, claimNext);
-    // 4 cards + collect for trick 12, 4 cards + collect for trick 13
-    expect(steps).toHaveLength(10);
+    // per trick: 4 cards, then a hold beat and a collect beat (mirrors
+    // stagePlaySteps' boundary block) — 6 beats × 2 tricks
+    expect(steps).toHaveLength(12);
 
     // every intermediate view stays locked in "playing" — Board.tsx owns the
     // hand-off to 'done' after the terminal stamp, not this function
@@ -381,19 +385,26 @@ describe('stageClaimSteps', () => {
     expect(steps[0].delayBefore).toBe(0);
     expect(steps[0].view.currentTrick).toEqual([trick12[0]]);
     expect(steps[0].view.hand).not.toContain(S(9));
+    // a card within the same trick uses the ordinary robot-to-robot gap
+    expect(steps[1].delayBefore).toBe(GLIDE_MS + ROBOT_GAP_MS);
 
-    // trick 12 collects: the claiming side's tally (declarer here) bumps
-    expect(steps[4].view.currentTrick).toEqual([]);
-    expect(steps[4].view.completedTricks).toBe(12);
-    expect(steps[4].view.declarerTricks).toBe(9);
-    expect(steps[4].view.defenderTricks).toBe(3);
+    // trick 12 holds, then sweeps: the claiming side's tally (declarer here)
+    // bumps on both beats (they share one view, same as stagePlaySteps)
+    expect(steps[4].delayBefore).toBe(GLIDE_MS + HOLD_MS);
+    expect(steps[5].delayBefore).toBe(COLLECT_MS + 80);
+    for (const i of [4, 5]) {
+      expect(steps[i].view.currentTrick).toEqual([]);
+      expect(steps[i].view.completedTricks).toBe(12);
+      expect(steps[i].view.declarerTricks).toBe(9);
+      expect(steps[i].view.defenderTricks).toBe(3);
+    }
 
-    // the second trick's opening card uses the (longer) inter-trick gap
-    expect(steps[5].delayBefore).toBe(CLAIM_TRICK_GAP_MS);
-    expect(steps[5].view.currentTrick).toEqual([trick13[0]]);
+    // the second trick's opening card uses the ordinary post-collect gap
+    expect(steps[6].delayBefore).toBe(STAMP_MS);
+    expect(steps[6].view.currentTrick).toEqual([trick13[0]]);
 
     // final staged step: fully tallied, hands empty
-    const last = steps[9];
+    const last = steps[11];
     expect(last.view.completedTricks).toBe(13);
     expect(last.view.declarerTricks).toBe(10);
     expect(last.view.hand).toEqual([]);
@@ -403,8 +414,8 @@ describe('stageClaimSteps', () => {
   it('reconciles a trick already in progress before staging the rest', () => {
     const midTrickPrev: BoardView = { ...claimPrev, currentTrick: [trick12[0], trick12[1]] };
     const steps = stageClaimSteps(midTrickPrev, claimNext);
-    // 2 remaining cards of trick 12 + collect, then all of trick 13 + collect
-    expect(steps).toHaveLength(8);
+    // 2 remaining cards of trick 12 + hold + collect, then all of trick 13 + hold + collect
+    expect(steps).toHaveLength(2 + 2 + 4 + 2);
     expect(steps[0].view.currentTrick).toEqual([trick12[0], trick12[1], trick12[2]]);
   });
 
@@ -413,13 +424,20 @@ describe('stageClaimSteps', () => {
     expect(stageClaimSteps(mismatched, claimNext)).toEqual([]);
   });
 
-  it('scales every gap by speedFactor, leaving the first card (delayBefore 0) untouched', () => {
-    const steps = stageClaimSteps(claimPrev, claimNext, CLAIM_SPEEDUP_FACTOR);
+  // fast=true is the settings tab's "Fast forward settled tricks" ON: the
+  // compressed claim pacing (CLAIM_GAP_MS/CLAIM_TRICK_GAP_MS), scaled further
+  // by CLAIM_SPEEDUP_FACTOR, with one beat per trick instead of two.
+  it('fast=true uses the compressed, sped-up claim pacing instead of table speed', () => {
+    const steps = stageClaimSteps(claimPrev, claimNext, true);
+    // 4 cards + 1 collect beat per trick (no separate hold/collect split)
+    expect(steps).toHaveLength(10);
     expect(steps[0].delayBefore).toBe(0); // 0 * factor is still 0
+    expect(steps[4].delayBefore).toBe(Math.round(CLAIM_GAP_MS * CLAIM_SPEEDUP_FACTOR));
     expect(steps[5].delayBefore).toBe(Math.round(CLAIM_TRICK_GAP_MS * CLAIM_SPEEDUP_FACTOR));
-    // default (no speedFactor arg) matches the base, un-sped-up pacing
-    const base = stageClaimSteps(claimPrev, claimNext);
-    expect(base[5].delayBefore).toBe(CLAIM_TRICK_GAP_MS);
+
+    // this is meaningfully faster than any table-pace gap
+    const tablePace = stageClaimSteps(claimPrev, claimNext);
+    expect(steps[5].delayBefore).toBeLessThan(tablePace[6].delayBefore);
   });
 });
 
@@ -487,11 +505,11 @@ describe('claimAnnouncement — mixed leading trick', () => {
 describe('stageClaimSteps — mixed leading trick', () => {
   it('tallies the in-progress trick to whichever side actually won it, not the claiming side', () => {
     const steps = stageClaimSteps(mixedPrev, mixedNext);
-    // 2 cards to finish trick 9 + collect, then 4+collect and 4+collect for the two clean tricks
-    expect(steps).toHaveLength(2 + 1 + 5 + 5);
+    // 2 cards to finish trick 9 + hold + collect, then (4 cards + hold + collect) × 2
+    expect(steps).toHaveLength(2 + 2 + 6 + 6);
 
     // the mixed trick's collect bumps the DEFENSE tally, not declarer
-    const mixedCollect = steps[2];
+    const mixedCollect = steps[3];
     expect(mixedCollect.view.completedTricks).toBe(10);
     expect(mixedCollect.view.declarerTricks).toBe(6);
     expect(mixedCollect.view.defenderTricks).toBe(4);
