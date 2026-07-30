@@ -93,9 +93,17 @@ export function Sparkline({
 
   const { x, y, line, trend } = geom;
   const n = points.length;
+  // A selection outlives a change of `points`: the LOOKBACK window swaps a
+  // SHORTER series into this same instance without remounting, so an index
+  // picked against the longer one can now be past the end. Clamp once here and
+  // read only `sel`/`active` below — indexing on raw `selected` throws on an
+  // undefined point, and with no error boundary in the app that blanks the whole
+  // Stats page. Clamping rather than clearing keeps the common case honest: the
+  // latest point stays the latest point across a resize.
+  const sel = selected === null ? null : Math.min(selected, n - 1);
   // What the slider reports when nothing has been picked yet: the latest point,
   // which is also what the endpoint dot already marks.
-  const active = selected ?? n - 1;
+  const active = sel ?? n - 1;
   const shown = points[active];
 
   /** Nearest point to a client x — the reader aims at a position, not a mark. */
@@ -156,10 +164,10 @@ export function Sparkline({
           <line x1="0" y1={BASE} x2={W} y2={BASE} stroke="var(--line)" strokeWidth="1" />
           {trend ? <polyline points={trend} fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeDasharray="4 4" /> : null}
           <polyline points={line} fill="none" stroke="var(--ink)" strokeWidth="2.5" />
-          {selected !== null ? (
+          {sel !== null ? (
             <>
-              <line x1={x(selected)} y1={TOP - 6} x2={x(selected)} y2={BASE} stroke="var(--ink)" strokeWidth="1" strokeDasharray="2 3" />
-              <circle cx={x(selected)} cy={y(points[selected].value)} r="4.5" fill="var(--paper)" stroke="var(--ink)" strokeWidth="2" />
+              <line x1={x(sel)} y1={TOP - 6} x2={x(sel)} y2={BASE} stroke="var(--ink)" strokeWidth="1" strokeDasharray="2 3" />
+              <circle cx={x(sel)} cy={y(points[sel].value)} r="4.5" fill="var(--paper)" stroke="var(--ink)" strokeWidth="2" />
             </>
           ) : null}
           <circle cx={x(n - 1)} cy={y(points[n - 1].value)} r="3.5" fill="var(--ink)" />
@@ -170,7 +178,7 @@ export function Sparkline({
         {refLabel ? <span className="sparkline-ref-label">- - {refLabel}</span> : null}
         <span>{rightCaption}</span>
       </div>
-      {selected !== null ? (
+      {sel !== null ? (
         <div className="sparkline-detail num" aria-hidden="true">
           {shown.label}
           {shown.caption ? ` · ${shown.caption}` : ''} · {format(shown.value)}

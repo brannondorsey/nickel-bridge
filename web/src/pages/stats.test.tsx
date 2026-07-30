@@ -113,6 +113,20 @@ describe('Stats', () => {
       expect(within(switchGroup()).getByRole('button', { name: 'ALL' })).toHaveAttribute('aria-pressed', 'true');
     });
 
+    // The switch swaps a shorter series into the same Sparkline instance, so a
+    // selection made against the longer one is out of range on the next render.
+    // Unclamped that throws, and with no error boundary the whole page blanks.
+    it('survives narrowing the window after a point is selected', async () => {
+      apiMock.playerStats.mockResolvedValue(longHistory(40));
+      renderStats();
+      await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS');
+      screen.getByRole('slider', { name: 'Matchpoints by tournament' }).focus(); // index 24 of 25
+      await userEvent.click(within(switchGroup()).getByRole('button', { name: '10' }));
+
+      expect(screen.getByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
+      expect(screen.getByRole('slider', { name: 'Matchpoints by tournament' })).toHaveAttribute('aria-valuenow', '9');
+    });
+
     it('discloses the Elo replay only on a career-length rating chart', async () => {
       const restated = /can restate this line/;
       apiMock.playerStats.mockResolvedValue({

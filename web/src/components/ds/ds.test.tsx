@@ -369,6 +369,23 @@ describe('Sparkline', () => {
     expect(screen.queryByText(/Tournament #10 ·/)).not.toBeInTheDocument();
   });
 
+  // The LOOKBACK switch swaps a shorter series into the SAME component instance,
+  // so a selection made against the longer one outlives it. Every read of
+  // `selected` has to survive that shrink or the render throws on an undefined
+  // point — and with no error boundary in the app, that blanks the whole page.
+  it('survives the series shrinking below the selected index', () => {
+    const pts = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ label: `Tournament #${i + 1}`, caption: 'Jul 2', value: 50 + i }));
+    const { rerender } = render(<Sparkline points={pts(25)} label="Matchpoints" />);
+    screen.getByRole('slider').focus(); // selects the latest point, index 24
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '24');
+
+    rerender(<Sparkline points={pts(10)} label="Matchpoints" />);
+    const slider = screen.getByRole('slider');
+    expect(slider).toHaveAttribute('aria-valuenow', '9');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Tournament #10, Jul 2, 59');
+  });
+
   it('renders the no-data note when empty', () => {
     render(<Sparkline points={[]} label="Matchpoints" />);
     expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
