@@ -11,7 +11,7 @@
 # per-PR preview app (see .github/workflows/ci.yml and pr-preview-teardown.yml).
 # `app = 'nickel-bridge'` below is only the default for local/manual `fly deploy` — CI always
 # passes `--app <name>` explicitly (`nickel-bridge` for production, `nickel-bridge-demo` for
-# the demo app at demo.bridge.brannon.online, `nickel-bridge-pr-<number>` for previews),
+# the demo app at demo-bridge.brannon.online, `nickel-bridge-pr-<number>` for previews),
 # which overrides it.
 #
 # One-time production setup (see README.md "Deployment" for the full checklist):

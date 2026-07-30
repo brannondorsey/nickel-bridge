@@ -188,7 +188,7 @@ watches until the app *stays* destroyed, because `deploy-preview` sits behind
 `needs: [test, e2e, docker]` and would otherwise re-create the app minutes after teardown
 had already run and found nothing; `deploy-preview` re-checks the PR state immediately
 before creating anything for the same reason), and every push to `main` deploys to production
-*and* redeploys the permanent demo app (`nickel-bridge-demo`, demo.bridge.brannon.online — a
+*and* redeploys the permanent demo app (`nickel-bridge-demo`, demo-bridge.brannon.online — a
 stable DEMO=1 instance for automation and click-testing) — see README.md "Deployment" for the
 one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
 `.github/workflows/claude-pr-review.yml` runs Claude (via `anthropics/claude-code-action`) on
@@ -437,7 +437,7 @@ nothing session-scoped can reach the cache set: `boardView` redacts hidden hands
 a cached `/api` response is one player's view of the deal served to another. That is an
 information leak, not a stale page.
 
-**Staged rollout: `demo.bridge.brannon.online` only, for now.** The production row in
+**Staged rollout: `demo-bridge.brannon.online` only, for now.** The production row in
 `SITES` is commented out and goes in as a follow-up once demo is proven end to end behind the
 proxy — demo has no human users at all and still burned 1.8 h/day on crawlers, so the effect
 is measurable there without a real player ever meeting a mis-cached page. Uncommenting that
@@ -485,6 +485,14 @@ deploy independently and purging the other's pages would discard good cache entr
 per host) weekly. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
 until that secret exists.
 
+**A fronted host must be one label below the apex.** Free Universal SSL is issued for
+`brannon.online` and `*.brannon.online`, and a wildcard matches one label — so
+`demo.bridge.brannon.online` had no edge certificate, and proxying it failed the TLS handshake
+and took the demo site down before a single rule was consulted. That is why demo lives at
+`demo-bridge.brannon.online`. `SITES` asserts the depth, so `--plan` fails in CI rather than at
+the moment someone flips the cloud; deeper names need Advanced Certificate Manager or Total TLS,
+both paid and both dearer than the machine time saved.
+
 Two things about proxying a Fly app that fail silently and late, both per
 [Fly's Cloudflare guide](https://fly.io/docs/networking/understanding-cloudflare/). Fly
 validates custom-domain certs over **TLS-ALPN**, and Cloudflare terminates TLS, so going
@@ -509,7 +517,7 @@ the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
 still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
-**Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo.bridge.brannon.online):**
+**Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo-bridge.brannon.online):**
 the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the
 visitor in as a shared "Inspector" persona and lands on `/scenarios` — a gallery of
 "exhibits" that jump straight into hard-to-reach game states for click-testing. An exhibit

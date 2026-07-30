@@ -274,7 +274,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   //
   // Throwaway origins must never compete with production in the search index.
   // The demo app and every PR preview serve a byte-identical build from their
-  // own hostnames (*.fly.dev, demo.bridge.brannon.online), so without this the
+  // own hostnames (*.fly.dev, demo-bridge.brannon.online), so without this the
   // index fills with duplicates of the real site — outranking it, and handing
   // searchers a database that gets wiped on a schedule. Both flags are the
   // reliable tell: invariant 5 forbids either on the production app.
