@@ -65,6 +65,27 @@ describe('Settings', () => {
     expect(segment('Name on the ladder', 'ON')).toHaveClass('active');
   });
 
+  // A failed write must only revert the field it touched. Regression for a bug
+  // where the whole `prefs` object was snapshotted per call: a later-resolving
+  // failure on one field could stomp a different field's already-succeeded write.
+  it('reverts only the field that failed, not a concurrently-succeeded one', async () => {
+    let rejectLadder!: (e: unknown) => void;
+    apiMock.setPrefs.mockImplementation((patch: Record<string, unknown>) => {
+      if ('ladderListed' in patch) return new Promise((_, reject) => (rejectLadder = reject));
+      return Promise.resolve({ ladderListed: true, fastForward: true });
+    });
+    renderSettings();
+
+    await userEvent.click(segment('Name on the ladder', 'OFF')!);
+    await userEvent.click(segment('Fast forward settled tricks', 'OFF')!);
+    await vi.waitFor(() => expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active'));
+
+    rejectLadder(new Error('nope'));
+    expect(await screen.findByText(/didn't save/i)).toBeInTheDocument();
+    expect(segment('Name on the ladder', 'ON')).toHaveClass('active');
+    expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
+  });
+
   it('signs out', async () => {
     apiMock.logout.mockResolvedValue({ ok: true });
     const { refresh } = renderSettings();

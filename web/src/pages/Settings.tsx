@@ -90,14 +90,17 @@ export default function Settings() {
   const [prefError, setPrefError] = useState<string | null>(null);
 
   const change = async (patch: Partial<AccountPrefs>) => {
-    const previous = prefs;
-    setPrefs({ ...prefs, ...patch });
+    const revert: Partial<AccountPrefs> = {};
+    for (const key of Object.keys(patch) as (keyof AccountPrefs)[]) revert[key] = prefs[key];
+    setPrefs((p) => ({ ...p, ...patch }));
     setPrefError(null);
     try {
       await api.setPrefs(patch);
       refresh();
     } catch {
-      setPrefs(previous);
+      // Revert only the key(s) this call touched — a concurrent, already-
+      // succeeded write to a different key must not be clobbered back.
+      setPrefs((p) => ({ ...p, ...revert }));
       setPrefError("That didn't save — try again.");
     }
   };
