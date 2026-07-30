@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { meFixture, playerStatsEmpty, playerStatsFull } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Player from './Player';
@@ -46,12 +46,10 @@ describe('Stats', () => {
     expect(screen.getByText('BID ACCURACY')).toBeInTheDocument();
   });
 
-  it('caps the sparkline lookback at 25 tournaments, keeping the most recent ones', async () => {
-    // 40 tournaments' worth of history — the server sends every series
-    // unbounded, so the trailing window is entirely the client's call.
-    apiMock.playerStats.mockResolvedValue({
+  describe('lookback window', () => {
+    const longHistory = (n: number) => ({
       ...playerStatsFull,
-      pctSeries: Array.from({ length: 40 }, (_, i) => ({
+      pctSeries: Array.from({ length: n }, (_, i) => ({
         tournamentId: i + 1,
         tournamentName: `Tournament #${i + 1}`,
         finishedAt: 1_780_000_000 + i * 86_400,
@@ -60,12 +58,78 @@ describe('Stats', () => {
         fieldSize: 8,
       })),
     });
-    renderStats();
-    expect(await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS')).toBeInTheDocument();
-    // the tail, not the head: #16..#40 are plotted and #15 is off the left edge
-    expect(screen.getByRole('button', { name: 'Tournament #40' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Tournament #16' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tournament #15' })).not.toBeInTheDocument();
+    const switchGroup = () => screen.getByRole('group', { name: 'Lookback window' });
+
+    beforeEach(() => localStorage.clear());
+
+    // The switch earns its place only once a window says something ALL doesn't.
+    // The stock fixture has exactly 10 tournaments, so 10 is not yet distinct.
+    it('stays hidden until a window would show something ALL does not', async () => {
+      apiMock.playerStats.mockResolvedValue(playerStatsFull);
+      renderStats();
+      expect(await screen.findByText('MATCHPOINTS — LAST 10 TOURNAMENTS')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Lookback window' })).not.toBeInTheDocument();
+    });
+
+    it('offers only the windows shorter than the history, plus ALL', async () => {
+      apiMock.playerStats.mockResolvedValue(longHistory(40));
+      renderStats();
+      await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS');
+      // 100 is longer than the 40 tournaments on file, so it would redraw ALL
+      expect(within(switchGroup()).getAllByRole('button').map((b) => b.textContent)).toEqual(['10', '25', 'ALL']);
+    });
+
+    it('defaults to 25 and keeps the most recent crossings', async () => {
+      apiMock.playerStats.mockResolvedValue(longHistory(40));
+      renderStats();
+      expect(await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS')).toBeInTheDocument();
+      expect(within(switchGroup()).getByRole('button', { name: '25' })).toHaveAttribute('aria-pressed', 'true');
+      // the tail, not the head — #40 is the latest point the scrubber reports
+      expect(screen.getByRole('slider', { name: 'Matchpoints by tournament' })).toHaveAttribute(
+        'aria-valuetext',
+        expect.stringContaining('Tournament #40'),
+      );
+    });
+
+    it('widens to the whole history on ALL and remembers the choice', async () => {
+      apiMock.playerStats.mockResolvedValue(longHistory(40));
+      const { unmount } = renderStats();
+      await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS');
+      await userEvent.click(within(switchGroup()).getByRole('button', { name: 'ALL' }));
+      expect(screen.getByText('MATCHPOINTS — LAST 40 TOURNAMENTS')).toBeInTheDocument();
+
+      unmount();
+      renderStats();
+      expect(await screen.findByText('MATCHPOINTS — LAST 40 TOURNAMENTS')).toBeInTheDocument();
+    });
+
+    // A stored 100 is meaningless on a 40-tournament history; it must not clamp
+    // to a number the switch isn't offering.
+    it('falls back to ALL when the stored window outgrew the history', async () => {
+      localStorage.setItem('nb:lookback', '100');
+      apiMock.playerStats.mockResolvedValue(longHistory(40));
+      renderStats();
+      expect(await screen.findByText('MATCHPOINTS — LAST 40 TOURNAMENTS')).toBeInTheDocument();
+      expect(within(switchGroup()).getByRole('button', { name: 'ALL' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('discloses the Elo replay only on a career-length rating chart', async () => {
+      const restated = /can restate this line/;
+      apiMock.playerStats.mockResolvedValue({
+        ...longHistory(40),
+        eloSeries: Array.from({ length: 40 }, (_, i) => ({
+          tournamentId: i + 1,
+          tournamentName: `Tournament #${i + 1}`,
+          finishedAt: 1_780_000_000 + i * 86_400,
+          elo: 1200 + i,
+        })),
+      });
+      renderStats();
+      await screen.findByText('MATCHPOINTS — LAST 25 TOURNAMENTS');
+      expect(screen.queryByText(restated)).not.toBeInTheDocument();
+      await userEvent.click(within(switchGroup()).getByRole('button', { name: 'ALL' }));
+      expect(screen.getByText(restated)).toBeInTheDocument();
+    });
   });
 
   it('shows the toll log with the window total baked into the heading', async () => {

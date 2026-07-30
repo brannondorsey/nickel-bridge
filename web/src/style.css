@@ -1046,15 +1046,13 @@ a.ds-btn-secondary:hover {
 /* ---- Sparkline ---- */
 .sparkline-plot {
   position: relative;
+  cursor: crosshair;
+  /* the plot scrubs on horizontal drag, so keep vertical scrolling with the page */
+  touch-action: pan-y;
 }
-.sparkline-hits {
-  position: absolute;
-  inset: 0;
-  display: flex;
-}
-.sparkline-hits button {
-  flex: 1;
-  opacity: 0;
+.sparkline-plot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .sparkline-captions {
   display: flex;
@@ -1072,6 +1070,36 @@ a.ds-btn-secondary:hover {
   font-size: 12.5px;
   text-align: center;
   margin-top: 6px;
+}
+.chart-note {
+  margin-top: 9px;
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ---- Lookback window switch (Stats) ----
+   One control above all three charts, never one per panel: three charts that can
+   disagree about which period they show is worse than no control at all. */
+.lookback-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* same 16px horizontal inset as .chart-panel — the row has to line up with the
+     panels it scopes, not with the page edge */
+  margin: 22px 16px 0;
+}
+/* bind the control to the charts below it rather than the panel above: a bigger
+   gap over than under is what says "this belongs to these three" */
+.lookback-row + .chart-panel {
+  margin-top: 8px;
+}
+.lookback-label {
+  color: var(--muted);
+  flex: none;
+}
+.lookback-switch {
+  flex: 1;
 }
 
 /* ---- DayGrid ---- */

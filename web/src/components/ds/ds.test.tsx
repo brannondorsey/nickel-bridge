@@ -336,21 +336,41 @@ describe('Sparkline', () => {
   ];
 
   it('renders a polyline over the value range and a dashed reference line', () => {
-    const { container } = render(<Sparkline points={points} refValue={50} refLabel="field average 50%" />);
+    const { container } = render(
+      <Sparkline points={points} label="Matchpoints" refValue={50} refLabel="field average 50%" />,
+    );
     expect(container.querySelector('polyline')).toBeInTheDocument();
     expect(container.querySelector('.sparkline-ref')).toBeInTheDocument();
     expect(screen.getByText(/field average 50%/)).toBeInTheDocument();
   });
 
-  it('tapping a point shows its detail line', async () => {
-    render(<Sparkline points={points} format={(v) => `${v}%`} />);
-    await userEvent.click(screen.getByRole('button', { name: /Tournament #12/ }));
-    expect(screen.getByText(/61%/)).toBeInTheDocument();
-    expect(screen.getByText(/Jul 13/)).toBeInTheDocument();
+  // The plot is ONE slider, not a button per point — that's what lifts the
+  // lookback ceiling (see Sparkline's doc comment). Selection is by proximity,
+  // so there is nothing per-point in the DOM to query.
+  it('exposes the whole plot as a single scrubber, defaulting to the latest point', () => {
+    render(<Sparkline points={points} label="Matchpoints" format={(v) => `${v}%`} />);
+    const slider = screen.getByRole('slider', { name: 'Matchpoints' });
+    expect(slider).toHaveAttribute('aria-valuemax', '2');
+    expect(slider).toHaveAttribute('aria-valuenow', '2');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Tournament #12, Jul 13, 61%');
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('steps through points with the arrow keys and clears on Escape', async () => {
+    render(<Sparkline points={points} label="Matchpoints" format={(v) => `${v}%`} />);
+    const slider = screen.getByRole('slider');
+    slider.focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(slider).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getByText(/Tournament #11 · Jul 9 · 54%/)).toBeInTheDocument();
+    await userEvent.keyboard('{Home}');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Tournament #10, Jul 2, 47%');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByText(/Tournament #10 ·/)).not.toBeInTheDocument();
   });
 
   it('renders the no-data note when empty', () => {
-    render(<Sparkline points={[]} />);
+    render(<Sparkline points={[]} label="Matchpoints" />);
     expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
   });
 });

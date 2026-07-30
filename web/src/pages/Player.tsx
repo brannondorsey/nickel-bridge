@@ -49,19 +49,71 @@ function ThemeSwitch() {
 }
 
 /**
- * How many tournaments the three sparkline panels look back over. The server
- * sends every series unbounded (stats.ts's pctSeries/eloSeries/accuracySeries),
- * so this is purely a display window — raising it costs no query and no payload.
+ * The lookback window for the three sparkline panels — how many tournaments
+ * back they plot.
  *
- * The ceiling is the chart's tap layer, not the data: Sparkline gives every
- * point a full-height invisible button in a flex row across a ~326px plot, so
- * the per-point target is 326/n — 46px at 7, 33px at 10, 13px at 25, and an
- * untappable 3px at 100. 25 is the last value that stays usable on the 390px
- * phone viewport (and keeps the keyboard tab order to 75 stops across three
- * charts). Going wider than this means replacing the per-point buttons with a
- * single scrubber or binned tap zones, not just changing this number.
+ * The server sends every series unbounded (stats.ts's
+ * pctSeries/eloSeries/accuracySeries) and `fieldPercentiles()` already sweeps
+ * every standard tournament site-wide through the same memoized
+ * `getStandings`, so a player's own tournaments are a subset of a pass that
+ * runs on every profile load: a longer window costs no query, no matchpointing
+ * and (at 100 tournaments, ~7.5KB gzipped) no payload worth counting. The old
+ * ceiling was the chart's tap layer — one invisible button per point across a
+ * ~326px plot, an untappable 3px target at 100 — and Sparkline's scrubber
+ * removed it, which is what makes a window switch possible at all.
+ *
+ * What's left is legibility: past roughly 150 points the line reads as texture
+ * rather than a shape, and the vertical scale spans a whole career so recent
+ * movement flattens. So the *default* stays deliberately short and the reader
+ * opts into more. 25 keeps the panels answering "how am I doing lately", which
+ * is the question they're placed on the page to answer.
  */
-const CHART_TOURNAMENTS = 25;
+const DEFAULT_LOOKBACK = 25;
+
+/**
+ * The windows the switch can offer, shortest first. A window is only offered
+ * once it's a genuinely distinct choice — see `offeredWindows` — so a player
+ * with 12 crossings is never shown a "100" that would draw the same chart as
+ * ALL. `all` is always the last option when any window qualifies.
+ */
+const CHART_WINDOWS = [10, 25, 100] as const;
+
+type Lookback = (typeof CHART_WINDOWS)[number] | 'all';
+
+const LOOKBACK_KEY = 'nb:lookback';
+
+/**
+ * Which fixed windows are worth showing for a history of `longest` tournaments.
+ *
+ * Strictly less than, not `<=`: a 25 window over a 25-tournament history plots
+ * exactly what ALL plots, and a button that redraws the same chart is a button
+ * that does nothing. This also means the switch itself stays hidden until the
+ * 11th crossing, where "last 10" first says something ALL doesn't — before
+ * that the panels behave exactly as they did with no control at all.
+ */
+function offeredWindows(longest: number): (typeof CHART_WINDOWS)[number][] {
+  return CHART_WINDOWS.filter((w) => w < longest);
+}
+
+/** Best-effort read; unreadable storage or an unrecognized stamp falls back to the default. */
+function readLookback(): Lookback {
+  try {
+    const v = localStorage.getItem(LOOKBACK_KEY);
+    if (v === 'all') return 'all';
+    const n = Number(v);
+    return (CHART_WINDOWS as readonly number[]).includes(n) ? (n as Lookback) : DEFAULT_LOOKBACK;
+  } catch {
+    return DEFAULT_LOOKBACK;
+  }
+}
+
+function storeLookback(v: Lookback) {
+  try {
+    localStorage.setItem(LOOKBACK_KEY, String(v));
+  } catch {
+    /* private mode — the preference just doesn't persist */
+  }
+}
 
 /**
  * Smoothing window for the bid-accuracy trend overlay, as a fraction of the
@@ -218,6 +270,7 @@ export default function Player() {
   const [error, setError] = useState('');
   const [bidLedgerOpen, setBidLedgerOpen] = useState(false);
   const [ledgerView, setLedgerView] = useState<'type' | 'convention'>('type');
+  const [lookbackPref, setLookbackPref] = useState<Lookback>(() => readLookback());
 
   useEffect(() => {
     setStats(null);
@@ -284,7 +337,16 @@ export default function Player() {
     year: 'numeric',
   });
 
-  const recent = <T,>(xs: T[]) => xs.slice(-CHART_TOURNAMENTS);
+  // The switch is shared by all three charts, so what it can offer is driven by
+  // the longest of them — a window any one chart can use is worth offering.
+  const graded = stats.accuracySeries.filter((p) => p.accuracy !== null);
+  const windows = offeredWindows(Math.max(stats.pctSeries.length, stats.eloSeries.length, graded.length));
+  // A stored preference that this history can't support (or 'all') resolves to
+  // ALL rather than silently clamping to a number the switch isn't showing.
+  const lookback: Lookback =
+    lookbackPref !== 'all' && (windows as number[]).includes(lookbackPref) ? lookbackPref : 'all';
+  const recent = <T,>(xs: T[]) => (lookback === 'all' ? xs : xs.slice(-lookback));
+
   const pctPoints = recent(stats.pctSeries).map((p) => ({
     label: p.tournamentName,
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
@@ -295,7 +357,7 @@ export default function Player() {
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.elo,
   }));
-  const accPoints = recent(stats.accuracySeries.filter((p) => p.accuracy !== null)).map((p) => ({
+  const accPoints = recent(graded).map((p) => ({
     label: p.tournamentName,
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.accuracy!,
@@ -403,12 +465,35 @@ export default function Player() {
             ) : null}
           </PerforatedPanel>
 
+          {windows.length > 0 ? (
+            <div className="lookback-row">
+              <span className="label-caps lookback-label">LOOKBACK</span>
+              <div className="theme-switch lookback-switch" role="group" aria-label="Lookback window">
+                {[...windows, 'all' as const].map((w) => (
+                  <button
+                    key={String(w)}
+                    type="button"
+                    className={w === lookback ? 'active' : ''}
+                    aria-pressed={w === lookback}
+                    onClick={() => {
+                      setLookbackPref(w);
+                      storeLookback(w);
+                    }}
+                  >
+                    {w === 'all' ? 'ALL' : w}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <ChartPanel
             heading={`MATCHPOINTS — LAST ${pctPoints.length} TOURNAMENT${pctPoints.length === 1 ? '' : 'S'}`}
             figure={t.avgPct !== null ? `Ø ${t.avgPct}%` : undefined}
           >
             <Sparkline
               points={pctPoints}
+              label="Matchpoints by tournament"
               refValue={50}
               refLabel="field average 50%"
               leftCaption={ago(pctPoints.length)}
@@ -418,7 +503,24 @@ export default function Player() {
 
           {!house ? (
             <ChartPanel heading="RATING BY TOURNAMENT" figure={`PEAK ${t.peakElo}`}>
-              <Sparkline points={eloPoints} refValue={1200} refLabel="start 1200" leftCaption={ago(eloPoints.length)} />
+              <Sparkline
+                points={eloPoints}
+                label="Rating by tournament"
+                refValue={1200}
+                refLabel="start 1200"
+                leftCaption={ago(eloPoints.length)}
+              />
+              {/* Elo is wiped and replayed from every crossing on each scored board
+                  (server/src/tournaments.ts), so this line is today's reconstruction
+                  rather than a diary. Over a short window that's a wobble nobody
+                  notices; drawn as a career arc it reads as a record of what the
+                  player saw at the time, so say so — the same disclosure the
+                  activity feed makes in its footer. */}
+              {lookback === 'all' && eloPoints.length > DEFAULT_LOOKBACK ? (
+                <div className="chart-note">
+                  <GlossaryProse text="Ratings are replayed from every crossing whenever a board is scored, so an old tournament finishing today can restate this line." />
+                </div>
+              ) : null}
             </ChartPanel>
           ) : null}
 
@@ -428,6 +530,7 @@ export default function Player() {
           >
             <Sparkline
               points={accPoints}
+              label="Bid accuracy by tournament"
               trendWindow={trendWindow(accPoints.length)}
               leftCaption={ago(accPoints.length)}
               rightCaption="latest · - - trend"
