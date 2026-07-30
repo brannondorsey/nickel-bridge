@@ -49,8 +49,8 @@
  * need comes from a Configuration Rule, so until that rule exists a proxied host falls back
  * to the zone default — and if that default is Flexible, fly.toml's `force_https = true`
  * makes an infinite redirect loop that the cache rule would then pin at the edge for the
- * full TTL. Merge first, let deploy-demo run `--apply` while the record is still grey (the rules are
- * inert with no traffic matching them), and only then flip the cloud.
+ * full TTL. Merge first, let deploy-production run `--apply` while the record is still grey
+ * (the rules are inert with no traffic matching them), and only then flip the cloud.
  *
  * KNOWN LIMITATION: query strings always reach the origin. Cloudflare's cache key includes
  * the query string and custom cache keys are Enterprise, so a cached `/?utm_source=…` could
