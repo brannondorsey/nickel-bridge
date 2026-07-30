@@ -139,19 +139,25 @@ jobs:
             flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
           fi
           flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo-bridge.brannon.online" --app "$APP"
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: 24
+      # Must run BEFORE the deploy: it records what the origin serves now, so the purge can
+      # tell what this deploy actually changed. Costs at most one wake, and usually not even
+      # that — the deploy immediately after would have woken the machine anyway.
+      - name: Snapshot origin before deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node scripts/cloudflare.mjs --snapshot --host=demo-bridge.brannon.online --out=/tmp/cf-before.json
       - name: Deploy demo
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
       # `--apply` deliberately does NOT run here: the ruleset is zone-wide, exactly one job
       # may write it, and deploy-production owns it now that production is fronted too. This
       # job purges only its own host, because the two apps deploy independently and dropping
       # the other one's pages would discard good cache entries.
-      - uses: actions/setup-node@v4
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        with:
-          node-version: 24
       - name: Purge the demo app's cached pages
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: node scripts/cloudflare.mjs --purge --host=demo-bridge.brannon.online
+        run: node scripts/cloudflare.mjs --purge --host=demo-bridge.brannon.online --since=/tmp/cf-before.json
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
   # exist (see README.md "Deployment" — one-time manual setup, not done by this workflow).
@@ -180,15 +186,19 @@ jobs:
             echo "::error::DEV_AUTH/DEMO secret found on the production app — remove it before deploying"
             exit 1
           fi
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: 24
+      # Must run BEFORE the deploy — see the same step in deploy-demo for why.
+      - name: Snapshot origin before deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node scripts/cloudflare.mjs --snapshot --host=bridge.brannon.online --out=/tmp/cf-before.json
       - run: flyctl deploy --app nickel-bridge --config fly.toml --remote-only --ha=false
       # This job owns `--apply`: the ruleset is zone-wide, so exactly one job may write it,
       # and production is the natural owner now that it is fronted too. deploy-demo keeps
       # only its own scoped purge. Purging is `--host`-scoped because the two apps deploy
       # independently, and dropping the other one's pages would discard good cache entries.
-      - uses: actions/setup-node@v4
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        with:
-          node-version: 24
       - name: Reconcile Cloudflare edge config
         id: cf_apply
         if: env.CLOUDFLARE_API_TOKEN != ''
@@ -199,7 +209,7 @@ jobs:
       # just changed behind a 30-day edge TTL. The two concerns are independent.
       - name: Purge production's cached pages
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: node scripts/cloudflare.mjs --purge --host=bridge.brannon.online
+        run: node scripts/cloudflare.mjs --purge --host=bridge.brannon.online --since=/tmp/cf-before.json
       - name: Fail the deploy if the edge config could not be reconciled
         if: env.CLOUDFLARE_API_TOKEN != '' && steps.cf_apply.outcome == 'failure'
         run: |

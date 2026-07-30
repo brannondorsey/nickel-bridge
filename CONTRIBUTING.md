@@ -148,7 +148,9 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
-                --plan/--apply/--check/--purge[--force]/--audit, see "The edge" below),
+                --plan/--apply/--check/--snapshot/--purge[--since|--force]/--audit; the purge
+                compares ORIGIN bytes before vs after a deploy and must never be rewritten to
+                ask the edge, see "The edge" below),
                 fly-uptime.mjs (machine time per day from Fly's Prometheus — the metric
                 the edge work is judged by; read its header before trusting a number,
                 that API punishes two obvious approaches), og-image.mjs (regenerates the
@@ -478,20 +480,45 @@ Free plan allows. The zone default is read and reported, never written. `always_
 deliberately unmanaged for the same reason — zone-only, no per-host equivalent, and worth one
 saved redirect at most; a scoped Redirect Rule is the way if it is ever wanted.
 
-**`--purge` only drops what actually changed.** Most deploys touch no web output, so the built
-`index.html`, the prerendered pages and the generated `robots.txt` come out byte-identical —
-and purging them throws away a warm cache for nothing. That is the biggest remaining lever on
-origin wakes, because a cold fill costs a full idle window *per PoP* (Cloudflare's cache is
-per-PoP), and with ~13 PoPs and ~3 deploys/day it is the purge rate, not the TTL, that bounds
-the hit rate. So every URL is compared against origin truth — fetched from `<app>.fly.dev`,
-which is never proxied and so cannot be answered from the cache being evaluated — and only the
-differing ones are purged. `robots.txt` is why that comparison runs against the origin rather
-than `web/dist`: it is generated at runtime from `seo.ts`, so no build artifact exists to
-diff. The comparison is deliberately **fail-safe** — a non-200, an unreachable host, a length
-mismatch or any thrown error all resolve to "purge" — because purging something unchanged
-costs one cold fill, while skipping something that *did* change serves a page referencing
-asset hashes the new build deleted, for up to the full 30-day TTL. `--purge --force` skips
-the comparison entirely.
+**`--purge` only drops what actually changed, and it asks the ORIGIN, never the edge.** Most
+deploys touch no web output, so the built `index.html`, the prerendered pages and the generated
+`robots.txt` come out byte-identical — and purging them throws away a warm cache for nothing.
+That matters because a cold fill costs a full idle window *per PoP*, and with ~13 PoPs and ~3
+deploys/day it is the purge rate, not the TTL, that bounds the hit rate.
+
+So `deploy-*` runs `--snapshot --out=…` **before** `flyctl deploy`, recording what
+`<app>.fly.dev` serves for a small sample, and `--purge --since=…` after it re-reads the same
+sample and purges what moved. `robots.txt` is why the comparison runs against a live origin
+rather than `web/dist`: it is generated at runtime from `seo.ts`, so no build artifact exists to
+diff — and the deploy jobs never run `npm run build` anyway.
+
+**Do not "simplify" this into asking the edge what it is serving.** That was the original
+implementation and it was wrong in the direction that silently breaks pages: Cloudflare's cache
+is per-PoP, and a plain `fetch` reaches exactly one PoP, whichever is nearest the runner. A URL
+cold *there* misses, fills from origin, compares byte-identical, and is skipped — while every
+other PoP keeps the previous build for up to the full 30-day TTL. The comparison also warms the
+runner's PoP, so the one vantage point it can see is the one it just repaired. On the
+2026-07-30 deploy of #111, which moved the bundle hash and therefore all 132 URLs, it reported
+`1/132 urls differ` and purged one; IAD went on serving `/glossary` at age 12 h referencing
+`/assets/index-3uRpM-0Y.js`, a filename that at origin returns the SPA fallback as `text/html`.
+The origin has the property the edge lacks — one machine, same bytes for every caller.
+
+Sampling ~8 URLs answers for all 132 because the prerendered pages are not independent: each is
+a copy of the same built `index.html` with its head span and `#root` swapped, so all of them
+embed that build's content-hashed `/assets/index-<hash>.js` and move together. `/` alone would
+do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata change, which the
+prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML set; the
+four static files purge individually.
+
+Every unknown resolves to **purge everything**: a missing or unreadable snapshot, a snapshot
+whose sample set no longer matches (terms.ts changed shape), or a non-200 on either side.
+Purging something unchanged costs one cold fill; skipping something that *did* change serves a
+page referencing deleted asset hashes for up to 30 days. `--purge --force` skips the comparison
+entirely, and a deploy that changed nothing never calls the Cloudflare API at all.
+
+The one thing the per-deploy purge **cannot** do is repair staleness left by an earlier missed
+or failed purge — it only knows about its own deploy. `edge-upkeep.yml` runs `--purge --force`
+weekly for that, which is also what recovers the damage the edge-sampling version already did.
 
 Exactly one job may write the zone-wide ruleset, and `deploy-production` is it: it runs
 `--apply` (as `continue-on-error`, then fails the job in a later step) plus
@@ -501,8 +528,8 @@ purpose — a refused apply means the zone holds a rule this script does not own
 human, and is no reason to also strand the HTML this deploy just changed behind a 30-day edge
 TTL. `--host` scoping matters because the two apps deploy independently and purging the other's
 pages would discard good cache entries.
-`.github/workflows/edge-upkeep.yml` runs `--check` (drift) and `--audit` (cert + cache health,
-per host) weekly. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
+`.github/workflows/edge-upkeep.yml` runs `--check` (drift), `--audit` (cert + cache health,
+per host) and a full `--purge --force` weekly. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
 how to verify a fronted host end to end, and how to measure whether the fronting actually
 bought machine time. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
 until that secret exists.

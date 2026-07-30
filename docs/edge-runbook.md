@@ -151,10 +151,9 @@ to expiry, `validationErrors`, and the one combination that is definitely broken
 TLS-ALPN as the only configured validation method) — deliberately not "is DNS-01 configured",
 which is the method Fly says collides with Cloudflare's Universal SSL records.
 
-**7. Purge correctness, across a real deploy.** This is the only check that exercises
-`shouldPurge`, and the only one that can catch the expensive failure. Capture the asset hash the
-edge is serving, push a web-affecting change to `main`, wait for `deploy-production`, then
-re-read it:
+**7. Purge correctness, across a real deploy.** The only check that exercises the purge, and
+the only one that can catch the expensive failure. Capture the asset hash the edge is serving,
+push a web-affecting change to `main`, wait for `deploy-production`, then re-read it:
 
 ```bash
 curl -sS "https://$HOST/" | grep -o '/assets/[^"]*\.js'
@@ -165,10 +164,27 @@ curl -sS -o /dev/null -w '%{http_code}\n' "https://$HOST$(curl -sS "https://$HOS
 
 The filename must change, and it must 200. Do the same for one glossary term page — those are
 prerendered copies of the shell, so every deploy invalidates all ~125 of them, which is why
-`purgeUrls()` enumerates them from `terms.ts`. Conversely, a deploy that touches no web output
-should purge **nothing**: `--purge` compares each URL against origin bytes first, and the CI log
-says which ones it dropped. Seeing "0 changed" on a server-only deploy is the behaviour working,
-not a bug — a needless purge costs one cold fill *per PoP*.
+`purgeUrls()` enumerates them from `terms.ts`. In the CI log the purge step should say
+`128/132 paths changed by this deploy` for a web-affecting deploy. Conversely, a deploy that
+touches no web output should purge **nothing** — `0/132`, and it never calls the Cloudflare API.
+Seeing that on a server-only deploy is the behaviour working, not a bug: a needless purge costs
+one cold fill *per PoP*.
+
+**Check this from more than one PoP.** The failure this replaced was invisible from a single
+vantage point — Cloudflare's cache is per-PoP, and the old check sampled the edge from the CI
+runner, which both mis-answered and self-repaired the one PoP it could see. `cf-ray`'s suffix
+names the colo that answered you, so compare two:
+
+```bash
+curl -sSI "https://$HOST/glossary" | grep -iE 'cf-ray|^age'      # e.g. ...-IAD
+curl -sSI --resolve "$HOST:443:$(dig +short $HOST | tail -1)" "https://$HOST/glossary" | grep -i cf-ray
+```
+
+Two PoPs disagreeing about `/glossary`'s `age` by hours, after a deploy that reported a purge,
+is the signature of that bug returning. The asset filename embedded in the page is the sharper
+tell: any page still naming a filename the origin no longer has is stale, and origin answers a
+deleted asset with the SPA fallback as `text/html` at **200**, so check the content type, not
+the status code.
 
 ## Proving the fix was meaningful
 
@@ -241,4 +257,5 @@ it from the user agents and paths in the log, not from `cf-cache-status` on a ha
 | A path that should cache reports `DYNAMIC` | Query string (the rule requires an empty query), or the route's `indexed` flag in `seo.ts` |
 | An `/api` path reports `HIT`/`MISS` | Stop. That is the leak invariant. Run `--check`, and if the live ruleset holds a rule the script doesn't own, `--apply` will have refused — a human has to reconcile it |
 | `--apply` refuses to write | The zone holds a Cache or Configuration Rule without the `[nickel-bridge]` prefix. It names it. Move it into this script or out of these two phases; do not hand-merge |
-| A page 404s on its assets after a deploy | A missed purge. `--purge --force` recovers it; then work out why `shouldPurge` compared equal |
+| A page 404s on its assets after a deploy | A missed purge. `--purge --force` recovers it; then work out why the before/after origin comparison saw no change. If only *some* PoPs are affected, suspect that the purge is sampling the edge again rather than the origin |
+| A page's assets return 200 but as `text/html` | Same thing seen from the other end — that is the SPA fallback answering for a file the build deleted. The page is stale, not the asset |
