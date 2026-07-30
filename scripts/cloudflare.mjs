@@ -591,7 +591,7 @@ async function check() {
  * sampled paths change with it, and a snapshot whose path set no longer matches is treated as
  * unusable — i.e. purge everything. That is the safe direction.
  */
-function samplePaths() {
+export function samplePaths() {
   const slugs = [TERMS[0]?.slug, TERMS[TERMS.length - 1]?.slug].filter(Boolean);
   return ['/', '/glossary', ...slugs.map((s) => `/glossary/${s}`), ...STATIC_FILES];
 }
@@ -664,7 +664,7 @@ async function mapLimit(items, limit, fn) {
  * Decide, from before/after ORIGIN bytes, which of this host's cached paths this deploy
  * changed. Returns null to mean "cannot tell — purge everything".
  */
-function changedPaths(site, before, allPaths, after, paths) {
+export function changedPaths(site, before, allPaths, after, paths) {
   if (!before || before.version !== 1) return null;
   const prev = before.sites?.[site.host];
   if (!prev) return null;
@@ -672,16 +672,26 @@ function changedPaths(site, before, allPaths, after, paths) {
   // compared path-for-path, and guessing would be a silent under-purge.
   if (paths.length !== before.paths?.length || paths.some((p, i) => p !== before.paths[i])) return null;
 
+  // The two halves are independent and BOTH must be collected: an HTML sample moving expands
+  // to the whole prerendered set, while a static file moving purges just itself. Returning
+  // the moment an HTML sample differs would drop every static file later in the array —
+  // and since samplePaths() lists the HTML samples first, that meant a deploy which changed
+  // both (editing seo.ts's route flags changes the prerendered pages AND the runtime-generated
+  // robots.txt — the documented way to add an indexable route) purged the pages and left
+  // robots.txt stale for the full month. Silent, and the exact failure this purge exists to
+  // prevent.
   const changed = new Set();
+  let htmlChanged = false;
   for (const p of paths) {
     const a = prev[p];
     const b = after[p];
     // An unreadable read on EITHER side is unknown, not unchanged.
     if (!a || !b || a !== b) {
-      if (isHtmlSample(p)) return allPaths.filter((q) => !STATIC_FILES.includes(q));
-      changed.add(p);
+      if (isHtmlSample(p)) htmlChanged = true;
+      else changed.add(p);
     }
   }
+  if (htmlChanged) for (const p of allPaths) if (!STATIC_FILES.includes(p)) changed.add(p);
   return [...changed];
 }
 

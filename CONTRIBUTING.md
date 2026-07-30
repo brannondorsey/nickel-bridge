@@ -510,6 +510,12 @@ do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata c
 prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML set; the
 four static files purge individually.
 
+Both halves are collected independently: an HTML sample moving expands to the whole HTML set,
+a static file moving purges just itself, and a deploy that does both purges both. That is not a
+hypothetical pairing — editing `seo.ts`'s route flags is the documented way to add an indexable
+route, and it changes the prerendered pages and the runtime-generated `robots.txt` in the same
+deploy. `server/test/cloudflare-purge.test.ts` pins it, along with every give-up case.
+
 Every unknown resolves to **purge everything**: a missing or unreadable snapshot, a snapshot
 whose sample set no longer matches (terms.ts changed shape), or a non-200 on either side.
 Purging something unchanged costs one cold fill; skipping something that *did* change serves a
@@ -529,7 +535,8 @@ human, and is no reason to also strand the HTML this deploy just changed behind 
 TTL. `--host` scoping matters because the two apps deploy independently and purging the other's
 pages would discard good cache entries.
 `.github/workflows/edge-upkeep.yml` runs `--check` (drift), `--audit` (cert + cache health,
-per host) and a full `--purge --force` weekly. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
+per host) and a full `--purge --force` weekly — all three fold into the job's pass/fail, since a
+repair pass that silently stopped running is the same as not having one. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
 how to verify a fronted host end to end, and how to measure whether the fronting actually
 bought machine time. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
 until that secret exists.

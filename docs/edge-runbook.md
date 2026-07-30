@@ -165,7 +165,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' "https://$HOST$(curl -sS "https://$HOS
 The filename must change, and it must 200. Do the same for one glossary term page — those are
 prerendered copies of the shell, so every deploy invalidates all ~125 of them, which is why
 `purgeUrls()` enumerates them from `terms.ts`. In the CI log the purge step should say
-`128/132 paths changed by this deploy` for a web-affecting deploy. Conversely, a deploy that
+`128/132 paths changed by this deploy` for a web-affecting deploy — or `130/132` if the same
+deploy also changed `robots.txt`/`sitemap.xml`, which an edit to `seo.ts`'s route flags does. Conversely, a deploy that
 touches no web output should purge **nothing** — `0/132`, and it never calls the Cloudflare API.
 Seeing that on a server-only deploy is the behaviour working, not a bug: a needless purge costs
 one cold fill *per PoP*.
