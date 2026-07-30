@@ -110,7 +110,7 @@ jobs:
 
             Or log in with any name — dev auth is enabled on preview apps only, no Google account needed.
 
-  # Keeps the single permanent demo instance (nickel-bridge-demo, demo.bridge.brannon.online)
+  # Keeps the single permanent demo instance (nickel-bridge-demo, demo-bridge.brannon.online)
   # in lockstep with production code on every push to main. Same DEMO/DEV_AUTH shape as PR
   # previews — it is deliberately NOT production, so invariant 5 (which is scoped to the
   # production app) does not apply here. Unlike previews it never gets torn down: it's a
@@ -138,7 +138,7 @@ jobs:
           if [ "$count" -eq 0 ]; then
             flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
           fi
-          flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo.bridge.brannon.online" --app "$APP"
+          flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo-bridge.brannon.online" --app "$APP"
       - name: Deploy demo
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
       # STAGED ROLLOUT: demo is the only host behind Cloudflare for now, so this job owns
@@ -164,7 +164,7 @@ jobs:
       # one reconciles rules, the other drops content those rules already cached.
       - name: Purge the demo app's cached pages
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: node scripts/cloudflare.mjs --purge --host=demo.bridge.brannon.online
+        run: node scripts/cloudflare.mjs --purge --host=demo-bridge.brannon.online
       - name: Fail the deploy if the edge config could not be reconciled
         if: env.CLOUDFLARE_API_TOKEN != '' && steps.cf_apply.outcome == 'failure'
         run: |

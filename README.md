@@ -41,7 +41,7 @@ no account at all, along with [the glossary](https://bridge.brannon.online/gloss
 [the rankings](https://bridge.brannon.online/leaderboard) — where the house players'
 records are open to anyone (real players' are not). Signing in is what gets you a
 seat at a real tournament. (For a fuller poke around, including a gallery of prepared
-boards, [demo.bridge.brannon.online/demo](https://demo.bridge.brannon.online/demo) drops
+boards, [demo-bridge.brannon.online/demo](https://demo-bridge.brannon.online/demo) drops
 you in as a guest with a seeded field behind you.)
 
 <details>
@@ -195,7 +195,7 @@ CI (`.github/workflows/ci.yml`) deploys automatically once CI passes:
 - **Every push to `main`** deploys straight to the production app (`nickel-bridge`), no manual
   approval step.
 - **Every push to `main` also redeploys the permanent demo app** (`nickel-bridge-demo`,
-  https://demo.bridge.brannon.online) — same `DEMO=1`/`DEV_AUTH=1` shape as previews, but at a
+  https://demo-bridge.brannon.online) — same `DEMO=1`/`DEV_AUTH=1` shape as previews, but at a
   stable URL that never gets torn down. It exists as a canonical target for automation (e.g.
   pointing an AI agent at the app to explore it) and occasional human click-testing, unlike
   per-PR preview URLs that die when the PR closes. Visit `/demo` to be signed in as the
@@ -246,9 +246,9 @@ deploy).
 8. Point the demo domain at the demo app. Unlike production, there is no manual app/volume/
    secrets creation here — the `deploy-demo` CI job self-provisions all of that on the first
    push to `main` (and the app is reachable at `https://nickel-bridge-demo.fly.dev` right
-   away). After that first deploy, run `fly certs add demo.bridge.brannon.online --app
-   nickel-bridge-demo`, add a **DNS-only** (unproxied) CNAME `demo.bridge →
-   nickel-bridge-demo.fly.dev`, and wait for `fly certs check demo.bridge.brannon.online
+   away). After that first deploy, run `fly certs add demo-bridge.brannon.online --app
+   nickel-bridge-demo`, add a **DNS-only** (unproxied) CNAME `demo-bridge →
+   nickel-bridge-demo.fly.dev`, and wait for `fly certs check demo-bridge.brannon.online
    --app nickel-bridge-demo` to go green. Same caveat as step 6: start DNS-only, and see
    "Putting Cloudflare in front" before proxying.
 
@@ -268,6 +268,13 @@ design and the invariants.
 
 This is **off until you set the secret** — merging the code changes nothing. To turn it on:
 
+0. **Check the hostname's depth first.** Free Universal SSL is issued for `brannon.online` and
+   `*.brannon.online`, and a wildcard matches exactly one label — so `demo.bridge.brannon.online`
+   has no edge certificate and proxying it fails the TLS handshake outright, taking the site
+   down before any rule is consulted. Fronted hosts must sit **one** label below the apex
+   (`demo-bridge`, not `demo.bridge`). Deeper names need Advanced Certificate Manager or Total
+   TLS, both paid. `scripts/cloudflare.mjs` asserts this, so CI fails rather than letting you
+   find out by flipping the switch.
 1. Mint a Cloudflare API token scoped to the one zone, with exactly:
    *Zone* → **Zone**:Read, **Cache Rules**:Edit, **Config Rules**:Edit, **Cache Purge**:Purge,
    **Zone Settings**:Read. Add it as the repo secret `CLOUDFLARE_API_TOKEN`. (Config Rules is

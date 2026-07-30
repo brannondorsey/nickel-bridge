@@ -112,9 +112,37 @@ const API = 'https://api.cloudflare.com/client/v4';
  */
 const SITES = [
   // { host: 'bridge.brannon.online', app: 'nickel-bridge' }, // follow-up, after demo is proven
-  { host: 'demo.bridge.brannon.online', app: 'nickel-bridge-demo' },
+  { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo' },
 ];
 const HOSTS = SITES.map((s) => s.host);
+
+/**
+ * Every fronted host must sit exactly one label below the zone apex.
+ *
+ * Cloudflare's free Universal SSL covers the apex and *first-level* subdomains only — it is
+ * issued for `brannon.online` and `*.brannon.online`, and a wildcard matches one label. So a
+ * third-level name like `demo.bridge.brannon.online` has no edge certificate, and proxying it
+ * fails the TLS handshake outright: the site is simply down, before any rule here is
+ * consulted. That is not theoretical — it is exactly what happened when demo was first
+ * flipped to orange, and it is why demo now lives at `demo-bridge.brannon.online`.
+ *
+ * Covering deeper names needs Advanced Certificate Manager or Total TLS, both paid, and both
+ * costing more than the machine time this whole exercise saves. So the constraint is asserted
+ * rather than documented: CI's `--plan` fails on a host that could not be served.
+ */
+for (const { host } of SITES) {
+  if (!host.endsWith(`.${ZONE_NAME}`)) {
+    throw new Error(`INVARIANT: ${host} is not under the zone ${ZONE_NAME}.`);
+  }
+  const labels = host.slice(0, -(ZONE_NAME.length + 1)).split('.');
+  if (labels.length !== 1) {
+    throw new Error(
+      `INVARIANT: ${host} is ${labels.length} labels below ${ZONE_NAME}; free Universal SSL ` +
+        `covers only one, so proxying it would fail TLS. Use a single-label host ` +
+        `(e.g. ${labels.join('-')}.${ZONE_NAME}) or buy Advanced Certificate Manager.`,
+    );
+  }
+}
 
 /** Vite content-hashes everything here, so a new build means a new filename. */
 const IMMUTABLE_PREFIX = '/assets/';
@@ -747,7 +775,7 @@ async function auditSite(site, fail) {
       //
       // These isAcme*Configured flags are a cache — Fly only recomputes them when it
       // re-validates, so a correctly configured host reads stale here until something pokes
-      // it. That is not hypothetical: demo.bridge.brannon.online sat at [tls-alpn] with its
+      // it. That is not hypothetical: demo-bridge.brannon.online sat at [tls-alpn] with its
       // _fly-ownership TXT already published and live in DNS, and a single `fly certs check`
       // flipped it to [tls-alpn,http-01]. So lead with the re-check: it is the cheaper and
       // more likely fix, and doing it first turns a confusing false alarm into one command.
