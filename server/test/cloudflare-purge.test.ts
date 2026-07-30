@@ -85,3 +85,26 @@ describe('purge decision', () => {
     expect(decide(stale, unchanged())).toBeNull();
   });
 });
+
+/**
+ * Cloudflare alphabetizes `action_parameters` keys on the way back out, while we author them
+ * in reading order. JSON.stringify is key-order sensitive, so --check reported drift on every
+ * run even when every value matched — a permanently red weekly job, which is the one outcome
+ * the check's own doc comment warns is useless.
+ */
+describe('rule comparison canonicalization', () => {
+  it('ignores key order but preserves array order', async () => {
+    const { canonical } = await import(resolve(root, 'scripts/cloudflare.mjs'));
+    const live = { browser_ttl: { default: 300, mode: 'override_origin' }, cache: true };
+    const desired = { cache: true, browser_ttl: { mode: 'override_origin', default: 300 } };
+    expect(JSON.stringify(canonical(live))).toBe(JSON.stringify(canonical(desired)));
+    // Order IS significant for rules and status_code_ttl, so arrays must not be sorted — even
+    // though the objects inside them ARE. The first element has keys worth sorting so both
+    // behaviours are pinned at once, and the values are chosen so that sorting the array WOULD
+    // move {a:2} to the front — otherwise the assertion passes either way. Compared as a string
+    // because toEqual ignores the very key order this function exists to normalize.
+    expect(JSON.stringify(canonical([{ z: 1, m: 0 }, { a: 2 }]))).toBe('[{"m":0,"z":1},{"a":2}]');
+    // Real differences must still be caught.
+    expect(JSON.stringify(canonical({ cache: true }))).not.toBe(JSON.stringify(canonical({ cache: false })));
+  });
+});

@@ -430,13 +430,36 @@ const CONFIG_PHASE = 'http_config_settings';
  */
 const RULE_TAG = '[nickel-bridge]';
 
+/**
+ * Recursively sort object keys so two structurally identical objects stringify identically.
+ *
+ * Cloudflare returns `action_parameters` with its keys ALPHABETIZED, while we author them in
+ * the order that reads best (`cache`, then `edge_ttl`, then `browser_ttl`). JSON.stringify is
+ * key-order sensitive, so comparing the two reported drift on every single run even though
+ * every value matched — `{browser_ttl, cache, edge_ttl}` vs `{cache, edge_ttl, browser_ttl}`,
+ * and `{default, mode}` vs `{mode, default}` one level down. Arrays keep their order, which
+ * matters: rule order is significant in a ruleset, and so is status_code_ttl's.
+ */
+export function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((k) => [k, canonical(value[k])]),
+    );
+  }
+  return value;
+}
+
 /** Compare only the fields we manage, so Cloudflare's server-side additions aren't "drift". */
-const shape = (r) => ({
-  description: r.description,
-  expression: r.expression,
-  action: r.action,
-  action_parameters: r.action_parameters,
-});
+const shape = (r) =>
+  canonical({
+    description: r.description,
+    expression: r.expression,
+    action: r.action,
+    action_parameters: r.action_parameters,
+  });
 
 /** Read a phase entrypoint's rules, treating "no such ruleset yet" as empty. */
 async function liveRules(id, phase) {
