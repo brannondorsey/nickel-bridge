@@ -38,8 +38,9 @@
  *   node scripts/cloudflare.mjs --plan     # print desired config, check invariants (no token)
  *   node scripts/cloudflare.mjs --apply    # reconcile Cloudflare to it (idempotent)
  *   node scripts/cloudflare.mjs --check    # fail if live config has drifted from desired
- *   node scripts/cloudflare.mjs --purge    # drop cached pages the deploy actually changed
- *   node scripts/cloudflare.mjs --purge --force   # ...or all of them, no comparison
+ *   node scripts/cloudflare.mjs --snapshot --out=f  # record origin bytes BEFORE deploying
+ *   node scripts/cloudflare.mjs --purge --since=f   # drop what the deploy actually changed
+ *   node scripts/cloudflare.mjs --purge --force     # ...or all of them, no comparison
  *   node scripts/cloudflare.mjs --audit    # cert + cache health; fails on anything actionable
  *
  * --purge and --audit take `--host=<one of SITES>` to act on a single deployment; without it
@@ -49,8 +50,8 @@
  * need comes from a Configuration Rule, so until that rule exists a proxied host falls back
  * to the zone default — and if that default is Flexible, fly.toml's `force_https = true`
  * makes an infinite redirect loop that the cache rule would then pin at the edge for the
- * full TTL. Merge first, let deploy-demo run `--apply` while the record is still grey (the rules are
- * inert with no traffic matching them), and only then flip the cloud.
+ * full TTL. Merge first, let deploy-production run `--apply` while the record is still grey
+ * (the rules are inert with no traffic matching them), and only then flip the cloud.
  *
  * KNOWN LIMITATION: query strings always reach the origin. Cloudflare's cache key includes
  * the query string and custom cache keys are Enterprise, so a cached `/?utm_source=…` could
@@ -94,16 +95,20 @@ const API = 'https://api.cloudflare.com/client/v4';
 /**
  * Every host fronted by this config, with the Fly app behind it.
  *
- * STAGED ROLLOUT — the demo app only, for now. Production is commented out deliberately and
- * goes in as a follow-up once demo has been verified end to end behind the proxy. Demo is
- * the right place to prove it: it has no human users whatsoever and still burned 1.8 h/day
- * answering crawlers, so the effect is measurable there without a real player ever seeing a
- * mis-cached page. Uncommenting the row is the entire prod change — the rules, invariants,
- * purge list and audit are all derived per host, so nothing else needs editing.
+ * Both are fronted now. Demo went first and was verified end to end behind the proxy — TLS
+ * clean, the crawler surface HITting, /api/me and /demo DYNAMIC, edge bytes identical to
+ * origin — before production followed; adding production was literally uncommenting its row,
+ * because the rules, invariants, purge list and audit are all derived per host.
  *
- * When production is added, its rules will be identical rather than special-cased: the route
- * table is the same in both deployments (only robots.txt's *content* differs, via DEMO=1's
- * throwaway-origin branch), so a second rule shape would be a difference with no cause.
+ * Their rules are identical rather than special-cased: the route table is the same in both
+ * deployments (only robots.txt's *content* differs, via DEMO=1's throwaway-origin branch), so
+ * a second rule shape would be a difference with no cause behind it.
+ *
+ * Note the asymmetry in what caching buys each one. Production takes ~1,364 requests/day
+ * across 13 PoPs, so repeat traffic per (PoP, purge-window) is high and the cache pays off.
+ * Demo takes ~43/day across 4 dominant PoPs and redeploys ~3x/day, so most crawl sessions are
+ * the first at their PoP since the last purge and MISS anyway — it earns perhaps 10-20% there.
+ * Demo is the debugging surface; production is where the machine time is.
  *
  * Everything here is scoped to these hosts, including the SSL mode — see SSL_MODE below for
  * why that is done with a Configuration Rule instead of the zone setting. `brannon.online`
@@ -111,7 +116,7 @@ const API = 'https://api.cloudflare.com/client/v4';
  * script does may reach them.
  */
 const SITES = [
-  // { host: 'bridge.brannon.online', app: 'nickel-bridge' }, // follow-up, after demo is proven
+  { host: 'bridge.brannon.online', app: 'nickel-bridge' },
   { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo' },
 ];
 const HOSTS = SITES.map((s) => s.host);
@@ -581,36 +586,74 @@ async function check() {
 }
 
 /**
- * Should this URL be purged? Compares what the edge is serving against what the origin now
- * serves, and answers TRUE on any doubt.
+ * The handful of URLs whose bytes decide the whole purge set.
  *
- * The asymmetry drives the whole design: purging something unchanged costs one cold fill,
- * while skipping something that DID change serves a page referencing asset hashes the new
- * build deleted — broken, and for up to the full 30-day TTL. So every error path, non-200,
- * and unreadable body resolves to "purge". The only way to skip is a byte-identical match.
+ * The prerendered pages are not independent: every one of them is a copy of the same built
+ * `index.html` with its head span and `#root` swapped, so they all embed that build's
+ * content-hashed `/assets/index-<hash>.js`. A build that changes anything the bundle touches
+ * changes ALL of them at once, which is why sampling `/` answers for all ~127. `/glossary`
+ * and two term pages are belt-and-braces for the one case `/` alone would miss — a change to
+ * `server/src/seo.ts`'s per-route metadata, which the prerender reads but the bundle does not.
  *
- * Origin truth comes from `<app>.fly.dev`, which is never proxied, so it cannot be answered
- * from the very cache we are trying to evaluate. That matters because robots.txt is generated
- * at runtime from seo.ts rather than built into web/dist — there is no local artifact to
- * compare against — and because it needs no cache-busting query trick, whose reliability
- * would depend on Cloudflare's default extension list rather than on our own rule.
+ * The first and last slug are deterministic given terms.ts. If terms.ts changes shape the
+ * sampled paths change with it, and a snapshot whose path set no longer matches is treated as
+ * unusable — i.e. purge everything. That is the safe direction.
  */
-async function shouldPurge(site, path) {
-  try {
-    const [edge, origin] = await Promise.all([
-      fetch(`https://${site.host}${path}`, { headers: { 'User-Agent': 'nickel-bridge-purge-check' } }),
-      fetch(`https://${site.app}.fly.dev${path}`, { headers: { 'User-Agent': 'nickel-bridge-purge-check' } }),
-    ]);
-    if (!edge.ok || !origin.ok) return true;
-    const [a, b] = await Promise.all([edge.arrayBuffer(), origin.arrayBuffer()]);
-    if (a.byteLength !== b.byteLength) return true;
-    const x = new Uint8Array(a);
-    const y = new Uint8Array(b);
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
-    return false;
-  } catch {
-    return true;
-  }
+export function samplePaths() {
+  const slugs = [TERMS[0]?.slug, TERMS[TERMS.length - 1]?.slug].filter(Boolean);
+  return ['/', '/glossary', ...slugs.map((s) => `/glossary/${s}`), ...STATIC_FILES];
+}
+
+/** Paths in the sample that stand in for the whole prerendered set. */
+const isHtmlSample = (p) => !STATIC_FILES.includes(p);
+
+/**
+ * SHA-256 of what the ORIGIN currently serves for each sample path.
+ *
+ * Origin truth comes from `<app>.fly.dev`, which is never proxied. That is not merely
+ * convenient, it is the correctness property: there is exactly one origin machine (SQLite on
+ * a single volume — see CONTRIBUTING.md "Deployment shape"), so this reads the same bytes no
+ * matter who asks or from where. The edge does not have that property, and an earlier version
+ * of this script learned it the expensive way — see purge() below.
+ *
+ * Any non-200, unreadable body or thrown error yields `null` for that path, which callers
+ * must treat as "unknown" and therefore "purge".
+ */
+async function originHashes(site, paths) {
+  const { createHash } = await import('node:crypto');
+  const out = {};
+  await mapLimit(paths, 8, async (p) => {
+    try {
+      const res = await fetch(`https://${site.app}.fly.dev${p}`, {
+        headers: { 'User-Agent': 'nickel-bridge-purge-check' },
+      });
+      out[p] = res.ok ? createHash('sha256').update(Buffer.from(await res.arrayBuffer())).digest('hex') : null;
+    } catch {
+      out[p] = null;
+    }
+  });
+  return out;
+}
+
+/**
+ * `--snapshot` — record the origin's pre-deploy bytes so `--purge` can tell what this deploy
+ * actually changed. Runs immediately BEFORE `flyctl deploy` in the same job.
+ *
+ * It costs one wake at most, and usually not even that: the deploy that follows a few seconds
+ * later would have woken the machine anyway.
+ */
+async function snapshot() {
+  const sites = SITES.filter((s) => selectedHosts().includes(s.host));
+  const out = process.argv.find((a) => a.startsWith('--out='))?.slice('--out='.length);
+  if (!out) throw new Error('--snapshot needs --out=<file>');
+  const paths = samplePaths();
+  const data = {};
+  for (const site of sites) data[site.host] = await originHashes(site, paths);
+  const { writeFile } = await import('node:fs/promises');
+  await writeFile(out, JSON.stringify({ version: 1, paths, sites: data }, null, 2));
+  const unknown = Object.values(data).flatMap((h) => Object.entries(h).filter(([, v]) => !v));
+  console.log(`snapshot: ${paths.length} origin paths × ${sites.length} host(s) -> ${out}`);
+  if (unknown.length) console.log(`  ${unknown.length} unreadable (those paths will purge unconditionally)`);
 }
 
 /** Run an async mapper over items with bounded concurrency. */
@@ -625,10 +668,88 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
+/**
+ * Decide, from before/after ORIGIN bytes, which of this host's cached paths this deploy
+ * changed. Returns null to mean "cannot tell — purge everything".
+ */
+export function changedPaths(site, before, allPaths, after, paths) {
+  if (!before || before.version !== 1) return null;
+  const prev = before.sites?.[site.host];
+  if (!prev) return null;
+  // A snapshot taken against a different sample set (terms.ts changed shape) cannot be
+  // compared path-for-path, and guessing would be a silent under-purge.
+  if (paths.length !== before.paths?.length || paths.some((p, i) => p !== before.paths[i])) return null;
+
+  // The two halves are independent and BOTH must be collected: an HTML sample moving expands
+  // to the whole prerendered set, while a static file moving purges just itself. Returning
+  // the moment an HTML sample differs would drop every static file later in the array —
+  // and since samplePaths() lists the HTML samples first, that meant a deploy which changed
+  // both (editing seo.ts's route flags changes the prerendered pages AND the runtime-generated
+  // robots.txt — the documented way to add an indexable route) purged the pages and left
+  // robots.txt stale for the full month. Silent, and the exact failure this purge exists to
+  // prevent.
+  const changed = new Set();
+  let htmlChanged = false;
+  for (const p of paths) {
+    const a = prev[p];
+    const b = after[p];
+    // An unreadable read on EITHER side is unknown, not unchanged.
+    if (!a || !b || a !== b) {
+      if (isHtmlSample(p)) htmlChanged = true;
+      else changed.add(p);
+    }
+  }
+  if (htmlChanged) for (const p of allPaths) if (!STATIC_FILES.includes(p)) changed.add(p);
+  return [...changed];
+}
+
+/**
+ * `--purge` — drop exactly what this deploy changed, decided from origin bytes captured by
+ * `--snapshot` before the deploy and re-read after it.
+ *
+ * WHY NOT ASK THE EDGE. The obvious implementation — fetch each URL from the edge, compare
+ * against origin, purge the ones that differ — is wrong, and wrong in the direction that
+ * silently breaks pages. Cloudflare's cache is per-PoP, and a plain fetch reaches exactly one
+ * PoP: whichever is nearest the runner. A URL that happens to be cold THERE misses, gets
+ * filled from origin, compares byte-identical, and is skipped — while every other PoP keeps
+ * serving the previous build for up to the full 30-day TTL. Worse, that very comparison warms
+ * the runner's PoP, so the one vantage point the check can see is the one it just repaired.
+ *
+ * That is not hypothetical. On the 2026-07-30 deploy of #111 — which moved the bundle hash,
+ * and therefore every one of the 132 URLs — the check reported `1/132 urls differ from origin`
+ * and purged one. Minutes later IAD still served `/glossary` at age 12h referencing
+ * `/assets/index-3uRpM-0Y.js` while ORD served the new build; at origin that filename returns
+ * `text/html` (the SPA fallback answering 200 for a file the build deleted), so any PoP that
+ * evicted the old asset while keeping the old HTML would serve a page whose module script is
+ * HTML and never boot. The bias was systematic, and it fell hardest on exactly the cold
+ * long-tail glossary pages the prerendering exists to serve.
+ *
+ * The origin has the property the edge lacks: one machine, same bytes for every caller. So
+ * the question becomes "what did THIS deploy change", answered before/after against origin,
+ * and the edge is never consulted. It also costs ~16 origin requests per deploy instead of
+ * ~264, on a machine the deploy wakes anyway.
+ *
+ * The one thing this deliberately cannot do is repair staleness left by an EARLIER missed
+ * purge — it only knows about this deploy. `edge-upkeep.yml` runs `--purge --force` weekly
+ * for that, which is also what recovers the damage the old check already did.
+ */
 async function purge() {
   const sites = SITES.filter((s) => selectedHosts().includes(s.host));
   const force = process.argv.includes('--force');
-  const id = await zoneId();
+  const sinceArg = process.argv.find((a) => a.startsWith('--since='))?.slice('--since='.length);
+
+  let since = null;
+  if (!force) {
+    if (!sinceArg) throw new Error('--purge needs --since=<snapshot file> (or --force to skip the comparison)');
+    try {
+      const { readFile } = await import('node:fs/promises');
+      since = JSON.parse(await readFile(sinceArg, 'utf8'));
+    } catch (err) {
+      // Fail SAFE, and loudly: a needless purge costs cold fills, a missed one serves a page
+      // referencing deleted assets for up to 30 days.
+      console.log(`::warning::could not read ${sinceArg} (${err.message}) — purging everything`);
+    }
+  }
 
   let files = [];
   for (const site of sites) {
@@ -637,19 +758,25 @@ async function purge() {
       files.push(...paths.map((p) => `https://${site.host}${p}`));
       continue;
     }
-    // A deploy that changed no web output leaves every one of these byte-identical, and
-    // purging them would throw away a warm cache for nothing — which is the single biggest
-    // lever on origin wakes, since a cold fill costs ~10 min of machine time per PoP.
-    const verdicts = await mapLimit(paths, 8, (p) => shouldPurge(site, p));
-    const stale = paths.filter((_, i) => verdicts[i]);
-    console.log(`${site.host}: ${stale.length}/${paths.length} urls differ from origin`);
-    files.push(...stale.map((p) => `https://${site.host}${p}`));
+    const sample = samplePaths();
+    const after = await originHashes(site, sample);
+    const changed = changedPaths(site, since, paths, after, sample);
+    if (changed === null) {
+      console.log(`${site.host}: no usable snapshot — purging all ${paths.length}`);
+      files.push(...paths.map((p) => `https://${site.host}${p}`));
+      continue;
+    }
+    console.log(`${site.host}: ${changed.length}/${paths.length} paths changed by this deploy`);
+    files.push(...changed.map((p) => `https://${site.host}${p}`));
   }
 
+  // Decided entirely from origin bytes, so a deploy that changed no cached output never
+  // touches the Cloudflare API at all — and needs no token to say so.
   if (!files.length) {
-    console.log('nothing to purge — the edge already matches the origin.');
+    console.log('nothing to purge — this deploy changed no cached output.');
     return;
   }
+  const id = await zoneId();
   for (let i = 0; i < files.length; i += PURGE_BATCH) {
     const batch = files.slice(i, i + PURGE_BATCH);
     await cf(`/zones/${id}/purge_cache`, { method: 'POST', body: JSON.stringify({ files: batch }) });
@@ -798,7 +925,14 @@ async function auditSite(site, fail) {
   return localFailed;
 }
 
-const MODES = { '--plan': plan, '--apply': apply, '--check': check, '--purge': purge, '--audit': audit };
+const MODES = {
+  '--plan': plan,
+  '--apply': apply,
+  '--check': check,
+  '--snapshot': snapshot,
+  '--purge': purge,
+  '--audit': audit,
+};
 const mode = process.argv.find((a) => MODES[a]) ?? '--plan';
 
 // A stack trace is the wrong thing to hand a CI log: the causes here are all operational

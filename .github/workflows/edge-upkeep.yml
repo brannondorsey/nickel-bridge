@@ -62,10 +62,25 @@ jobs:
         continue-on-error: true
         run: node scripts/cloudflare.mjs --audit
 
-      - name: Fail if either check failed
+      # The per-deploy purge only knows what ITS deploy changed, so nothing in CI repairs a
+      # page left stale by a purge that failed, was skipped, or ran before this logic was
+      # fixed. Once a week, drop the lot and let it refill. The cost is one cold fill per
+      # (PoP, URL) actually requested afterwards — negligible weekly, and the only thing that
+      # bounds how long a missed purge can persist to something under the 30-day edge TTL.
+      - name: Weekly full purge (repairs any drift the per-deploy purge missed)
+        if: steps.gate.outputs.configured == 'true'
+        id: repair
+        continue-on-error: true
+        run: node scripts/cloudflare.mjs --purge --force
+
+      # The repair purge is in here for the same reason the other two are: it is the only thing
+      # that bounds how long a page missed by a per-deploy purge stays stale, so a week of it
+      # silently failing (token scope, rate limit) must not read as a green run.
+      - name: Fail if any step failed
         if: steps.gate.outputs.configured == 'true'
         run: |
           drift='${{ steps.drift.outcome }}'
           health='${{ steps.health.outcome }}'
-          echo "drift=$drift health=$health"
-          [ "$drift" = 'success' ] && [ "$health" = 'success' ]
+          repair='${{ steps.repair.outcome }}'
+          echo "drift=$drift health=$health repair=$repair"
+          [ "$drift" = 'success' ] && [ "$health" = 'success' ] && [ "$repair" = 'success' ]

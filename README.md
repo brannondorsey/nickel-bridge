@@ -266,7 +266,8 @@ that answers those paths without touching Fly can. `scripts/cloudflare.mjs` is t
 derived from `server/src/seo.ts`; see [CONTRIBUTING.md](CONTRIBUTING.md) "The edge" for the
 design and the invariants.
 
-This is **off until you set the secret** — merging the code changes nothing. To turn it on:
+Both `bridge.brannon.online` and `demo-bridge.brannon.online` are fronted. This is **off until
+you set the secret** — merging the code changes nothing. To turn it on for a host:
 
 0. **Check the hostname's depth first.** Free Universal SSL is issued for `brannon.online` and
    `*.brannon.online`, and a wildcard matches exactly one label — so `demo.bridge.brannon.online`
@@ -292,8 +293,10 @@ This is **off until you set the secret** — merging the code changes nothing. T
    redirect loop the cache would then pin at the edge.
 4. *Then* flip the record to proxied (orange cloud).
 5. Verify: `node scripts/cloudflare.mjs --audit` should go green, and
-   `curl -sI https://<host>/api/me | grep cf-cache-status` must say `BYPASS` — session-scoped
-   responses must never cache.
+   `curl -sI https://<host>/api/me | grep cf-cache-status` must say `BYPASS`/`DYNAMIC` —
+   session-scoped responses must never cache. [docs/edge-runbook.md](docs/edge-runbook.md) has
+   the full sweep, plus how to measure whether the fronting actually bought machine time
+   (`scripts/fly-uptime.mjs`).
 
 Order matters: 2 before 4, and 3 before 4.
 
