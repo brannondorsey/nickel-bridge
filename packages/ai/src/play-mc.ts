@@ -16,7 +16,7 @@ import {
   satisfiesConstraint,
   seededRng,
 } from '@bridge/core';
-import { getSharedDdPool } from './dd-pool.js';
+import { SolvePriority, getSharedDdPool } from './dd-pool.js';
 import { DdSolve, buildSolveRequest, futureTricksToDdSolve, pickFromSolve, solveRequest } from './play-ai.js';
 
 /**
@@ -395,6 +395,16 @@ export interface SampledChooseOpts {
    * argmax, byte-identical to every caller that predates this option).
    */
   playTopN?: number;
+  /**
+   * Forwarded to every DD pool solve this decision makes (default
+   * 'interactive' — every pre-existing caller is unaffected). server/src/
+   * bot-play.ts's shared board-play loop passes 'background' for every bot-
+   * driven decision (the benchmark AI personas, demo seeding, demo exhibit
+   * replay) so a real human's concurrent request jumps the queue for the
+   * next free DD worker — see dd-pool.ts's doc comment for the measured
+   * effect this fixes.
+   */
+  priority?: SolvePriority;
 }
 
 /**
@@ -427,6 +437,7 @@ export async function chooseCardSampled(
   // threads, each with its own WASM instance); otherwise — or if the pool
   // degrades mid-flight — through the main-thread instance. DDS is
   // deterministic, so where a solve runs can never change the chosen card.
+  const priority = opts.priority ?? 'interactive';
   const totals = new Map<Card, number>();
   const solves = await Promise.all(
     layouts.map(async (layout) => {
@@ -434,7 +445,7 @@ export async function chooseCardSampled(
       const pool = getSharedDdPool();
       if (pool) {
         try {
-          return futureTricksToDdSolve(await pool.solve(req));
+          return futureTricksToDdSolve(await pool.solve(req, priority));
         } catch {
           // degraded pool — fall through to the main-thread solve
         }

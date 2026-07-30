@@ -98,14 +98,19 @@ export async function playSingleBoard(
  */
 async function playBoard(t: TournamentRow, userId: number, boardNo: number, strategy: BoardStrategy): Promise<void> {
   const b = loadBoard(t, userId, boardNo, true)!;
-  await ensureAdvanced(b);
+  // 'background' priority on every call here: this loop drives bot-vs-bot
+  // play (benchmark AI personas, demo seeding, demo exhibit reveal), never a
+  // live human request, so any DD solve it triggers should yield the next
+  // free worker to a real player's concurrent request — see
+  // packages/ai/src/dd-pool.ts's doc comment for the contention this fixes.
+  await ensureAdvanced(b, 'background');
   let view = boardView(t, b, 1200);
   let safety = 250;
   while (view.state !== 'done' && safety-- > 0) {
     if (view.state === 'bidding' && view.myTurn) {
-      await submitCall(b, await strategy.call(b, view.legalCalls as Call[]));
+      await submitCall(b, await strategy.call(b, view.legalCalls as Call[]), 'background');
     } else if (view.state === 'playing' && view.myTurn) {
-      await submitPlay(b, await strategy.card(b, view.legalCards as Card[]));
+      await submitPlay(b, await strategy.card(b, view.legalCards as Card[]), 'background');
     } else {
       throw new Error(`bot stuck on ${t.seed} board ${boardNo}: ${view.state}`);
     }

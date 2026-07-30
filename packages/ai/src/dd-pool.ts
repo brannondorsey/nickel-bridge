@@ -17,6 +17,29 @@ import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
  * build) or spawning fails, and callers fall back to sequential solving on
  * the main-thread instance. Workers are unref()ed so an idle pool never
  * keeps the process alive.
+ *
+ * PRIORITY: the benchmark AI personas (ai-players.ts) solve through this same
+ * pool as real human requests (server/src/game.ts's advanceRobots), and on a
+ * single-vCPU deployment (Fly's performance-1x — production, the demo app,
+ * and every PR preview all run this) the pool collapses to exactly one
+ * worker. Measured: with a background persona decision (K=8, the 'expert'
+ * tier) running continuously against that one worker, a concurrent human
+ * card-play decision's latency went from p50=85ms/p90=312ms (uncontended) to
+ * p50=1.1s/p90=2.0s/p99=3.5s — the "occasional multi-second freeze on card
+ * play" this pool's queueing exists to prevent. ai-players.ts's courtesyGap
+ * reduces how OFTEN a persona decision is mid-flight when a human taps (it
+ * won't START one during a quiet gap), but its COURTESY_CAP_MS deliberately
+ * lets one proceed anyway after a bounded wait even during continuous human
+ * play, and once dispatched, DDS's synchronous WASM call can't be preempted
+ * mid-solve. So each solve() call carries a priority: an INTERACTIVE request
+ * (default — every existing call site, unchanged) jumps ahead of any queued
+ * BACKGROUND request (ai-players.ts's persona decisions, opted in explicitly)
+ * for the next free worker. This can't shorten a solve already executing
+ * inside a worker, but it stops a human's request from waiting behind a
+ * whole persona decision's remaining UNSTARTED solves (up to K-1 of them) —
+ * the bulk of the measured tail. Priority only changes WHICH worker a
+ * request reaches and WHEN, never its result, so robot determinism
+ * (invariant 1) is untouched by construction, same as the pool itself.
  */
 
 /** cap: each worker holds a ~5 MB WASM heap; solves split K/size ways */
@@ -33,17 +56,30 @@ const POOL_SIZE = Math.max(1, Math.min(availableParallelism() - 1, 4));
  */
 const SOLVE_TIMEOUT_MS = 15_000;
 
-interface Pending {
+/** Lower sorts first: an INTERACTIVE request always jumps a queued BACKGROUND one. */
+const PRIORITY = { interactive: 0, background: 1 } as const;
+export type SolvePriority = keyof typeof PRIORITY;
+
+interface InFlight {
   resolve: (res: FutureTricks) => void;
   reject: (err: Error) => void;
-  workerIndex: number;
   timer: NodeJS.Timeout;
+}
+
+interface Queued extends InFlight {
+  id: number;
+  req: DealPbn;
+  priority: number;
 }
 
 export class DdPool {
   private workers: Worker[] = [];
-  private busy: number[] = [];
-  private pending = new Map<number, Pending>();
+  /** true = this worker isn't currently running a solve */
+  private idle: boolean[] = [];
+  /** requests waiting for a free worker, not yet dispatched */
+  private queue: Queued[] = [];
+  /** dispatched requests awaiting their worker's reply, keyed by request id */
+  private inFlight = new Map<number, InFlight>();
   private nextId = 1;
   private dead = false;
 
@@ -52,60 +88,83 @@ export class DdPool {
       const worker = new Worker(workerUrl);
       worker.unref();
       worker.on('message', (msg: { id: number; res?: FutureTricks; error?: string }) => {
-        const p = this.pending.get(msg.id);
-        if (!p) return; // timed out earlier — late reply discarded
-        clearTimeout(p.timer);
-        this.pending.delete(msg.id);
-        this.busy[p.workerIndex]--;
-        if (msg.error !== undefined) p.reject(new Error(msg.error));
-        else p.resolve(msg.res!);
+        const p = this.inFlight.get(msg.id);
+        if (p) {
+          clearTimeout(p.timer);
+          this.inFlight.delete(msg.id);
+          if (msg.error !== undefined) p.reject(new Error(msg.error));
+          else p.resolve(msg.res!);
+        } // else: timed out earlier — late reply discarded, worker is still newly free below
+        this.idle[i] = true;
+        this.dispatchNext(i);
       });
       worker.on('error', (err: unknown) => this.fail(err instanceof Error ? err : new Error(String(err))));
       worker.on('exit', (code) => {
-        // ANY exit while requests are in flight loses their replies — fail so
-        // callers fall back, whatever the exit code claims.
-        if (!this.dead && (code !== 0 || this.pending.size > 0)) {
+        // ANY exit while requests are outstanding loses their replies — fail
+        // so callers fall back, whatever the exit code claims.
+        if (!this.dead && (code !== 0 || this.inFlight.size > 0 || this.queue.length > 0)) {
           this.fail(new Error(`dd-worker exited with code ${code}`));
         }
       });
       this.workers.push(worker);
-      this.busy.push(0);
+      this.idle.push(true);
     }
   }
 
-  /** reject everything in flight and mark the pool unusable (callers fall back) */
+  /** Hand the highest-priority waiting request (FIFO within a priority) to a just-freed worker. */
+  private dispatchNext(workerIndex: number): void {
+    if (this.dead || !this.idle[workerIndex] || this.queue.length === 0) return;
+    let best = 0;
+    for (let i = 1; i < this.queue.length; i++) {
+      if (this.queue[i].priority < this.queue[best].priority) best = i;
+    }
+    const [item] = this.queue.splice(best, 1);
+    this.idle[workerIndex] = false;
+    this.inFlight.set(item.id, { resolve: item.resolve, reject: item.reject, timer: item.timer });
+    this.workers[workerIndex].postMessage({ id: item.id, req: item.req });
+  }
+
+  /** reject everything queued or in flight and mark the pool unusable (callers fall back) */
   private fail(err: Error): void {
     this.dead = true;
-    for (const p of this.pending.values()) {
+    for (const q of this.queue) {
+      clearTimeout(q.timer);
+      q.reject(err);
+    }
+    this.queue = [];
+    for (const p of this.inFlight.values()) {
       clearTimeout(p.timer);
       p.reject(err);
     }
-    this.pending.clear();
+    this.inFlight.clear();
   }
 
   get usable(): boolean {
     return !this.dead;
   }
 
-  solve(req: DealPbn): Promise<FutureTricks> {
+  /**
+   * `priority` defaults to 'interactive' — every pre-existing call site is
+   * unaffected. Pass 'background' for work that should yield the next free
+   * worker to any interactive request already waiting (see this file's
+   * PRIORITY doc comment above).
+   */
+  solve(req: DealPbn, priority: SolvePriority = 'interactive'): Promise<FutureTricks> {
     if (this.dead) return Promise.reject(new Error('dd pool is degraded'));
-    let workerIndex = 0;
-    for (let i = 1; i < this.workers.length; i++) {
-      if (this.busy[i] < this.busy[workerIndex]) workerIndex = i;
-    }
     const id = this.nextId++;
-    this.busy[workerIndex]++;
     return new Promise<FutureTricks>((resolve, reject) => {
       const timer = setTimeout(() => {
-        const p = this.pending.get(id);
-        if (!p) return;
-        this.pending.delete(id);
-        this.busy[p.workerIndex]--;
-        p.reject(new Error(`dd pool solve exceeded ${SOLVE_TIMEOUT_MS}ms`));
+        const qi = this.queue.findIndex((q) => q.id === id);
+        if (qi >= 0) this.queue.splice(qi, 1);
+        // if it was already dispatched, drop tracking so the eventual real
+        // reply is discarded as a late message (see the 'message' handler)
+        this.inFlight.delete(id);
+        reject(new Error(`dd pool solve exceeded ${SOLVE_TIMEOUT_MS}ms`));
       }, SOLVE_TIMEOUT_MS);
       timer.unref();
-      this.pending.set(id, { resolve, reject, workerIndex, timer });
-      this.workers[workerIndex].postMessage({ id, req });
+      this.queue.push({ id, req, priority: PRIORITY[priority], resolve, reject, timer });
+      const idleIndex = this.idle.indexOf(true);
+      if (idleIndex >= 0) this.dispatchNext(idleIndex);
     });
   }
 

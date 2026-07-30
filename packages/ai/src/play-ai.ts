@@ -15,7 +15,7 @@ import {
 // from github.com/bookchris/bridge-dds-js with its ESM import path fixed.
 import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
 import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
-import { getSharedDdPool } from './dd-pool.js';
+import { SolvePriority, getSharedDdPool } from './dd-pool.js';
 
 let ddsInstance: Dds | null = null;
 
@@ -119,13 +119,22 @@ export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
  * every concurrent request for the duration. DDS is deterministic, so where
  * the solve runs can never change its result — latency only, invariant 1
  * untouched.
+ *
+ * `priority` defaults to 'interactive' (every existing call site — a real
+ * human decision point) and forwards to the pool's dispatch queue; see
+ * dd-pool.ts's doc comment for why this exists.
  */
-export async function solveFutureTricks(deal: Deal, contract: Contract, plays: Card[]): Promise<DdSolve> {
+export async function solveFutureTricks(
+  deal: Deal,
+  contract: Contract,
+  plays: Card[],
+  priority: SolvePriority = 'interactive',
+): Promise<DdSolve> {
   const req = buildSolveRequest(deal, contract, plays);
   const pool = getSharedDdPool();
   if (pool) {
     try {
-      return futureTricksToDdSolve(await pool.solve(req));
+      return futureTricksToDdSolve(await pool.solve(req, priority));
     } catch {
       // degraded pool — fall through to the main-thread solve
     }
@@ -150,12 +159,17 @@ export function pickFromSolve(legal: Card[], solve: DdSolve): Card {
 }
 
 /** Choose the double-dummy-optimal card for the hand to play. */
-export async function chooseCard(deal: Deal, contract: Contract, plays: Card[]): Promise<Card> {
+export async function chooseCard(
+  deal: Deal,
+  contract: Contract,
+  plays: Card[],
+  priority: SolvePriority = 'interactive',
+): Promise<Card> {
   const state = playState(deal, contract, plays);
   const legal = legalCards(deal, state);
   if (legal.length === 0) throw new Error('no legal cards');
   if (legal.length === 1) return legal[0];
-  return pickFromSolve(legal, await solveFutureTricks(deal, contract, plays));
+  return pickFromSolve(legal, await solveFutureTricks(deal, contract, plays, priority));
 }
 
 /** DDS `equals` bitmask (bit r set = rank r is equivalent) → ranks */
