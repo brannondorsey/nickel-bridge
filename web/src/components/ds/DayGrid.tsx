@@ -9,7 +9,7 @@ export interface DayGridPoint {
 
 /** Trailing window shown by default — a width-budget-driven guess (fits the
  *  same 326px design width as Sparkline at a legible cell size), not a
- *  data-driven choice like pctSeries's "last 10 tournaments". */
+ *  data-driven choice like pctSeries's trailing-tournament window. */
 export const DAYGRID_WEEKS = 18;
 
 const MS_PER_DAY = 86_400_000;
