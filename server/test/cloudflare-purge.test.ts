@@ -98,8 +98,12 @@ describe('rule comparison canonicalization', () => {
     const live = { browser_ttl: { default: 300, mode: 'override_origin' }, cache: true };
     const desired = { cache: true, browser_ttl: { mode: 'override_origin', default: 300 } };
     expect(JSON.stringify(canonical(live))).toBe(JSON.stringify(canonical(desired)));
-    // Order IS significant for rules and status_code_ttl, so arrays must not be sorted.
-    expect(canonical([{ b: 1 }, { a: 2 }])).toEqual([{ b: 1 }, { a: 2 }]);
+    // Order IS significant for rules and status_code_ttl, so arrays must not be sorted — even
+    // though the objects inside them ARE. The first element has keys worth sorting so both
+    // behaviours are pinned at once, and the values are chosen so that sorting the array WOULD
+    // move {a:2} to the front — otherwise the assertion passes either way. Compared as a string
+    // because toEqual ignores the very key order this function exists to normalize.
+    expect(JSON.stringify(canonical([{ z: 1, m: 0 }, { a: 2 }]))).toBe('[{"m":0,"z":1},{"a":2}]');
     // Real differences must still be caught.
     expect(JSON.stringify(canonical({ cache: true }))).not.toBe(JSON.stringify(canonical({ cache: false })));
   });
