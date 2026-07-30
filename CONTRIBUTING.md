@@ -78,8 +78,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
-                pages/ (Board.tsx is the gameplay UI; sign-out AND the night-mode switch
-                live on the Stats page; Scenarios.tsx is the demo-mode gallery;
+                pages/ (Board.tsx is the gameplay UI; sign-out, the night-mode switch AND
+                the sparklines' LOOKBACK switch (nb:lookback) live on the Stats page —
+                see "The profile sparklines" below; Scenarios.tsx is the demo-mode gallery;
                 Glossary.tsx is the glossary screen; Tour.tsx is the first-crossing
                 onboarding tour; Activity.tsx is the TRAFFIC feed, with all of its
                 clock-dependent grouping in the pure, unit-tested activityFeed.ts
@@ -620,6 +621,29 @@ meeting for the first time open the term sheet — which means the gate-rendered
 its own `GlossaryProvider` in `App.tsx`, since it renders in place of the routes the app-wide
 one wraps (a sheet lives in `?term=`, leaving the path alone, so opening one never disturbs
 the arrival gate).
+
+**The profile sparklines are scrubbed, not tapped, which is what makes the LOOKBACK switch
+possible.** `ds/Sparkline.tsx` used to give every point its own full-height invisible button
+in a flex row; across a ~326px plot that is 326/n per target — fine at 10, tight at 25, an
+untappable 3px at 100 — and it put one tab stop per point per chart in the keyboard order.
+The plot is now a single `role="slider"`: pointer and arrow keys resolve the *nearest* point
+by x, so there is no per-point DOM at all and no ceiling from the tap layer.
+`aria-valuetext` carries the reading (name, date, value), which is why the visual detail line
+below the plot is `aria-hidden` — otherwise every step announces twice. The polyline strings
+are memoized on `points` so scrubbing repaints only the crosshair; if a series ever exceeds
+the ~326 available pixel columns, decimating the *drawn* vertices (never what the scrubber
+resolves against) is the next lever, and nothing does that today.
+
+What's left bounding the window is legibility, not the DOM: past roughly 150 points the line
+reads as texture, and the vertical scale spans a whole career so recent movement flattens. So
+`DEFAULT_LOOKBACK` stays 25 and the reader opts into more via one switch above all three
+charts (never one per panel — three charts that can disagree about their period is worse than
+no control). `offeredWindows()` in `Player.tsx` only offers a window **strictly shorter** than
+the history: a 25 button on a 25-tournament record redraws exactly what ALL draws, so the
+switch stays hidden entirely until the 11th crossing and never shows a button that does
+nothing. A stored preference the history has outgrown resolves to ALL rather than clamping.
+None of this costs the server anything — see `DEFAULT_LOOKBACK`'s doc comment for why
+`fieldPercentiles()` already pays for every tournament a profile could plot.
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
