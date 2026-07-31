@@ -3,6 +3,20 @@ name: Claude PR Review
 on:
   pull_request:
     types: [opened, reopened]
+  #
+  # NOTE ON RE-RUNNING A FAILED REVIEW. There is deliberately no
+  # workflow_dispatch here: it was tried (run #69) and is a trap. The action
+  # takes its PR context from the event payload, so under a dispatch PR_NUMBER
+  # is empty, the review silently does nothing — and the job still reports
+  # SUCCESS in ~15s, which is worse than failing, because the check goes green
+  # having reviewed nothing.
+  #
+  # `issue_comment` (say @claude on the PR) is the action's own supported
+  # re-trigger and would work, but note that non-`pull_request` events run the
+  # workflow file from the DEFAULT branch — so the settings below only apply
+  # once they are merged to main, not while they sit on a feature branch.
+  # Until then the only retrigger that picks up this file is reopening the PR,
+  # which costs a preview teardown (see pr-preview-teardown.yml).
 
 permissions:
   contents: read
@@ -63,7 +77,12 @@ jobs:
           # because every PR today is self-authored (brannondorsey); revisit before this
           # repo takes outside contributions, since it lets a crafted PR description/diff
           # try to steer the agent with no tool gate at all.
+          # 50 turns was not enough: the review of #122 spent all 50 reading the
+          # diff and hit `error_max_turns` at turn 51 without ever reaching the
+          # step that posts the comment — a full run's cost for no output. The
+          # limit exists to bound a runaway loop, not to bound a thorough read,
+          # so it is set well clear of what a large PR actually needs.
           claude_args: |
             --model claude-sonnet-5
-            --max-turns 50
+            --max-turns 75
             --permission-mode bypassPermissions
