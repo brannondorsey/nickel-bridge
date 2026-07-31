@@ -40,7 +40,7 @@ describe('Settings', () => {
     ['Fast forward settled tricks', 'fastForward'],
     ['Name on the ladder', 'ladderListed'],
   ])('writes %s to the account and refreshes the session', async (group, key) => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, ownMeaningsHidden: false });
     const { refresh } = renderSettings();
     expect(segment(group, 'ON')).toHaveClass('active');
     await userEvent.click(segment(group, 'OFF')!);
@@ -52,6 +52,22 @@ describe('Settings', () => {
     renderSettings({ ...meFixture, user: { ...meFixture.user!, ladderListed: false, fastForward: false } });
     expect(segment('Name on the ladder', 'OFF')).toHaveClass('active');
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
+  });
+
+  // Unlike the other two rows, this one defaults OFF — nothing changes for
+  // an account that has never visited Settings.
+  it('defaults "Hide your side\'s bid meanings" to OFF and can turn it on', async () => {
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, ownMeaningsHidden: true });
+    const { refresh } = renderSettings();
+    expect(segment("Hide your side's bid meanings", 'OFF')).toHaveClass('active');
+    await userEvent.click(segment("Hide your side's bid meanings", 'ON')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ ownMeaningsHidden: true });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('reflects an account that already hides its own side\'s meanings', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, ownMeaningsHidden: true } });
+    expect(segment("Hide your side's bid meanings", 'ON')).toHaveClass('active');
   });
 
   // The switch moves under the finger, so a rejected write has to move it

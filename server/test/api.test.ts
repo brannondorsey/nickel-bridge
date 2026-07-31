@@ -209,9 +209,11 @@ describe('handle (first-login username)', () => {
     // defaults, and a partial patch leaves the untouched key alone
     let me = await pete.get('/api/me');
     expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+    expect(me.user.ownMeaningsHidden).toBe(false); // unlike the other two, this one defaults OFF
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
+      ownMeaningsHidden: false,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
@@ -219,10 +221,22 @@ describe('handle (first-login username)', () => {
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
-    expect(await pete.post('/api/me/prefs', {})).toEqual({ ladderListed: false, fastForward: false });
+    expect(await pete.post('/api/me/prefs', {})).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      ownMeaningsHidden: false,
+    });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
     expect((await pete.get('/api/me')).user.fastForward).toBe(false);
+
+    // ownMeaningsHidden is a plain boolean on the same partial-update path
+    expect(await pete.post('/api/me/prefs', { ownMeaningsHidden: true })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      ownMeaningsHidden: true,
+    });
+    expect((await pete.get('/api/me')).user.ownMeaningsHidden).toBe(true);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

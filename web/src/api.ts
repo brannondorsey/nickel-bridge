@@ -12,6 +12,8 @@ export interface Me {
     ladderListed: boolean;
     /** replay a claim's settled tricks compressed (settings: "Fast forward settled tricks") */
     fastForward: boolean;
+    /** suppress the SAYC meaning UI for the human's own partnership's (N/S) calls (settings: "Hide your side's bid meanings") */
+    ownMeaningsHidden: boolean;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -341,8 +343,8 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean }>('/api/me/prefs', {
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; ownMeaningsHidden?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean; ownMeaningsHidden: boolean }>('/api/me/prefs', {
       method: 'POST',
       body: JSON.stringify(prefs),
     }),
@@ -408,6 +410,20 @@ export const SUIT_SYMBOLS = ['♠', '♥', '♦', '♣'];
 export const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const STRAIN_SYMBOLS = ['♣', '♦', '♥', '♠', 'NT'];
 export const SEAT_SHORT = ['N', 'E', 'S', 'W'];
+
+/**
+ * Is `seat` the human's own AUCTION partnership (N/S), as opposed to the
+ * opponents (E/W)? This is bidding-partnership membership only — the human
+ * always bids from South and North is always their partner, so it is a fixed
+ * seat%2 check. It is deliberately NOT the card-play hand-flip mechanism
+ * (`boardView.flipped`/`playingSeat`/`dummy`, see CONTRIBUTING's "Hand-flip
+ * subtlety"): who bid what during the auction never flips, only who plays
+ * which hand once the contract is set. Used to gate the "Hide your side's
+ * bid meanings" setting.
+ */
+export function isHumanPartnershipSeat(seat: number): boolean {
+  return seat % 2 === 0;
+}
 
 export const cardSuit = (c: number) => Math.floor(c / 13);
 export const cardRank = (c: number) => c % 13;

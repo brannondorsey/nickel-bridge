@@ -67,6 +67,12 @@ export default function Board() {
   // follows the player between devices; see runClaim below for what it paces.
   const fastForward = useMe().me?.user?.fastForward !== false;
 
+  // "Hide your side's bid meanings" (settings gate) — suppresses the SAYC
+  // meaning UI for calls made by the human's own partnership (N/S) during
+  // the auction; see isHumanPartnershipSeat in api.ts. Defaults to false
+  // (today's behaviour), unlike fastForward above which defaults true.
+  const ownMeaningsHidden = useMe().me?.user?.ownMeaningsHidden === true;
+
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCall, setSelectedCall] = useState<number | null>(null);
@@ -364,6 +370,7 @@ export default function Board() {
           claimInfo={claimInfo}
           claimAnnounceOpen={claimAnnounceOpen}
           onSkipClaim={skipClaimAnnouncement}
+          ownMeaningsHidden={ownMeaningsHidden}
         />
       ) : (
         <BiddingPhase
@@ -375,9 +382,12 @@ export default function Board() {
           busy={busy}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
+          ownMeaningsHidden={ownMeaningsHidden}
         />
       )}
-      {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
+      {inspect ? (
+        <CallInspector entry={inspect} onClose={() => setInspect(null)} ownMeaningsHidden={ownMeaningsHidden} />
+      ) : null}
     </div>
   );
 }
@@ -439,6 +449,7 @@ export function BiddingPhase({
   inspect,
   onInspect,
   hint = null,
+  ownMeaningsHidden = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -450,6 +461,8 @@ export function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
   /** tour only: pulse this call in the bid box */
   hint?: number | null;
+  /** settings: "Hide your side's bid meanings" */
+  ownMeaningsHidden?: boolean;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -459,13 +472,20 @@ export function BiddingPhase({
   // foot, so the controls never move no matter how tall the feedback grows. The
   // decision cluster (feedback, hand, seat line) is pinned to the bottom of the
   // scroll region (margin-top:auto), hugging the dock; the auction stays up top.
+  // No seat check on the "Your" preview: bidding is always from South for the
+  // human, and the auction never flips (see isHumanPartnershipSeat in api.ts).
   const feedback = board.myTurn ? (
     selectedCall !== null ? (
-      <MeaningPanel meaning={meanings[selectedCall]} call={selectedCall} prefix="Your" />
+      <MeaningPanel
+        meaning={meanings[selectedCall]}
+        call={selectedCall}
+        prefix="Your"
+        hidden={ownMeaningsHidden}
+      />
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
-      <MeaningPanel placeholder />
+      <MeaningPanel placeholder hidden={ownMeaningsHidden} />
     )
   ) : lastEval ? (
     <GradeToast evaluation={lastEval} />
@@ -474,7 +494,13 @@ export function BiddingPhase({
   return (
     <div className="bid-phase">
       <div className="bid-scroll">
-        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+        <AuctionGrid
+          auction={board.auction}
+          dealer={board.dealer}
+          myTurn={Boolean(board.myTurn)}
+          onInspect={onInspect}
+          ownMeaningsHidden={ownMeaningsHidden}
+        />
         <div className="bid-decision">
           {feedback}
           <div className="board-fan">
@@ -513,6 +539,7 @@ export function PlayPhase({
   claimAnnounceOpen,
   onSkipClaim,
   hint = null,
+  ownMeaningsHidden = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -525,6 +552,9 @@ export function PlayPhase({
   onSkipClaim: () => void;
   /** tour only: pulse this card in whichever fan holds it */
   hint?: number | null;
+  /** settings: "Hide your side's bid meanings" — the auction is display-only
+   * here (no live BidBox), so this only reaches AuctionGrid/CallInspector. */
+  ownMeaningsHidden?: boolean;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -547,7 +577,13 @@ export function PlayPhase({
 
   return (
     <>
-      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
+      <AuctionGrid
+        auction={board.auction}
+        dealer={board.dealer}
+        myTurn={false}
+        onInspect={onInspect}
+        ownMeaningsHidden={ownMeaningsHidden}
+      />
       {/* keep the last bid's grade visible when the auction ends on the human's
           own call — it clears as soon as they play a card */}
       {lastEval ? <GradeToast evaluation={lastEval} /> : null}

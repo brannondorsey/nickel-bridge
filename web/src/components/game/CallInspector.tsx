@@ -1,17 +1,34 @@
-import { SEAT_SHORT, type AuctionEntry } from '../../api';
+import { SEAT_SHORT, isHumanPartnershipSeat, type AuctionEntry } from '../../api';
 import { Chip } from '../ds/Chip';
 import { Dialog } from '../ds/Dialog';
 import { CallText } from './CallText';
 import { ForcingChip } from './MeaningPanel';
 import { GlossaryProse } from './GlossaryProse';
 
-/** Bottom-sheet inspector for a past auction call. */
-export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose: () => void }) {
+/**
+ * Bottom-sheet inspector for a past auction call.
+ *
+ * `ownMeaningsHidden` (settings: "Hide your side's bid meanings") seals the
+ * body for the human's own partnership's (N/S) calls. The sealed message is
+ * exactly the same whether or not `entry.meaning` is populated — showing
+ * different sealed copy for "no meaning" vs. "meaning present but hidden"
+ * would itself leak which calls are recognized SAYC conventions.
+ */
+export function CallInspector({
+  entry,
+  onClose,
+  ownMeaningsHidden = false,
+}: {
+  entry: AuctionEntry;
+  onClose: () => void;
+  ownMeaningsHidden?: boolean;
+}) {
+  const hidden = ownMeaningsHidden && isHumanPartnershipSeat(entry.seat);
   const m = entry.meaning;
   const title = (
     <>
       {SEAT_SHORT[entry.seat]} bid <CallText call={entry.call} />
-      {m ? (
+      {m && !hidden ? (
         <>
           {' — '}
           <GlossaryProse text={m.title} />
@@ -21,7 +38,11 @@ export function CallInspector({ entry, onClose }: { entry: AuctionEntry; onClose
   );
   return (
     <Dialog title={title} onClose={onClose}>
-      {m ? (
+      {hidden ? (
+        <div className="meaning-body meaning-sealed">
+          Sealed — turn off &ldquo;Hide your side&rsquo;s bid meanings&rdquo; in Settings to see it.
+        </div>
+      ) : m ? (
         <>
           {m.points || m.shapePromise || m.forcing ? (
             <div className="meaning-chips">

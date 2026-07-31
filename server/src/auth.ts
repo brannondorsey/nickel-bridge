@@ -29,6 +29,7 @@ const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id =
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
+const stmtSetOwnMeaningsHidden = db.prepare(`UPDATE users SET own_meanings_hidden = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -205,6 +206,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             onboardedAt: user.onboarded_at,
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
+            ownMeaningsHidden: user.own_meanings_hidden !== 0,
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -247,6 +249,13 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * - fastForward — pacing of the claim replay. On the account and not in
    *   localStorage because it describes the person, not the browser; see the
    *   fast_forward migration in db.ts.
+   * - ownMeaningsHidden — suppress the SAYC meaning UI for calls made by the
+   *   human's own partnership (seats N/S) during the auction; opponents'
+   *   (E/W) calls are always explained. This is bidding-partnership
+   *   membership only (seat % 2 === 0) and must NOT consult the card-play
+   *   hand-flip mechanism (`boardView.flipped`/`playingSeat` — see
+   *   CONTRIBUTING's "Hand-flip subtlety"): who bid what never flips, only
+   *   who plays which hand after the contract is set.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -255,6 +264,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const fields: [key: string, apply: (on: boolean) => void][] = [
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
+      ['ownMeaningsHidden', (on) => stmtSetOwnMeaningsHidden.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
     for (const key of Object.keys(body)) {
@@ -265,7 +275,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       if (key in body) apply(body[key] as boolean);
     }
     const row = stmtUserById.get(user.id) as UserRow;
-    return reply.send({ ladderListed: row.ladder_listed !== 0, fastForward: row.fast_forward !== 0 });
+    return reply.send({
+      ladderListed: row.ladder_listed !== 0,
+      fastForward: row.fast_forward !== 0,
+      ownMeaningsHidden: row.own_meanings_hidden !== 0,
+    });
   });
 
   // First-crossing tour completion (or skip). Idempotent — the stamp is

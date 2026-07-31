@@ -127,6 +127,19 @@ if (!userColumns.has('ladder_listed')) {
 if (!userColumns.has('fast_forward')) {
   db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `own_meanings_hidden` — suppress the SAYC meaning UI (the
+// dotted-underline cue, MeaningPanel's live preview, CallInspector's body)
+// for auction calls made or contemplated by the human's own partnership
+// (seats N=0, S=2 — always the human's side during BIDDING; unrelated to
+// the card-play hand-flip, see CONTRIBUTING's "Hand-flip subtlety" —
+// partnership membership for this setting never consults board.flipped).
+// Opponents' (E/W) calls are always shown, since inferring the auction from
+// their bidding is the actual skill this trains. Defaults to 0, exactly
+// today's behaviour: this adds a way to turn scaffolding off, it doesn't
+// change anyone who ignores it.
+if (!userColumns.has('own_meanings_hidden')) {
+  db.exec(`ALTER TABLE users ADD COLUMN own_meanings_hidden INTEGER NOT NULL DEFAULT 0`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -181,6 +194,8 @@ export interface UserRow {
   ladder_listed: number;
   /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
   fast_forward: number;
+  /** 1 = suppress the SAYC meaning UI for the human's own partnership's calls (N/S); 0 = show every call's meaning */
+  own_meanings_hidden: number;
   elo: number;
   created_at: number;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { AuctionEntry } from '../../api';
+import { isHumanPartnershipSeat, type AuctionEntry } from '../../api';
 import { CallText } from './CallText';
 
 /**
@@ -8,17 +8,26 @@ import { CallText } from './CallText';
  * SAYC meaning get the dotted underline; every call is a button that opens
  * the inspector. Long auctions scroll inside the frame (sticky header,
  * autoscrolled to the newest row).
+ *
+ * `ownMeaningsHidden` (settings: "Hide your side's bid meanings") suppresses
+ * the dotted-underline cue for the human's own partnership's (N/S) calls —
+ * the cell stays exactly as tappable and opens the same CallInspector, which
+ * withholds the actual content. The class itself must not leak whether a
+ * hidden call has a real meaning underneath, so it is omitted rather than
+ * swapped for a different one.
  */
 export function AuctionGrid({
   auction,
   dealer,
   myTurn,
   onInspect,
+  ownMeaningsHidden = false,
 }: {
   auction: AuctionEntry[];
   dealer: number;
   myTurn: boolean;
   onInspect: (entry: AuctionEntry) => void;
+  ownMeaningsHidden?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -65,7 +74,11 @@ export function AuctionGrid({
                       {entry ? (
                         <button
                           type="button"
-                          className={entry.meaning?.exact ? 'has-meaning' : ''}
+                          className={
+                            entry.meaning?.exact && !(ownMeaningsHidden && isHumanPartnershipSeat(entry.seat))
+                              ? 'has-meaning'
+                              : ''
+                          }
                           onClick={() => onInspect(entry)}
                           title="what does this call mean?"
                           aria-label={entry.name}

@@ -1471,6 +1471,22 @@ a.ds-btn-secondary:hover {
   font-style: italic;
   margin-top: 8px;
 }
+/* "Hide your side's bid meanings" (settings) — the same sealed/unavailable
+   idiom as .meaning-panel-placeholder and .board-row-sealed: muted italic
+   text, dashed line where a solid border would otherwise be. Used both on
+   MeaningPanel's own root (the live BidBox preview) and on a plain
+   .meaning-body inside CallInspector's Dialog (which supplies its own
+   border chrome, so only the text treatment applies there). */
+.meaning-sealed {
+  font-style: italic;
+  color: var(--muted);
+}
+.meaning-panel.meaning-sealed {
+  border-color: var(--line);
+}
+.meaning-panel.meaning-sealed::before {
+  border-left-color: var(--line-dashed);
+}
 /* Glossary term links in prose (GlossaryProse) — a quiet dotted underline,
    inheriting the surrounding type entirely; tap opens the term sheet. */
 .gloss-link {

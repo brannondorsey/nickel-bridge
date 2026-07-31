@@ -79,7 +79,8 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
-                where night mode, claim fast-forward, ladder listing and sign-out live;
+                where night mode, claim fast-forward, ladder listing, hiding your own bid
+                meanings, and sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
                 see "The profile sparklines" below; Scenarios.tsx is the demo-mode gallery;
                 Glossary.tsx is the glossary screen; Tour.tsx is the first-crossing
@@ -806,15 +807,16 @@ switch: the SAME component at different arities, deliberately, which is why the 
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
 
-**Where a preference lives is a decision, not an accident.** Both new rows are columns on
-`users` (`fast_forward`, `ladder_listed`), written through one partial-update endpoint,
-`POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is plain
-per-user booleans and still growing (`difficulty` is already a column waiting for a UI).
-Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't look
-like a successful write. Appearance is the ONE device-local row, and only because it has
-to be applied before first paint by the inline script in `index.html` — no round trip can
-answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer says that
-once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+**Where a preference lives is a decision, not an accident.** Every non-appearance row is a
+column on `users` (`fast_forward`, `ladder_listed`, `own_meanings_hidden`), written through
+one partial-update endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself
+when the list is plain per-user booleans and still growing (`difficulty` is already a column
+waiting for a UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a
+typo can't look like a successful write. Appearance is the ONE device-local row, and only
+because it has to be applied before first paint by the inline script in `index.html` — no
+round trip can answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer
+says that once rather than tagging rows. Each of the three account-backed settings has one
+thing worth knowing:
 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
   preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
@@ -841,6 +843,23 @@ once rather than tagging rows. Each of the two new settings has one thing worth 
   (`Leaderboard.tsx`), so an omitted player leaves no gap; a signed-out visitor's #3 can
   differ from a signed-in one's, which beats a hole in the numbering advertising that
   somebody opted out.
+- **Hide your side's bid meanings** (`users.own_meanings_hidden`, default **off** — unlike
+  the two rows above) suppresses the SAYC meaning UI (the auction grid's dotted-underline
+  cue, the live BidBox "Your" preview, `CallInspector`'s body) for calls made by the human's
+  own partnership — seats N and S, since the human always bids from South. Opponents' (E/W)
+  calls are always explained; inferring the auction from their bidding is the actual skill
+  this trains. Purely a client-side rendering gate: `boardView`'s per-call meaning data is
+  unchanged, and `packages/core`'s SAYC explainer/advisor never sees this setting.
+  Partnership membership here is a fixed `seat % 2 === 0` check
+  (`isHumanPartnershipSeat` in `web/src/api.ts`) — it is **not** the card-play hand-flip
+  mechanism (`boardView.flipped`/`playingSeat`, see "Hand-flip subtlety" below): who bid
+  what during the auction never flips, only who plays which hand once the contract is set.
+  Suppressing the content is deliberately not the same as hiding the cue: `AuctionGrid`
+  still omits the `has-meaning` class for a hidden call (so the cue itself doesn't leak
+  which calls are real conventions), but the button stays tappable and opens the same
+  `CallInspector`, which renders one identical "Sealed" message whether or not
+  `entry.meaning` is populated — showing different copy for "no meaning" vs. "meaning
+  present but hidden" would itself be the leak.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,

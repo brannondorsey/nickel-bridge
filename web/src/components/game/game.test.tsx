@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import type { AuctionEntry } from '../../api';
 import {
   allHands,
   bid2H,
@@ -139,6 +140,29 @@ describe('AuctionGrid', () => {
     expect(screen.getByText('?')).toBeInTheDocument();
     expect(screen.getByText(/tap any call to inspect/i)).toBeInTheDocument();
   });
+
+  // "Hide your side's bid meanings" only ever suppresses the dotted-underline
+  // cue on N/S calls (biddingAuction[2] is S's 1♥, an exact meaning); the
+  // cell stays clickable either way, since CallInspector — not this class —
+  // is what actually withholds the content.
+  it("suppresses the has-meaning cue for the human's own partnership's calls when ownMeaningsHidden", async () => {
+    const onInspect = vi.fn();
+    const shown = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn onInspect={onInspect} />);
+    const shownButton = screen.getByRole('button', { name: /1♥/ });
+    expect(shownButton).toHaveClass('has-meaning');
+    shown.unmount();
+
+    const { container } = render(
+      <AuctionGrid auction={biddingAuction} dealer={0} myTurn onInspect={onInspect} ownMeaningsHidden />,
+    );
+    const hiddenButton = screen.getByRole('button', { name: /1♥/ });
+    expect(hiddenButton).not.toHaveClass('has-meaning');
+    // still fully tappable — the suppression is content-only
+    await userEvent.click(hiddenButton);
+    expect(onInspect).toHaveBeenCalledWith(biddingAuction[2]);
+    // opponents' (E/W) cells are untouched; no other cell should gain the class
+    expect(container.querySelectorAll('.has-meaning').length).toBe(0);
+  });
 });
 
 describe('MeaningPanel', () => {
@@ -162,6 +186,26 @@ describe('MeaningPanel', () => {
     const none = render(<MeaningPanel call={8} prefix="Your" />);
     expect(none.getByText(/no standard SAYC meaning/i)).toBeInTheDocument();
   });
+
+  // "Hide your side's bid meanings": the live "Your" preview seals identically
+  // regardless of whether a meaning exists underneath — a differing message
+  // would itself leak which calls are real conventions.
+  it('seals the live preview when hidden, for both a real meaning and none', () => {
+    const sealedCopy = 'Sealed — turn off “Hide your side’s bid meanings” in Settings to see it.';
+    const withMeaning = render(<MeaningPanel meaning={meaning2H} call={bid2H} prefix="Your" hidden />);
+    expect(withMeaning.container.textContent).toContain(sealedCopy);
+    expect(withMeaning.queryByText('10–12 HCP')).not.toBeInTheDocument();
+    withMeaning.unmount();
+
+    const sealedNoMeaning = render(<MeaningPanel call={8} prefix="Your" hidden />);
+    expect(sealedNoMeaning.container.textContent).toContain(sealedCopy);
+  });
+
+  it('shortens the placeholder when hidden, since it can no longer promise a meaning', () => {
+    render(<MeaningPanel placeholder hidden />);
+    expect(screen.queryByText(/to see what it means/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/tap a bid/i)).toBeInTheDocument();
+  });
 });
 
 describe('CallInspector', () => {
@@ -173,6 +217,32 @@ describe('CallInspector', () => {
     expect(screen.getByText(/13–21 HCP/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // biddingAuction[2] (S, seat 2) is the human's own partnership; the sealed
+  // body must be identical whether the call has a real meaning or not — see
+  // MeaningPanel's matching test above for the same invariant.
+  it("seals a South (own partnership) call's body when ownMeaningsHidden, title suffix included", () => {
+    const south = render(<CallInspector entry={biddingAuction[2]} onClose={() => {}} ownMeaningsHidden />);
+    expect(screen.getByRole('dialog', { name: /S bid 1\s*♥/ })).toBeInTheDocument();
+    // the meaning title suffix is gone, not just the body
+    expect(screen.queryByText(/13–21 HCP/)).not.toBeInTheDocument();
+    const southSealed = screen.getByText(/sealed/i).textContent;
+    south.unmount();
+
+    // biddingAuction[0] (N, Pass) has no meaning at all — the sealed message
+    // must read identically either way.
+    render(<CallInspector entry={biddingAuction[0]} onClose={() => {}} ownMeaningsHidden />);
+    expect(screen.getByText(/sealed/i).textContent).toBe(southSealed);
+  });
+
+  it("never seals an opponent's (E/W) call, even when ownMeaningsHidden", () => {
+    // biddingAuction has no E/W entry with a meaning, so build one: East
+    // (seat 1) with the same meaning South's real 1♥ carries.
+    const eastCall: AuctionEntry = { ...biddingAuction[2], seat: 1, isHuman: false };
+    render(<CallInspector entry={eastCall} onClose={() => {}} ownMeaningsHidden />);
+    expect(screen.queryByText(/sealed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/13–21 HCP/)).toBeInTheDocument();
   });
 });
 

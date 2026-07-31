@@ -321,6 +321,10 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
   // The tour is public, so there may be no account to have set this; the
   // default matches the live board's.
   const fastForward = useMe().me?.user?.fastForward !== false;
+  // Same idea for "Hide your side's bid meanings" — a signed-out visitor
+  // (the common tour path) has no account, so this is always false there;
+  // it only matters when a signed-in user replays /tour with the setting on.
+  const ownMeaningsHidden = useMe().me?.user?.ownMeaningsHidden === true;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -600,6 +604,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
           claimAnnounceOpen={claimAnnounceOpen}
           onSkipClaim={skipClaimAnnouncement}
           hint={guided && !forced && step?.kind === 'card' && selectedCard === null ? step.action : null}
+          ownMeaningsHidden={ownMeaningsHidden}
         />
       ) : (
         <BiddingPhase
@@ -612,9 +617,12 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           hint={guided && step?.kind === 'call' && selectedCall === null ? step.action : null}
+          ownMeaningsHidden={ownMeaningsHidden}
         />
       )}
-      {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
+      {inspect ? (
+        <CallInspector entry={inspect} onClose={() => setInspect(null)} ownMeaningsHidden={ownMeaningsHidden} />
+      ) : null}
     </div>
   );
 }

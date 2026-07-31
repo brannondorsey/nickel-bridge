@@ -78,7 +78,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean };
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean; ownMeaningsHidden: boolean };
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -86,6 +86,9 @@ export default function Settings() {
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
+    // unlike the two rows above, this one defaults OFF — today's behaviour
+    // (every call's meaning shown) is unchanged for anyone who ignores it.
+    ownMeaningsHidden: me?.user?.ownMeaningsHidden === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -136,6 +139,18 @@ export default function Settings() {
               value={prefs.fastForward}
               options={OFF_ON}
               onChange={(fastForward) => change({ fastForward })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Hide your side's bid meanings"
+            note="Opponents' calls still explain themselves. Yours and partner's don't — read your own auction the way you'd have to at a real table."
+          >
+            <PrefSwitch
+              label="Hide your side's bid meanings"
+              value={prefs.ownMeaningsHidden}
+              options={OFF_ON}
+              onChange={(ownMeaningsHidden) => change({ ownMeaningsHidden })}
             />
           </SettingRow>
 
