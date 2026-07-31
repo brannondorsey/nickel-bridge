@@ -12,6 +12,9 @@ web/dist/
 test-results/
 playwright-report/
 .claude/settings.local.json
+# Workflow-tool scratch space: isolated git worktrees for parallel agent runs.
+# Each is its own checkout on its own branch, never meant to be tracked here.
+.claude/worktrees/
 # Player-outreach output (see .claude/skills/player-outreach/): real names and email
 # addresses. This repo is public — belt-and-braces so a stray write can never be committed.
 roster*.csv
