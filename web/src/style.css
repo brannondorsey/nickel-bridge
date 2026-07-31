@@ -175,6 +175,76 @@
   }
 }
 
+/* ---- colorblind suit palette — a SECOND, INDEPENDENT axis from night mode, not a
+   third theme option (see suitPalette.ts). Standard red/gold hearts+diamonds are a
+   known collision under red-green colorblindness (~8% of men); this swaps ONLY
+   --suit-h/--suit-d (and their --cardface-suit-* / --onprimary-suit-* derivatives) to
+   a blue/orange pair ("stamp-ink blue" / "rust orange") — the standard safe
+   substitute, since blue/orange sit on the tritan axis that red-green deficiency
+   leaves intact. --suit-s/--suit-c are untouched: clubs already sits off the
+   red-green collision axis, so only the colliding pair moves. Values were checked
+   both by hand-computed WCAG contrast against --panel/--cardface (each stays >= the
+   original pair's contrast, so legibility never regresses) and through a
+   deuteranopia/protanopia simulator for pairwise distinguishability — hand-computed
+   contrast against the background alone says nothing about that.
+
+   Three blocks below, composing with [data-theme="night"] exactly like any other
+   token override rather than replacing it:
+   - [data-suit-palette="colorblind"] — day. Day cardface tokens are PINNED LITERALS
+     in the base :root (not var()-chained to --suit-*), so --cardface-suit-h/-d are
+     redeclared here explicitly with the same hex values.
+   - [data-theme="night"][data-suit-palette="colorblind"] — night. MUST ALSO redeclare
+     --cardface-suit-h/-d as literals, even though the night :root block chains them
+     to var(--suit-h)/var(--suit-d) and it looks like they'd inherit the new value
+     for free. They don't: this selector and the DAY block above are both (0,1,0) —
+     [data-theme="night"] alone is (0,1,0) too, and this compound selector only beats
+     it on properties it actually declares — so on --cardface-suit-h/-d specifically,
+     which the compound selector left undeclared, the cascade falls back to comparing
+     [data-theme="night"]'s var()-chain against the day block's literal, both (0,1,0),
+     and the day block wins the tie by sitting later in the file. That silently fed
+     the WRONG (day) hex to card faces in explicit Night mode — redeclaring the two
+     properties here, exactly like --onprimary-suit-* already does, gives this
+     selector (0,2,0) and settles it outright.
+   - the @media (prefers-color-scheme: dark) mirror, for 'system' appearance with no
+     explicit data-theme. THIS ONE BLOCK IS ORDER-SENSITIVE: it and the standard
+     @media dark mirror above are both single-descendant-combinator overrides of
+     :root at equal specificity, so which wins for "system-dark OS + colorblind, no
+     explicit Appearance override" is decided by which is textually LATER in this
+     file, not by specificity — keep this block after the standard one. The DAY
+     block above is order-sensitive against :root the exact same way (both (0,1,0),
+     day wins only because it's later) — it isn't "outright on specificity" either,
+     it's just already in the right order. [data-theme=night][data-suit-palette] is
+     the ONE pairing here that truly settles on specificity alone, and only because
+     it now redeclares every property the tie could otherwise be lost on — see
+     above. e2e/smoke.spec.ts has a computed-style test for the system-dark
+     combination; there is no equivalent test for explicit Night — this exact bug
+     shipped once already because of that gap. ---- */
+[data-suit-palette='colorblind'] {
+  --suit-h: #0a5c99; /* stamp-ink blue */
+  --suit-d: #98490a; /* rust/kiln orange */
+  --cardface-suit-h: #0a5c99;
+  --cardface-suit-d: #98490a;
+  --onprimary-suit-h: #7fc0ff;
+  --onprimary-suit-d: #ffb877;
+}
+[data-theme='night'][data-suit-palette='colorblind'] {
+  --suit-h: #6fb3e0; /* harbor blue — lighter, for dark stock */
+  --suit-d: #e0995a; /* amber-rust — lighter, for dark stock */
+  --cardface-suit-h: #6fb3e0;
+  --cardface-suit-d: #e0995a;
+  --onprimary-suit-h: #0a5c99;
+  --onprimary-suit-d: #98490a;
+}
+@media (prefers-color-scheme: dark) {
+  /* Order-sensitive against the standard mirror above — see the block comment. */
+  [data-suit-palette='colorblind']:not([data-theme]) {
+    --suit-h: #6fb3e0;
+    --suit-d: #e0995a;
+    --onprimary-suit-h: #0a5c99;
+    --onprimary-suit-d: #98490a;
+  }
+}
+
 :root {
   --font-display: 'Poiret One', cursive; /* wordmark ONLY */
   --font-body: 'Crimson Pro', serif; /* body, titles, greetings */
@@ -2736,6 +2806,18 @@ a.stat-tile:hover {
   background: var(--btn-primary-bg);
   border-color: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
+}
+
+/* Suit colors row's glyph confirmation strip — decorative (aria-hidden, the
+   switch's pressed segment already carries the state), so purely a visual
+   readback of the four live suit tokens. gap, not letter-spacing, so it doesn't
+   inherit the tracked-caps spacing of the label above it. */
+.suit-preview {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  font-size: 1.2em;
+  padding-top: 2px;
 }
 
 .settings-page {

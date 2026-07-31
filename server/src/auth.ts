@@ -30,6 +30,7 @@ const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch()
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
 const stmtSetBriskPacing = db.prepare(`UPDATE users SET brisk_pacing = ? WHERE id = ?`);
+const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -207,6 +208,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
             briskPacing: user.brisk_pacing !== 0,
+            bidFeedback: user.bid_feedback !== 0,
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -256,6 +258,10 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   Deliberately does not affect stageClaimSteps or TrickArea's WAAPI
    *   glide/collect durations in either mode — see brisk_pacing's migration
    *   comment and stagePlaySteps' own doc comment in playAnim.ts.
+   * - bidFeedback — whether the post-call grading toast renders. Grading
+   *   itself (bidEvals, stats, the post-board review table) is computed and
+   *   stored unconditionally; this only gates the live interruption — see
+   *   the bid_feedback migration in db.ts.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -265,6 +271,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
       ['briskPacing', (on) => stmtSetBriskPacing.run(on ? 1 : 0, user.id)],
+      ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
     for (const key of Object.keys(body)) {
@@ -279,6 +286,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ladderListed: row.ladder_listed !== 0,
       fastForward: row.fast_forward !== 0,
       briskPacing: row.brisk_pacing !== 0,
+      bidFeedback: row.bid_feedback !== 0,
     });
   });
 

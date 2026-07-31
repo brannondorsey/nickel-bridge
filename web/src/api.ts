@@ -14,6 +14,8 @@ export interface Me {
     fastForward: boolean;
     /** replay ordinary robot card play at a compressed pace (settings: "Table speed") */
     briskPacing: boolean;
+    /** show the post-call grading toast (settings: "Bid feedback") */
+    bidFeedback: boolean;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -343,11 +345,11 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; briskPacing?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean; briskPacing: boolean }>('/api/me/prefs', {
-      method: 'POST',
-      body: JSON.stringify(prefs),
-    }),
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; briskPacing?: boolean; bidFeedback?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean; briskPacing: boolean; bidFeedback: boolean }>(
+      '/api/me/prefs',
+      { method: 'POST', body: JSON.stringify(prefs) },
+    ),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),

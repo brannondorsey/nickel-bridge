@@ -65,11 +65,17 @@ export default function Board() {
 
   // "Fast forward settled tricks" (settings gate) — account state, so it
   // follows the player between devices; see runClaim below for what it paces.
-  const fastForward = useMe().me?.user?.fastForward !== false;
+  const { me } = useMe();
+  const fastForward = me?.user?.fastForward !== false;
   // "Table speed" (settings gate) — paces ORDINARY robot card play only; see
   // applyBoard below and stagePlaySteps' doc comment. Default off (unlike
   // fastForward), matching the brisk_pacing schema default.
-  const briskPacing = useMe().me?.user?.briskPacing === true;
+  const briskPacing = me?.user?.briskPacing === true;
+  // "Bid feedback" (settings gate) — gates only whether the post-call grading
+  // toast renders below; grading is computed and stored (bidEvals)
+  // unconditionally, so turning this off never affects scoring, stats, or
+  // the post-board review table. See the bid_feedback migration in db.ts.
+  const bidFeedback = me?.user?.bidFeedback !== false;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +371,7 @@ export default function Board() {
       ) : board.state === 'playing' ? (
         <PlayPhase
           board={board}
-          lastEval={lastEval}
+          lastEval={bidFeedback ? lastEval : null}
           selectedCard={selectedCard}
           onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
           inspect={inspect}
@@ -377,7 +383,7 @@ export default function Board() {
       ) : (
         <BiddingPhase
           board={board}
-          lastEval={lastEval}
+          lastEval={bidFeedback ? lastEval : null}
           selectedCall={selectedCall}
           onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}

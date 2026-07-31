@@ -31,6 +31,7 @@ export const meFixture: Me = {
     ladderListed: true,
     fastForward: true,
     briskPacing: false,
+    bidFeedback: true,
   },
   devAuth: true,
   googleAuth: true,

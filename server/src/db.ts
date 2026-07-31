@@ -141,6 +141,19 @@ if (!userColumns.has('brisk_pacing')) {
   db.exec(`ALTER TABLE users ADD COLUMN brisk_pacing INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `bid_feedback` — show the post-call grading toast (1, the
+// shipped behaviour) or suppress it (0). The toast is deliberately excellent
+// for a learner and unwanted noise for a stronger player who is here to
+// compete rather than study. Account state, not localStorage, for the same
+// reason as fast_forward: it describes how this PERSON wants to be coached,
+// not a property of the device. Purely a rendering gate — grading is still
+// computed and stored in bidEvals on every submitCall regardless of this
+// flag, so bid-accuracy stats and the post-board "YOUR BIDDING" review table
+// are unaffected either way.
+if (!userColumns.has('bid_feedback')) {
+  db.exec(`ALTER TABLE users ADD COLUMN bid_feedback INTEGER NOT NULL DEFAULT 1`);
+}
+
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
 // first-class column — not a name convention — because placement, the Elo
@@ -196,6 +209,8 @@ export interface UserRow {
   fast_forward: number;
   /** 1 = replay ordinary robot card play at a compressed pace; 0 (default) = table pace */
   brisk_pacing: number;
+  /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
+  bid_feedback: number;
   elo: number;
   created_at: number;
 }
