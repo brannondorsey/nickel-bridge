@@ -3,6 +3,18 @@ name: Claude PR Review
 on:
   pull_request:
     types: [opened, reopened]
+  # Manual re-run, because the automatic triggers are both one-shot: a review
+  # that fails (the usual cause is exhausting --max-turns before it posts) can
+  # otherwise only be retried by closing and reopening the PR — and closing
+  # fires pr-preview-teardown.yml, which cancels the in-flight CI run and
+  # destroys the preview app and its volume. Paying that to re-run a comment
+  # job is a bad trade, so dispatch it directly instead.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -30,7 +42,8 @@ jobs:
           #      and update the CLAUDE_CODE_OAUTH_TOKEN secret with the new value.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Review this pull request in the brannondorsey/nickel-bridge repo.
+            Review pull request #${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+            in the brannondorsey/nickel-bridge repo.
 
             Read the repo's CLAUDE.md (checked in at the repo root) for context, and pay
             particular attention to its "Invariants — do not break" section — e.g. robot
@@ -63,7 +76,12 @@ jobs:
           # because every PR today is self-authored (brannondorsey); revisit before this
           # repo takes outside contributions, since it lets a crafted PR description/diff
           # try to steer the agent with no tool gate at all.
+          # 50 turns was not enough: the review of #122 spent all 50 reading the
+          # diff and hit `error_max_turns` at turn 51 without ever reaching the
+          # step that posts the comment — a full run's cost for no output. The
+          # limit exists to bound a runaway loop, not to bound a thorough read,
+          # so it is set well clear of what a large PR actually needs.
           claude_args: |
             --model claude-sonnet-5
-            --max-turns 50
+            --max-turns 75
             --permission-mode bypassPermissions
