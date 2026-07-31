@@ -291,15 +291,16 @@ test('settings apply a night-mode choice that survives a reload', async ({ page 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night');
 
-  // the other two rows are account state, so they round-trip through the server
+  // the other rows are account state, so they round-trip through the server
   await page.getByRole('group', { name: 'Name on the ladder' }).getByRole('button', { name: 'OFF' }).click();
   await page.getByRole('group', { name: 'Fast forward settled tricks' }).getByRole('button', { name: 'OFF' }).click();
+  await page.getByRole('group', { name: 'Bid feedback' }).getByRole('button', { name: 'OFF' }).click();
   await expect
     .poll(async () => {
       const { user } = await (await page.request.get('/api/me')).json();
-      return [user.ladderListed, user.fastForward];
+      return [user.ladderListed, user.fastForward, user.bidFeedback];
     })
-    .toEqual([false, false]);
+    .toEqual([false, false, false]);
 });
 
 /**

@@ -12,6 +12,8 @@ export interface Me {
     ladderListed: boolean;
     /** replay a claim's settled tricks compressed (settings: "Fast forward settled tricks") */
     fastForward: boolean;
+    /** show the post-call grading toast (settings: "Bid feedback") */
+    bidFeedback: boolean;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -341,8 +343,8 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean }>('/api/me/prefs', {
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; bidFeedback?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean; bidFeedback: boolean }>('/api/me/prefs', {
       method: 'POST',
       body: JSON.stringify(prefs),
     }),
