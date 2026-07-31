@@ -3,18 +3,20 @@ name: Claude PR Review
 on:
   pull_request:
     types: [opened, reopened]
-  # Manual re-run, because the automatic triggers are both one-shot: a review
-  # that fails (the usual cause is exhausting --max-turns before it posts) can
-  # otherwise only be retried by closing and reopening the PR — and closing
-  # fires pr-preview-teardown.yml, which cancels the in-flight CI run and
-  # destroys the preview app and its volume. Paying that to re-run a comment
-  # job is a bad trade, so dispatch it directly instead.
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to review'
-        required: true
-        type: string
+  #
+  # NOTE ON RE-RUNNING A FAILED REVIEW. There is deliberately no
+  # workflow_dispatch here: it was tried (run #69) and is a trap. The action
+  # takes its PR context from the event payload, so under a dispatch PR_NUMBER
+  # is empty, the review silently does nothing — and the job still reports
+  # SUCCESS in ~15s, which is worse than failing, because the check goes green
+  # having reviewed nothing.
+  #
+  # `issue_comment` (say @claude on the PR) is the action's own supported
+  # re-trigger and would work, but note that non-`pull_request` events run the
+  # workflow file from the DEFAULT branch — so the settings below only apply
+  # once they are merged to main, not while they sit on a feature branch.
+  # Until then the only retrigger that picks up this file is reopening the PR,
+  # which costs a preview teardown (see pr-preview-teardown.yml).
 
 permissions:
   contents: read
@@ -42,8 +44,7 @@ jobs:
           #      and update the CLAUDE_CODE_OAUTH_TOKEN secret with the new value.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Review pull request #${{ github.event.inputs.pr_number || github.event.pull_request.number }}
-            in the brannondorsey/nickel-bridge repo.
+            Review this pull request in the brannondorsey/nickel-bridge repo.
 
             Read the repo's CLAUDE.md (checked in at the repo root) for context, and pay
             particular attention to its "Invariants — do not break" section — e.g. robot
