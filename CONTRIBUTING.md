@@ -285,6 +285,23 @@ whole batch belongs to the claiming side. See invariant 1 below — claims chang
 `advanceRobots` records for a human's untaken decisions, so they interact directly with the
 robot-trace fixture.
 
+**Table speed** (settings gate, `users.brisk_pacing`, default off) is a second, independent
+pacing dial on top of the ones above — it does NOT touch claims. `stagePlaySteps` takes an
+optional `brisk` argument (default false, so every pre-existing call site is byte-identical)
+that scales only the "think"/"read" gap terms in its own delay math (`ROBOT_GAP_MS`/`HOLD_MS`/
+`STAMP_MS`, via an internal `pace()` helper and `BRISK_SCALE`) — `GLIDE_MS`/`COLLECT_MS`
+(`TrickArea.tsx`'s own WAAPI animation durations) and the one-shot `LEAD_SETTLE_MS` layout-settle
+beat are never scaled, the same split `CLAIM_SPEEDUP_FACTOR` already uses for the claim
+fast-forward. `stageClaimSteps` and `TrickArea.tsx` have zero lines of code that reference
+`brisk_pacing` at all: the claim tail (both "Fast forward settled tricks" modes) keeps using its
+own fixed gap sets exactly as before this setting existed, matching the reasoning under "Fast
+forward settled tricks" below for why the two settings deliberately don't interact. Note that
+because `stagePlaySteps` only ever stages a play-phase transition (`intoPlay`/`withinPlay`
+above), a bidding→bidding response has nothing to stage — Table Speed paces ordinary robot CARD
+PLAY only, never the auction, despite its name. `Board.tsx` and `Tour.tsx` read it off
+`MeContext` the same way they read `fastForward`, with the opposite default comparison
+(`=== true`, not `!== false`) since `brisk_pacing`'s schema default is 0/false.
+
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
 tier, resolved by `boardDifficulty()` in `tournaments.ts` from two tournament columns:
@@ -806,15 +823,27 @@ switch: the SAME component at different arities, deliberately, which is why the 
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
 
-**Where a preference lives is a decision, not an accident.** Both new rows are columns on
-`users` (`fast_forward`, `ladder_listed`), written through one partial-update endpoint,
-`POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is plain
-per-user booleans and still growing (`difficulty` is already a column waiting for a UI).
-Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't look
-like a successful write. Appearance is the ONE device-local row, and only because it has
-to be applied before first paint by the inline script in `index.html` — no round trip can
-answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer says that
-once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+**Where a preference lives is a decision, not an accident.** The three non-appearance rows
+are columns on `users` (`fast_forward`, `ladder_listed`, `brisk_pacing`), written through one
+partial-update endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself when
+the list is plain per-user booleans and still growing (`difficulty` is already a column
+waiting for a UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a
+typo can't look like a successful write. Appearance is the ONE device-local row, and only
+because it has to be applied before first paint by the inline script in `index.html` — no
+round trip can answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer
+says that once rather than tagging rows. Each of the three account settings has one thing
+worth knowing:
+
+- **Table speed** (`users.brisk_pacing`, default OFF/NORMAL — unlike the other two, which
+  default on) paces ORDINARY robot card play (see the "Table speed" paragraph under "Auto-play
+  and claims" above for the mechanism) and nothing else — it deliberately does not reach
+  `stageClaimSteps` or `TrickArea.tsx`'s WAAPI durations in either "Fast forward settled
+  tricks" mode. Ships opt-in because, unlike `fast_forward`, it changes the felt pacing of
+  ordinary play itself — a taste call, not a QoL fix — so every existing account's experience
+  is unchanged until the player flips it. `Board.tsx` and `Tour.tsx` read it off `MeContext`
+  the same way they read `fastForward`, with the opposite default comparison (`=== true`, not
+  `!== false`) to match its opposite schema default — copying `fastForward`'s comparison here
+  would silently default every account to BRISK.
 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
   preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every

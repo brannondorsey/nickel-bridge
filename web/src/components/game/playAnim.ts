@@ -25,10 +25,28 @@ export const HOLD_MS = 300;
 export const COLLECT_MS = 260;
 export const STAMP_MS = 420;
 
+// entering play from the auction: how long the newly-exposed dummy/fan gets
+// to settle before the opening lead glides in. Fires once per board, not per
+// card, so unlike the "table speed" dial below this is layout-settle time,
+// not a robot-pacing beat a player perceives as a wait — the "Table speed"
+// setting (BRISK_SCALE) deliberately leaves it alone.
+export const LEAD_SETTLE_MS = 350;
+
 // A forced (single-legal-card) turn auto-plays after this delay — just long
 // enough to register as a deliberate play (not an instant jump) without
 // making the player wait to see a card they had no choice over.
 export const AUTO_PLAY_DELAY_MS = 250;
+
+// The settings tab's "Table speed" (users.brisk_pacing, default off) ON
+// pacing for ORDINARY robot card play — see stagePlaySteps' `brisk` param
+// below. Only the "think"/"read" gaps between plays (ROBOT_GAP_MS/HOLD_MS/
+// STAMP_MS) scale; GLIDE_MS/COLLECT_MS (TrickArea's own WAAPI durations) stay
+// fixed, same split CLAIM_SPEEDUP_FACTOR already uses for the claim
+// fast-forward below — real wall-clock animation time is left alone, only
+// the pauses between plays compress.
+export const BRISK_SCALE = 0.5;
+
+const pace = (ms: number, brisk: boolean): number => (brisk ? Math.round(ms * BRISK_SCALE) : ms);
 
 // The "Fast forward settled tricks" ON pacing: much shorter than
 // ROBOT_GAP_MS/HOLD_MS+STAMP_MS since a claim can span many tricks — the
@@ -166,8 +184,21 @@ const lockedView = (next: BoardView, over: Partial<BoardView>): BoardView => ({
  * At most one trick boundary can occur per transition: the human plays at
  * least one card in every trick, so advanceRobots always stops within the
  * trick after the one the human just completed.
+ *
+ * `brisk` (the settings tab's "Table speed" ON, default false so every
+ * pre-existing call site is byte-identical) scales only the "think"/"read"
+ * gap terms below (ROBOT_GAP_MS/HOLD_MS/STAMP_MS, via the `pace` helper) —
+ * GLIDE_MS/COLLECT_MS/LEAD_SETTLE_MS never scale, since those are real
+ * wall-clock time TrickArea's WAAPI animation (or, for LEAD_SETTLE_MS, the
+ * DOM) is still consuming. This mirrors CLAIM_SPEEDUP_FACTOR's own precedent
+ * of leaving TrickArea's durations fixed and only compressing the gaps
+ * between plays — stageClaimSteps is untouched by this setting entirely, on
+ * purpose: bidding has no client-side staging today (a bidding→bidding
+ * response falls straight through to a plain state jump, since intoPlay/
+ * withinPlay above are both false for it), so this only ever paces card
+ * play, never the auction, despite the row's name.
  */
-export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
+export function stagePlaySteps(prev: BoardView, next: BoardView, brisk = false): StagedStep[] {
   const intoPlay = prev.state === 'bidding' && next.state === 'playing';
   const withinPlay = prev.state === 'playing' && (next.state === 'playing' || next.state === 'done');
   if (!intoPlay && !withinPlay) return [];
@@ -236,7 +267,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
 
   finishing.forEach((play, i) => {
     steps.push({
-      delayBefore: i === 0 ? (intoPlay ? 350 : 0) : GLIDE_MS + ROBOT_GAP_MS,
+      delayBefore: i === 0 ? (intoPlay ? LEAD_SETTLE_MS : 0) : GLIDE_MS + pace(ROBOT_GAP_MS, brisk),
       view: lockedView(next, {
         currentTrick: [...prevTrick, ...finishing.slice(0, i + 1)],
         completedTricks: prevDone,
@@ -255,7 +286,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     // tally stamps — counts change only on the tally snapshot so TrickArea
     // can animate collect and stamp as separate beats
     steps.push({
-      delayBefore: GLIDE_MS + HOLD_MS,
+      delayBefore: GLIDE_MS + pace(HOLD_MS, brisk),
       view: lockedView(next, {
         currentTrick: [],
         completedTricks: nextDone,
@@ -278,7 +309,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     });
     after.forEach((play, i) => {
       steps.push({
-        delayBefore: i === 0 ? STAMP_MS : GLIDE_MS + ROBOT_GAP_MS,
+        delayBefore: i === 0 ? pace(STAMP_MS, brisk) : GLIDE_MS + pace(ROBOT_GAP_MS, brisk),
         view: lockedView(next, {
           currentTrick: nextCur.slice(0, i + 1),
           completedTricks: nextDone,
@@ -292,7 +323,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
 
   // the real server view last: restores myTurn/legalCards (or shows the result)
   const lastWasPlay = !boundary || after.length > 0;
-  steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : STAMP_MS, view: next });
+  steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : pace(STAMP_MS, brisk), view: next });
   return steps;
 }
 

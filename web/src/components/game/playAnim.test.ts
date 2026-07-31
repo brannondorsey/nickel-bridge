@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
+  BRISK_SCALE,
   CLAIM_GAP_MS,
   CLAIM_SPEEDUP_FACTOR,
   CLAIM_TRICK_GAP_MS,
   COLLECT_MS,
   GLIDE_MS,
   HOLD_MS,
+  LEAD_SETTLE_MS,
   ROBOT_GAP_MS,
   STAMP_MS,
   captureFanOriginIfVisible,
@@ -294,6 +296,89 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, next)).toEqual([]);
     // two boundaries at once (stale tab): never animate a guess
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
+  });
+
+  // "Table speed" (settings tab, users.brisk_pacing) — omitting the arg (every
+  // pre-existing call site) must stay byte-identical to brisk=false.
+  describe('brisk (Table speed)', () => {
+    it('omitting `brisk` is identical to passing false', () => {
+      const lead = { seat: 2, card: myCard };
+      const r1 = { seat: 3, card: H(2) };
+      const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
+      const next: BoardView = {
+        ...prev,
+        hand: prev.hand.filter((c) => c !== myCard),
+        currentTrick: [lead, r1],
+        myTurn: true,
+        handToPlay: 0,
+      };
+      expect(stagePlaySteps(emptyPrev, next)).toEqual(stagePlaySteps(emptyPrev, next, false));
+    });
+
+    it('scales the robot "think" gap between plays, never the glide itself', () => {
+      const lead = { seat: 2, card: myCard };
+      const r1 = { seat: 3, card: H(2) };
+      const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
+      const next: BoardView = {
+        ...prev,
+        hand: prev.hand.filter((c) => c !== myCard),
+        currentTrick: [lead, r1],
+        myTurn: true,
+        handToPlay: 0,
+      };
+      const table = stagePlaySteps(emptyPrev, next);
+      const brisk = stagePlaySteps(emptyPrev, next, true);
+      // table: [lead(0), r1(GLIDE+ROBOT_GAP), final(GLIDE+ROBOT_GAP)]
+      expect(table[1].delayBefore).toBe(GLIDE_MS + ROBOT_GAP_MS);
+      expect(brisk[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * BRISK_SCALE));
+      // GLIDE_MS itself never moves — only ROBOT_GAP_MS does
+      expect(brisk[1].delayBefore).toBeLessThan(table[1].delayBefore);
+      expect(brisk[1].delayBefore).toBeGreaterThan(GLIDE_MS);
+    });
+
+    it('scales HOLD_MS and the post-collect STAMP_MS at a trick boundary, never COLLECT_MS', () => {
+      const next: BoardView = {
+        ...prev,
+        contract: { level: 4, strain: 3, declarer: 2 },
+        hand: prev.hand.filter((c) => c !== myCard),
+        currentTrick: [],
+        completedTricks: 5,
+        declarerTricks: 4,
+        defenderTricks: 1,
+        lastTrick: fullTrick,
+        myTurn: true,
+        handToPlay: 2,
+        legalCards: [prev.legalCards![0]],
+      };
+      const table = stagePlaySteps(prev, next);
+      const brisk = stagePlaySteps(prev, next, true);
+      // steps: [my card(0), hold+collect-sweep(GLIDE+HOLD), tally(COLLECT+80), final(STAMP)]
+      expect(table[1].delayBefore).toBe(GLIDE_MS + HOLD_MS);
+      expect(brisk[1].delayBefore).toBe(GLIDE_MS + Math.round(HOLD_MS * BRISK_SCALE));
+      // COLLECT_MS+80 never scales
+      expect(table[2].delayBefore).toBe(COLLECT_MS + 80);
+      expect(brisk[2].delayBefore).toBe(COLLECT_MS + 80);
+      // the final (real server view) step is a STAMP_MS beat here, and scales
+      expect(table[3].delayBefore).toBe(STAMP_MS);
+      expect(brisk[3].delayBefore).toBe(Math.round(STAMP_MS * BRISK_SCALE));
+    });
+
+    it('never scales LEAD_SETTLE_MS (the opening-lead layout-settle beat)', () => {
+      const lead = { seat: 3, card: H(9) };
+      const biddingPrev: BoardView = { ...prev, state: 'bidding', currentTrick: undefined, completedTricks: undefined };
+      const next: BoardView = {
+        ...prev,
+        currentTrick: [lead],
+        completedTricks: 0,
+        declarerTricks: 0,
+        defenderTricks: 0,
+        lastTrick: null,
+        myTurn: true,
+        handToPlay: 0,
+      };
+      const brisk = stagePlaySteps(biddingPrev, next, true);
+      expect(brisk[1].delayBefore).toBe(LEAD_SETTLE_MS);
+    });
   });
 });
 

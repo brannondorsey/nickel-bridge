@@ -321,6 +321,11 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
   // The tour is public, so there may be no account to have set this; the
   // default matches the live board's.
   const fastForward = useMe().me?.user?.fastForward !== false;
+  // "Table speed" — same reasoning, but its default matches the live board's
+  // brisk_pacing default (off) rather than fastForward's (on): a signed-out
+  // visitor's `me?.user` is null either way, so `=== true` already resolves
+  // correctly without needing fastForward's `!== false` flip.
+  const briskPacing = useMe().me?.user?.briskPacing === true;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -396,7 +401,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
 
   const applyTransition = useCallback(
     (prev: BoardView, next: BoardView, speed: number) => {
-      const steps = motionOK() ? stagePlaySteps(prev, next) : [];
+      const steps = motionOK() ? stagePlaySteps(prev, next, briskPacing) : [];
       if (!steps.length) {
         // bidding→bidding (or reduced motion): land after a beat, as if the
         // robots took a moment to reply
@@ -407,7 +412,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       }
       scheduleSteps(steps, speed);
     },
-    [clearTimers, scheduleSteps],
+    [briskPacing, clearTimers, scheduleSteps],
   );
 
   // Bracket a claim the same two ways Board.tsx does: an unmissable,

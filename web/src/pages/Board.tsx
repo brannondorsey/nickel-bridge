@@ -66,6 +66,10 @@ export default function Board() {
   // "Fast forward settled tricks" (settings gate) — account state, so it
   // follows the player between devices; see runClaim below for what it paces.
   const fastForward = useMe().me?.user?.fastForward !== false;
+  // "Table speed" (settings gate) — paces ORDINARY robot card play only; see
+  // applyBoard below and stagePlaySteps' doc comment. Default off (unlike
+  // fastForward), matching the brisk_pacing schema default.
+  const briskPacing = useMe().me?.user?.briskPacing === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +179,12 @@ export default function Board() {
 
   const applyBoard = useCallback(
     (prev: BoardView | null, next: BoardView) => {
-      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+      const steps =
+        prev && motionOK()
+          ? next.claimed
+            ? stageClaimSteps(prev, next)
+            : stagePlaySteps(prev, next, briskPacing)
+          : [];
       if (!steps.length) {
         cancelStaging();
         setBoard(next);
@@ -183,7 +192,7 @@ export default function Board() {
       }
       scheduleSteps(prev!, steps);
     },
-    [cancelStaging, scheduleSteps],
+    [briskPacing, cancelStaging, scheduleSteps],
   );
 
   // Bracket a claim in two beats: the ClaimOverlay holds the board for

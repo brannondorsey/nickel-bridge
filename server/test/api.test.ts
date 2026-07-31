@@ -208,18 +208,23 @@ describe('handle (first-login username)', () => {
 
     // defaults, and a partial patch leaves the untouched key alone
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.briskPacing]).toEqual([true, true, false]);
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
+      briskPacing: false,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward]).toEqual([false, false]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.briskPacing]).toEqual([false, false, false]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
-    expect(await pete.post('/api/me/prefs', {})).toEqual({ ladderListed: false, fastForward: false });
+    expect(await pete.post('/api/me/prefs', {})).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      briskPacing: false,
+    });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
     expect((await pete.get('/api/me')).user.fastForward).toBe(false);
@@ -227,6 +232,27 @@ describe('handle (first-login username)', () => {
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,
     ).toBe(401);
+  });
+
+  it('round-trips briskPacing independently of the other prefs, and rejects a non-boolean', async () => {
+    const priya = new TestClient(app, 'Priya');
+    await priya.login();
+
+    let me = await priya.get('/api/me');
+    expect(me.user.briskPacing).toBe(false);
+
+    expect(await priya.post('/api/me/prefs', { briskPacing: true })).toEqual({
+      ladderListed: true,
+      fastForward: true,
+      briskPacing: true,
+    });
+    me = await priya.get('/api/me');
+    expect(me.user.briskPacing).toBe(true);
+    // untouched keys survive the patch
+    expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+
+    expect((await priya.raw('POST', '/api/me/prefs', { briskPacing: 'fast' })).statusCode).toBe(400);
+    expect((await priya.get('/api/me')).user.briskPacing).toBe(true); // rejected patch didn't move it
   });
 
   // Play is still the toll: opening the game up to anonymous callers is

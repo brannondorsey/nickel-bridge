@@ -54,6 +54,23 @@ describe('Settings', () => {
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
   });
 
+  // brisk_pacing's schema default is 0/false — the opposite polarity from
+  // ladderListed/fastForward — so it gets its own coverage rather than
+  // sharing the it.each above (whose OFF/ON labels don't match NORMAL/BRISK).
+  it('defaults Table speed to NORMAL and writes a BRISK choice to the account', async () => {
+    const { refresh } = renderSettings();
+    expect(segment('Table speed', 'NORMAL')).toHaveClass('active');
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, briskPacing: true });
+    await userEvent.click(segment('Table speed', 'BRISK')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ briskPacing: true });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('reflects an account that already set Table speed to BRISK', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, briskPacing: true } });
+    expect(segment('Table speed', 'BRISK')).toHaveClass('active');
+  });
+
   // The switch moves under the finger, so a rejected write has to move it
   // back — otherwise the screen quietly claims a state the server never
   // accepted.

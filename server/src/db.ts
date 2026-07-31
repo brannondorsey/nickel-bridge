@@ -127,6 +127,19 @@ if (!userColumns.has('ladder_listed')) {
 if (!userColumns.has('fast_forward')) {
   db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `brisk_pacing` — replay ordinary robot card play (the "think
+// time" gaps between plays, not the glide/collect animation itself) at a
+// compressed pace (1) or the shipped table pace (0, default). Account state,
+// not localStorage, for the same reason as fast_forward: it says how this
+// PERSON wants to watch a hand play out, independent of device. Defaults to
+// 0 (unlike fast_forward's default-on): this changes the felt pacing of
+// ordinary play itself, a matter of taste rather than a QoL fix, so it ships
+// opt-in and every existing account's experience is unchanged until they
+// flip it. Deliberately does NOT reach stageClaimSteps or TrickArea's WAAPI
+// glide/collect durations in playAnim.ts — see stagePlaySteps' doc comment.
+if (!userColumns.has('brisk_pacing')) {
+  db.exec(`ALTER TABLE users ADD COLUMN brisk_pacing INTEGER NOT NULL DEFAULT 0`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -181,6 +194,8 @@ export interface UserRow {
   ladder_listed: number;
   /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
   fast_forward: number;
+  /** 1 = replay ordinary robot card play at a compressed pace; 0 (default) = table pace */
+  brisk_pacing: number;
   elo: number;
   created_at: number;
 }

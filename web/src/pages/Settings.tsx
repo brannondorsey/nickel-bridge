@@ -68,6 +68,11 @@ const OFF_ON = [
   { value: true, label: 'ON' },
 ];
 
+const SPEED_OPTIONS = [
+  { value: false, label: 'NORMAL' },
+  { value: true, label: 'BRISK' },
+];
+
 function SettingRow({ label, note, children }: { label: string; note: string; children: ReactNode }) {
   return (
     <div className="setting-row">
@@ -78,7 +83,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean };
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean; briskPacing: boolean };
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -86,6 +91,10 @@ export default function Settings() {
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
+    // Opposite comparison from the two rows above: brisk_pacing defaults to
+    // 0/false in the schema (unlike ladder_listed/fast_forward's 1/true), so
+    // `!== false` here would silently default every account to BRISK.
+    briskPacing: me?.user?.briskPacing === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -124,6 +133,18 @@ export default function Settings() {
                 storeThemePref(pref);
                 applyThemePref(pref);
               }}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Table speed"
+            note="How quickly the robots play their cards once the bidding ends. Normal is table speed; brisk moves the hand along."
+          >
+            <PrefSwitch
+              label="Table speed"
+              value={prefs.briskPacing}
+              options={SPEED_OPTIONS}
+              onChange={(briskPacing) => change({ briskPacing })}
             />
           </SettingRow>
 
