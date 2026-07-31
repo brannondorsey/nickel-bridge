@@ -152,7 +152,7 @@ async function seedTournament(
       // with a starter, and gives the lobby a "board in progress" to show.
       if (!stmtBoardExists.get(t.id, player.id, 1)) {
         const b = loadBoard(t, player.id, 1, true)!;
-        await ensureAdvanced(b);
+        await ensureAdvanced(b, 'background'); // boot-time bot seeding, never a live request
       }
       continue;
     }

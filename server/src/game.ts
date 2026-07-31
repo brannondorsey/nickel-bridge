@@ -4,6 +4,7 @@ import {
   DdSolve,
   MC_SAMPLES,
   PLAY_NOISE,
+  SolvePriority,
   bidDecisionSeed,
   chooseCard,
   chooseCardSampled,
@@ -267,8 +268,14 @@ async function capturePlayPrecision(b: GameBoard): Promise<void> {
 /**
  * Advance all robot actions until it's the human's turn or the board is over.
  * Deterministic: model argmax bidding, double-dummy-optimal card play.
+ *
+ * `priority` forwards to every DD pool solve this call makes (default
+ * 'interactive' — every real human request). bot-play.ts's shared board-play
+ * loop (the benchmark AI personas, demo seeding, demo exhibit replay) passes
+ * 'background' so a concurrent human's own request jumps the queue for the
+ * next free DD worker — see packages/ai/src/dd-pool.ts's doc comment for why.
  */
-export async function advanceRobots(b: GameBoard): Promise<void> {
+export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'interactive'): Promise<void> {
   for (;;) {
     if (b.row.state === 'bidding') {
       const auction = auctionState(b.deal.dealer, b.calls);
@@ -301,7 +308,7 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
         // A forced (single-legal-card) node carries no new branching
         // information for a claim, so we skip the solve there — the next
         // real decision point is checked the following iteration regardless.
-        const solve = await solveFutureTricks(b.deal, b.contract!, b.plays);
+        const solve = await solveFutureTricks(b.deal, b.contract!, b.plays, priority);
         const remainingTricks = 13 - ps.completedTricks.length;
         if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
           // Either the side to move (bestScore === remaining) or the
@@ -311,11 +318,11 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
           // continued play would have produced.
           b.claimed = true;
           b.plays.push(pickFromSolve(legal, solve));
-          await resolveClaim(b);
+          await resolveClaim(b, priority);
           continue;
         }
         if (!humanControls(ps.handToPlay, b.contract!)) {
-          b.plays.push(await robotCard(b, ps, legal, solve));
+          b.plays.push(await robotCard(b, ps, legal, solve, priority));
           continue;
         }
         return;
@@ -323,7 +330,7 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
       // Forced node: chooseCard returns the single legal card without a
       // solve — identical at every difficulty.
       if (humanControls(ps.handToPlay, b.contract!)) return;
-      b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
+      b.plays.push(await chooseCard(b.deal, b.contract!, b.plays, priority));
       continue;
     }
     return; // done
@@ -348,7 +355,13 @@ export async function advanceRobots(b: GameBoard): Promise<void> {
  * robot E-W — declaring, controlling their dummy, or defending — get the
  * tier's kOpp/auctionAware/playTopN.
  */
-async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSolve): Promise<Card> {
+async function robotCard(
+  b: GameBoard,
+  ps: PlayState,
+  legal: Card[],
+  solve: DdSolve,
+  priority: SolvePriority,
+): Promise<Card> {
   const difficulty = boardDifficulty(b.tournament, b.row.board_no);
   if (difficulty === 'perfect') return pickFromSolve(legal, solve);
   const dummy = partnerOf(b.contract!.declarer);
@@ -362,6 +375,7 @@ async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSo
     seed: mcDecisionSeed(b.tournament.seed, b.row.board_no, b.plays.length),
     dealer: b.deal.dealer,
     calls: b.calls,
+    priority,
   });
 }
 
@@ -372,15 +386,16 @@ async function robotCard(b: GameBoard, ps: PlayState, legal: Card[], solve: DdSo
  * with perfect play is what keeps the fast-forwarded score identical to what
  * continued play would have produced.
  */
-async function resolveClaim(b: GameBoard): Promise<void> {
+async function resolveClaim(b: GameBoard, priority: SolvePriority): Promise<void> {
   while (!playState(b.deal, b.contract!, b.plays).isOver) {
-    b.plays.push(await chooseCard(b.deal, b.contract!, b.plays));
+    b.plays.push(await chooseCard(b.deal, b.contract!, b.plays, priority));
   }
 }
 
 export async function submitCall(
   b: GameBoard,
   call: Call,
+  priority: SolvePriority = 'interactive',
 ): Promise<BidEvaluation & { call: Call; bestMeaning: BidMeaning | null }> {
   return withBoardLock(b.row, async () => {
     refresh(b);
@@ -394,7 +409,7 @@ export async function submitCall(
     b.calls.push(call);
     b.bidEvals.push(evaluation);
     const wasDone = boardDone(b.row);
-    await advanceRobots(b);
+    await advanceRobots(b, priority);
     if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
     save(b);
     if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
@@ -402,7 +417,7 @@ export async function submitCall(
   });
 }
 
-export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
+export async function submitPlay(b: GameBoard, card: Card, priority: SolvePriority = 'interactive'): Promise<void> {
   return withBoardLock(b.row, async () => {
     refresh(b);
     if (b.row.state !== 'playing') throw httpError(409, 'not in play phase');
@@ -411,7 +426,7 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
     if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
     b.plays.push(card);
     const wasDone = boardDone(b.row);
-    await advanceRobots(b);
+    await advanceRobots(b, priority);
     if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
     save(b);
     if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
@@ -431,12 +446,12 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
  * point advanceRobots is a no-op (nothing left to advance) instead of
  * overwriting it.
  */
-export async function ensureAdvanced(b: GameBoard): Promise<void> {
+export async function ensureAdvanced(b: GameBoard, priority: SolvePriority = 'interactive'): Promise<void> {
   return withBoardLock(b.row, async () => {
     refresh(b);
     const wasDone = boardDone(b.row);
     const before = JSON.stringify([b.calls, b.plays, b.row.state]);
-    await advanceRobots(b);
+    await advanceRobots(b, priority);
     if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
       if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
       save(b);
