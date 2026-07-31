@@ -177,6 +177,37 @@ function trickDeltaNote(avgDelta: number): string {
   return 'Tricks made track the bid closely — the mark of an honest auction.';
 }
 
+const fmt1 = (n: number) => n.toFixed(1);
+
+/**
+ * Toll-bridge-voice takeaway for the play-precision tile. Never calls the
+ * player's own result "luck" — duplicate scoring already strips deal-luck
+ * out via matchpointing against the field before this number is even
+ * computed (see PlayerStats.playPrecision's doc comment), which is the one
+ * fact this copy leans on instead.
+ *
+ * Keyed on precisionPct rather than avgTricksLost for the cold-ceiling
+ * branch: server/src/stats.ts's avgTricksLost is null only when `boards`
+ * itself is 0 (this note is only ever rendered when boards > 0, so it's
+ * never actually null here), while precisionPct can independently be null
+ * with boards > 0 — every counted contract had a zero-trick DD ceiling (a
+ * hopeless sacrifice) — which is the state this branch's copy actually
+ * describes.
+ */
+function playPrecisionNote(p: { avgTricksLost: number | null; precisionPct: number | null }): string {
+  if (p.precisionPct === null) {
+    return 'Every counted contract here had no ceiling worth chasing — this one fills in once a game or slam is on the card.';
+  }
+  const avgTricksLost = p.avgTricksLost!; // non-null whenever boards > 0, which this note is always gated on
+  if (avgTricksLost < -0.05) {
+    return `Ø ${fmt1(Math.abs(avgTricksLost))} tricks past the ceiling — the defense wasn't its sharpest on these boards, not this declarer's doing.`;
+  }
+  if (avgTricksLost <= 0.15) {
+    return 'Landing right at the ceiling, hand after hand — the auction is where the next gain is, not the play.';
+  }
+  return `Ø ${fmt1(avgTricksLost)} tricks short of the ceiling — matchpointing already squares every pair against the same deal, so what's left here is technique.`;
+}
+
 /**
  * Sub-line for the TOPS tile. "1 in 7 boards" is the reading worth printing,
  * but it only stays true once the ratio rounds to 2 or more — 3 tops in 4
@@ -706,7 +737,26 @@ export default function Player() {
               sub={topsSub(t.tops.count, t.boardsCompleted)}
               to={isMe && t.tops.latest ? `/t/${t.tops.latest.tournamentId}/b/${t.tops.latest.boardNo}` : undefined}
             />
+            {/* Declarer-side technical execution vs. the double-dummy ceiling
+                — a subset of DECLARING's board count (see the field's doc
+                comment on the server), so the tile is gated on it separately
+                rather than assumed to exist alongside DECLARING. Not tappable:
+                unlike BEST CROSSING/TOPS there's no natural single destination
+                for "your play precision" to point at. */}
+            {stats.playPrecision.boards > 0 ? (
+              <Tile
+                label="PLAY PRECISION"
+                value={stats.playPrecision.precisionPct !== null ? `${stats.playPrecision.precisionPct}%` : '—'}
+                sub={`${stats.playPrecision.boards} of ${t.declarer.boards} contracts`}
+              />
+            ) : null}
           </div>
+
+          {stats.playPrecision.boards > 0 ? (
+            <div className="stats-tiles-note">
+              <GlossaryProse text={playPrecisionNote(stats.playPrecision)} />
+            </div>
+          ) : null}
 
           {stats.trickDelta.avgDelta !== null ? (
             <PerforatedPanel

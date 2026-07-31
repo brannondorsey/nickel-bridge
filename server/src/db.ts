@@ -163,6 +163,20 @@ if (!tournamentColumns.has('ai_field')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN ai_field INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `dd_declarer_tricks` — the double-dummy trick ceiling for a
+// completed board's contract (13 minus the opening leader's DD bestScore —
+// see capturePlayPrecision()'s doc comment in game.ts for the sign
+// derivation), captured once at the request that finishes the board. NULL for
+// every board finished before this shipped (no backfill — a retroactive DDS
+// solve over the whole boards table isn't worth paying for a stat), for a
+// passed-out board (no contract to solve), and for the rare case where the
+// completion-time solve itself throws. stats.ts's playPrecision aggregate
+// treats NULL as "not counted," never as 0.
+const boardColumns = new Set((db.prepare(`PRAGMA table_info(boards)`).all() as { name: string }[]).map((c) => c.name));
+if (!boardColumns.has('dd_declarer_tricks')) {
+  db.exec(`ALTER TABLE boards ADD COLUMN dd_declarer_tricks INTEGER`);
+}
+
 export interface UserRow {
   id: number;
   google_id: string;
@@ -235,5 +249,7 @@ export interface BoardRow {
   contract: string | null;
   tricks_declarer: number | null;
   score_ns: number | null;
+  /** double-dummy declarer-trick ceiling for `contract`, captured once at completion; see the migration comment above */
+  dd_declarer_tricks: number | null;
   updated_at: number;
 }

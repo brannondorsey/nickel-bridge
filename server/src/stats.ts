@@ -47,7 +47,7 @@ const stmtEloSeries = db.prepare(
 // not inflate boardsCompleted, chart series, or anyone's percentile pool.
 // Inert in production, where every tournament is 'standard'.
 const stmtDoneBoards = db.prepare(
-  `SELECT b.tournament_id, b.board_no, b.calls, b.bid_evals, b.contract, b.tricks_declarer, b.updated_at,
+  `SELECT b.tournament_id, b.board_no, b.calls, b.bid_evals, b.contract, b.tricks_declarer, b.dd_declarer_tricks, b.updated_at,
           t.name AS tournament_name
    FROM boards b JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
    WHERE b.user_id = ? AND b.state = 'done' ORDER BY b.updated_at, b.id`,
@@ -144,6 +144,31 @@ interface PlayerStats {
     boards: number;
     avgDelta: number | null; // null only when boards === 0
   };
+  /**
+   * Declarer-side technical execution: on declaring boards with a captured DD
+   * ceiling (game.ts's capturePlayPrecision), how close actual tricks taken
+   * came to the double-dummy-optimal count for that contract. NOT a "luck"
+   * stat — duplicate matchpointing already strips deal-luck out by scoring
+   * every pair against the same deal (totals.avgPct, percentiles.avgPct); what
+   * a DD-ceiling comparison measures on top of that is technique (declarer
+   * play, and the defense it beat or was beaten by), which is why this field
+   * and its UI never use the word "luck." `boards` is a strict SUBSET of
+   * `totals.declarer.boards` — only completions on/after this stat shipped
+   * carry a captured ceiling (no backfill), and it can shrink further on a
+   * completion-time solve failure (best-effort, never blocks the board's
+   * save). `precisionPct` can exceed 100 at non-'perfect' difficulty tiers,
+   * where the defense is genuinely fallible (sampled-DD play, see
+   * CONTRIBUTING.md's "Robot difficulty" sections) and can let declarer take
+   * more than the DD ceiling — disclosed, not clamped.
+   */
+  playPrecision: {
+    /** boards counted — subset of totals.declarer.boards with a non-null dd_declarer_tricks */
+    boards: number;
+    /** signed mean(dd_declarer_tricks - tricksDeclarer), 1dp; positive = short of the ceiling, negative = past it */
+    avgTricksLost: number | null;
+    /** round(100 * actual tricks / DD-ceiling tricks) across counted boards; null when boards===0 or the ceiling sum is 0 */
+    precisionPct: number | null;
+  };
   /** "better than N% of players" per metric; null when the player or field lacks data */
   percentiles: {
     elo: number | null;
@@ -223,6 +248,8 @@ interface DoneBoardRow {
   bid_evals: string;
   contract: string | null;
   tricks_declarer: number | null;
+  /** double-dummy declarer-trick ceiling for `contract`; NULL pre-migration, on a pass-out, or if the capture solve failed */
+  dd_declarer_tricks: number | null;
   updated_at: number;
   tournament_name: string;
 }
@@ -399,6 +426,14 @@ export function playerStats(userId: number): PlayerStats | null {
   const byConvention = new Map<ConventionFamily, { total: number; satisfactory: number }>();
   const trickDeltaHist = new Map<number, number>(); // clamped delta -> count
   const trickDeltas: number[] = []; // unclamped, for the true average
+  // Play precision: a strict subset of declarer.boards, gated on a captured
+  // DD ceiling (see PlayerStats.playPrecision's doc comment). ddSum/actualSum
+  // are the raw trick totals across counted boards — precisionPct is derived
+  // from their ratio, not from averaging per-board percentages, so one
+  // hopeless-ceiling board (ddSum contribution 0) can't skew the aggregate.
+  let precisionBoards = 0;
+  let ddSum = 0;
+  let actualSum = 0;
   const contractMix = {
     partscore: { boards: 0, made: 0 },
     game: { boards: 0, made: 0 },
@@ -467,6 +502,12 @@ export function playerStats(userId: number): PlayerStats | null {
         const clamped = Math.max(-3, Math.min(3, delta));
         trickDeltaHist.set(clamped, (trickDeltaHist.get(clamped) ?? 0) + 1);
         trickDeltas.push(delta);
+
+        if (b.dd_declarer_tricks != null) {
+          precisionBoards++;
+          ddSum += b.dd_declarer_tricks;
+          actualSum += tricks;
+        }
 
         const tier = contractMix[contractTier(contract.level, contract.strain)];
         tier.boards++;
@@ -612,6 +653,11 @@ export function playerStats(userId: number): PlayerStats | null {
       monthlyEloDelta: monthlyEloDelta(u.elo, eloSeries),
     },
     trickDelta,
+    playPrecision: {
+      boards: precisionBoards,
+      avgTricksLost: precisionBoards ? round1((ddSum - actualSum) / precisionBoards) : null,
+      precisionPct: precisionBoards && ddSum > 0 ? Math.round((100 * actualSum) / ddSum) : null,
+    },
     percentiles: fieldPercentiles(u.elo, eloSeries.length > 0, avgPct, avgBidAccuracy, declaringRate, getStandings),
     eloSeries,
     pctSeries,

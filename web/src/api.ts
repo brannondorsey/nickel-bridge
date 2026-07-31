@@ -242,6 +242,18 @@ export interface PlayerStats {
     boards: number;
     avgDelta: number | null;
   };
+  /**
+   * Declarer-side technical execution vs. the double-dummy ceiling for the
+   * contract reached (server/src/stats.ts) — NOT a luck stat; matchpointing
+   * already strips deal-luck out, so what's left here is technique. `boards`
+   * is a strict subset of `totals.declarer.boards`: only completions on/after
+   * this stat shipped carry a captured ceiling (no backfill).
+   */
+  playPrecision: {
+    boards: number;
+    avgTricksLost: number | null;
+    precisionPct: number | null;
+  };
   percentiles: {
     elo: number | null;
     avgPct: number | null;

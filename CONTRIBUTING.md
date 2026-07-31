@@ -59,8 +59,15 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 plus the boot assertion index.ts calls; lenient at import so tests
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
-                game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
-                tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
+                game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView;
+                capturePlayPrecision is the one-shot post-advanceRobots hook that
+                captures the "Play precision" profile stat's DD ceiling, kept
+                deliberately OUTSIDE advanceRobots/finishBoard — see invariant 1),
+                tournaments.ts (JIT placement, standings, recomputeElo),
+                stats.ts (per-player profile aggregates, including playPrecision —
+                declarer-side tricks taken vs. each contract's captured DD
+                ceiling, NOT a luck stat: matchpointing already strips deal-luck
+                out, so what's left is technique — see its doc comment),
                 activity.ts (the TRAFFIC feed's flat, ungrouped events — see
                 "The activity feed" below),
                 ai-players.ts (benchmark AI personas — the "house" rows ranked in
@@ -1076,6 +1083,17 @@ the sitemap and `robots.txt` follow on their own.
    Elo: the replay's inputs are human-only (`eloParticipants`), so house play can never move
    a rating — `server/test/ai-players.test.ts` deletes every AI row and asserts
    `elo_history` is byte-identical.
+   **`game.ts`'s `capturePlayPrecision` (the "Play precision" profile stat's DD-ceiling
+   solve, `stats.ts`) is deliberately called from `submitCall`/`submitPlay`/`ensureAdvanced`
+   only, never from inside `advanceRobots`/`finishBoard` themselves** — even though it is
+   read-only bookkeeping that cannot change a decision, those two functions own the robot
+   decision path this invariant protects, and keeping every edit to them auditable under
+   invariant 1 is worth more than the one extra `solveFutureTricks` call this costs (an
+   equivalent solve, with an empty `plays` array, already runs inside `advanceRobots`'s
+   claim gate at the very first play-phase decision — this is deliberately not reused from
+   there for the same reason). It also stays out of `finishBoard`, which is synchronous;
+   see its own doc comment for why a solve failure there must never be able to block
+   `save()` from persisting the human's just-submitted call or card.
 2. **`packages/ai/src/encode.ts` is a bit-for-bit port** of the pgx `bridge_bidding`
    observation encoding, verified by golden tests against the original JAX output. Do not
    refactor it for style. Regenerating `packages/ai/test/fixtures.json` is only needed if the

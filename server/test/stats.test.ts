@@ -83,6 +83,7 @@ describe('player stats', () => {
     expect(stats.trickDelta.boards).toBe(0);
     expect(stats.trickDelta.avgDelta).toBeNull();
     expect(stats.trickDelta.buckets).toEqual([-3, -2, -1, 0, 1, 2, 3].map((delta) => ({ delta, count: 0 })));
+    expect(stats.playPrecision).toEqual({ boards: 0, avgTricksLost: null, precisionPct: null });
     expect(stats.percentiles.elo).toBeNull();
     expect(stats.percentiles.avgPct).toBeNull();
     expect(stats.percentiles.declaring).toBeNull();
@@ -289,6 +290,47 @@ describe('player stats', () => {
     const stats = await carol.get(`/api/users/${uid}/stats`);
     expect(stats.conventions).toEqual([{ family: 'stayman', total: 1, satisfactory: 1 }]);
     expect(stats.bidTypes).toEqual([{ category: 'response', total: 2, satisfactory: 2 }]);
+  });
+
+  // Play precision (server/src/stats.ts's playPrecision) sums raw tricks
+  // across every N-S-declared board that HAS a captured DD ceiling
+  // (dd_declarer_tricks IS NOT NULL) — a strict subset of totals.declarer —
+  // and derives precisionPct from the ratio of those sums, not from
+  // averaging three separate per-board percentages. Three raw-inserted
+  // boards exercise that directly: two N-S-declared boards with a captured
+  // ceiling (one short of it, one exactly at it) and one legacy-shaped board
+  // (a contract + tricks_declarer but no dd_declarer_tricks, matching every
+  // row from before this stat shipped) that must count toward
+  // totals.declarer but be excluded here.
+  it('aggregates play precision from raw declarer/ceiling totals, excluding uncaptured boards', async () => {
+    const dawn = new TestClient(app, 'StatsDawn');
+    await dawn.login();
+    const uid = await userId(dawn);
+    const tid = (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', 'seed-dawn') RETURNING id`).get() as {
+      id: number;
+    }).id;
+    const contract = (declarer: number) => JSON.stringify({ level: 2, strain: 4, declarer, doubled: false, redoubled: false });
+    // board 1: 1 short of a 10-trick ceiling
+    db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract, tricks_declarer, dd_declarer_tricks, score_ns, updated_at)
+       VALUES (?, ?, 1, 'done', '[]', '[]', '[]', ?, 9, 10, 140, unixepoch())`,
+    ).run(tid, uid, contract(0));
+    // board 2: right at an 8-trick ceiling
+    db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract, tricks_declarer, dd_declarer_tricks, score_ns, updated_at)
+       VALUES (?, ?, 2, 'done', '[]', '[]', '[]', ?, 8, 8, 110, unixepoch())`,
+    ).run(tid, uid, contract(2));
+    // board 3: a declaring board with no captured ceiling at all (legacy shape)
+    db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract, tricks_declarer, score_ns, updated_at)
+       VALUES (?, ?, 3, 'done', '[]', '[]', '[]', ?, 9, 140, unixepoch())`,
+    ).run(tid, uid, contract(0));
+
+    const stats = await dawn.get(`/api/users/${uid}/stats`);
+    expect(stats.totals.declarer.boards).toBe(3); // all three count as declaring boards...
+    expect(stats.playPrecision.boards).toBe(2); // ...but only the two with a captured ceiling count here
+    expect(stats.playPrecision.avgTricksLost).toBe(0.5); // mean(10-9, 8-8) = mean(1, 0) = 0.5
+    expect(stats.playPrecision.precisionPct).toBe(94); // round(100 * (9+8) / (10+8)) = round(94.44...)
   });
 
   it('is visible to other signed-in players', async () => {

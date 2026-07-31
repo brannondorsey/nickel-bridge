@@ -393,6 +393,8 @@ export const playerStatsFull: PlayerStats = {
       { delta: 3, count: 8 },
     ],
   },
+  // a subset of declarer.boards (88): older boards predate the DD-capture migration
+  playPrecision: { boards: 42, avgTricksLost: 0.4, precisionPct: 96 },
   percentiles: { elo: 72, avgPct: 64, bidAccuracy: 70, declaring: 58, ratedPlayers: 54, activePlayers: 60, declaringPlayers: 52 },
   eloSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), elo: 1380 + i * 11 })),
   pctSeries: Array.from({ length: 10 }, (_, i) => ({ ...statPoint(i + 2), pct: 44 + ((i * 7) % 30), boards: 4, fieldSize: 8 })),
@@ -463,6 +465,7 @@ export const playerStatsEmpty: PlayerStats = {
     avgDelta: null,
     buckets: ([-3, -2, -1, 0, 1, 2, 3] as const).map((delta) => ({ delta, count: 0 })),
   },
+  playPrecision: { boards: 0, avgTricksLost: null, precisionPct: null },
   percentiles: {
     elo: null,
     avgPct: null,

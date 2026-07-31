@@ -55,7 +55,7 @@ const stmtCreateBoard = db.prepare(
 // recycled id belonging to a different user's board. With the full scope the
 // stale write matches nothing and drops harmlessly.
 const stmtSaveBoard = db.prepare(
-  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch()
+  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, dd_declarer_tricks = ?, updated_at = unixepoch()
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
@@ -193,6 +193,7 @@ function save(b: GameBoard): void {
     b.contract ? JSON.stringify(b.contract) : null,
     b.row.tricks_declarer,
     b.row.score_ns,
+    b.row.dd_declarer_tricks,
     b.row.id,
     b.row.tournament_id,
     b.row.user_id,
@@ -225,6 +226,42 @@ function finishBoard(b: GameBoard): void {
     b.row.score_ns = 0; // passed out
   }
   b.row.state = 'done';
+}
+
+/**
+ * Captures declarer's double-dummy trick ceiling for a completed board's
+ * contract — the "Play precision" profile stat's raw material (stats.ts) —
+ * once, at the exact request whose advanceRobots call finishes the board.
+ * Deliberately kept OUTSIDE advanceRobots/finishBoard: this is read-only
+ * profile-stat bookkeeping, not part of the robot decision path those two own
+ * (invariant 1), and a caller here that throws must never be able to stop the
+ * human's just-submitted call/card from being saved — see the try/catch
+ * below, and submitCall/submitPlay/ensureAdvanced's placement of this call
+ * strictly between advanceRobots and save().
+ *
+ * Reuses solveFutureTricks with an EMPTY plays array — the same call
+ * advanceRobots's claim gate already makes at the very first play-phase
+ * decision point — which gives the full-hand DD-optimal trick count from the
+ * top for whichever side is on lead. That's always a DEFENDER
+ * (playState's opening leader is nextSeat(contract.declarer) with no plays),
+ * so the declaring side's ceiling is 13 minus that raw bestScore, not
+ * bestScore itself.
+ *
+ * Callers gate this call on a not-done -> done TRANSITION rather than on
+ * `dd_declarer_tricks == null`, so a board whose solve failed once (left it
+ * null, see the catch below) is never retried on a later GET of the same
+ * already-done board (ensureAdvanced) — it stays null forever, same as a
+ * legacy pre-migration row, rather than re-paying a doomed solve on every
+ * future view.
+ */
+async function capturePlayPrecision(b: GameBoard): Promise<void> {
+  if (!b.contract) return; // passed out — no ceiling to solve for
+  try {
+    const solve = await solveFutureTricks(b.deal, b.contract, []);
+    b.row.dd_declarer_tricks = 13 - solve.bestScore;
+  } catch {
+    b.row.dd_declarer_tricks = null; // best-effort bookkeeping; never block save()
+  }
 }
 
 /**
@@ -356,7 +393,9 @@ export async function submitCall(
     const evaluation = { ...bare, call, bestMeaning: meaningFor(b.deal.dealer, b.calls, bare.bestCall) };
     b.calls.push(call);
     b.bidEvals.push(evaluation);
+    const wasDone = boardDone(b.row);
     await advanceRobots(b);
+    if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
     save(b);
     if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
     return evaluation;
@@ -371,7 +410,9 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
     if (ps.isOver || !humanControls(ps.handToPlay, b.contract!)) throw httpError(409, 'not your turn');
     if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
     b.plays.push(card);
+    const wasDone = boardDone(b.row);
     await advanceRobots(b);
+    if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
     save(b);
     if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
   });
@@ -393,9 +434,11 @@ export async function submitPlay(b: GameBoard, card: Card): Promise<void> {
 export async function ensureAdvanced(b: GameBoard): Promise<void> {
   return withBoardLock(b.row, async () => {
     refresh(b);
+    const wasDone = boardDone(b.row);
     const before = JSON.stringify([b.calls, b.plays, b.row.state]);
     await advanceRobots(b);
     if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
+      if (!wasDone && boardDone(b.row)) await capturePlayPrecision(b);
       save(b);
       if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
     }
