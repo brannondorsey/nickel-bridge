@@ -24,7 +24,7 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * they're on rather than of their account. The footer says that once rather
  * than tagging individual rows.
  *
- * The two account switches are optimistic: they move under the finger and
+ * The account switches are optimistic: they move under the finger and
  * revert if the write is refused, since a switch that waits on a round trip
  * before moving reads as a dead control on a slow connection.
  */
@@ -85,7 +85,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean };
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: boolean };
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -94,6 +94,7 @@ export default function Settings() {
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
+    bidFeedback: me?.user?.bidFeedback !== false,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -179,6 +180,18 @@ export default function Settings() {
               value={prefs.ladderListed}
               options={OFF_ON}
               onChange={(ladderListed) => change({ ladderListed })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Bid feedback"
+            note="After a call, a toast grades it against the robot's own bid. Off keeps the toast out of the way — nothing about how the board is scored changes."
+          >
+            <PrefSwitch
+              label="Bid feedback"
+              value={prefs.bidFeedback}
+              options={OFF_ON}
+              onChange={(bidFeedback) => change({ bidFeedback })}
             />
           </SettingRow>
           {prefError ? <div className="notice-error settings-error">{prefError}</div> : null}

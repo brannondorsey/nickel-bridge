@@ -45,13 +45,14 @@ describe('Settings', () => {
     expect(apiMock.setPrefs).not.toHaveBeenCalled();
   });
 
-  // Both account switches send a PARTIAL patch: sending the whole object
-  // would let a stale render clobber the other setting.
+  // The account switches send a PARTIAL patch: sending the whole object
+  // would let a stale render clobber another setting.
   it.each([
     ['Fast forward settled tricks', 'fastForward'],
     ['Name on the ladder', 'ladderListed'],
+    ['Bid feedback', 'bidFeedback'],
   ])('writes %s to the account and refreshes the session', async (group, key) => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true });
     const { refresh } = renderSettings();
     expect(segment(group, 'ON')).toHaveClass('active');
     await userEvent.click(segment(group, 'OFF')!);

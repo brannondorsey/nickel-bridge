@@ -208,21 +208,34 @@ describe('handle (first-login username)', () => {
 
     // defaults, and a partial patch leaves the untouched key alone
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([true, true, true]);
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
+      bidFeedback: true,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward]).toEqual([false, false]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([false, false, true]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
-    expect(await pete.post('/api/me/prefs', {})).toEqual({ ladderListed: false, fastForward: false });
+    expect(await pete.post('/api/me/prefs', {})).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: true,
+    });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
     expect((await pete.get('/api/me')).user.fastForward).toBe(false);
+
+    // bidFeedback patches the same way as the other two switches
+    expect(await pete.post('/api/me/prefs', { bidFeedback: false })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: false,
+    });
+    expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,
