@@ -335,6 +335,45 @@ export default function Scenarios() {
                 ENTER →
               </Button>
             </div>
+            {/* Compare's two states. Client-only rows rather than replay
+                recipes: nothing here needs a scripted board, only two players
+                with (and without) a shared history — and neither state is
+                reachable by clicking around a fresh database, which is the
+                rule that says an exhibit has to exist. */}
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Compare, against someone you have met</b>
+                <span className="exhibit-row-desc">
+                  Your record beside a well-travelled bot's: the head-to-head slip, then the beam — bars that tip
+                  toward whoever leads, with dashed gates marking the margin below which nothing is called. Grey
+                  bars are the ones the ledger will not certify.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => richProfileId != null && navigate(`/compare/${richProfileId}`)}
+                disabled={richProfileId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Compare, against a stranger</b>
+                <span className="exhibit-row-desc">
+                  The never-played persona, so there is no head-to-head to show. Common ground stands in — how each
+                  of you has fared against the house, the one opponent you have both faced. Below the floor of 16
+                  boards it becomes the "not enough crossings yet" state instead.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => newCrosserId != null && navigate(`/compare/${newCrosserId}`)}
+                disabled={newCrosserId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
           </PerforatedPanel>
 
           <PerforatedPanel heading="HOUSEKEEPING" dashed className="exhibit-panel">

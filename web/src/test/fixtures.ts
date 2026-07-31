@@ -11,6 +11,8 @@ import type {
   BidEval,
   BidMeaning,
   BoardView,
+  CompareMeasure,
+  CompareView,
   Me,
   PlayerStats,
   TournamentInfo,
@@ -31,6 +33,9 @@ export const meFixture: Me = {
     ladderListed: true,
     fastForward: true,
     bidFeedback: true,
+    // Comfortably past COMPARE_MIN_BOARDS, so this established player is
+    // offered Compare; meFreshCrosser below is the other side of that gate.
+    boards: 112,
   },
   devAuth: true,
   googleAuth: true,
@@ -39,7 +44,12 @@ export const meFixture: Me = {
 export const meNoHandle: Me = { ...meFixture, user: { ...meFixture.user!, handle: null } };
 export const meLoggedOut: Me = { user: null, devAuth: true, googleAuth: true };
 /** Handle chosen, tour not yet taken — App shows the first crossing. */
-export const meFreshCrosser: Me = { ...meFixture, user: { ...meFixture.user!, onboardedAt: null } };
+// A brand-new account: no tour stamp, and no record either, so Compare's entry
+// points stay hidden for them.
+export const meFreshCrosser: Me = {
+  ...meFixture,
+  user: { ...meFixture.user!, onboardedAt: null, boards: 0 },
+};
 
 // ---- hands (S = the human's hand from the design prototype: 12 HCP) ----
 
@@ -442,9 +452,11 @@ export const playerStatsFull: PlayerStats = {
   // (see App.test.tsx, stats.test.tsx's house-profile test), and a rival row
   // with the same handle would collide with the page's own name heading.
   rivals: [
-    { userId: 92, handle: 'The Novice', kind: 'ai', shared: 6, record: { ahead: 4, behind: 2, tied: 0 } },
-    { userId: 50, handle: 'Marge', kind: 'human', shared: 5, record: { ahead: 2, behind: 2, tied: 1 } },
-    { userId: 51, handle: 'Dev', kind: 'human', shared: 4, record: { ahead: 1, behind: 3, tied: 0 } },
+    // `boards` decides whether the row offers a COMPARE link: the first two
+    // clear COMPARE_MIN_BOARDS, the third deliberately does not.
+    { userId: 92, handle: 'The Novice', kind: 'ai', shared: 6, record: { ahead: 4, behind: 2, tied: 0 }, boards: 220 },
+    { userId: 50, handle: 'Marge', kind: 'human', shared: 5, record: { ahead: 2, behind: 2, tied: 1 }, boards: 48 },
+    { userId: 51, handle: 'Dev', kind: 'human', shared: 4, record: { ahead: 1, behind: 3, tied: 0 }, boards: 7 },
   ],
 };
 
@@ -620,3 +632,85 @@ export const activityResponse = {
 
 /** The cold start: a signed-in player looking at a week nobody crossed. */
 export const activityEmpty = { since: at(15, 0, 0), players: {}, events: [] };
+
+// ---- compare ----
+//
+// The server decides every verdict (server/src/compare.ts), so these fixtures
+// carry gate/fullTilt/verdict as they arrive over the wire — the page never
+// recomputes them. The four measures below deliberately cover all four states:
+// called-for-you, called-for-them, level, and set aside.
+
+const measure = (over: Partial<CompareMeasure> & Pick<CompareMeasure, 'key' | 'label'>): CompareMeasure => ({
+  panel: 'headline',
+  a: 0,
+  b: 0,
+  unit: 'pct',
+  margin: 0,
+  gate: 5,
+  fullTilt: 20,
+  verdict: 'level',
+  samples: [40, 40],
+  ...over,
+});
+
+const COMPARE_MEASURES: CompareMeasure[] = [
+  // provisional: neither side is rated enough for a rating verdict
+  measure({ key: 'elo', label: 'NICKEL RATING', a: 1284, b: 1341, unit: 'elo', margin: -57,
+    gate: 35, fullTilt: 140, verdict: 'aside', reason: 'provisional', samples: [2, 3] }),
+  measure({ key: 'bidAccuracy', label: 'BID ACCURACY', a: 71, b: 66, margin: 5,
+    gate: 3.4, fullTilt: 7, verdict: 'you', samples: [412, 531] }),
+  measure({ key: 'declaring', label: 'DECLARING', a: 63, b: 71, margin: -8,
+    gate: 12.3, fullTilt: 14, verdict: 'level', samples: [58, 74] }),
+  measure({ key: 'defending', label: 'DEFENDING', a: 41, b: 38, margin: 3,
+    gate: 14.3, fullTilt: 10, verdict: 'aside', reason: 'thin', samples: [47, 62] }),
+  measure({ key: 'bidType:overcall', label: 'OVERCALLS', panel: 'bidType', a: 51, b: 70,
+    margin: -19, gate: 9.8, fullTilt: 20, verdict: 'them', samples: [42, 58] }),
+  measure({ key: 'contract:slam', label: 'SLAM', panel: 'contract', a: 75, b: 60, margin: 15,
+    gate: 46.2, fullTilt: 20, verdict: 'aside', reason: 'thin', samples: [4, 5] }),
+];
+
+const compareSides = {
+  you: { id: 1, handle: 'Margaret', picture: null, kind: 'human' as const, boards: 112 },
+  them: { id: 50, handle: 'Marge', picture: null, kind: 'human' as const, boards: 143 },
+};
+
+/** Two players who have met six times — the head-to-head slip is the hero. */
+export const compareMet: CompareView = {
+  ...compareSides,
+  eligible: true,
+  minBoards: 16,
+  headToHead: { shared: 6, ahead: 2, behind: 3, tied: 1, sequence: ['you', 'them', 'them', 'you', 'level', 'them'] },
+  commonGround: null,
+  measures: COMPARE_MEASURES,
+  context: [
+    { key: 'bestPct', label: 'BEST CROSSING', a: 78.5, b: 72, unit: 'pct1' },
+    { key: 'boards', label: 'BOARDS PLAYED', a: 112, b: 143, unit: 'count' },
+  ],
+  tally: { you: 1, them: 1, level: 1, aside: 3 },
+};
+
+/** Never crossed: the common-ground panel stands in for head-to-head. */
+export const compareUnmet: CompareView = {
+  ...compareMet,
+  them: { id: 60, handle: 'Vance', picture: null, kind: 'human', boards: 61 },
+  headToHead: null,
+  commonGround: [
+    { userId: 90, handle: 'The Novice', you: { shared: 26, ahead: 19, behind: 7, tied: 0, sequence: [] },
+      them: { shared: 14, ahead: 9, behind: 5, tied: 0, sequence: [] } },
+    { userId: 91, handle: 'The Shark', you: { shared: 26, ahead: 8, behind: 18, tied: 0, sequence: [] },
+      them: { shared: 14, ahead: 6, behind: 8, tied: 0, sequence: [] } },
+  ],
+};
+
+/** Under the floor on the other side — the "not enough boards yet" state. */
+export const compareThin: CompareView = {
+  you: compareSides.you,
+  them: { id: 70, handle: 'Newcomer', picture: null, kind: 'human', boards: 4 },
+  eligible: false,
+  minBoards: 16,
+  headToHead: null,
+  commonGround: null,
+  measures: [],
+  context: [],
+  tally: { you: 0, them: 0, level: 0, aside: 0 },
+};

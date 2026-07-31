@@ -14,6 +14,7 @@ import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Login from './pages/Login';
 import NotFound from './pages/NotFound';
+import Compare from './pages/Compare';
 import Player from './pages/Player';
 import Scenarios from './pages/Scenarios';
 import Settings from './pages/Settings';
@@ -279,6 +280,13 @@ export default function App() {
                   public: false to match. */}
               <Route path="/settings" element={<Settings />} />
               <Route path="/players/:id" element={<Player />} />
+              {/* Scoped to the VIEWER — it is your record beside theirs — so it
+                  is gated, and it deliberately does NOT live under /players/:
+                  isPublicPath matches that prefix with startsWith, which would
+                  have swept a viewer-scoped screen into the public list while
+                  seo.test.ts went on passing, because the table and the gate
+                  would have agreed on the wrong answer. */}
+              <Route path="/compare/:id" element={<Compare />} />
               <Route path="/glossary" element={<Glossary />} />
               <Route path="/glossary/:slug" element={<Glossary />} />
               <Route path="/t/:tid" element={<Tournament />} />

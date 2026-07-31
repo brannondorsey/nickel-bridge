@@ -83,15 +83,27 @@ export interface Rival {
   /** tournaments where both players have >=1 scored board (see rivalries()'s doc comment) */
   shared: number;
   record: { ahead: number; behind: number; tied: number };
+  /**
+   * This rival's completed-board count, so the profile's RIVALRIES panel knows
+   * whether a Compare link would land on a real comparison or on the "not
+   * enough boards yet" state. Bounded by RIVAL_TOP_N, so at most ten extra
+   * COUNTs per profile load.
+   */
+  boards: number;
 }
 
-interface StatPoint {
+export interface StatPoint {
   tournamentId: number;
   tournamentName: string;
   finishedAt: number | null;
 }
 
-interface PlayerStats {
+/**
+ * Exported because compare.ts is a pure function of two of these — everything
+ * its error models need (the grade histogram, the per-crossing pct series, and
+ * every rate's own numerator and denominator) is already collected here.
+ */
+export interface PlayerStats {
   /** kind = 'ai' identifies one of the benchmark house personas (ai-players.ts) */
   user: { id: number; handle: string; picture: string | null; elo: number; createdAt: number; kind: 'human' | 'ai' };
   totals: {
@@ -265,7 +277,7 @@ const HUMAN_SEAT: Seat = 2;
  * any cross-request staleness concern (a fresh closure, and thus a fresh
  * cache, is created at the top of every playerStats() call).
  */
-function memoizedStandings(): (tournamentId: number) => StandingDetail[] {
+export function memoizedStandings(): (tournamentId: number) => StandingDetail[] {
   const cache = new Map<number, StandingDetail[]>();
   return (tournamentId: number) => {
     let s = cache.get(tournamentId);
@@ -339,7 +351,145 @@ function rivalries(userId: number, tournamentIds: number[], getStandings: (id: n
         b.record.ahead - b.record.behind - (a.record.ahead - a.record.behind) ||
         a.handle.localeCompare(b.handle),
     )
-    .slice(0, RIVAL_TOP_N);
+    .slice(0, RIVAL_TOP_N)
+    // After the slice, so this is at most RIVAL_TOP_N counts rather than one
+    // per opponent the user has ever met.
+    .map((r) => ({ ...r, boards: completedBoardCount(r.userId) }));
+}
+
+/**
+ * Standard tournaments where BOTH players have at least one completed board,
+ * oldest first. Ordering by tournament id (not a timestamp) matches the Elo
+ * replay's notion of "the rating timeline" — see recomputeElo — so the tally
+ * strip reads in the same order the ratings moved.
+ */
+const stmtSharedTournaments = db.prepare(
+  `SELECT DISTINCT b.tournament_id AS id FROM boards b
+   JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   WHERE b.user_id = ? AND b.state = 'done'
+     AND EXISTS (SELECT 1 FROM boards o
+                 WHERE o.tournament_id = b.tournament_id AND o.user_id = ? AND o.state = 'done')
+   ORDER BY b.tournament_id`,
+);
+
+const stmtCompletedBoards = db.prepare(
+  `SELECT COUNT(*) AS n FROM boards b
+   JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+   WHERE b.user_id = ? AND b.state = 'done'`,
+);
+
+/** Just enough of a user to name them on a screen that isn't their profile. */
+export function playerIdentity(
+  userId: number,
+): { id: number; handle: string; picture: string | null; kind: 'human' | 'ai' } | null {
+  const u = stmtUser.get(userId) as
+    | { id: number; handle: string; picture: string | null; kind: 'human' | 'ai' }
+    | undefined;
+  return u ? { id: u.id, handle: u.handle, picture: u.picture, kind: u.kind } : null;
+}
+
+/**
+ * Completed standard boards, as one cheap COUNT.
+ *
+ * Compare needs this BEFORE deciding whether to build anything: the full
+ * profile build is the most expensive read in the app, and a pair that is too
+ * thin to compare must not be able to trigger two of them.
+ */
+export function completedBoardCount(userId: number): number {
+  return (stmtCompletedBoards.get(userId) as { n: number }).n;
+}
+
+/** Every persona row, as a pure read — `ensureAiPlayers()` writes and must not be used here. */
+const stmtHousePlayers = db.prepare(
+  `SELECT id, handle FROM users WHERE kind = 'ai' AND handle IS NOT NULL ORDER BY id`,
+);
+
+/** How many shared crossings the tally strip draws. Older ones still count in the record. */
+const SEQUENCE_MAX = 12;
+
+/** Head-to-head between one specific pair. */
+export interface PairRecord {
+  shared: number;
+  ahead: number;
+  behind: number;
+  tied: number;
+  /**
+   * One entry per shared crossing, oldest first, capped to the most recent
+   * SEQUENCE_MAX — `ahead`/`behind`/`tied` above always count every crossing,
+   * so the strip is a window on the record, never the record itself.
+   */
+  sequence: ('you' | 'them' | 'level')[];
+}
+
+/**
+ * The record between two named players.
+ *
+ * Deliberately NOT read off `rivalries()`: that caps at RIVAL_TOP_N and sorts by
+ * how often paths crossed, so the very player being asked about can be missing
+ * from it. It also returns only the aggregate, and the tally strip needs the
+ * per-crossing sequence.
+ *
+ * Comparison rules match rivalries() exactly — `totalPct` rather than `rank`,
+ * because rank is only assigned once a player has completed all four boards, so
+ * two people mid-way through a shared tournament would both lack one and drop
+ * silently out of the tally. Comparing the rounded totalPct means a "level"
+ * here always agrees with the two figures printed side by side.
+ */
+export function pairRecord(
+  userId: number,
+  otherId: number,
+  getStandings: (id: number) => StandingDetail[],
+): PairRecord {
+  const rec: PairRecord = { shared: 0, ahead: 0, behind: 0, tied: 0, sequence: [] };
+  const ids = stmtSharedTournaments.all(userId, otherId) as { id: number }[];
+  for (const { id } of ids) {
+    const field = getStandings(id);
+    const mine = field.find((s) => s.userId === userId);
+    const theirs = field.find((s) => s.userId === otherId);
+    if (!mine || !theirs || mine.totalPct === null || theirs.totalPct === null) continue;
+    rec.shared++;
+    const outcome = mine.totalPct > theirs.totalPct ? 'you' : mine.totalPct < theirs.totalPct ? 'them' : 'level';
+    if (outcome === 'you') rec.ahead++;
+    else if (outcome === 'them') rec.behind++;
+    else rec.tied++;
+    rec.sequence.push(outcome);
+  }
+  rec.sequence = rec.sequence.slice(-SEQUENCE_MAX);
+  return rec;
+}
+
+/** One house persona's record against each of the two players being compared. */
+export interface CommonGroundRow {
+  userId: number;
+  handle: string;
+  you: PairRecord;
+  them: PairRecord;
+}
+
+/**
+ * The stand-in for head-to-head when two players have never met.
+ *
+ * The house personas are the only fixed reference this app has: they play every
+ * `ai_field` tournament at a constant tier, so "how often did you finish ahead
+ * of The Shark" is a field-controlled question both players have answered
+ * independently. That is a genuinely weaker inference than meeting someone —
+ * hence it is displayed without a verdict — but it is the nearest thing to a
+ * shared table.
+ *
+ * Note this had to be a RECORD against each persona rather than "your average
+ * on boards where that persona was in the field": all three personas join every
+ * ai_field tournament, so those three board sets are identical and the three
+ * rows would have printed the same number.
+ */
+export function commonGround(
+  aId: number,
+  bId: number,
+  getStandings: (id: number) => StandingDetail[],
+): CommonGroundRow[] {
+  const house = stmtHousePlayers.all() as { id: number; handle: string }[];
+  return house
+    .map((h) => ({ userId: h.id, handle: h.handle, you: pairRecord(aId, h.id, getStandings), them: pairRecord(bId, h.id, getStandings) }))
+    .filter((r) => r.you.shared > 0 || r.them.shared > 0);
 }
 
 /** share of *other* players this value beats, 0..100; null without a comparison field */
@@ -368,7 +518,18 @@ function longestDayStreak(dates: string[]): number {
   return best;
 }
 
-export function playerStats(userId: number): PlayerStats | null {
+/**
+ * `getStandings` is injectable so a caller building TWO profiles in one request
+ * (compare.ts) pays `fieldPercentiles`'s site-wide sweep once instead of twice —
+ * that sweep matchpoints every standard tournament in the database, and it is
+ * comfortably the most expensive thing this function does. Omitting it keeps
+ * the original behaviour exactly: a fresh closure per call, so no cross-request
+ * staleness is possible.
+ */
+export function playerStats(
+  userId: number,
+  getStandings: (tournamentId: number) => StandingDetail[] = memoizedStandings(),
+): PlayerStats | null {
   const u = stmtUser.get(userId) as
     | { id: number; handle: string; picture: string | null; elo: number; created_at: number; kind: 'human' | 'ai' }
     | undefined;
@@ -486,11 +647,10 @@ export function playerStats(userId: number): PlayerStats | null {
   // ordered by the user's play order — their learning timeline
   const tournaments = [...byTournament.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt);
 
-  // shared across pctSeries/rivalries/fieldPercentiles below, so a
-  // tournament this player has played gets matchpointed once per request
-  // instead of up to three times over — see memoizedStandings()'s doc comment.
-  const getStandings = memoizedStandings();
-
+  // `getStandings` (the parameter) is shared across pctSeries/rivalries/
+  // fieldPercentiles below, so a tournament this player has played gets
+  // matchpointed once per request instead of up to three times over — see
+  // memoizedStandings()'s doc comment.
   const rivals = rivalries(
     userId,
     tournaments.map(([tid]) => tid),

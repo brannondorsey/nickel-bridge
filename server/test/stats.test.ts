@@ -444,10 +444,13 @@ describe('player stats', () => {
     playAllBoards(tidB1, subjectId, 0);
     playAllBoards(tidB1, oppBId, 400);
 
+    // `boards` is each rival's career total (two tournaments of four, and one
+    // of four): the RIVALRIES panel needs it to decide whether a Compare link
+    // would land on a real comparison or on the "not enough boards" state.
     const stats = await subject.get(`/api/users/${subjectId}/stats`);
     expect(stats.rivals).toEqual([
-      { userId: oppAId, handle: 'RivalOppA', kind: 'human', shared: 2, record: { ahead: 0, behind: 0, tied: 2 } },
-      { userId: oppBId, handle: 'RivalOppB', kind: 'human', shared: 1, record: { ahead: 0, behind: 1, tied: 0 } },
+      { userId: oppAId, handle: 'RivalOppA', kind: 'human', shared: 2, record: { ahead: 0, behind: 0, tied: 2 }, boards: 8 },
+      { userId: oppBId, handle: 'RivalOppB', kind: 'human', shared: 1, record: { ahead: 0, behind: 1, tied: 0 }, boards: 4 },
     ]);
   });
 });

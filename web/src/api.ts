@@ -14,11 +14,24 @@ export interface Me {
     fastForward: boolean;
     /** show the post-call grading toast (settings: "Bid feedback") */
     bidFeedback: boolean;
+    /**
+     * Completed standard boards. Sent because Compare's entry points need to
+     * know whether the VIEWER has a record worth comparing — on someone else's
+     * profile the client has their board count but not its own.
+     */
+    boards: number;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
   /** demo mode (preview deployments): /scenarios gallery on, auto-splash off */
   demo?: boolean;
+  /**
+   * Completed boards both players need before Compare is offered. Served rather
+   * than mirrored here, because DEMO=1 relaxes it (the seeder's bots never reach
+   * the production floor) — a hardcoded copy would put the button on screens the
+   * server then refuses. server/src/compare.ts's compareMin() is the authority.
+   */
+  compareMinBoards?: number;
 }
 
 export interface BidMeaning {
@@ -199,6 +212,8 @@ export interface Rival {
   kind: 'human' | 'ai';
   shared: number;
   record: { ahead: number; behind: number; tied: number };
+  /** this rival's completed boards — decides whether a Compare link would land somewhere real */
+  boards: number;
 }
 
 /** Named-convention bucket for the convention ledger (server: core's ConventionFamily). */
@@ -272,8 +287,85 @@ export interface PlayerStats {
   };
   /** completed boards by UTC day, sparse, ascending — see server's stats.ts doc comment */
   dailyBoards: DailyBoardCount[];
-  /** other players ranked by shared-tournament count, most-crossed-paths first (max 5) */
+  /** other players ranked by shared-tournament count, most-crossed-paths first (max RIVAL_TOP_N = 10) */
   rivals: Rival[];
+}
+
+/**
+ * Compare (server/src/compare.ts): the viewer's record beside another player's.
+ *
+ * Every judged row arrives with its verdict already decided. The client draws
+ * `margin`/`gate`/`fullTilt` and prints the figures; it deliberately does not
+ * re-derive any statistics, because the error model differs per measure (a rate
+ * is binomial with an Agresti-Coull adjustment, bid accuracy is the mean of a
+ * four-point score) and two implementations of that would drift.
+ */
+/**
+ * Fallback floor for Compare's entry points, used only until `/api/me` has
+ * answered. The served `me.compareMinBoards` is the authority — see the note on
+ * that field — so this is deliberately the PRODUCTION value: erring toward
+ * hiding a door is better than showing one the server will refuse.
+ */
+export const COMPARE_MIN_BOARDS_FALLBACK = 16;
+
+export type CompareVerdict = 'you' | 'them' | 'level' | 'aside';
+export type CompareAsideReason = 'thin' | 'provisional' | 'no-data';
+export type ComparePanel = 'headline' | 'bidType' | 'convention' | 'contract';
+
+export interface CompareMeasure {
+  key: string;
+  label: string;
+  panel: ComparePanel;
+  a: number | null;
+  b: number | null;
+  unit: 'elo' | 'pct' | 'pct1';
+  margin: number;
+  /** the threshold the margin must clear to be called, in the same units */
+  gate: number;
+  fullTilt: number;
+  verdict: CompareVerdict;
+  reason?: CompareAsideReason;
+  samples: [number, number];
+}
+
+export interface CompareContextRow {
+  key: string;
+  label: string;
+  a: number | null;
+  b: number | null;
+  unit: 'elo' | 'pct' | 'pct1' | 'count' | 'delta';
+}
+
+/** Head-to-head between the pair, or between one of them and a house persona. */
+export interface PairRecord {
+  shared: number;
+  ahead: number;
+  behind: number;
+  tied: number;
+  /** most recent crossings, oldest first — a window on the record, not the whole of it */
+  sequence: ('you' | 'them' | 'level')[];
+}
+
+export interface CompareSide {
+  id: number;
+  handle: string;
+  picture: string | null;
+  kind: 'human' | 'ai';
+  boards: number;
+}
+
+export interface CompareView {
+  you: CompareSide;
+  them: CompareSide;
+  /** false when either record is under `minBoards`; everything below is then empty */
+  eligible: boolean;
+  minBoards: number;
+  /** null when the two have never shared a crossing — `commonGround` stands in */
+  headToHead: PairRecord | null;
+  commonGround: { userId: number; handle: string; you: PairRecord; them: PairRecord }[] | null;
+  measures: CompareMeasure[];
+  context: CompareContextRow[];
+  tally: { you: number; them: number; level: number; aside: number };
 }
 
 /** A demo-mode gallery exhibit (see server/src/scenarios.ts). */
@@ -363,6 +455,7 @@ export const api = {
       body: JSON.stringify({ card }),
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
+  compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery
   demoScenarios: () =>
     request<{ scenarios: DemoScenario[]; newCrosserId: number; richProfileId: number; collisionHandle: string }>(

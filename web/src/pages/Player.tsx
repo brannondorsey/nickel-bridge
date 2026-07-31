@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, ConventionKey, PlayerStats, Rival, api } from '../api';
+import { BidTypeKey, COMPARE_MIN_BOARDS_FALLBACK, ConventionKey, PlayerStats, Rival, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
@@ -293,6 +293,9 @@ export default function Player() {
   }
 
   const isMe = stats.user.id === me?.user?.id;
+  // Served, not mirrored: DEMO=1 relaxes the floor, so a hardcoded copy would
+  // offer Compare where the server refuses it (or hide it where it wouldn't).
+  const compareFloor = me?.compareMinBoards ?? COMPARE_MIN_BOARDS_FALLBACK;
   // Benchmark house personas are never Elo-rated (their scores count in
   // matchpoints but not in ratings), so every Elo surface — the rating hero,
   // the rating chart — is hidden on their profiles.
@@ -399,6 +402,19 @@ export default function Player() {
               ) : null}
             </div>
           </>
+        ) : null}
+        {/* Compare needs a record on BOTH sides to say anything — below the
+            floor every measure is set aside, because at a handful of boards any
+            difference between two players is the shuffle rather than the play.
+            So the door only appears when both records clear it, rather than
+            leading somewhere that has to apologise. Same reasoning as the BEST
+            CROSSING tile below: don't render an affordance that bounces. */}
+        {!isMe && me?.user && me.user.boards >= compareFloor && t.boardsCompleted >= compareFloor ? (
+          <div className="stats-compare-cta">
+            <Button variant="secondary" to={`/compare/${stats.user.id}`}>
+              COMPARE RECORDS →
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -748,20 +764,33 @@ export default function Player() {
 
           {stats.rivals.length > 0 ? (
             <PerforatedPanel heading="RIVALRIES" className="stats-rivals num">
+              {/* The row was a single whole-row Link. It can't stay one now
+                  that it carries a second destination — a nested <a> is invalid
+                  and the browser drops it — so the profile link is the row's
+                  heading and Compare sits beside it as its own target. The
+                  people you've crossed most are exactly the ones worth
+                  comparing against, which is why this is the second door.
+                  Only on your OWN profile: these rivals are yours, and the
+                  comparison is always viewer-scoped. */}
               {stats.rivals.map((r) => (
-                <Link key={r.userId} to={`/players/${r.userId}`} className="stats-rival-row">
+                <div key={r.userId} className="stats-rival-row">
                   <div className="stats-rival-head">
-                    <span className="stats-rival-name">
+                    <Link to={`/players/${r.userId}`} className="stats-rival-name">
                       {r.handle}
                       {r.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
-                    </span>
+                    </Link>
                     <span className="stats-rival-record">
                       {r.record.ahead}-{r.record.behind}
                       {r.record.tied ? `-${r.record.tied}` : ''}
                     </span>
                   </div>
                   <div className="stats-rival-note">{rivalLine(r)}</div>
-                </Link>
+                  {isMe && me?.user && me.user.boards >= compareFloor && r.boards >= compareFloor ? (
+                    <Link to={`/compare/${r.userId}`} className="stats-rival-compare">
+                      COMPARE →
+                    </Link>
+                  ) : null}
+                </div>
               ))}
             </PerforatedPanel>
           ) : null}

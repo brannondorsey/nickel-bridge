@@ -89,6 +89,14 @@ export const SITE_ROUTES: readonly SiteRoute[] = [
   // is public because it's a bounded list of handles and ratings; this is a
   // behavioural record, and it stays behind the gate.
   { path: '/activity', public: false, indexed: false, spa: true },
+  // Your record beside another player's — scoped to the VIEWER, which is
+  // exactly what the public list above must never contain. Note the path is
+  // NOT /players/:id/compare: App.tsx's isPublicPath matches the /players/
+  // prefix with startsWith, so mounting it there would have made a gated screen
+  // public while this table and that gate went on agreeing with each other.
+  // Must stay `/compare/*` — covers() is exact unless the row ends in /*, so a
+  // bare `/compare` row would not cover `/compare/7` and seo.test.ts would fail.
+  { path: '/compare/*', public: false, indexed: false, spa: true },
   // One person's own preferences. Nothing to read here without their session.
   { path: '/settings', public: false, indexed: false, spa: true },
   { path: '/scenarios', public: false, indexed: false, spa: true },

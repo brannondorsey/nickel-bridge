@@ -41,6 +41,7 @@ function freshApiMock(): ApiMock {
     call: stub(),
     playCard: stub(),
     playerStats: stub(),
+    compare: stub(),
     leaderboard: stub(),
     activity: stub(),
     demoScenarios: stub(),

@@ -1285,6 +1285,77 @@ a.ds-btn-secondary:hover {
   background: var(--ink);
 }
 
+/* ---- BeamBar ----
+   A diverging bar: fill grows from the centre line toward whichever side leads,
+   with dashed "gate" marks at the margin below which no winner is named. Sits
+   beside PctBar because it is the same idea — a fill positioned by inset rather
+   than sized — turned around a centre.
+
+   The gate stroke is deliberately --ink and NOT --accent: --accent and
+   --negative are the same hex in both themes, and --accent is already the
+   dashed reference line in Sparkline/StemChart, so an accent gate would be
+   indistinguishable from a red beam half. */
+.beam {
+  display: block;
+  position: relative;
+  height: 15px;
+  background: var(--chart-track);
+  border: 1px solid var(--line);
+}
+.beam-centre {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--ink);
+}
+.beam-gate {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 0;
+  border-left: 1.5px dashed var(--ink);
+  opacity: 0.6;
+}
+.beam-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+}
+.beam-fill-you {
+  background: var(--positive);
+}
+.beam-fill-them {
+  background: var(--negative);
+}
+/* Level: the lean is still drawn, but in a quiet grey that claims nothing. */
+.beam-fill-level {
+  background: var(--line-dashed);
+}
+.beam-margin {
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: var(--paper);
+  padding: 0 5px;
+}
+/* Set aside: the gate does not fit the scale, so there is no bar to read. */
+.beam-aside {
+  display: block;
+  height: 15px;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 4px,
+    var(--line-quiet) 4px,
+    var(--line-quiet) 6px
+  );
+}
+
 /* ---- HcpBadge ---- */
 .hcp-badge {
   display: inline-block;
@@ -2760,6 +2831,31 @@ a.stat-tile:hover {
 }
 .stats-rival-name {
   font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+.stats-rival-name:hover {
+  text-decoration: underline;
+}
+/* The row's second destination. Quiet by default — the profile is still the
+   primary target — and it only renders when both records clear the floor. */
+.stats-rival-compare {
+  display: inline-block;
+  margin-top: 4px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+.stats-rival-compare:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.stats-compare-cta {
+  margin-top: 14px;
 }
 .stats-rival-record {
   font-family: var(--font-label);
@@ -2773,6 +2869,359 @@ a.stat-tile:hover {
 }
 
 .stats-footer {
+  margin: 20px 16px 0;
+}
+
+/* ---- Compare ----
+   Your record beside another player's. The beam rows themselves are the DS
+   component above (.beam); everything here is the page around them. */
+.cmp-page {
+  padding-bottom: 24px;
+}
+.cmp-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 16px 0;
+}
+.cmp-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.cmp-side-them {
+  justify-content: flex-end;
+}
+.cmp-av {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 14px;
+  object-fit: cover;
+}
+.cmp-av-you {
+  background: var(--ink);
+  color: var(--paper);
+}
+.cmp-name-block {
+  min-width: 0;
+}
+.cmp-name-block-them {
+  text-align: right;
+}
+.cmp-handle {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.cmp-vs {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  flex: none;
+}
+
+/* the head-to-head slip */
+.cmp-slip {
+  margin: 12px 16px 0;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 16px 14px 14px;
+  text-align: center;
+}
+.cmp-slip-eyebrow {
+  color: var(--muted);
+}
+.cmp-slip-fig {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 46px;
+  line-height: 1;
+  margin: 7px 0 2px;
+}
+.cmp-slip-sep {
+  color: var(--line-dashed);
+  font-weight: 400;
+}
+.cmp-slip-sub {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 14px;
+}
+.cmp-tally {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.cmp-tick {
+  width: 7px;
+  height: 22px;
+  border: 1px solid var(--ink);
+}
+.cmp-tick-you {
+  background: var(--positive);
+  border-color: var(--positive);
+}
+.cmp-tick-them {
+  background: var(--negative);
+  border-color: var(--negative);
+}
+.cmp-tick-level {
+  background: var(--chart-track);
+}
+.cmp-tally-key {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+/* beam panels */
+.stats-page .cmp-beam-panel,
+.cmp-page .cmp-beam-panel,
+.cmp-page .cmp-common,
+.cmp-page .cmp-context {
+  margin: 12px 16px 0;
+}
+.cmp-panel-tag {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.cmp-legend {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ink);
+  margin-bottom: 12px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.cmp-legend span:last-child {
+  text-align: right;
+}
+.cmp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cmp-row {
+  margin-bottom: 12px;
+}
+.cmp-row:last-child {
+  margin-bottom: 0;
+}
+.cmp-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cmp-fig {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 12.5px;
+  flex: none;
+}
+.cmp-fig-them {
+  font-weight: 400;
+  color: var(--muted);
+}
+.cmp-name {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex: 1;
+  text-align: center;
+}
+.cmp-row-sub {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-label);
+  font-size: 8.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.cmp-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.cmp-caveat,
+.cmp-aside-note,
+.cmp-common-note {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* verdict chips */
+.cmp-verdict {
+  margin: 12px 16px 0;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  padding: 11px 12px;
+}
+.cmp-chips {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+.cmp-chip {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+}
+.cmp-chip-you {
+  background: var(--positive);
+  border-color: var(--positive);
+  color: var(--paper);
+}
+.cmp-chip-them {
+  background: var(--negative);
+  border-color: var(--negative);
+  color: var(--paper);
+}
+.cmp-chip-level {
+  background: var(--chart-track);
+  border-color: var(--line);
+  color: var(--muted);
+}
+.cmp-verdict-txt {
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* the perforated divider between the headline and the long ledger */
+.cmp-cut {
+  margin: 18px 16px 6px;
+  border-top: 1.5px dashed var(--line-dashed);
+  position: relative;
+}
+.cmp-cut span {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  transform: translateX(-50%);
+  background: var(--paper);
+  padding: 0 8px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* common ground + context rows share a shape */
+.cmp-common-lead {
+  margin: 0 0 11px;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.cmp-common-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 9px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-quiet);
+}
+.cmp-common-row:last-of-type {
+  border-bottom: 0;
+}
+.cmp-common-name {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cmp-common-fig {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 13px;
+}
+.cmp-common-fig-them {
+  font-weight: 400;
+  color: var(--muted);
+  min-width: 56px;
+  text-align: right;
+}
+
+/* the "not enough boards yet" state */
+.cmp-thin {
+  margin: 20px 16px 0;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 20px 16px;
+  text-align: center;
+}
+.cmp-thin-lead {
+  font-size: 17px;
+  margin: 0 0 10px;
+}
+.cmp-thin-note {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.cmp-footer {
   margin: 20px 16px 0;
 }
 

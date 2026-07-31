@@ -3,7 +3,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { DIFFICULTIES, type SettableDifficulty } from '@bridge/ai';
 import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
 import { db, UserRow } from './db.js';
+import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
+import { completedBoardCount } from './stats.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -207,11 +209,22 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
             bidFeedback: user.bid_feedback !== 0,
+            // Completed standard boards. Here rather than derived on the client
+            // because Compare's entry points need to know whether the VIEWER
+            // has a record worth comparing, and on someone else's profile the
+            // client has their board count but not its own. One cheap COUNT.
+            boards: completedBoardCount(user.id),
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
       googleAuth: Boolean(clientId),
       demo: process.env.DEMO === '1',
+      // Compare's board floor, so the entry points and the server agree about
+      // who gets a door. Sent rather than mirrored in the web bundle because
+      // DEMO=1 relaxes it — a hardcoded copy would put the button on screens
+      // the server then refuses, or hide it where the server would have said
+      // yes. app.ts's compareMin() is the one place the env is read.
+      compareMinBoards: compareMin(),
     });
   });
 

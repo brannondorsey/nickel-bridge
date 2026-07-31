@@ -424,8 +424,28 @@ describe('Stats', () => {
     const dev = within(panel).getByText('Dev').closest('.stats-rival-row')!;
     expect(within(dev as HTMLElement).getByText('1-3')).toBeInTheDocument();
     expect(within(dev as HTMLElement).getByText('Crossed paths 4 times — behind 1-3.')).toBeInTheDocument();
-    // links to the rival's own profile
-    expect(dev).toHaveAttribute('href', '/players/51');
+    // The row carries two destinations now (profile, and Compare where both
+    // records are thick enough), so the profile link is the NAME rather than
+    // the whole row — a nested <a> would be invalid and the browser drops it.
+    expect(within(dev as HTMLElement).getByText('Dev')).toHaveAttribute('href', '/players/51');
+  });
+
+  /**
+   * Compare is offered from a rivalry row only when BOTH records clear
+   * COMPARE_MIN_BOARDS — below that every measure on the comparison is set
+   * aside, so the link would lead somewhere that has to apologise. The fixture
+   * gives Marge 48 boards and Dev 7, either side of the floor.
+   */
+  it('offers Compare on rivalry rows only where both records are thick enough', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    const panel = (await screen.findByText('RIVALRIES')).closest('.stats-rivals') as HTMLElement;
+
+    const marge = within(panel).getByText('Marge').closest('.stats-rival-row') as HTMLElement;
+    expect(within(marge).getByText('COMPARE →')).toHaveAttribute('href', '/compare/50');
+
+    const dev = within(panel).getByText('Dev').closest('.stats-rival-row') as HTMLElement;
+    expect(within(dev).queryByText('COMPARE →')).not.toBeInTheDocument();
   });
 
   it('hides the rivalries panel when the player has no rivals yet', async () => {
