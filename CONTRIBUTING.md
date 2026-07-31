@@ -410,6 +410,13 @@ interactive backlog starves past `SOLVE_TIMEOUT_MS` and rejects, and its caller'
 the **main-thread** `solveRequest()` — a synchronous WASM solve with no timeout that blocks the
 event loop for every concurrent request, i.e. a worse freeze than the one being fixed. A
 background request that has waited the bound is promoted to interactive.
+That main-thread fallback is now a genuine last resort rather than the first thing tried:
+`play-ai.ts`'s `solveVia()` is the ONE place that chooses pool-vs-main-thread for every DD
+solve in the app, and it reaches `solveRequest()` only when there is no compiled worker at all
+(vitest on TS sources) or when a second pool has also failed. A pool that died mid-decision —
+which rejects every outstanding solve at once, so `chooseCardSampled`'s K layouts all land here
+together — is retried on the replacement `getSharedDdPool()` mints, instead of becoming K
+sequential event-loop-blocking solves.
 Play starts when a human is placed into
 or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
 sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and

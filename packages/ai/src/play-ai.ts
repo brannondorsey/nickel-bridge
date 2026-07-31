@@ -93,7 +93,16 @@ export function futureTricksToDdSolve(res: FutureTricks): DdSolve {
   return { cardScores, bestScore };
 }
 
-/** Solve an arbitrary prebuilt request on the shared main-thread DDS instance. */
+/**
+ * Solve an arbitrary prebuilt request on the shared main-thread DDS instance.
+ *
+ * This BLOCKS THE EVENT LOOP for the whole solve: SolveBoardPBN is one
+ * synchronous WASM call with no yield point (the vendored build has neither
+ * Asyncify nor JSPI), so nothing else — no timer, no I/O callback, no other
+ * request — runs until it returns. Measured over 240 trick-0 full-board
+ * solves on one core: p50 47ms, p90 257ms, p99 763ms, max 1.58s. Prefer
+ * solveVia, which reaches this only when there is no worker pool to use.
+ */
 export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
   const dds = await getDds();
   return dds.SolveBoardPBN(
@@ -104,6 +113,66 @@ export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
   );
 }
 
+/** The only part of DdPool solveVia needs, so a test can stand in for one. */
+export interface SolveSource {
+  solve(req: DealPbn, priority: SolvePriority): Promise<FutureTricks>;
+}
+
+/**
+ * Solve one request, on a worker whenever that is possible at all — the one
+ * place that decides pool-vs-main-thread, for every DD solve in the app
+ * (solveFutureTricks here, chooseCardSampled in play-mc.ts, the unshipped
+ * play-mc-forget.ts). Three copies of this used to reach for the main thread
+ * the moment a pool call rejected, which is backwards: a slow solve on a
+ * worker costs one request some latency, while the same solve on the main
+ * thread costs EVERY concurrent request the whole of it (see solveRequest).
+ *
+ * The case that actually reached it is a pool dying MID-FLIGHT. A pool that
+ * is already dead never gets handed out — getSharedDdPool() replaces it on
+ * lookup — but a worker erroring or exiting during a decision rejects every
+ * outstanding solve at once, and callers arrive here in bulk
+ * (chooseCardSampled solves K layouts under one Promise.all). So one worker
+ * crash became K sequential main-thread solves with nothing able to
+ * interleave. Measured on one core, K=8 with the pool killed mid-decision:
+ * the event loop fired 3 timer ticks in 903ms, worst lag 510ms; through
+ * here it fires 67, worst lag 3.9ms, and the decision finishes SOONER
+ * (678ms) because the solves keep their own thread.
+ *
+ * Hence the retry: a rejection whose next lookup yields a DIFFERENT pool
+ * means the old one died and the replacement answers in milliseconds. A
+ * rejection from a pool that is still usable is a timeout instead, and
+ * re-queueing that would land behind the same backlog — so it falls
+ * through. Since SOLVE_TIMEOUT_MS is ~10x the slowest solve measured above,
+ * a timeout means the pool is wedged rather than the deal being hard, and
+ * the main thread really is the only way left to answer.
+ *
+ * Never changes a result, only where it is computed — DDS is deterministic,
+ * so invariant 1 is untouched (same argument as the pool itself).
+ */
+export async function solveVia(
+  req: DealPbn,
+  priority: SolvePriority = 'interactive',
+  /** overridable only so tests can drive this policy without a built worker */
+  getPool: () => SolveSource | null = getSharedDdPool,
+): Promise<FutureTricks> {
+  const pool = getPool();
+  if (pool) {
+    try {
+      return await pool.solve(req, priority);
+    } catch {
+      const fresh = getPool();
+      if (fresh && fresh !== pool) {
+        try {
+          return await fresh.solve(req, priority);
+        } catch {
+          // the replacement died too — the main thread is all that is left
+        }
+      }
+    }
+  }
+  return solveRequest(req);
+}
+
 /**
  * Runs the double-dummy solver once for the current position and scores
  * every legal card. `bestScore` answers the laydown question for *both*
@@ -112,13 +181,10 @@ export async function solveRequest(req: DealPbn): Promise<FutureTricks> {
  * move can force nothing, which — by the same DD guarantee — means the
  * *other* side can force everything (a laydown for the defense).
  *
- * Prefers the worker pool when one is up (same pattern as chooseCardSampled):
- * this is the claim-gate solve advanceRobots runs at every real decision
- * point, and the main-thread path has no timeout — DDS's documented heavy
- * tail (a real deal once cost ~37s, see claim-soundness.test.ts) would stall
- * every concurrent request for the duration. DDS is deterministic, so where
- * the solve runs can never change its result — latency only, invariant 1
- * untouched.
+ * Runs through solveVia, so this is a worker solve whenever a pool exists —
+ * see that function for why the main-thread path is a last resort. DDS is
+ * deterministic, so where the solve runs can never change its result —
+ * latency only, invariant 1 untouched.
  *
  * `priority` defaults to 'interactive' (every existing call site — a real
  * human decision point) and forwards to the pool's dispatch queue; see
@@ -130,16 +196,7 @@ export async function solveFutureTricks(
   plays: Card[],
   priority: SolvePriority = 'interactive',
 ): Promise<DdSolve> {
-  const req = buildSolveRequest(deal, contract, plays);
-  const pool = getSharedDdPool();
-  if (pool) {
-    try {
-      return futureTricksToDdSolve(await pool.solve(req, priority));
-    } catch {
-      // degraded pool — fall through to the main-thread solve
-    }
-  }
-  return futureTricksToDdSolve(await solveRequest(req));
+  return futureTricksToDdSolve(await solveVia(buildSolveRequest(deal, contract, plays), priority));
 }
 
 /**

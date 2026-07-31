@@ -61,13 +61,19 @@ import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
 const POOL_SIZE = Math.max(1, Math.min(availableParallelism() - 1, 4));
 
 /**
- * Deadline for one pool solve. DDS has a documented heavy tail — a real deal
- * once cost ~37s (see claim-soundness.test.ts) — and a wedged or lost worker
- * would otherwise stall its callers forever. On expiry the promise rejects
- * and the caller re-runs the SAME request on the main-thread instance:
+ * Deadline for one pool solve — a wedged or lost worker would otherwise
+ * stall its callers forever. Deliberately about 10x the slowest single solve
+ * observed (240 trick-0 full-board solves on one core: p50 47ms, p90 257ms,
+ * p99 763ms, max 1.58s), so expiry means the pool is broken rather than the
+ * deal being hard. That margin is what lets play-ai.ts's solveVia treat a
+ * timeout as "this pool cannot answer" instead of retrying it. Note the
+ * ~37s figure quoted in claim-soundness.test.ts is that test's whole
+ * brute-force enumeration — hundreds of solves — not one SolveBoardPBN call.
+ *
+ * On expiry the promise rejects and solveVia decides what happens next;
  * timing may change WHERE a solve runs, never whether its result is used, so
  * robot determinism is untouched. A late worker reply after expiry is
- * discarded (its pending entry is gone).
+ * discarded (its tracking entry is gone) but still frees its worker.
  */
 const SOLVE_TIMEOUT_MS = 15_000;
 
@@ -233,6 +239,11 @@ let shared: DdPool | null | undefined;
  */
 export function getSharedDdPool(): DdPool | null {
   if (shared !== undefined && (shared === null || shared.usable)) return shared;
+  // Replacing a degraded pool: its workers are still live OS threads holding
+  // a WASM heap each (a pool is marked dead on one worker's error/exit, which
+  // says nothing about the others), so let them go rather than leaking a set
+  // per replacement. Fire-and-forget — the new pool must not wait on it.
+  if (shared) void shared.destroy().catch(() => {});
   const url = new URL('./dd-worker.js', import.meta.url);
   try {
     if (url.protocol !== 'file:' || !existsSync(fileURLToPath(url))) {

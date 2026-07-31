@@ -1,6 +1,5 @@
 import { Call, Card, Contract, Deal, Seat, cardSuit, legalCards, playState, seededRng } from '@bridge/core';
-import { getSharedDdPool } from './dd-pool.js';
-import { DdSolve, buildSolveRequest, futureTricksToDdSolve, pickFromSolve, solveRequest } from './play-ai.js';
+import { DdSolve, buildSolveRequest, futureTricksToDdSolve, pickFromSolve, solveVia } from './play-ai.js';
 import {
   DecisionKnowledge,
   SampledChooseOpts,
@@ -109,18 +108,9 @@ export async function chooseCardSampledForgetful(
 
   const totals = new Map<Card, number>();
   const solves = await Promise.all(
-    layouts.map(async (layout) => {
-      const req = buildSolveRequest(layout.deal, contract, plays);
-      const pool = getSharedDdPool();
-      if (pool) {
-        try {
-          return futureTricksToDdSolve(await pool.solve(req));
-        } catch {
-          // degraded pool — fall through to the main-thread solve
-        }
-      }
-      return futureTricksToDdSolve(await solveRequest(req));
-    }),
+    layouts.map(async (layout) =>
+      futureTricksToDdSolve(await solveVia(buildSolveRequest(layout.deal, contract, plays))),
+    ),
   );
   layouts.forEach((layout, i) => {
     const solve: DdSolve = solves[i];
