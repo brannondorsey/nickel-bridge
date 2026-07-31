@@ -30,7 +30,7 @@ export const meFixture: Me = {
     onboardedAt: 1700000000,
     ladderListed: true,
     fastForward: true,
-    tableSpeed: 2, // TABLE_SPEED_DEFAULT (playAnim.ts) — NORMAL, the midpoint
+    tableSpeed: 0, // TABLE_SPEED_DEFAULT (playAnim.ts) — NORMAL, the midpoint
     bidFeedback: true,
   },
   devAuth: true,

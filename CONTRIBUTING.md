@@ -290,30 +290,36 @@ whole batch belongs to the claiming side. See invariant 1 below — claims chang
 `advanceRobots` records for a human's untaken decisions, so they interact directly with the
 robot-trace fixture.
 
-**Table speed** (settings gate, `users.table_speed`, an integer `TABLE_SPEED_MIN`..
-`TABLE_SPEED_MAX` — a five-position slider, not a switch) is a second, independent pacing dial
-on top of the ones above — it does NOT touch claims. `stagePlaySteps` takes an optional
-`tableSpeed` argument (default `TABLE_SPEED_DEFAULT`, the slider's own midpoint, so every
-pre-existing call site is byte-identical) that scales only the "think"/"read" gap terms in its
-own delay math (`ROBOT_GAP_MS`/`HOLD_MS`/`STAMP_MS`, via an internal `pace()` helper and the
-`TABLE_SPEED_SCALE` lookup array) — `GLIDE_MS`/`COLLECT_MS` (`TrickArea.tsx`'s own WAAPI
-animation durations) and the one-shot `LEAD_SETTLE_MS` layout-settle beat are never scaled, the
-same split `CLAIM_SPEEDUP_FACTOR` already uses for the claim fast-forward. `TABLE_SPEED_SCALE`'s
-midpoint entry is exactly `1` (a true no-op scale), which is what makes the default reproduce
-the table's pre-slider pace byte for byte rather than merely "close to it" — moving the slider
-LEFT of the midpoint stretches the gaps (`TABLE_SPEED_SCALE[level] > 1`, table runs slower than
-it always has), moving RIGHT compresses them (`< 1`, faster), and the fast end (`TABLE_SPEED_MAX`,
-scale `0.5`) is the exact factor the setting's original two-state ("brisk") version shipped and
-was calibrated against, so that endpoint didn't move when the toggle became a slider.
-`stageClaimSteps` and `TrickArea.tsx` have zero lines of code that reference `table_speed` at
-all: the claim tail (both "Fast forward settled tricks" modes) keeps using its own fixed gap
-sets exactly as before this setting existed, matching the reasoning under "Fast forward settled
-tricks" below for why the two settings deliberately don't interact. Note that because
-`stagePlaySteps` only ever stages a play-phase transition (`intoPlay`/`withinPlay` above), a
-bidding→bidding response has nothing to stage — Table Speed paces ordinary robot CARD PLAY
-only, never the auction, despite its name. `Board.tsx` and `Tour.tsx` read it off `MeContext`
-the same way they read `fastForward`, falling back to `TABLE_SPEED_DEFAULT` (not a `!== false`/
-`=== true` comparison, since this is an integer, not a boolean) when signed out or unset.
+**Table speed** (settings gate, `users.table_speed`, a continuous float `TABLE_SPEED_MIN`..
+`TABLE_SPEED_MAX` — a genuine drag slider, not a switch, and a `REAL` column rather than
+`INTEGER` since the whole point is that a player can settle anywhere between SLOW and FAST, not
+just on a fixed set of stops) is a second, independent pacing dial on top of the ones above — it
+does NOT touch claims. `stagePlaySteps` takes an optional `tableSpeed` argument (default
+`TABLE_SPEED_DEFAULT`, the slider's own midpoint, so every pre-existing call site is
+byte-identical) that scales only the "think"/"read" gap terms in its own delay math
+(`ROBOT_GAP_MS`/`HOLD_MS`/`STAMP_MS`, via an internal `pace()` helper and the `tableSpeedScale`
+function) — `GLIDE_MS`/`COLLECT_MS` (`TrickArea.tsx`'s own WAAPI animation durations) and the
+one-shot `LEAD_SETTLE_MS` layout-settle beat are never scaled, the same split
+`CLAIM_SPEEDUP_FACTOR` already uses for the claim fast-forward. `tableSpeedScale(v) = 2^-v` is
+exponential, not linear, specifically so `v=0` (the midpoint AND the default) lands on an exact
+scale of `1` — a true no-op — which is what makes the default reproduce the table's pre-slider
+pace byte for byte rather than merely "close to it"; a plain linear interpolation between the
+endpoint scales (`2` and `0.5`) would put `1` at 80% of the way from slow to fast, not at the
+visual center of the track. Moving the slider LEFT of the midpoint stretches the gaps
+(`tableSpeedScale(v) > 1` for `v < 0`, table runs slower than it always has), moving RIGHT
+compresses them (`< 1` for `v > 0`, faster), and the fast end (`TABLE_SPEED_MAX`, scale `0.5`)
+is the exact factor the setting's original two-state ("brisk") version shipped and was
+calibrated against — neither this rework nor the five-position slider that preceded it moved
+that endpoint's actual pacing, only how finely a player can dial in between. `stageClaimSteps`
+and `TrickArea.tsx` have zero lines of code that reference `table_speed` at all: the claim tail
+(both "Fast forward settled tricks" modes) keeps using its own fixed gap sets exactly as before
+this setting existed, matching the reasoning under "Fast forward settled tricks" below for why
+the two settings deliberately don't interact. Note that because `stagePlaySteps` only ever
+stages a play-phase transition (`intoPlay`/`withinPlay` above), a bidding→bidding response has
+nothing to stage — Table Speed paces ordinary robot CARD PLAY only, never the auction, despite
+its name. `Board.tsx` and `Tour.tsx` read it off `MeContext` the same way they read
+`fastForward`, falling back to `TABLE_SPEED_DEFAULT` (not a `!== false`/
+`=== true` comparison, since this is a float, not a boolean) when signed out or unset.
 
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
@@ -874,9 +880,9 @@ which is the ledger and now holds nothing that isn't a record of play.
 partial-update endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself when
 the list is plain per-user preferences and still growing (`difficulty` is already a column
 waiting for a UI). Absent keys are left alone; an unknown key is a 400, and each known key is
-validated against its OWN type — boolean for a switch, an in-range integer for `tableSpeed`,
-the endpoint's one non-boolean field — so a typo, a stray string, or an out-of-range drag can't
-silently no-op or wedge the column. Appearance and suit colors are the TWO device-local rows,
+validated against its OWN type — boolean for a switch, a finite in-range number for
+`tableSpeed`, the endpoint's one non-boolean field — so a typo, a stray string, or an
+out-of-range drag can't silently no-op or wedge the column. Appearance and suit colors are the TWO device-local rows,
 and only because they have to be applied before first paint by an inline script in
 `index.html` — no round trip can answer in time, and both `SYSTEM`/`ADAPT` and a colorblind
 palette are per-device ideas anyway. The footer says that once rather than tagging rows. Each
@@ -899,7 +905,7 @@ of the newer settings has one thing worth knowing:
   walking the practice deal). Letting a player actually *play* the settled tail would mean
   not claiming for that user, which is a server change with a real fairness cost — see the
   note under invariant 1.
-- **Table speed** (`users.table_speed`, an integer `TABLE_SPEED_MIN`..`TABLE_SPEED_MAX`,
+- **Table speed** (`users.table_speed`, a continuous float `TABLE_SPEED_MIN`..`TABLE_SPEED_MAX`,
   default `TABLE_SPEED_DEFAULT` — the ONE slider among these rows, not a switch) paces
   ORDINARY robot card play (see the "Table speed" paragraph under "Auto-play and claims" above
   for the mechanism) and nothing else — it deliberately does not reach `stageClaimSteps` or

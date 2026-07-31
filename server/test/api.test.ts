@@ -211,13 +211,13 @@ describe('handle (first-login username)', () => {
     expect([me.user.ladderListed, me.user.fastForward, me.user.tableSpeed, me.user.bidFeedback]).toEqual([
       true,
       true,
-      2,
+      0,
       true,
     ]);
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
-      tableSpeed: 2,
+      tableSpeed: 0,
       bidFeedback: true,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
@@ -225,7 +225,7 @@ describe('handle (first-login username)', () => {
     expect([me.user.ladderListed, me.user.fastForward, me.user.tableSpeed, me.user.bidFeedback]).toEqual([
       false,
       false,
-      2,
+      0,
       true,
     ]);
 
@@ -234,7 +234,7 @@ describe('handle (first-login username)', () => {
     expect(await pete.post('/api/me/prefs', {})).toEqual({
       ladderListed: false,
       fastForward: false,
-      tableSpeed: 2,
+      tableSpeed: 0,
       bidFeedback: true,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
@@ -245,7 +245,7 @@ describe('handle (first-login username)', () => {
     expect(await pete.post('/api/me/prefs', { bidFeedback: false })).toEqual({
       ladderListed: false,
       fastForward: false,
-      tableSpeed: 2,
+      tableSpeed: 0,
       bidFeedback: false,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
@@ -255,32 +255,37 @@ describe('handle (first-login username)', () => {
     ).toBe(401);
   });
 
-  it('round-trips tableSpeed independently of the other prefs, and rejects an out-of-range or non-integer value', async () => {
+  it('round-trips tableSpeed as a genuine continuous float, independently of the other prefs, and rejects an out-of-range or non-finite value', async () => {
     const priya = new TestClient(app, 'Priya');
     await priya.login();
 
     let me = await priya.get('/api/me');
-    expect(me.user.tableSpeed).toBe(2);
+    expect(me.user.tableSpeed).toBe(0);
 
-    expect(await priya.post('/api/me/prefs', { tableSpeed: 4 })).toEqual({
+    // a fractional, off-grid value is exactly the point of a continuous
+    // slider — it must round-trip untouched, not get snapped to a step
+    expect(await priya.post('/api/me/prefs', { tableSpeed: 0.37 })).toEqual({
       ladderListed: true,
       fastForward: true,
-      tableSpeed: 4,
+      tableSpeed: 0.37,
       bidFeedback: true,
     });
     me = await priya.get('/api/me');
-    expect(me.user.tableSpeed).toBe(4);
+    expect(me.user.tableSpeed).toBe(0.37);
     // untouched keys survive the patch
     expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
 
     // the ends of the range are legal...
-    expect(await priya.post('/api/me/prefs', { tableSpeed: 0 })).toMatchObject({ tableSpeed: 0 });
-    // ...one past either end, a fraction, and a non-number are not
-    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: -1 })).statusCode).toBe(400);
-    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 5 })).statusCode).toBe(400);
-    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 2.5 })).statusCode).toBe(400);
+    expect(await priya.post('/api/me/prefs', { tableSpeed: -1 })).toMatchObject({ tableSpeed: -1 });
+    expect(await priya.post('/api/me/prefs', { tableSpeed: 1 })).toMatchObject({ tableSpeed: 1 });
+    // ...one past either end, or a non-number, are not. (Infinity/NaN aren't
+    // separately testable here — JSON has no wire representation for either,
+    // so they'd arrive as `null` and be caught by the typeof check instead;
+    // Number.isFinite is defense in depth against a body built by hand.)
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: -1.01 })).statusCode).toBe(400);
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 1.01 })).statusCode).toBe(400);
     expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 'fast' })).statusCode).toBe(400);
-    expect((await priya.get('/api/me')).user.tableSpeed).toBe(0); // rejected patches didn't move it
+    expect((await priya.get('/api/me')).user.tableSpeed).toBe(1); // rejected patches didn't move it
   });
 
   // Play is still the toll: opening the game up to anonymous callers is

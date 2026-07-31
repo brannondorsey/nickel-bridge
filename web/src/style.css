@@ -2811,12 +2811,14 @@ a.stat-tile:hover {
 /* Table speed's slider — a native <input type="range">, restyled into the
    same flat ink-on-paper language PrefSwitch uses above: a 1px ink track, a
    square ink-filled thumb (the exact fill PrefSwitch gives its active
-   segment, via --btn-primary-bg/-fg), and tracked-caps tick labels
-   standing in for PrefSwitch's row of buttons — the slider's continuous
-   track can't itself carry text the way a segmented lever's buttons do.
-   appearance: none strips every browser's native chrome so track and thumb
-   can be drawn by hand instead; the two pseudo-element pairs cover
-   WebKit/Blink and Firefox, which is the whole matrix worth supporting. */
+   segment, via --btn-primary-bg/-fg), and three tracked-caps captions
+   (SLOW/NORMAL/FAST) marking the track's low end, midpoint, and high end —
+   this is a genuinely continuous control, so unlike PrefSwitch's row of
+   buttons there is no "which one is active" state to color; the thumb's own
+   position is the only indicator. appearance: none strips every browser's
+   native chrome so track and thumb can be drawn by hand instead; the two
+   pseudo-element pairs cover WebKit/Blink and Firefox, which is the whole
+   matrix worth supporting. */
 .ds-slider {
   display: flex;
   flex-direction: column;
@@ -2872,9 +2874,6 @@ a.stat-tile:hover {
   font-size: 9.5px;
   letter-spacing: 0.12em;
   color: var(--muted);
-}
-.ds-slider-ticks .active {
-  color: var(--ink);
 }
 
 /* Suit colors row's glyph confirmation strip — decorative (aria-hidden, the

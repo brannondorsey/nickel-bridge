@@ -66,23 +66,25 @@ describe('Settings', () => {
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
   });
 
-  // Table speed is a slider, not a PrefSwitch, so it needs its own coverage:
-  // a drag's `input`/onChange ticks must move the thumb (and the account,
-  // once committed) in EITHER direction from the default midpoint, and a
-  // tick alone must never hit the network — only release (mouseup/touchend/
-  // keyup) commits, so a mid-drag position is never persisted.
-  it('defaults Table speed to the midpoint and only commits a slider move on release', async () => {
+  // Table speed is a genuinely continuous slider, not a PrefSwitch, so it
+  // needs its own coverage: a drag's `input`/onChange ticks must move the
+  // thumb (and the account, once committed) in EITHER direction from the
+  // default midpoint — to an arbitrary, off-grid position, not just a fixed
+  // set of stops — and a tick alone must never hit the network — only
+  // release (mouseup/touchend/keyup) commits, so a mid-drag position is
+  // never persisted.
+  it('defaults Table speed to the midpoint and only commits a slider move on release, to an off-grid position', async () => {
     const { refresh } = renderSettings();
     const slider = screen.getByRole('slider', { name: 'Table speed' });
-    expect(slider).toHaveValue('2');
+    expect(slider).toHaveValue('0');
 
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, tableSpeed: 4, bidFeedback: true });
-    fireEvent.change(slider, { target: { value: '4' } });
-    expect(slider).toHaveValue('4'); // the thumb tracks the drag immediately...
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, tableSpeed: 0.63, bidFeedback: true });
+    fireEvent.change(slider, { target: { value: '0.63' } });
+    expect(slider).toHaveValue('0.63'); // the thumb tracks the drag immediately...
     expect(apiMock.setPrefs).not.toHaveBeenCalled(); // ...but a tick alone never writes
 
     fireEvent.mouseUp(slider);
-    expect(apiMock.setPrefs).toHaveBeenCalledWith({ tableSpeed: 4 });
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ tableSpeed: 0.63 });
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
@@ -91,18 +93,18 @@ describe('Settings', () => {
   it('commits a keyboard step on keyup, same as a drag release', async () => {
     renderSettings();
     const slider = screen.getByRole('slider', { name: 'Table speed' });
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, tableSpeed: 3, bidFeedback: true });
-    fireEvent.change(slider, { target: { value: '3' } });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, tableSpeed: -0.5, bidFeedback: true });
+    fireEvent.change(slider, { target: { value: '-0.5' } });
     fireEvent.keyUp(slider);
-    expect(apiMock.setPrefs).toHaveBeenCalledWith({ tableSpeed: 3 });
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ tableSpeed: -0.5 });
   });
 
   it('reflects an account that already moved Table speed off the midpoint, in either direction', () => {
-    const { unmount } = renderSettings({ ...meFixture, user: { ...meFixture.user!, tableSpeed: 4 } });
-    expect(screen.getByRole('slider', { name: 'Table speed' })).toHaveValue('4');
+    const { unmount } = renderSettings({ ...meFixture, user: { ...meFixture.user!, tableSpeed: 1 } });
+    expect(screen.getByRole('slider', { name: 'Table speed' })).toHaveValue('1');
     unmount();
-    renderSettings({ ...meFixture, user: { ...meFixture.user!, tableSpeed: 0 } });
-    expect(screen.getByRole('slider', { name: 'Table speed' })).toHaveValue('0');
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, tableSpeed: -1 } });
+    expect(screen.getByRole('slider', { name: 'Table speed' })).toHaveValue('-1');
   });
 
   // The slider's revert target is the last value the ACCOUNT confirmed, not
@@ -112,10 +114,10 @@ describe('Settings', () => {
     apiMock.setPrefs.mockRejectedValue(new Error('nope'));
     renderSettings();
     const slider = screen.getByRole('slider', { name: 'Table speed' });
-    fireEvent.change(slider, { target: { value: '4' } });
+    fireEvent.change(slider, { target: { value: '0.8' } });
     fireEvent.mouseUp(slider);
     expect(await screen.findByText(/didn't save/i)).toBeInTheDocument();
-    expect(slider).toHaveValue('2');
+    expect(slider).toHaveValue('0');
   });
 
   // The switch moves under the finger, so a rejected write has to move it

@@ -15,8 +15,8 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * what the setting actually does, then a full-width control. Every row is
  * mostly the same control at a different arity — four segments for
  * appearance, two for the switches — with Table speed the one exception: a
- * five-position drag slider, since "how fast" is a continuum a segmented
- * lever can't represent as legibly as a track + thumb can.
+ * genuinely continuous drag slider, since "how fast" is a continuum a
+ * segmented lever can't represent as legibly as a track + thumb can.
  *
  * Everything here is account state (columns on `users`, written through
  * POST /api/me/prefs) EXCEPT appearance and suit colors, which are device-local
@@ -80,16 +80,33 @@ const OFF_ON = [
   { value: true, label: 'ON' },
 ];
 
-// index i <-> TABLE_SPEED_MIN..TABLE_SPEED_MAX; TABLE_SPEED_DEFAULT (2) is
-// NORMAL, the exact pace the table ran at before this slider existed.
-const TABLE_SPEED_LABELS = ['SLOWER', 'SLOW', 'NORMAL', 'BRISK', 'BRISKEST'];
+// Caption-only, unlike PrefSwitch's segments — there's no discrete "which
+// one is active" the way a stepped control has, so these three just mark
+// the track's low end, midpoint, and high end (TABLE_SPEED_MIN/DEFAULT/MAX).
+// The thumb's own position is what actually communicates the value.
+const TABLE_SPEED_LABELS = ['SLOW', 'NORMAL', 'FAST'];
+
+// 100 steps across the full MIN..MAX range: fine enough to read as a smooth
+// drag, coarse enough that a keyboard arrow step (which moves by exactly one
+// `step`) is a sensible, visible increment rather than an imperceptible
+// nudge or (with the browser's step="any" fallback of 1) a jump clear from
+// NORMAL to an endpoint in a single keypress.
+const TABLE_SPEED_STEP = (TABLE_SPEED_MAX - TABLE_SPEED_MIN) / 100;
+
+/** aria-valuetext bucket — screen readers get a word, not a raw float. */
+function tableSpeedValueText(v: number): string {
+  if (v < -0.05) return 'Slower than normal';
+  if (v > 0.05) return 'Faster than normal';
+  return 'Normal';
+}
 
 /**
  * A native <input type="range"> in the toll-bridge idiom: a 1px ink track,
  * a square ink thumb (the same "filled ink plate" look PrefSwitch gives its
- * active segment), and tracked-caps tick labels underneath — the slider's
- * equivalent of a segmented lever's row of buttons, just laid under a
- * continuous track instead of being the tappable surface itself.
+ * active segment), and tracked-caps SLOW/NORMAL/FAST captions underneath —
+ * the slider's equivalent of a segmented lever's row of buttons, marking
+ * the track's ends and midpoint rather than being the tappable surface
+ * itself.
  *
  * `value` is the CURRENT DRAG POSITION, updated on every native `input`
  * tick so the thumb tracks the finger/cursor with no lag — a controlled
@@ -119,20 +136,18 @@ function TableSpeedSlider({
         className="ds-slider-input"
         min={TABLE_SPEED_MIN}
         max={TABLE_SPEED_MAX}
-        step={1}
+        step={TABLE_SPEED_STEP}
         value={value}
         aria-label="Table speed"
-        aria-valuetext={TABLE_SPEED_LABELS[value]}
+        aria-valuetext={tableSpeedValueText(value)}
         onChange={(e) => onChange(Number(e.target.value))}
         onMouseUp={commit}
         onTouchEnd={commit}
         onKeyUp={commit}
       />
       <div className="ds-slider-ticks" aria-hidden="true">
-        {TABLE_SPEED_LABELS.map((label, i) => (
-          <span key={label} className={i === value ? 'active' : ''}>
-            {label}
-          </span>
+        {TABLE_SPEED_LABELS.map((label) => (
+          <span key={label}>{label}</span>
         ))}
       </div>
     </div>

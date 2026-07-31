@@ -13,12 +13,12 @@ import {
   STAMP_MS,
   TABLE_SPEED_MAX,
   TABLE_SPEED_MIN,
-  TABLE_SPEED_SCALE,
   captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
   stageClaimSteps,
   stagePlaySteps,
+  tableSpeedScale,
   takePlayOrigin,
   trickWinner,
 } from './playAnim';
@@ -300,27 +300,20 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
   });
 
-  // "Table speed" (settings tab, users.table_speed) — a TABLE_SPEED_MIN..
-  // TABLE_SPEED_MAX slider; omitting the arg (every pre-existing call site)
-  // must stay byte-identical to the midpoint, TABLE_SPEED_DEFAULT, since
-  // that's the exact pace the table ran at before this dial existed.
+  // "Table speed" (settings tab, users.table_speed) — a CONTINUOUS float,
+  // TABLE_SPEED_MIN..TABLE_SPEED_MAX; omitting the arg (every pre-existing
+  // call site) must stay byte-identical to the midpoint, TABLE_SPEED_DEFAULT,
+  // since that's the exact pace the table ran at before this dial existed.
   describe('tableSpeed (Table speed)', () => {
-    it('omitting `tableSpeed` is identical to passing the default (the midpoint, scale 1)', () => {
-      const lead = { seat: 2, card: myCard };
-      const r1 = { seat: 3, card: H(2) };
-      const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
-      const next: BoardView = {
-        ...prev,
-        hand: prev.hand.filter((c) => c !== myCard),
-        currentTrick: [lead, r1],
-        myTurn: true,
-        handToPlay: 0,
-      };
-      expect(TABLE_SPEED_SCALE[2]).toBe(1); // the midpoint is a true no-op scale
-      expect(stagePlaySteps(emptyPrev, next)).toEqual(stagePlaySteps(emptyPrev, next, 2));
+    it('tableSpeedScale is an identity (1) at the default, and byte-for-byte symmetric at the endpoints', () => {
+      // the whole reason the scale is 2^-v rather than a plain lerp between
+      // the endpoint scales: it puts the identity EXACTLY at the midpoint
+      expect(tableSpeedScale(0)).toBe(1);
+      expect(tableSpeedScale(TABLE_SPEED_MIN)).toBe(2); // slowest: double the gap
+      expect(tableSpeedScale(TABLE_SPEED_MAX)).toBe(0.5); // fastest: half the gap
     });
 
-    it('scales the robot "think" gap between plays in BOTH directions, never the glide itself', () => {
+    it('omitting `tableSpeed` is identical to passing the default', () => {
       const lead = { seat: 2, card: myCard };
       const r1 = { seat: 3, card: H(2) };
       const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
@@ -331,27 +324,48 @@ describe('stagePlaySteps', () => {
         myTurn: true,
         handToPlay: 0,
       };
-      const table = stagePlaySteps(emptyPrev, next); // default (2, NORMAL)
+      expect(stagePlaySteps(emptyPrev, next)).toEqual(stagePlaySteps(emptyPrev, next, 0));
+    });
+
+    it('scales the robot "think" gap between plays in BOTH directions, never the glide itself — including a genuinely off-grid, fractional position', () => {
+      const lead = { seat: 2, card: myCard };
+      const r1 = { seat: 3, card: H(2) };
+      const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
+      const next: BoardView = {
+        ...prev,
+        hand: prev.hand.filter((c) => c !== myCard),
+        currentTrick: [lead, r1],
+        myTurn: true,
+        handToPlay: 0,
+      };
+      const table = stagePlaySteps(emptyPrev, next); // default (0, NORMAL)
       const fastest = stagePlaySteps(emptyPrev, next, TABLE_SPEED_MAX);
       const slowest = stagePlaySteps(emptyPrev, next, TABLE_SPEED_MIN);
+      // an arbitrary point nowhere near a "step" — this is what makes it a
+      // real continuous slider rather than five buttons wearing a track
+      const partway = stagePlaySteps(emptyPrev, next, 0.37);
       // table: [lead(0), r1(GLIDE+ROBOT_GAP), final(GLIDE+160)] — no trick
       // boundary here (only 2 of the trick's cards are in), so the final
       // step is the lastWasPlay hand-off beat, not a STAMP_MS tally.
       expect(table[1].delayBefore).toBe(GLIDE_MS + ROBOT_GAP_MS);
-      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
-      expect(slowest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MIN]));
+      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * tableSpeedScale(TABLE_SPEED_MAX)));
+      expect(slowest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * tableSpeedScale(TABLE_SPEED_MIN)));
+      expect(partway[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * tableSpeedScale(0.37)));
       // GLIDE_MS itself never moves — only ROBOT_GAP_MS does, and it moves
       // in both directions around the default: faster below it, slower above
       expect(fastest[1].delayBefore).toBeLessThan(table[1].delayBefore);
       expect(fastest[1].delayBefore).toBeGreaterThan(GLIDE_MS);
       expect(slowest[1].delayBefore).toBeGreaterThan(table[1].delayBefore);
+      // a positive (FAST-ward) position lands strictly between NORMAL and FASTEST
+      expect(partway[1].delayBefore).toBeLessThan(table[1].delayBefore);
+      expect(partway[1].delayBefore).toBeGreaterThan(fastest[1].delayBefore);
       // the lastWasPlay hand-off beat (GLIDE_MS + 160) scales too — it's a
       // "wait before you get control back" read gap like ROBOT_GAP_MS/
       // HOLD_MS/STAMP_MS, not a WAAPI duration like GLIDE_MS/COLLECT_MS
       expect(table[2].delayBefore).toBe(GLIDE_MS + 160);
-      expect(fastest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
+      expect(fastest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * tableSpeedScale(TABLE_SPEED_MAX)));
       expect(fastest[2].delayBefore).toBeLessThan(table[2].delayBefore);
-      expect(slowest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * TABLE_SPEED_SCALE[TABLE_SPEED_MIN]));
+      expect(slowest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * tableSpeedScale(TABLE_SPEED_MIN)));
       expect(slowest[2].delayBefore).toBeGreaterThan(table[2].delayBefore);
     });
 
@@ -373,13 +387,13 @@ describe('stagePlaySteps', () => {
       const fastest = stagePlaySteps(prev, next, TABLE_SPEED_MAX);
       // steps: [my card(0), hold+collect-sweep(GLIDE+HOLD), tally(COLLECT+80), final(STAMP)]
       expect(table[1].delayBefore).toBe(GLIDE_MS + HOLD_MS);
-      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(HOLD_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
+      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(HOLD_MS * tableSpeedScale(TABLE_SPEED_MAX)));
       // COLLECT_MS+80 never scales
       expect(table[2].delayBefore).toBe(COLLECT_MS + 80);
       expect(fastest[2].delayBefore).toBe(COLLECT_MS + 80);
       // the final (real server view) step is a STAMP_MS beat here, and scales
       expect(table[3].delayBefore).toBe(STAMP_MS);
-      expect(fastest[3].delayBefore).toBe(Math.round(STAMP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
+      expect(fastest[3].delayBefore).toBe(Math.round(STAMP_MS * tableSpeedScale(TABLE_SPEED_MAX)));
     });
 
     it('never scales LEAD_SETTLE_MS (the opening-lead layout-settle beat), at either end of the slider', () => {

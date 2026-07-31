@@ -29,7 +29,7 @@ export const STAMP_MS = 420;
 // to settle before the opening lead glides in. Fires once per board, not per
 // card, so unlike the "table speed" dial below this is layout-settle time,
 // not a robot-pacing beat a player perceives as a wait — the "Table speed"
-// setting (TABLE_SPEED_SCALE) deliberately leaves it alone.
+// setting (tableSpeedScale) deliberately leaves it alone.
 export const LEAD_SETTLE_MS = 350;
 
 // A forced (single-legal-card) turn auto-plays after this delay — just long
@@ -37,25 +37,35 @@ export const LEAD_SETTLE_MS = 350;
 // making the player wait to see a card they had no choice over.
 export const AUTO_PLAY_DELAY_MS = 250;
 
-// The settings tab's "Table speed" slider (users.table_speed, an integer
-// 0..4) — see stagePlaySteps' `tableSpeed` param below. Level 2 is the
-// midpoint AND the default: scale 1 there means an account with no
-// preference set (or a fresh signed-out visitor) reproduces the exact
-// pacing that shipped before this dial existed, byte for byte. Moving left
-// slows the table down (scale > 1); moving right speeds it up (scale < 1).
-// Level 4's 0.5 is the same factor the original two-state "brisk" toggle
-// shipped and was calibrated against, so that endpoint is unchanged by this
-// rework. Only the "think"/"read" gaps between plays (ROBOT_GAP_MS/HOLD_MS/
-// STAMP_MS) scale; GLIDE_MS/COLLECT_MS (TrickArea's own WAAPI durations) stay
-// fixed, same split CLAIM_SPEEDUP_FACTOR already uses for the claim
-// fast-forward below — real wall-clock animation time is left alone, only
-// the pauses between plays compress or stretch.
-export const TABLE_SPEED_MIN = 0;
-export const TABLE_SPEED_MAX = 4;
-export const TABLE_SPEED_DEFAULT = 2;
-export const TABLE_SPEED_SCALE = [2, 1.5, 1, 0.66, 0.5] as const;
+// The settings tab's "Table speed" slider (users.table_speed, a continuous
+// float TABLE_SPEED_MIN..TABLE_SPEED_MAX) — see stagePlaySteps' `tableSpeed`
+// param below. 0 is the midpoint AND the default: tableSpeedScale(0) is
+// exactly 1, so an account with no preference set (or a fresh signed-out
+// visitor) reproduces the exact pacing that shipped before this dial
+// existed, byte for byte. Dragging toward SLOW (negative) stretches the
+// gaps; dragging toward FAST (positive) compresses them.
+//
+// The scale is exponential, not linear, specifically so the slider's visual
+// midpoint lands exactly on the identity scale of 1: a plain lerp between
+// the endpoint scales (2 and 0.5) would put 1 at t=0.8 of the way from slow
+// to fast, not at the center. tableSpeedScale(v) = 2^-v instead interpolates
+// the EXPONENT linearly (1 at v=-1, 0 at v=0, -1 at v=1), which is what
+// makes v=0 <-> scale=1 fall exactly on the slider's midpoint. The endpoints
+// (2 at v=-1, 0.5 at v=1) are unchanged from this setting's original
+// five-position version, and 0.5 is in turn the same factor the very first,
+// two-state "brisk" toggle shipped and was calibrated against — so neither
+// rework has moved the FAST end's actual pacing, only how finely a player
+// can dial in between. Only the "think"/"read" gaps between plays
+// (ROBOT_GAP_MS/HOLD_MS/STAMP_MS) scale; GLIDE_MS/COLLECT_MS (TrickArea's
+// own WAAPI durations) stay fixed, same split CLAIM_SPEEDUP_FACTOR already
+// uses for the claim fast-forward below — real wall-clock animation time is
+// left alone, only the pauses between plays compress or stretch.
+export const TABLE_SPEED_MIN = -1;
+export const TABLE_SPEED_MAX = 1;
+export const TABLE_SPEED_DEFAULT = 0;
+export const tableSpeedScale = (v: number): number => 2 ** -v;
 
-const pace = (ms: number, tableSpeed: number): number => Math.round(ms * TABLE_SPEED_SCALE[tableSpeed]);
+const pace = (ms: number, tableSpeed: number): number => Math.round(ms * tableSpeedScale(tableSpeed));
 
 // The "Fast forward settled tricks" ON pacing: much shorter than
 // ROBOT_GAP_MS/HOLD_MS+STAMP_MS since a claim can span many tricks — the

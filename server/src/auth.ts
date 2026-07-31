@@ -237,9 +237,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // import, with TABLE_SPEED_MIN/MAX in web/src/components/game/playAnim.ts.
   // The server bundle doesn't depend on the web bundle (see CONTRIBUTING's
   // core/ai/web boundary rules), so this can't be a shared constant; if you
-  // change the slider's step count on one side, change it here too.
-  const TABLE_SPEED_MIN = 0;
-  const TABLE_SPEED_MAX = 4;
+  // change the slider's range on one side, change it here too.
+  const TABLE_SPEED_MIN = -1;
+  const TABLE_SPEED_MAX = 1;
 
   /**
    * The settings gate's account-backed preferences (web/src/pages/Settings.tsx).
@@ -248,7 +248,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * plain per-user preferences with no side effects, and the list will keep
    * growing (difficulty already exists as a backend-only preference and
    * wants a UI). Absent keys are left alone; a present key must match its
-   * field's own type — boolean for a switch, an in-range integer for a
+   * field's own type — boolean for a switch, a finite in-range number for a
    * slider — so a typo'd field or an out-of-range drag can't silently no-op
    * or wedge the column.
    *
@@ -261,16 +261,20 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * - fastForward — pacing of the claim replay. On the account and not in
    *   localStorage because it describes the person, not the browser; see the
    *   fast_forward migration in db.ts.
-   * - tableSpeed — the ONE non-boolean preference: an integer slider
+   * - tableSpeed — the ONE non-boolean preference: a continuous slider
    *   position, TABLE_SPEED_MIN..TABLE_SPEED_MAX, pacing ORDINARY robot card
    *   play replay only, never the auction (the gaps stagePlaySteps computes
    *   for a non-claim response), independent of fastForward. Account state
    *   for the same reason as fastForward. Deliberately does not affect
    *   stageClaimSteps or TrickArea's WAAPI glide/collect durations at any
    *   position — see table_speed's migration comment and stagePlaySteps'
-   *   own doc comment in playAnim.ts. The midpoint is also the default, so
-   *   an account that has never touched the slider gets the exact pacing
-   *   that shipped before this setting existed.
+   *   own doc comment in playAnim.ts. Unlike the boolean fields, this is a
+   *   REAL column, not an INTEGER one, and validation checks range/
+   *   finiteness rather than integrality — the whole point is that a player
+   *   can settle anywhere between SLOW and FAST, not just on a fixed set of
+   *   stops. The midpoint is also the default, so an account that has never
+   *   touched the slider gets the exact pacing that shipped before this
+   *   setting existed.
    * - bidFeedback — whether the post-call grading toast renders. Grading
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
@@ -294,8 +298,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
     if ('tableSpeed' in body) {
       const v = body.tableSpeed;
-      if (typeof v !== 'number' || !Number.isInteger(v) || v < TABLE_SPEED_MIN || v > TABLE_SPEED_MAX) {
-        return reply.code(400).send({ error: `tableSpeed must be an integer between ${TABLE_SPEED_MIN} and ${TABLE_SPEED_MAX}` });
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < TABLE_SPEED_MIN || v > TABLE_SPEED_MAX) {
+        return reply.code(400).send({ error: `tableSpeed must be a number between ${TABLE_SPEED_MIN} and ${TABLE_SPEED_MAX}` });
       }
     }
     for (const [key, apply] of boolFields) {
