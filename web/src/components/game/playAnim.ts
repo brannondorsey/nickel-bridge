@@ -323,7 +323,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView, brisk = false):
 
   // the real server view last: restores myTurn/legalCards (or shows the result)
   const lastWasPlay = !boundary || after.length > 0;
-  steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : pace(STAMP_MS, brisk), view: next });
+  steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + pace(160, brisk) : pace(STAMP_MS, brisk), view: next });
   return steps;
 }
 

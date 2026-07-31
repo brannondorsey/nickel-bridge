@@ -328,12 +328,20 @@ describe('stagePlaySteps', () => {
       };
       const table = stagePlaySteps(emptyPrev, next);
       const brisk = stagePlaySteps(emptyPrev, next, true);
-      // table: [lead(0), r1(GLIDE+ROBOT_GAP), final(GLIDE+ROBOT_GAP)]
+      // table: [lead(0), r1(GLIDE+ROBOT_GAP), final(GLIDE+160)] — no trick
+      // boundary here (only 2 of the trick's cards are in), so the final
+      // step is the lastWasPlay hand-off beat, not a STAMP_MS tally.
       expect(table[1].delayBefore).toBe(GLIDE_MS + ROBOT_GAP_MS);
       expect(brisk[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * BRISK_SCALE));
       // GLIDE_MS itself never moves — only ROBOT_GAP_MS does
       expect(brisk[1].delayBefore).toBeLessThan(table[1].delayBefore);
       expect(brisk[1].delayBefore).toBeGreaterThan(GLIDE_MS);
+      // the lastWasPlay hand-off beat (GLIDE_MS + 160) scales too — it's a
+      // "wait before you get control back" read gap like ROBOT_GAP_MS/
+      // HOLD_MS/STAMP_MS, not a WAAPI duration like GLIDE_MS/COLLECT_MS
+      expect(table[2].delayBefore).toBe(GLIDE_MS + 160);
+      expect(brisk[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * BRISK_SCALE));
+      expect(brisk[2].delayBefore).toBeLessThan(table[2].delayBefore);
     });
 
     it('scales HOLD_MS and the post-collect STAMP_MS at a trick boundary, never COLLECT_MS', () => {
