@@ -859,7 +859,13 @@ thing worth knowing:
   which calls are real conventions), but the button stays tappable and opens the same
   `CallInspector`, which renders one identical "Sealed" message whether or not
   `entry.meaning` is populated — showing different copy for "no meaning" vs. "meaning
-  present but hidden" would itself be the leak.
+  present but hidden" would itself be the leak. The post-bid `GradeToast` is the same
+  leak in a different shape and is gated too: `evaluation.saycConsistent` there is
+  computed against the human's own submitted call (`saycConsistent(hand, dealer, calls,
+  userCall)` in `bidder.ts`), so its "a textbook SAYC bid" clause names the exact fact
+  the auction UI seals — `GradeToast` drops that clause under this setting and falls
+  back to its plain "the robot bid" wording, leaving the grade, stars, and the robot's
+  own call/meaning untouched.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,

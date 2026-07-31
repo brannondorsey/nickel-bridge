@@ -17,8 +17,18 @@ export const GRADE_STARS: Record<BidEval['grade'], 0 | 1 | 2 | 3> = {
   poor: 0,
 };
 
-/** Post-bid grade toast: tier + stars (✗ for poor) + the robot comparison sentence. */
-export function GradeToast({ evaluation }: { evaluation: BidEval }) {
+/**
+ * Post-bid grade toast: tier + stars (✗ for poor) + the robot comparison sentence.
+ *
+ * `evaluation.saycConsistent` is evaluated against the HUMAN'S OWN submitted call
+ * (bidder.ts's saycConsistent(hand, dealer, calls, userCall)), so naming it here is
+ * exactly the fact "Hide your side's bid meanings" seals everywhere else — the
+ * MeaningPanel/CallInspector/AuctionGrid dot for this same call. `ownMeaningsHidden`
+ * suppresses only that one clause; the grade itself, the star count, and the robot's
+ * own bid + meaning are unaffected — this is about not narrating the human's call as
+ * "textbook SAYC," not about hiding feedback on it.
+ */
+export function GradeToast({ evaluation, ownMeaningsHidden = false }: { evaluation: BidEval; ownMeaningsHidden?: boolean }) {
   const differs = evaluation.bestCall !== evaluation.call;
   // Name the robot's bid when it's a recognized convention, so the comparison teaches.
   const bestTitle = evaluation.bestMeaning?.exact ? evaluation.bestMeaning.title : null;
@@ -30,7 +40,7 @@ export function GradeToast({ evaluation }: { evaluation: BidEval }) {
       </b>
       {differs ? (
         <>
-          {evaluation.saycConsistent ? ', a textbook SAYC bid; the robot chose ' : '; the robot bid '}
+          {evaluation.saycConsistent && !ownMeaningsHidden ? ', a textbook SAYC bid; the robot chose ' : '; the robot bid '}
           <b>
             <CallText call={evaluation.bestCall} />
           </b>

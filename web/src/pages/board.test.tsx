@@ -159,6 +159,39 @@ describe('Board — bidding', () => {
     expect(toast).not.toHaveTextContent(/%/);
   });
 
+  it("doesn't name the human's own call as a textbook SAYC bid when ownMeaningsHidden — same fact the auction UI seals elsewhere", async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: {
+        call: bid2H,
+        bestCall: 18, // 4♣
+        userProb: 0,
+        bestProb: 0.85,
+        grade: 'good',
+        score: 0.75,
+        saycConsistent: true,
+        bestMeaning: { title: 'Splinter raise', description: 'Double jump in a new suit.', exact: true },
+      },
+      board: boardBiddingRobots,
+    });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: { ...meFixture, user: { ...meFixture.user!, ownMeaningsHidden: true } }, route: '/t/12/b/2' },
+    );
+    // MeaningPanel's placeholder copy shortens when ownMeaningsHidden — no "see what it means"
+    await screen.findByText(/Tap a bid, then tap again to make the call/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    await screen.findByText('Good');
+    const toast = document.querySelector('.grade-toast')!;
+    // the grade, stars, and the robot's own call + meaning still show — only the
+    // clause naming the HUMAN'S call as a recognized convention is suppressed
+    expect(toast).toHaveTextContent(/Good — you bid 2♥; the robot bid 4♣ \(Splinter raise\)/);
+    expect(toast).not.toHaveTextContent(/textbook SAYC/);
+  });
+
   it('keeps the grade toast visible when the bid ends the auction', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({

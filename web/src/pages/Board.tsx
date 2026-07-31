@@ -483,12 +483,12 @@ export function BiddingPhase({
         hidden={ownMeaningsHidden}
       />
     ) : lastEval ? (
-      <GradeToast evaluation={lastEval} />
+      <GradeToast evaluation={lastEval} ownMeaningsHidden={ownMeaningsHidden} />
     ) : (
       <MeaningPanel placeholder hidden={ownMeaningsHidden} />
     )
   ) : lastEval ? (
-    <GradeToast evaluation={lastEval} />
+    <GradeToast evaluation={lastEval} ownMeaningsHidden={ownMeaningsHidden} />
   ) : null;
 
   return (
@@ -586,7 +586,7 @@ export function PlayPhase({
       />
       {/* keep the last bid's grade visible when the auction ends on the human's
           own call — it clears as soon as they play a card */}
-      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
+      {lastEval ? <GradeToast evaluation={lastEval} ownMeaningsHidden={ownMeaningsHidden} /> : null}
       {board.flipped ? (
         <Toast className="flip-note">
           Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
