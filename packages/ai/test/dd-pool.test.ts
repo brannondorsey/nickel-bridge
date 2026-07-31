@@ -66,6 +66,46 @@ describe.skipIf(!built)('DdPool', () => {
     }
   }, 60_000);
 
+  // Scheduling, on a ONE-worker pool — the production topology (Fly's
+  // performance-1x), and the only size where dispatch order is observable
+  // without racing. All three requests below are issued in the same tick, so
+  // the first occupies the worker and the other two are queued behind it
+  // before any of them can finish; what's asserted is which of the two the
+  // freed worker takes next.
+  const priorityReq = (n: number) => buildSolveRequest(dealBoard('pool-priority', (n % 4) + 1), contract, []);
+
+  it('gives a freed worker to a later interactive request over a queued background one', async () => {
+    const p = new DdPool(1, workerUrl);
+    try {
+      const order: string[] = [];
+      const first = p.solve(priorityReq(1)).then(() => order.push('first'));
+      const background = p.solve(priorityReq(2), 'background').then(() => order.push('background'));
+      const interactive = p.solve(priorityReq(3), 'interactive').then(() => order.push('interactive'));
+      await Promise.all([first, background, interactive]);
+      expect(order).toEqual(['first', 'interactive', 'background']);
+    } finally {
+      await p.destroy();
+    }
+  }, 60_000);
+
+  it('promotes a background request that has waited out the starvation bound', async () => {
+    // Same shape, but with a 1ms bound: by the time the first (whole-board)
+    // solve frees the worker the queued background request has aged past it,
+    // so it is promoted and — being the older of the two — goes first. Without
+    // promotion it would lose to the interactive request indefinitely.
+    const p = new DdPool(1, workerUrl, 1);
+    try {
+      const order: string[] = [];
+      const first = p.solve(priorityReq(1)).then(() => order.push('first'));
+      const background = p.solve(priorityReq(2), 'background').then(() => order.push('background'));
+      const interactive = p.solve(priorityReq(3), 'interactive').then(() => order.push('interactive'));
+      await Promise.all([first, background, interactive]);
+      expect(order).toEqual(['first', 'background', 'interactive']);
+    } finally {
+      await p.destroy();
+    }
+  }, 60_000);
+
   it('destroy() rejects nothing in flight when idle and terminates workers', async () => {
     const p = new DdPool(1, workerUrl);
     await expect(p.destroy()).resolves.toBeUndefined();

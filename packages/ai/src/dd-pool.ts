@@ -40,6 +40,21 @@ import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
  * the bulk of the measured tail. Priority only changes WHICH worker a
  * request reaches and WHEN, never its result, so robot determinism
  * (invariant 1) is untouched by construction, same as the pool itself.
+ *
+ * That preference is deliberately BOUNDED (STARVATION_PROMOTE_MS), because
+ * unbounded it reintroduces the same freeze through a different door. A
+ * queued background request is jumped by every newly-arriving interactive
+ * one, so under a sustained interactive backlog it can wait forever —
+ * measured on a 1-worker pool with three interactive requests kept in
+ * flight, a background solve starved past the full SOLVE_TIMEOUT_MS and
+ * rejected. Its caller's catch then falls back to the MAIN-THREAD
+ * solveRequest() (play-mc.ts, play-ai.ts), a synchronous WASM call with no
+ * timeout that blocks the event loop for every concurrent request — strictly
+ * worse than the contention this priority queue exists to relieve. So a
+ * background request that has waited STARVATION_PROMOTE_MS is promoted to
+ * interactive, capping its wait at that plus one in-flight solve, well
+ * inside the timeout. The cost to a human is at most one extra background
+ * solve per promotion window.
  */
 
 /** cap: each worker holds a ~5 MB WASM heap; solves split K/size ways */
@@ -56,9 +71,21 @@ const POOL_SIZE = Math.max(1, Math.min(availableParallelism() - 1, 4));
  */
 const SOLVE_TIMEOUT_MS = 15_000;
 
-/** Lower sorts first: an INTERACTIVE request always jumps a queued BACKGROUND one. */
+/** Lower sorts first: an INTERACTIVE request jumps a queued BACKGROUND one. */
 const PRIORITY = { interactive: 0, background: 1 } as const;
 export type SolvePriority = keyof typeof PRIORITY;
+
+/**
+ * How long a queued BACKGROUND request may be jumped before it is promoted
+ * to interactive — the anti-starvation bound argued in this file's PRIORITY
+ * doc comment. Well under SOLVE_TIMEOUT_MS: the promoted request still has
+ * to wait out whichever solve is in flight when it wins, and the point is to
+ * clear it long before the timeout drops its caller onto the blocking
+ * main-thread path. This reads the wall clock, which decides only WHICH
+ * queued request a freed worker takes next — the same latency-only lever as
+ * priority itself, so invariant 1 is untouched (DDS is deterministic).
+ */
+const STARVATION_PROMOTE_MS = 5_000;
 
 interface InFlight {
   resolve: (res: FutureTricks) => void;
@@ -70,6 +97,7 @@ interface Queued extends InFlight {
   id: number;
   req: DealPbn;
   priority: number;
+  enqueuedAt: number;
 }
 
 export class DdPool {
@@ -83,7 +111,12 @@ export class DdPool {
   private nextId = 1;
   private dead = false;
 
-  constructor(size: number, workerUrl: URL) {
+  /** overridable only so tests can exercise promotion without a 5s wait */
+  constructor(
+    size: number,
+    workerUrl: URL,
+    private readonly starvationMs: number = STARVATION_PROMOTE_MS,
+  ) {
     for (let i = 0; i < size; i++) {
       const worker = new Worker(workerUrl);
       worker.unref();
@@ -111,12 +144,26 @@ export class DdPool {
     }
   }
 
-  /** Hand the highest-priority waiting request (FIFO within a priority) to a just-freed worker. */
+  /**
+   * Hand the highest-priority waiting request (FIFO within a priority) to a
+   * just-freed worker. A background request that has waited starvationMs
+   * counts as interactive here, and since the queue stays in enqueue order it
+   * is then the OLDEST interactive-priority item and wins outright — which is
+   * what makes the bound a bound rather than a nudge.
+   */
   private dispatchNext(workerIndex: number): void {
     if (this.dead || !this.idle[workerIndex] || this.queue.length === 0) return;
+    const now = Date.now();
+    const effective = (q: Queued): number =>
+      now - q.enqueuedAt >= this.starvationMs ? PRIORITY.interactive : q.priority;
     let best = 0;
+    let bestPriority = effective(this.queue[0]);
     for (let i = 1; i < this.queue.length; i++) {
-      if (this.queue[i].priority < this.queue[best].priority) best = i;
+      const p = effective(this.queue[i]);
+      if (p < bestPriority) {
+        best = i;
+        bestPriority = p;
+      }
     }
     const [item] = this.queue.splice(best, 1);
     this.idle[workerIndex] = false;
@@ -146,7 +193,8 @@ export class DdPool {
   /**
    * `priority` defaults to 'interactive' — every pre-existing call site is
    * unaffected. Pass 'background' for work that should yield the next free
-   * worker to any interactive request already waiting (see this file's
+   * worker to any interactive request already waiting — for at most
+   * STARVATION_PROMOTE_MS, after which it stops yielding (see this file's
    * PRIORITY doc comment above).
    */
   solve(req: DealPbn, priority: SolvePriority = 'interactive'): Promise<FutureTricks> {
@@ -162,7 +210,7 @@ export class DdPool {
         reject(new Error(`dd pool solve exceeded ${SOLVE_TIMEOUT_MS}ms`));
       }, SOLVE_TIMEOUT_MS);
       timer.unref();
-      this.queue.push({ id, req, priority: PRIORITY[priority], resolve, reject, timer });
+      this.queue.push({ id, req, priority: PRIORITY[priority], enqueuedAt: Date.now(), resolve, reject, timer });
       const idleIndex = this.idle.indexOf(true);
       if (idleIndex >= 0) this.dispatchNext(idleIndex);
     });
