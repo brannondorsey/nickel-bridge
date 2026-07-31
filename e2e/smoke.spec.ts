@@ -288,8 +288,14 @@ test('settings apply a night-mode choice that survives a reload', async ({ page 
   await page.getByRole('group', { name: 'Appearance' }).getByRole('button', { name: 'NIGHT' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night');
 
+  // Suit colors is the other device-local row (see suitPalette.ts) — same
+  // pre-paint-script pattern as Appearance, so it gets the same reload check.
+  await page.getByRole('group', { name: 'Suit colors' }).getByRole('button', { name: 'COLORBLIND' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-suit-palette', 'colorblind');
+
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night');
+  await expect(page.locator('html')).toHaveAttribute('data-suit-palette', 'colorblind');
 
   // the other rows are account state, so they round-trip through the server
   await page.getByRole('group', { name: 'Name on the ladder' }).getByRole('button', { name: 'OFF' }).click();
@@ -301,6 +307,36 @@ test('settings apply a night-mode choice that survives a reload', async ({ page 
       return [user.ladderListed, user.fastForward, user.bidFeedback];
     })
     .toEqual([false, false, false]);
+});
+
+/**
+ * The colorblind suit palette's night variant is only reachable through a CSS
+ * cascade tie: the new `@media (prefers-color-scheme: dark)` colorblind mirror
+ * and the pre-existing standard one are both equal-specificity overrides of
+ * :root, so which wins depends on which is textually LATER in style.css, not on
+ * specificity (see the block comment above both in style.css). An
+ * attribute-presence assertion can't catch a regression of that ordering — only
+ * a computed-style check under emulated dark OS + Appearance left at SYSTEM
+ * (i.e. no explicit data-theme) can.
+ */
+test('a colorblind palette under system-dark OS repaints hearts, not the standard night red', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ colorScheme: 'dark' });
+  const page = await context.newPage();
+  await signInAndOnboard(page, `Colorblind ${Date.now()}`);
+
+  await page.click('.tabbar >> text=SETTINGS');
+  await expect(page).toHaveURL('/settings');
+  // Appearance stays at SYSTEM (its default) — data-theme is never set, so the
+  // dark palette can only come from the @media mirror, not an explicit override.
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
+
+  await page.getByRole('group', { name: 'Suit colors' }).getByRole('button', { name: 'COLORBLIND' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-suit-palette', 'colorblind');
+
+  const hearts = page.locator('.suit-preview .suit-h');
+  await expect(hearts).toHaveCSS('color', 'rgb(111, 179, 224)'); // night colorblind --suit-h: #6fb3e0
 });
 
 /**

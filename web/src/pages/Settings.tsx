@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useMe } from '../App';
-import { api } from '../api';
+import { SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
 /**
@@ -16,11 +17,12 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * theme picker with toggles bolted under it.
  *
  * Everything here is account state (columns on `users`, written through
- * POST /api/me/prefs) EXCEPT appearance, which is device-local because it has
- * to be applied before first paint by the inline script in index.html — no
- * server round trip can answer in time, and a person's screen at 11 PM is a
- * property of the room they're in rather than of their account. The footer
- * says that once rather than tagging individual rows.
+ * POST /api/me/prefs) EXCEPT appearance and suit colors, which are device-local
+ * because they have to be applied before first paint by the inline scripts in
+ * index.html — no server round trip can answer in time, and both a person's
+ * screen at 11 PM and how they read a suit glyph are properties of the device
+ * they're on rather than of their account. The footer says that once rather
+ * than tagging individual rows.
  *
  * The account switches are optimistic: they move under the finger and
  * revert if the write is refused, since a switch that waits on a round trip
@@ -32,6 +34,11 @@ const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
   { pref: 'night', label: 'NIGHT' },
   { pref: 'adaptive', label: 'ADAPT' },
   { pref: 'system', label: 'SYSTEM' },
+];
+
+const SUIT_PALETTE_OPTIONS: { pref: SuitPalette; label: string }[] = [
+  { pref: 'standard', label: 'STANDARD' },
+  { pref: 'colorblind', label: 'COLORBLIND' },
 ];
 
 /** The shared lever: n segments, the chosen one on the ink plate. */
@@ -83,6 +90,7 @@ type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: 
 export default function Settings() {
   const { me, refresh } = useMe();
   const [theme, setTheme] = useState<ThemePref>(() => readThemePref());
+  const [suitPalette, setSuitPalette] = useState<SuitPalette>(() => readSuitPalette());
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
@@ -126,6 +134,29 @@ export default function Settings() {
                 applyThemePref(pref);
               }}
             />
+          </SettingRow>
+
+          <SettingRow
+            label="Suit colors"
+            note="Colorblind gives hearts a stamp-ink blue and diamonds a rust orange instead of red and gold, so a red-green deficiency can still read all four suits at a glance. Spades and clubs are unchanged."
+          >
+            <PrefSwitch
+              label="Suit colors"
+              value={suitPalette}
+              options={SUIT_PALETTE_OPTIONS.map((o) => ({ value: o.pref, label: o.label }))}
+              onChange={(pref) => {
+                setSuitPalette(pref);
+                storeSuitPalette(pref);
+                applySuitPalette(pref);
+              }}
+            />
+            <div className="suit-preview" aria-hidden="true">
+              {SUIT_SYMBOLS.map((sym, i) => (
+                <span key={sym} className={suitClass(i)}>
+                  {sym}
+                </span>
+              ))}
+            </div>
           </SettingRow>
 
           <SettingRow
@@ -177,7 +208,7 @@ export default function Settings() {
             Sign out
           </Button>
           <p className="settings-foot-note">
-            Appearance is kept on this device; the rest travels with your account.
+            Appearance and suit colors are kept on this device; the rest travels with your account.
           </p>
         </div>
       </div>
