@@ -112,3 +112,37 @@ describe.skipIf(!built)('DdPool', () => {
     await expect(p.solve(buildSolveRequest(dealBoard('x', 1), contract, []))).rejects.toThrow();
   });
 });
+
+/**
+ * Pool DEATH, which play-ai.ts's solveVia discriminates on: a rejection whose
+ * next getSharedDdPool() lookup yields a different pool means the old one
+ * died and the replacement is worth a retry. Pointing a pool at a module that
+ * doesn't exist takes the same route a crashing worker does —
+ * worker.on('error') → fail() — so this needs no compiled worker and runs
+ * whether or not the build has been done, unlike the suite above.
+ */
+describe('DdPool failure', () => {
+  const missing = new URL('./no-such-dd-worker.js', import.meta.url);
+  const req = () => buildSolveRequest(dealBoard('pool-fail', 1), contract, []);
+
+  it('goes unusable and rejects its callers when a worker fails', async () => {
+    const p = new DdPool(1, missing);
+    // Worker failure is asynchronous, so a pool is handed out healthy and
+    // dies afterwards — which is exactly how a live decision's K solves come
+    // to reject together, mid-flight, rather than being caught on lookup.
+    expect(p.usable).toBe(true);
+    await expect(p.solve(req())).rejects.toThrow();
+    expect(p.usable).toBe(false);
+    await p.destroy();
+  });
+
+  it('tolerates destroy() after it has already failed', async () => {
+    // getSharedDdPool() destroys a degraded pool when replacing it, to free
+    // the workers its dead sibling left running — so this is load-bearing
+    // rather than hygiene, and it must not throw back into the lookup.
+    const p = new DdPool(1, missing);
+    await expect(p.solve(req())).rejects.toThrow();
+    await expect(p.destroy()).resolves.toBeUndefined();
+    await expect(p.destroy()).resolves.toBeUndefined();
+  });
+});
