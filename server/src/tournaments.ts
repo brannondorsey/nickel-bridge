@@ -331,11 +331,21 @@ function eloParticipants(tournamentId: number): { userId: number; totalPct: numb
  * tournament changes that tournament's pairwise set and the correction
  * propagates through the whole history — ratings continuously re-rank as the
  * field grows. At friends scale this is a few milliseconds.
+ *
+ * The replay is also the only place that can answer "how many rated
+ * tournaments did this player have BEFORE this one" — the input core's
+ * PROVISIONAL dials need (see elo.ts). It falls out for free here: walking
+ * tournaments in id order, `rated` is that count by construction, so no new
+ * column and no second pass. It is incremented only for players who actually
+ * rated in this tournament, which is the same set that gets an elo_history
+ * row — a player whose tournament had no second human doesn't burn a
+ * provisional crossing on it.
  */
 export const recomputeElo = db.transaction(() => {
   stmtClearEloHistory.run();
   stmtResetElo.run(ELO_INITIAL);
   const ratings = new Map<number, number>();
+  const rated = new Map<number, number>();
   for (const { id } of stmtAllTournamentIds.all() as { id: number }[]) {
     // eloParticipants, not standings(): benchmark AI personas never rate, and
     // the replay's pcts are matchpointed among humans only so house scores
@@ -348,9 +358,11 @@ export const recomputeElo = db.transaction(() => {
       userId: s.userId,
       rating: ratings.get(s.userId) ?? ELO_INITIAL,
       totalPct: s.totalPct,
+      priorTournaments: rated.get(s.userId) ?? 0,
     }));
     for (const r of eloUpdates(participants)) {
       ratings.set(r.userId, r.after);
+      rated.set(r.userId, (rated.get(r.userId) ?? 0) + 1);
       stmtEloHistory.run(r.userId, id, r.before, r.after);
     }
   }

@@ -417,6 +417,7 @@ describe('scoring', () => {
 
 describe('elo', () => {
   it('updates pairwise and conserves total', () => {
+    // No priorTournaments ⇒ everyone established ⇒ classic single-K Elo.
     const res = eloUpdates([
       { userId: 1, rating: 1200, totalPct: 60 },
       { userId: 2, rating: 1200, totalPct: 50 },
@@ -426,6 +427,37 @@ describe('elo', () => {
     expect(res[2].after).toBeLessThan(1200);
     const total = res.reduce((s, r) => s + r.after - r.before, 0);
     expect(Math.abs(total)).toBeLessThanOrEqual(2); // rounding only
+  });
+
+  it('damps an established player facing a provisional one', () => {
+    const evenMatch = (priorTournaments: number) =>
+      eloUpdates([
+        { userId: 1, rating: 1200, totalPct: 60, priorTournaments: 99 },
+        { userId: 2, rating: 1200, totalPct: 40, priorTournaments },
+      ]);
+    const vsEstablished = evenMatch(99);
+    const vsNewcomer = evenMatch(0);
+    // The established winner gains strictly less from beating an unproven
+    // opponent — the whole point of OPPONENT_DAMP.
+    expect(vsEstablished[0].after - 1200).toBe(12);
+    expect(vsNewcomer[0].after - 1200).toBe(6);
+    // The newcomer's own rating still moves at the full classic K — only the
+    // ESTABLISHED side is damped. That asymmetry is the point: the newcomer
+    // still converges toward their true strength at normal speed, while the
+    // proven player is shielded from a result that says little about them.
+    // It is also what stops a one-and-done winner from draining the pool,
+    // since the established side now loses half of what the newcomer gains.
+    expect(1200 - vsNewcomer[1].after).toBe(12);
+  });
+
+  it('is exactly classic Elo when provisional handling is disabled', () => {
+    const participants = [
+      { userId: 1, rating: 1250, totalPct: 60, priorTournaments: 0 },
+      { userId: 2, rating: 1180, totalPct: 40, priorTournaments: 0 },
+    ];
+    const off = eloUpdates(participants, { provisional: null });
+    const total = off.reduce((s, r) => s + r.after - r.before, 0);
+    expect(Math.abs(total)).toBeLessThanOrEqual(1); // strictly zero-sum
   });
 });
 

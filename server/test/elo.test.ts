@@ -47,18 +47,21 @@ describe('continuous Elo recompute', () => {
     finishBoards(t1, bob, [100, 100, 100, 100]);
   });
 
+  // Both are on their first crossing, so both are provisional and each side's
+  // K carries core's OPPONENT_DAMP (0.5): 24 * 0.5 * (1 - 0.5) = 6, not the
+  // classic 12. See PROVISIONAL in packages/core/src/elo.ts.
   it('rates a completed head-to-head tournament', () => {
     recomputeElo();
-    expect(elo(alice)).toBe(1212);
-    expect(elo(bob)).toBe(1188);
+    expect(elo(alice)).toBe(1206);
+    expect(elo(bob)).toBe(1194);
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history`).get()).toEqual({ n: 2 });
   });
 
   it('is idempotent', () => {
     recomputeElo();
     recomputeElo();
-    expect(elo(alice)).toBe(1212);
-    expect(elo(bob)).toBe(1188);
+    expect(elo(alice)).toBe(1206);
+    expect(elo(bob)).toBe(1194);
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history`).get()).toEqual({ n: 2 });
   });
 
@@ -82,12 +85,23 @@ describe('continuous Elo recompute', () => {
     recomputeElo();
     const s = standings(t2);
     expect(s.find((x) => x.userId === carol)?.complete).toBe(false);
-    // bob (lower-rated after t1) beats alice → gains more than 12
-    const bobDelta =
-      (db.prepare(`SELECT after - before AS d FROM elo_history WHERE tournament_id = ? AND user_id = ?`).get(t2, bob) as {
-        d: number;
-      }).d;
-    expect(bobDelta).toBeGreaterThan(12);
+    // t2 is rated off the ratings t1 LEFT BEHIND, not off ELO_INITIAL: bob
+    // enters below alice (she beat him in t1) and his win is an upset.
+    // Asserting the size of the upset premium is no longer useful — both are
+    // still inside the provisional window, so K is damped to 12 (see
+    // PROVISIONAL in packages/core/src/elo.ts) and at these near-equal
+    // ratings the premium rounds away entirely. So assert the carry-forward
+    // itself, which is what this test is named for.
+    const row = db
+      .prepare(`SELECT before, after FROM elo_history WHERE tournament_id = ? AND user_id = ?`)
+      .get(t2, bob) as { before: number; after: number };
+    const aliceBefore = (
+      db.prepare(`SELECT before FROM elo_history WHERE tournament_id = ? AND user_id = ?`).get(t2, alice) as {
+        before: number;
+      }
+    ).before;
+    expect(row.before).toBeLessThan(aliceBefore); // carried forward from t1
+    expect(row.after - row.before).toBeGreaterThanOrEqual(6); // and he gained
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE tournament_id = ?`).get(t2)).toEqual({ n: 2 });
   });
 });

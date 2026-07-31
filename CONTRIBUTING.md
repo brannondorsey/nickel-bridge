@@ -27,7 +27,9 @@ covers how the code is organized, how to work on it, and which invariants you mu
 ```
 packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/PBN/HCP),
                 auction.ts + play.ts (state machines), score.ts (scoring + matchpoints),
-                elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
+                elo.ts (pairwise Elo, start 1200 K=24, plus the PROVISIONAL
+                damping that shields established players from unproven ones —
+                see "Elo is recomputed from scratch" below), sayc.ts (the SAYC bid explainer,
                 biggest file in core), advisor.ts (checks a hand against a meaning's
                 machine-readable `req` constraints — saycConsistent feeds bid grading,
                 saycViolation feeds the robot bidding guardrail), types.ts,
@@ -149,7 +151,11 @@ tools           offline Python weight conversion + golden-fixture generation;
                 the shipped tiers (--ew-only: signed IMP, matches PARTNER_FLOOR's asymmetry);
                 calibrate_whatif.mjs compares named CANDIDATE configs (not just shipped tiers)
                 for "should we change tier X or Y" questions — see
-                docs/difficulty-tuning-guide.md for how these fit together
+                docs/difficulty-tuning-guide.md for how these fit together;
+                calibrate_elo.mjs is the same idea for core's PROVISIONAL dials —
+                replays a real (--input) or synthetic (--synthetic) tournament
+                history and reports what each candidate does to established
+                players' exposure to one-and-done accounts
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
@@ -729,6 +735,37 @@ None of this costs the server anything — see `DEFAULT_LOOKBACK`'s doc comment 
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
 everyone — so don't "optimize" it into an incremental update without redesigning the model.
+The replay is also where a player's prior-crossing count comes from: walking tournaments in
+id order makes it free, so `PROVISIONAL` needs no new column and no second pass.
+
+**K is per participant, per pairing — not one shared constant.** `PROVISIONAL` in
+`packages/core/src/elo.ts` damps how much an *established* player's rating moves on a result
+against someone still inside their first `TOURNAMENTS` (4, the same quota the leaderboard
+uses to decide when to *show* a rating). The problem it exists for was measured, not
+imagined: a new account starts at 1200, can win or lose real rating on four boards of
+variance, and — because the replay is permanent — never gives it back if it never returns.
+On production at the time, 7 of the 16 humans ever rated had exactly one rated tournament
+and had already gone quiet, and one established player dropped 45 points in a single
+crossing (deltas stack across every pairing, so a small field does **not** bound the damage
+to ±K).
+
+The counterintuitive part, and the reason `tools/calibrate_elo.mjs` exists: the *other*
+obvious dial makes it worse. `SELF_K_MULT` — the USCF-style elevated provisional K — ships
+**inert at 1**, because an elevated K only pays off for a player who keeps playing; for one
+who leaves after a single tournament it just amplifies the noise they inject and then walk
+away holding. Measured, `SELF_K_MULT=2` alone took rating mass leaving with one-and-done
+accounts from 97 to 185 and the worst established-player swing from 45 to 90. The shipped
+`OPPONENT_DAMP: 0.5` instead cut established players' churn in those fields by 22%, the
+worst swing by 27%, and left the ladder order completely unchanged.
+
+Two things to know before touching these. Unequal K on the two sides of a pairing means
+rating is **no longer strictly zero-sum** (~-84 points across 27 players, ~3 each) — the
+same trade every provisional-rating system in wide use has made. And changing `PROVISIONAL`
+retroactively re-rates every human, exactly like changing a difficulty tier constant: run
+the sweep first (`node tools/calibrate_elo.mjs --input <export>`, or `--synthetic` without
+production access) rather than picking numbers by taste. Passing `provisional: null` to
+`eloUpdates` restores classic single-K Elo, and omitting `priorTournaments` on a participant
+means "established", so callers that don't track history are unaffected.
 
 **The activity feed ("TRAFFIC")** answers the one question the ladder and the profiles don't:
 who else has been on the bridge lately. `GET /api/activity` (`server/src/activity.ts`) is a
