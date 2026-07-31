@@ -22,7 +22,7 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * property of the room they're in rather than of their account. The footer
  * says that once rather than tagging individual rows.
  *
- * The two account switches are optimistic: they move under the finger and
+ * The three account switches are optimistic: they move under the finger and
  * revert if the write is refused, since a switch that waits on a round trip
  * before moving reads as a dead control on a slow connection.
  */

@@ -249,8 +249,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * - fastForward — pacing of the claim replay. On the account and not in
    *   localStorage because it describes the person, not the browser; see the
    *   fast_forward migration in db.ts.
-   * - briskPacing — pacing of ORDINARY robot bidding/play replay (the gaps
-   *   stagePlaySteps computes for a non-claim response), independent of
+   * - briskPacing — pacing of ORDINARY robot card play replay only, never the
+   *   auction (the gaps stagePlaySteps computes for a non-claim response),
+   *   independent of
    *   fastForward. Account state for the same reason as fastForward.
    *   Deliberately does not affect stageClaimSteps or TrickArea's WAAPI
    *   glide/collect durations in either mode — see brisk_pacing's migration
