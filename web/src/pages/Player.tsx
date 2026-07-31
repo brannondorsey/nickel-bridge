@@ -243,7 +243,7 @@ function ChartPanel({ heading, figure, children }: { heading: string; figure?: s
   );
 }
 
-function Tile({ label, value, sub, to }: { label: string; value: string; sub: string; to?: string }) {
+function Tile({ label, value, sub, to, full }: { label: string; value: string; sub: string; to?: string; full?: boolean }) {
   const content = (
     <>
       <div className="label-caps stat-tile-label">{label}</div>
@@ -251,14 +251,15 @@ function Tile({ label, value, sub, to }: { label: string; value: string; sub: st
       <div className="stat-tile-sub num">{sub}</div>
     </>
   );
+  const className = full ? 'stat-tile stat-tile-full' : 'stat-tile';
   if (to) {
     return (
-      <Link to={to} className="stat-tile">
+      <Link to={to} className={className}>
         {content}
       </Link>
     );
   }
-  return <div className="stat-tile">{content}</div>;
+  return <div className={className}>{content}</div>;
 }
 
 /** Stats: the turnstile rating hero, trend sparklines, and the bidding/play record. */
@@ -748,6 +749,7 @@ export default function Player() {
                 label="PLAY PRECISION"
                 value={stats.playPrecision.precisionPct !== null ? `${stats.playPrecision.precisionPct}%` : '—'}
                 sub={`${stats.playPrecision.boards} of ${t.declarer.boards} contracts`}
+                full
               />
             ) : null}
           </div>

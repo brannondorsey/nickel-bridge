@@ -2534,6 +2534,12 @@ a.board-row:hover {
 a.stat-tile:hover {
   background: var(--surface);
 }
+/* the 9th, conditional tile (PLAY PRECISION) — an odd count against this
+   grid's fixed 2 columns would otherwise leave it alone in column 1 with an
+   empty column 2 beside it, not stretched across the row as intended. */
+.stat-tile-full {
+  grid-column: 1 / -1;
+}
 .stat-tile-label {
   font-size: 9.5px;
   letter-spacing: 0.16em;
