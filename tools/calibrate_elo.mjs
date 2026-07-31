@@ -56,13 +56,23 @@ const QUIET_DAYS = Number(argValue('--quiet-days') ?? 14);
  */
 const CANDIDATES = [
   { label: 'today (classic Elo)', provisional: null },
-  { label: 'shipped (damp 0.5, win 4)', provisional: { ...PROVISIONAL } },
-  { label: 'damp 0.75', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 1, OPPONENT_DAMP: 0.75 } },
-  { label: 'damp 0.25', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 1, OPPONENT_DAMP: 0.25 } },
-  { label: 'damp 0.5, window 2', provisional: { TOURNAMENTS: 2, SELF_K_MULT: 1, OPPONENT_DAMP: 0.5 } },
-  { label: 'damp 0.5, window 8', provisional: { TOURNAMENTS: 8, SELF_K_MULT: 1, OPPONENT_DAMP: 0.5 } },
-  // The rejected dial, kept in the sweep so the reason stays reproducible
-  // rather than being folklore in a doc comment — see PROVISIONAL in elo.ts.
+  { label: 'damp 0.5 only', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 1, OPPONENT_DAMP: 0.5 } },
+  { label: 'damp 0.25 only', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 1, OPPONENT_DAMP: 0.25 } },
+  // SYMMETRIC: self == damp, so both sides of every pairing carry the same K
+  // and the whole system stays strictly zero-sum. Shrinking a provisional
+  // player's OWN K is the opposite of what Glicko/Kalman prescribe for
+  // estimation (an uncertain prior should update faster), but this app is not
+  // optimizing estimation for someone who never returns — it is minimizing
+  // the rating they strand on the way out.
+  { label: 'symmetric 0.75', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 0.75, OPPONENT_DAMP: 0.75 } },
+  { label: 'symmetric 0.5', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 0.5, OPPONENT_DAMP: 0.5 } },
+  { label: 'symmetric 0.25', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 0.25, OPPONENT_DAMP: 0.25 } },
+  { label: 'shipped (whatever is in core)', provisional: { ...PROVISIONAL } },
+  { label: 'symmetric 0.5, window 2', provisional: { TOURNAMENTS: 2, SELF_K_MULT: 0.5, OPPONENT_DAMP: 0.5 } },
+  { label: 'symmetric 0.5, window 8', provisional: { TOURNAMENTS: 8, SELF_K_MULT: 0.5, OPPONENT_DAMP: 0.5 } },
+  { label: 'self 0.5 only', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 0.5, OPPONENT_DAMP: 1 } },
+  // The USCF-style dial, kept in the sweep so its rejection stays reproducible
+  // rather than becoming folklore in a doc comment — see PROVISIONAL in elo.ts.
   { label: 'self 2x only (REJECTED)', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 2, OPPONENT_DAMP: 1 } },
   { label: 'self 2x + damp 0.5 (REJECTED)', provisional: { TOURNAMENTS: 4, SELF_K_MULT: 2, OPPONENT_DAMP: 0.5 } },
 ];
@@ -160,6 +170,26 @@ function analyze(data, base, run) {
   // Zero-sum drift: total rating in the pool vs. what classic Elo conserves.
   const totalDrift = [...ratings.values()].reduce((s, r) => s + r - ELO_INITIAL, 0);
 
+  // Convergence cost, for players who STAYED. Shrinking a provisional
+  // player's own K buys less stranded rating at the price of a slower climb
+  // to their true strength, and that price is only paid by people who keep
+  // playing — so it has to be measured on them specifically. For each player
+  // with a long record, how far was their rating from where it ended up, at
+  // the moment they left the provisional window? Bigger = slower convergence.
+  const LONG_RECORD = 8;
+  const seriesByUser = new Map();
+  for (const h of history) {
+    if (!seriesByUser.has(h.userId)) seriesByUser.set(h.userId, []);
+    seriesByUser.get(h.userId).push(h.after);
+  }
+  const gaps = [];
+  for (const [userId, series] of seriesByUser) {
+    if (series.length < LONG_RECORD) continue;
+    const atWindowEnd = series[Math.min(PROVISIONAL.TOURNAMENTS, series.length) - 1];
+    gaps.push(Math.abs(atWindowEnd - ratings.get(userId)));
+  }
+  const convergenceGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+
   // Ladder churn vs. the baseline run, among leaderboard-eligible players only.
   const order = (r, who) => who.slice().sort((a, b) => r.get(b) - r.get(a));
   const eligible = established.filter((u) => (base.rated.get(u) ?? 0) >= PROVISIONAL.TOURNAMENTS);
@@ -179,6 +209,7 @@ function analyze(data, base, run) {
     totalDrift,
     rankSwaps,
     maxRatingShift,
+    convergenceGap,
     eligible: eligible.length,
   };
 }
@@ -240,6 +271,7 @@ const header = [
   'leaver mass'.padStart(12),
   'exposed |Δ|'.padStart(12),
   'worst'.padStart(6),
+  'conv'.padStart(6),
   'shift'.padStart(6),
   'swaps'.padStart(6),
 ].join(' ');
@@ -256,6 +288,7 @@ for (const c of CANDIDATES) {
       a.massHeldByLeavers.toFixed(0).padStart(12),
       a.exposedDeltaAbs.toFixed(0).padStart(12),
       a.worstSwing.toFixed(0).padStart(6),
+      a.convergenceGap.toFixed(0).padStart(6),
       a.maxRatingShift.toFixed(0).padStart(6),
       String(a.rankSwaps).padStart(6),
     ].join(' '),
@@ -269,6 +302,10 @@ console.log(`
   exposed |Δ|  summed |rating change| taken by ESTABLISHED players in tournaments that
                contained a one-and-done account. This is the exposure being bounded.
   worst        largest single-tournament swing for an established player in those.
+  conv         for players who STAYED (8+ rated tournaments), mean distance from
+               their final rating at the moment they left the provisional window.
+               This is the price of shrinking a newcomer's own K — a slower climb
+               for the people who keep playing. Lower is better.
   shift        largest rating move vs. the classic-Elo baseline, ladder-eligible players.
   swaps        ladder positions that differ from the classic-Elo baseline.
 `);

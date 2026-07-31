@@ -26,42 +26,60 @@ export const ELO_K = 24;
  * single crossing (deltas stack across every pairing in the field, so a small
  * field does NOT bound the damage to ±K the way a 1v1 game would).
  *
- * There are two candidate dials here, and **only one of them survived
- * measurement**. The distinction is between the USCF/FIDE fix and the Glicko
- * one, and it matters which problem each actually solves:
+ * The shipped rule is simple to say: **any pairing that involves an unproven
+ * player carries a smaller K, on BOTH sides.** SELF_K_MULT and OPPONENT_DAMP
+ * are equal, which is what makes that true, and the equality is load-bearing
+ * rather than tidy — see "zero-sum" below.
  *
- * - OPPONENT_DAMP (Glicko's rating-deviation insight): a result against an
- *   unproven player is weak evidence about *you*, so it should move your
- *   rating less. This is the shipped dial, and the only one that helps here.
+ * Getting here required rejecting the textbook answer, so the reasoning is
+ * worth keeping. Glicko and Kalman both say an uncertain prior should update
+ * FASTER: gain is prior-variance / (prior-variance + measurement-noise), and
+ * a brand-new player's 1200 is a nearly worthless prior. USCF encodes the
+ * same idea as an elevated K during a provisional window. Every one of those
+ * systems would set SELF_K_MULT well above 1.
  *
- * - SELF_K_MULT (the USCF provisional window): an unproven player's OWN
- *   rating moves faster so it converges to their true strength in a few
- *   crossings. **Ships INERT (1) — measurement showed it makes this specific
- *   problem worse, not better.** An elevated K only pays off for a player who
- *   keeps playing; for one who leaves after a single tournament it just
- *   amplifies the noise they inject and then walk away holding. On the real
- *   history, SELF_K_MULT=2 alone took the rating mass leaving with
- *   one-and-done accounts from 97 to 185, and the worst single-tournament
- *   swing for an established player from 45 points to 90. It is kept as a
- *   dial (not deleted) because it would be the right lever if the population
- *   ever shifts toward newcomers who stay — but turn it on only with a fresh
- *   sweep, the same way PLAY_NOISE ships off for `intermediate`.
+ * They are all optimizing something this app doesn't have: the accuracy of a
+ * rating for a player who KEEPS PLAYING. For one who leaves after a single
+ * tournament, convergence is worthless — their K is nothing but a knob
+ * controlling how much noise they inject on the way out. Measured on the real
+ * history, SELF_K_MULT=2 nearly doubled the rating mass leaving with
+ * one-and-done accounts (97 → 185) and doubled the worst single-tournament
+ * swing for an established player (45 → 90). It is exactly backwards here.
  *
- * Measured effect of the shipped values on the real history
- * (tools/calibrate_elo.mjs, 41 tournaments / 27 rated humans):
- * summed rating churn taken by established players in fields containing a
- * one-and-done account fell 249 → 193 (-22%), the worst single-tournament
- * swing 45 → 33 (-27%), and rating mass walking out the door 97 → 80 (-18%).
- * The existing ladder did not reorder at all (zero rank swaps).
+ * Damping both sides instead (tools/calibrate_elo.mjs, 41 tournaments / 27
+ * rated humans, vs. classic Elo):
  *
- * The cost, stated plainly rather than hidden: unequal K on the two sides of
- * a pairing means rating is **no longer strictly zero-sum**. The pool drifts
- * about -84 points total across 27 players (~3 points each) — established
- * players win less from beating a newcomer than the newcomer loses, and they
- * beat newcomers more often than not. That is the same trade every
- * provisional-rating system in wide use has made, and it is the root of the
- * perennial FIDE/USCF inflation-vs-deflation argument. Re-run the sweep
- * before touching these numbers.
+ *   rating stranded by one-and-done accounts   97 → 40   (-59%)
+ *   churn taken by established players in
+ *     fields containing one                   249 → 174  (-30%)
+ *   worst single-tournament swing              45 → 28   (-38%)
+ *   zero-sum drift                             -2 → +1   (unchanged)
+ *
+ * The cost that was expected and did NOT appear: a slower climb for players
+ * who stay. Measured as how far a long-record player still was from their
+ * final rating when they left the provisional window, it slightly IMPROVED
+ * (64 → 49) — less noise during the window leaves them closer to where they
+ * settle. That is measured on only the handful of players with 8+ rated
+ * tournaments, so treat it as "no evidence of a penalty" rather than proof
+ * of a benefit. It is also cheap here in a way it wouldn't be for a chess
+ * federation: the leaderboard already hides a player until TOURNAMENTS rated
+ * crossings, so a slow start is invisible anyway.
+ *
+ * **Zero-sum is preserved, and only because the two dials are equal.** With
+ * SELF_K_MULT === OPPONENT_DAMP both players in any pairing carry identical
+ * K, so every update is still a pure transfer — nothing is created or
+ * destroyed. Splitting them (an earlier version shipped 1 / 0.5) drifts the
+ * pool by ~-84 points across 27 players. If you ever set them apart, you are
+ * choosing to leave strict conservation behind, which is the trade FIDE/USCF
+ * made and the root of their perennial inflation-vs-deflation argument. Do
+ * it knowingly.
+ *
+ * Not done, and worth knowing why: FIDE's actual answer is to award no
+ * rating at all until a player has met a game threshold. That would zero the
+ * stranded-rating problem outright, but at this app's scale most tournaments
+ * would then rate nobody — a field needs two ESTABLISHED humans instead of
+ * two humans — so the ladder would barely move. Halving the damage is the
+ * right trade for a player base this size.
  *
  * TOURNAMENTS deliberately matches the leaderboard's own provisional quota
  * (PROVISIONAL_MIN_TOURNAMENTS in server/src/tournaments.ts). That quota
@@ -72,9 +90,9 @@ export const ELO_K = 24;
 export const PROVISIONAL = {
   /** Rated tournaments before a player counts as established. */
   TOURNAMENTS: 4,
-  /** Multiplier on a provisional player's own K. 1 = off — see above. */
-  SELF_K_MULT: 1,
-  /** Multiplier on your K when your OPPONENT is provisional — trust it less. */
+  /** Multiplier on a provisional player's own K. */
+  SELF_K_MULT: 0.5,
+  /** Multiplier on your K when your OPPONENT is provisional. */
   OPPONENT_DAMP: 0.5,
 } as const;
 

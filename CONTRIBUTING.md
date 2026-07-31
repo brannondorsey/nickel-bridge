@@ -739,33 +739,37 @@ The replay is also where a player's prior-crossing count comes from: walking tou
 id order makes it free, so `PROVISIONAL` needs no new column and no second pass.
 
 **K is per participant, per pairing — not one shared constant.** `PROVISIONAL` in
-`packages/core/src/elo.ts` damps how much an *established* player's rating moves on a result
-against someone still inside their first `TOURNAMENTS` (4, the same quota the leaderboard
-uses to decide when to *show* a rating). The problem it exists for was measured, not
-imagined: a new account starts at 1200, can win or lose real rating on four boards of
-variance, and — because the replay is permanent — never gives it back if it never returns.
-On production at the time, 7 of the 16 humans ever rated had exactly one rated tournament
-and had already gone quiet, and one established player dropped 45 points in a single
-crossing (deltas stack across every pairing, so a small field does **not** bound the damage
-to ±K).
+`packages/core/src/elo.ts` shrinks K on **both sides** of any pairing involving a player
+still inside their first `TOURNAMENTS` (4, the same quota the leaderboard uses to decide
+when to *show* a rating). The problem it exists for was measured, not imagined: a new
+account starts at 1200, can win or lose real rating on four boards of variance, and —
+because the replay is permanent — never gives it back if it never returns. On production at
+the time, 7 of the 16 humans ever rated had exactly one rated tournament and had already
+gone quiet, and one established player dropped 45 points in a single crossing (deltas stack
+across every pairing, so a small field does **not** bound the damage to ±K).
 
-The counterintuitive part, and the reason `tools/calibrate_elo.mjs` exists: the *other*
-obvious dial makes it worse. `SELF_K_MULT` — the USCF-style elevated provisional K — ships
-**inert at 1**, because an elevated K only pays off for a player who keeps playing; for one
-who leaves after a single tournament it just amplifies the noise they inject and then walk
-away holding. Measured, `SELF_K_MULT=2` alone took rating mass leaving with one-and-done
-accounts from 97 to 185 and the worst established-player swing from 45 to 90. The shipped
-`OPPONENT_DAMP: 0.5` instead cut established players' churn in those fields by 22%, the
-worst swing by 27%, and left the ladder order completely unchanged.
+The counterintuitive part, and the reason `tools/calibrate_elo.mjs` exists: **the textbook
+answer is backwards here.** Glicko and Kalman both say an uncertain prior should update
+*faster* (gain is prior-variance / (prior-variance + measurement-noise), and a newcomer's
+1200 is a worthless prior); USCF encodes the same idea as an elevated provisional K. All of
+them are optimizing rating accuracy for a player who keeps playing. For one who leaves after
+a single tournament, convergence is worthless and their K is purely a noise knob — measured,
+`SELF_K_MULT=2` nearly doubled the rating stranded by one-and-done accounts (97 → 185) and
+doubled the worst established-player swing (45 → 90). Damping both sides instead cut
+stranded rating 59%, established players' churn in those fields 30%, and the worst swing
+38%. The convergence penalty that argument predicts did not appear (it slightly improved) —
+and it is cheap here regardless, since the leaderboard hides a player until 4 rated
+crossings anyway, so a slow start is invisible.
 
-Two things to know before touching these. Unequal K on the two sides of a pairing means
-rating is **no longer strictly zero-sum** (~-84 points across 27 players, ~3 each) — the
-same trade every provisional-rating system in wide use has made. And changing `PROVISIONAL`
-retroactively re-rates every human, exactly like changing a difficulty tier constant: run
-the sweep first (`node tools/calibrate_elo.mjs --input <export>`, or `--synthetic` without
-production access) rather than picking numbers by taste. Passing `provisional: null` to
-`eloUpdates` restores classic single-K Elo, and omitting `priorTournaments` on a participant
-means "established", so callers that don't track history are unaffected.
+Two things to know before touching these. **The two dials must stay equal** or rating stops
+being zero-sum: equal K on both sides of a pairing keeps every update a pure transfer, while
+an earlier `1 / 0.5` split drifted the pool ~-84 points across 27 players. And changing
+`PROVISIONAL` retroactively re-rates every human, exactly like changing a difficulty tier
+constant: run the sweep first (`node tools/calibrate_elo.mjs --input <export>`, or
+`--synthetic` without production access) rather than picking numbers by taste. Passing
+`provisional: null` to `eloUpdates` restores classic single-K Elo, and omitting
+`priorTournaments` on a participant means "established", so callers that don't track history
+are unaffected.
 
 **The activity feed ("TRAFFIC")** answers the one question the ladder and the profiles don't:
 who else has been on the bridge lately. `GET /api/activity` (`server/src/activity.ts`) is a

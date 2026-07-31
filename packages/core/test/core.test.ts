@@ -441,13 +441,23 @@ describe('elo', () => {
     // opponent — the whole point of OPPONENT_DAMP.
     expect(vsEstablished[0].after - 1200).toBe(12);
     expect(vsNewcomer[0].after - 1200).toBe(6);
-    // The newcomer's own rating still moves at the full classic K — only the
-    // ESTABLISHED side is damped. That asymmetry is the point: the newcomer
-    // still converges toward their true strength at normal speed, while the
-    // proven player is shielded from a result that says little about them.
-    // It is also what stops a one-and-done winner from draining the pool,
-    // since the established side now loses half of what the newcomer gains.
-    expect(1200 - vsNewcomer[1].after).toBe(12);
+    // ...and the newcomer's own loss is damped by the SAME factor, so the
+    // pairing stays a pure transfer. This is what keeps a one-and-done
+    // winner from stranding rating on the way out, and it is why
+    // SELF_K_MULT and OPPONENT_DAMP must stay equal — see PROVISIONAL.
+    expect(1200 - vsNewcomer[1].after).toBe(6);
+  });
+
+  it('stays zero-sum with provisional players in the field', () => {
+    // Mixed field: two unproven, one established, one mid-window.
+    const res = eloUpdates([
+      { userId: 1, rating: 1200, totalPct: 70, priorTournaments: 0 },
+      { userId: 2, rating: 1260, totalPct: 55, priorTournaments: 99 },
+      { userId: 3, rating: 1190, totalPct: 40, priorTournaments: 1 },
+      { userId: 4, rating: 1240, totalPct: 35, priorTournaments: 3 },
+    ]);
+    const total = res.reduce((s, r) => s + r.after - r.before, 0);
+    expect(Math.abs(total)).toBeLessThanOrEqual(2); // rounding only
   });
 
   it('is exactly classic Elo when provisional handling is disabled', () => {

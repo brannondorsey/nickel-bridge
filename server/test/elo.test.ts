@@ -47,21 +47,23 @@ describe('continuous Elo recompute', () => {
     finishBoards(t1, bob, [100, 100, 100, 100]);
   });
 
-  // Both are on their first crossing, so both are provisional and each side's
-  // K carries core's OPPONENT_DAMP (0.5): 24 * 0.5 * (1 - 0.5) = 6, not the
-  // classic 12. See PROVISIONAL in packages/core/src/elo.ts.
+  // Both are on their first crossing, so BOTH sides of the pairing are
+  // damped: K = 24 * SELF_K_MULT * OPPONENT_DAMP = 6, and an even-ratings win
+  // moves 6 * 0.5 = 3. The two deltas stay equal and opposite — provisional
+  // damping never breaks conservation. See PROVISIONAL in packages/core/src/elo.ts.
   it('rates a completed head-to-head tournament', () => {
     recomputeElo();
-    expect(elo(alice)).toBe(1206);
-    expect(elo(bob)).toBe(1194);
+    expect(elo(alice)).toBe(1203);
+    expect(elo(bob)).toBe(1197);
+    expect(elo(alice) + elo(bob)).toBe(2400); // zero-sum
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history`).get()).toEqual({ n: 2 });
   });
 
   it('is idempotent', () => {
     recomputeElo();
     recomputeElo();
-    expect(elo(alice)).toBe(1206);
-    expect(elo(bob)).toBe(1194);
+    expect(elo(alice)).toBe(1203);
+    expect(elo(bob)).toBe(1197);
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history`).get()).toEqual({ n: 2 });
   });
 
@@ -72,7 +74,8 @@ describe('continuous Elo recompute', () => {
     expect(elo(alice)).toBeGreaterThan(elo(bob));
     // history rebuilt: one snapshot per participant
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history`).get()).toEqual({ n: 3 });
-    // ratings are conserved up to rounding
+    // ratings are conserved up to rounding — still true with everyone
+    // provisional, since both sides of a damped pairing carry the same K
     const total = elo(alice) + elo(bob) + elo(carol);
     expect(Math.abs(total - 3600)).toBeLessThanOrEqual(3);
   });
@@ -88,7 +91,7 @@ describe('continuous Elo recompute', () => {
     // t2 is rated off the ratings t1 LEFT BEHIND, not off ELO_INITIAL: bob
     // enters below alice (she beat him in t1) and his win is an upset.
     // Asserting the size of the upset premium is no longer useful — both are
-    // still inside the provisional window, so K is damped to 12 (see
+    // still inside the provisional window, so K is damped to 6 (see
     // PROVISIONAL in packages/core/src/elo.ts) and at these near-equal
     // ratings the premium rounds away entirely. So assert the carry-forward
     // itself, which is what this test is named for.
@@ -101,7 +104,7 @@ describe('continuous Elo recompute', () => {
       }
     ).before;
     expect(row.before).toBeLessThan(aliceBefore); // carried forward from t1
-    expect(row.after - row.before).toBeGreaterThanOrEqual(6); // and he gained
+    expect(row.after - row.before).toBeGreaterThanOrEqual(3); // and he gained
     expect(db.prepare(`SELECT COUNT(*) AS n FROM elo_history WHERE tournament_id = ?`).get(t2)).toEqual({ n: 2 });
   });
 });
