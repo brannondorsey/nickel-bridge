@@ -392,6 +392,24 @@ always exist by the time a human finishes a board), while everything else parks 
 interactive API request landed within `AI_PAUSE_MS`; even urgent units yield
 decision-by-decision to in-flight human taps (`courtesyGap` — personas solve inside the
 human's think-time gaps, capped so they always make progress, disabled when `AI_PAUSE_MS=0`).
+`courtesyGap` only stops a persona from STARTING a new decision during a quiet gap — its cap
+(`COURTESY_CAP_MS`) deliberately lets one proceed anyway after a bounded wait even during
+continuous human play, and once dispatched, DDS's synchronous WASM solve can't be preempted
+mid-flight. On a single-vCPU deployment (Fly's `performance-1x` — every environment this app
+runs on) the shared DD worker pool (`packages/ai/src/dd-pool.ts`) collapses to exactly one
+worker, so a persona's in-flight decision (up to K solves) could fully serialize a concurrent
+human card-play request behind it — measured as an occasional multi-second freeze on card play.
+`dd-pool.ts`'s `solve()` takes a priority (`'interactive'` default, `'background'` for every
+bot-driven call — personas here, plus demo seeding and demo exhibit replay, all routed through
+`bot-play.ts`): an interactive request jumps the queue for the next free worker ahead of any
+queued (not yet dispatched) background request. This can't shorten a solve already executing,
+only the wait behind the REST of a persona's batch — see `dd-pool.ts`'s doc comment for the
+measured effect. That preference is **bounded** (`STARVATION_PROMOTE_MS`), and the bound is
+load-bearing rather than tidiness: unbounded, a queued background request under a sustained
+interactive backlog starves past `SOLVE_TIMEOUT_MS` and rejects, and its caller's fallback is
+the **main-thread** `solveRequest()` — a synchronous WASM solve with no timeout that blocks the
+event loop for every concurrent request, i.e. a worse freeze than the one being fixed. A
+background request that has waited the bound is promoted to interactive.
 Play starts when a human is placed into
 or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
 sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and
