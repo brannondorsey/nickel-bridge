@@ -207,6 +207,31 @@ describe('Board — bidding', () => {
     expect(document.querySelector('.trick')).toBeInTheDocument();
   });
 
+  // "Bid feedback" (settings gate) only hides the toast — grading is still
+  // requested and applied to the auction on the refreshed board either way.
+  it('suppresses the grade toast when "Bid feedback" is off, but still grades the call', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: { ...meFixture, user: { ...meFixture.user!, bidFeedback: false } }, route: '/t/12/b/2' },
+    );
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    // grading was still requested from the server …
+    expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
+    await screen.findByText('Robots are thinking…');
+    // … but nothing renders the grade
+    expect(screen.queryByText('Excellent')).not.toBeInTheDocument();
+    expect(document.querySelector('.grade-toast')).not.toBeInTheDocument();
+  });
+
   it('docks the bid box at the foot, with the auction + feedback scrolling above it', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     renderBoard();

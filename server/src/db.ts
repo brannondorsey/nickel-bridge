@@ -127,6 +127,18 @@ if (!userColumns.has('ladder_listed')) {
 if (!userColumns.has('fast_forward')) {
   db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `bid_feedback` — show the post-call grading toast (1, the
+// shipped behaviour) or suppress it (0). The toast is deliberately excellent
+// for a learner and unwanted noise for a stronger player who is here to
+// compete rather than study. Account state, not localStorage, for the same
+// reason as fast_forward: it describes how this PERSON wants to be coached,
+// not a property of the device. Purely a rendering gate — grading is still
+// computed and stored in bidEvals on every submitCall regardless of this
+// flag, so bid-accuracy stats and the post-board "YOUR BIDDING" review table
+// are unaffected either way.
+if (!userColumns.has('bid_feedback')) {
+  db.exec(`ALTER TABLE users ADD COLUMN bid_feedback INTEGER NOT NULL DEFAULT 1`);
+}
 // Migration: `own_meanings_hidden` — suppress the SAYC meaning UI (the
 // dotted-underline cue, MeaningPanel's live preview, CallInspector's body)
 // for auction calls made or contemplated by the human's own partnership
@@ -194,6 +206,8 @@ export interface UserRow {
   ladder_listed: number;
   /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
   fast_forward: number;
+  /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
+  bid_feedback: number;
   /** 1 = suppress the SAYC meaning UI for the human's own partnership's calls (N/S); 0 = show every call's meaning */
   own_meanings_hidden: number;
   elo: number;

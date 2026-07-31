@@ -29,6 +29,7 @@ const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id =
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
+const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
 const stmtSetOwnMeaningsHidden = db.prepare(`UPDATE users SET own_meanings_hidden = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
@@ -206,6 +207,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             onboardedAt: user.onboarded_at,
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
+            bidFeedback: user.bid_feedback !== 0,
             ownMeaningsHidden: user.own_meanings_hidden !== 0,
           }
         : null,
@@ -249,6 +251,10 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * - fastForward — pacing of the claim replay. On the account and not in
    *   localStorage because it describes the person, not the browser; see the
    *   fast_forward migration in db.ts.
+   * - bidFeedback — whether the post-call grading toast renders. Grading
+   *   itself (bidEvals, stats, the post-board review table) is computed and
+   *   stored unconditionally; this only gates the live interruption — see
+   *   the bid_feedback migration in db.ts.
    * - ownMeaningsHidden — suppress the SAYC meaning UI for calls made by the
    *   human's own partnership (seats N/S) during the auction; opponents'
    *   (E/W) calls are always explained. This is bidding-partnership
@@ -264,6 +270,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const fields: [key: string, apply: (on: boolean) => void][] = [
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
+      ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
       ['ownMeaningsHidden', (on) => stmtSetOwnMeaningsHidden.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
@@ -278,6 +285,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.send({
       ladderListed: row.ladder_listed !== 0,
       fastForward: row.fast_forward !== 0,
+      bidFeedback: row.bid_feedback !== 0,
       ownMeaningsHidden: row.own_meanings_hidden !== 0,
     });
   });

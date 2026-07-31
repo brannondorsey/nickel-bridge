@@ -169,6 +169,12 @@ function tierStrategy(tier: SettableDifficulty, tournamentSeed: string): BoardSt
         seed: mcDecisionSeed(seedBase, b.row.board_no, b.plays.length),
         dealer: b.deal.dealer,
         calls: b.calls,
+        // A persona's own decision, not a live request — yields the next
+        // free DD worker to a real player's concurrent request. See
+        // packages/ai/src/dd-pool.ts's doc comment for the contention this
+        // fixes (courtesyGap above reduces how OFTEN this collides with a
+        // human tap; this reduces how much it costs when it still does).
+        priority: 'background',
       });
     },
   };

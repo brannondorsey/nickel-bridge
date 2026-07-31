@@ -30,6 +30,7 @@ export const meFixture: Me = {
     onboardedAt: 1700000000,
     ladderListed: true,
     fastForward: true,
+    bidFeedback: true,
     ownMeaningsHidden: false,
   },
   devAuth: true,
