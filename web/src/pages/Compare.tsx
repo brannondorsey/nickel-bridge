@@ -230,14 +230,24 @@ export default function Compare() {
           <Tally record={view.headToHead} />
           <div className="cmp-tally-key">Oldest at left</div>
         </div>
-      ) : view.commonGround && view.commonGround.length > 0 ? (
+      ) : (
+        // No head-to-head. The panel renders EITHER WAY: common ground is the
+        // good case, but "you have never crossed" is itself the answer to the
+        // first question this screen invites, and dropping the panel when there
+        // is no shared opponent would leave that question silently unanswered.
+        // Not hypothetical — the house personas only play a tournament once
+        // someone lands in it, so a pair can easily share no opponent at all.
         <PerforatedPanel heading="COMMON GROUND" className="cmp-common">
           <p className="cmp-common-lead">
             <GlossaryProse
-              text={`You have never crossed with ${them}. You have both played the house, though — and the house plays the same every night.`}
+              text={
+                view.commonGround && view.commonGround.length > 0
+                  ? `You have never crossed with ${them}. You have both played the house, though — and the house plays the same every night.`
+                  : `You have never crossed with ${them}, and you have no opponent in common yet either. The beam below is the only reading available.`
+              }
             />
           </p>
-          {view.commonGround.map((c) => (
+          {view.commonGround?.map((c) => (
             <div key={c.userId} className="cmp-common-row">
               <span className="cmp-common-name">{c.handle}</span>
               <span className="cmp-common-fig num">
@@ -248,11 +258,17 @@ export default function Compare() {
               </span>
             </div>
           ))}
-          <div className="cmp-common-note">
-            <GlossaryProse text="Crossings each of you finished ahead of that house player. Shown without a verdict — it is a weaker reading than the beam, and should not look as confident." />
-          </div>
+          {view.commonGround && view.commonGround.length > 0 ? (
+            <div className="cmp-common-note">
+              <GlossaryProse text="Crossings each of you finished ahead of that house player. Shown without a verdict — it is a weaker reading than the beam, and should not look as confident." />
+            </div>
+          ) : (
+            <div className="cmp-common-note">
+              <GlossaryProse text="Once you have both faced the same house player, their record against each of you appears here — the nearest thing to a shared table." />
+            </div>
+          )}
         </PerforatedPanel>
-      ) : null}
+      )}
 
       <PerforatedPanel heading="WHERE THE BEAM TIPS" className="cmp-beam-panel">
         <div className="cmp-legend" aria-hidden="true">

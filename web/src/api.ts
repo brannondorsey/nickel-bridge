@@ -458,7 +458,14 @@ export const api = {
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery
   demoScenarios: () =>
-    request<{ scenarios: DemoScenario[]; newCrosserId: number; richProfileId: number; collisionHandle: string }>(
+    request<{
+      scenarios: DemoScenario[];
+      newCrosserId: number;
+      richProfileId: number;
+      /** a seeded bot the Inspector has never shared a field with — the Compare "common ground" exhibit */
+      strangerId: number;
+      collisionHandle: string;
+    }>(
       '/api/demo/scenarios',
     ),
   runDemoScenario: (id: string) =>

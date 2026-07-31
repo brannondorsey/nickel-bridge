@@ -45,6 +45,24 @@ describe('Compare', () => {
     expect(screen.getByText('The Shark')).toBeInTheDocument();
   });
 
+  /**
+   * The panel must render even when there is no common ground to put in it.
+   * "You have never crossed" is the answer to the first question this screen
+   * invites, and dropping the panel leaves it silently unanswered. Reachable
+   * in practice: the house personas only join a tournament once somebody lands
+   * in one, so two players can easily share no opponent at all.
+   */
+  it('still explains the absence when there is no common ground either', async () => {
+    apiMock.compare.mockResolvedValue({ ...compareUnmet, commonGround: [] });
+    renderCompare(60);
+
+    expect(await screen.findByText('COMMON GROUND')).toBeInTheDocument();
+    expect(screen.getByText(/no opponent in common yet either/)).toBeInTheDocument();
+    expect(screen.getByText(/Once you have both faced the same house player/)).toBeInTheDocument();
+    // The beam is still the substance of the page, and still drawn.
+    expect(document.querySelectorAll('.beam').length).toBeGreaterThan(0);
+  });
+
   it('draws a beam per judged row and omits the ones set aside', async () => {
     apiMock.compare.mockResolvedValue(compareMet);
     renderCompare();
