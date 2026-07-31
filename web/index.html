@@ -103,6 +103,24 @@
         }
       })();
     </script>
+    <!--
+      Suit color palette: apply the persisted suitPalette.ts preference before
+      first paint, orthogonal to the theme script above (its own attribute, its
+      own try/catch — a failure in one must not block the other). Plain, blocking
+      JS for the same reason as the theme script: this must run before the
+      deferred module script graph loads. Keep in sync with suitPalette.ts by hand.
+    -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('nb:suitPalette') === 'colorblind') {
+            document.documentElement.setAttribute('data-suit-palette', 'colorblind');
+          }
+        } catch (e) {
+          /* ignore — worst case is the standard palette on first paint */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

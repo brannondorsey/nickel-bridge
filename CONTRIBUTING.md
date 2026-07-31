@@ -78,8 +78,11 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
+                suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
+                device-local axis, orthogonal to theme.ts — see "Night mode" below),
                 pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
-                where night mode, claim fast-forward, ladder listing and sign-out live;
+                where night mode, suit colors, claim fast-forward, ladder listing and
+                sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
                 see "The profile sparklines" below; Scenarios.tsx is the demo-mode gallery;
                 Glossary.tsx is the glossary screen; Tour.tsx is the first-crossing
@@ -102,7 +105,7 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 "The glossary" below),
                 index.html (the SPA shell — holds the site-wide SEO block between its
                 seo:start/seo:end markers, which the prerender replaces per page, plus
-                the pre-paint night-mode script),
+                the pre-paint night-mode and suit-palette scripts),
                 scripts/prerender.mjs (a BUILD STEP, not an offline generator
                 like tools/'s — `build` runs it after `vite build` to prerender the
                 glossary into dist/glossary-static/ and the landing page into
@@ -125,7 +128,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype;
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
-                the night token overrides)
+                the night token overrides; [data-suit-palette="colorblind"] + its
+                [data-theme="night"] and @media twins hold the colorblind suit-color
+                overrides — see "Night mode" below)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
@@ -799,6 +804,39 @@ graph loads. The `@media (prefers-color-scheme: dark)` copy of the night token b
 scoped to `:not([data-theme])` so it never fights an explicit override — if you add a new
 base token, add it to both the `[data-theme="night"]` block and that media copy.
 
+**The colorblind suit palette is a second, independent device-local axis, not a third
+theme.** `data-suit-palette="colorblind"` on `<html>` (`suitPalette.ts`, `nb:suitPalette` in
+localStorage) composes with `data-theme` rather than replacing it — a colorblind player
+wants both a day AND a night variant of a safe palette, the same way a sighted player wants
+both variants of the standard one, so this could not be a fifth `THEME_OPTIONS` entry.
+Standard red/gold hearts and diamonds are a known collision under red-green colorblindness
+(~8% of men); the colorblind palette swaps ONLY `--suit-h`/`--suit-d` (day: `#0a5c99`
+"stamp-ink blue" / `#98490a` "rust orange"; night: `#6fb3e0` / `#e0995a`, lighter for the
+dark stock) to a blue/orange pair — the conventional accessible substitute, since blue and
+orange sit on the tritan axis red-green deficiency leaves intact — and their
+`--cardface-suit-*`/`--onprimary-suit-*` derivatives; `--suit-s`/`--suit-c` are untouched,
+since clubs already sits off the red-green collision axis. Three override blocks in
+`style.css`, mirroring the night-mode shape exactly one level down:
+`[data-suit-palette="colorblind"]` (day — redeclares `--cardface-suit-h`/`-d` as literals,
+since the day cardface tokens are pinned literals rather than `var()`-chained),
+`[data-theme="night"][data-suit-palette="colorblind"]` (night — does NOT redeclare
+`--cardface-suit-h`/`-d`, since the night block already chains them to
+`var(--suit-h)`/`var(--suit-d)` and they inherit the new value automatically; redeclaring
+would be the same hand-drift risk already flagged for `--onprimary-suit-*` above), and a
+`@media (prefers-color-scheme: dark)` mirror for `SYSTEM` appearance. That mirror is the one
+place order, not specificity, decides the outcome: it and the pre-existing standard dark
+mirror are both equal-specificity overrides of `:root`, so the colorblind mirror MUST stay
+textually after the standard one in `style.css` (see the block comment above both) — get
+this backwards and a colorblind player on system-dark OS with Appearance left at SYSTEM
+silently sees the original night red. `e2e/smoke.spec.ts` has a computed-style test under
+emulated dark `colorScheme` for exactly this combination, since an attribute-presence
+assertion can't catch a regression of file order. Applied the same way appearance is: once
+by a second blocking inline script in `index.html` before first paint (its own try/catch —
+a failure in one script must not block the other), and again by `applySuitPalette` when the
+settings gate's switch is flipped; unlike `theme.ts` there is no `system`/`adaptive`
+equivalent to re-apply on a timer, since there's no OS media feature for color-vision
+deficiency and no time-of-day concept for it.
+
 **The settings gate** (`web/src/pages/Settings.tsx`, the sixth tab) is one perforated panel
 of identical rows — tracked-caps label, the italic aside that says what the setting does,
 then a full-width `.pref-switch` segmented lever. Four segments for appearance, two for a
@@ -806,15 +844,16 @@ switch: the SAME component at different arities, deliberately, which is why the 
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
 
-**Where a preference lives is a decision, not an accident.** Both new rows are columns on
-`users` (`fast_forward`, `ladder_listed`), written through one partial-update endpoint,
-`POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is plain
-per-user booleans and still growing (`difficulty` is already a column waiting for a UI).
-Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't look
-like a successful write. Appearance is the ONE device-local row, and only because it has
-to be applied before first paint by the inline script in `index.html` — no round trip can
-answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer says that
-once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+**Where a preference lives is a decision, not an accident.** The two account rows are
+columns on `users` (`fast_forward`, `ladder_listed`), written through one partial-update
+endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is
+plain per-user booleans and still growing (`difficulty` is already a column waiting for a
+UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't
+look like a successful write. Appearance and suit colors are the TWO device-local rows, and
+only because they have to be applied before first paint by an inline script in `index.html`
+— no round trip can answer in time, and both `SYSTEM`/`ADAPT` and a colorblind palette are
+per-device ideas anyway. The footer says that once rather than tagging rows. Each of the
+three new settings has one thing worth knowing:
 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
   preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
@@ -841,6 +880,12 @@ once rather than tagging rows. Each of the two new settings has one thing worth 
   (`Leaderboard.tsx`), so an omitted player leaves no gap; a signed-out visitor's #3 can
   differ from a signed-in one's, which beats a hole in the numbering advertising that
   somebody opted out.
+- **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
+  colorblind palette — see "Night mode" above for the full token-swap story. The one thing
+  worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,
+  unlike the two bullets above it — its `onChange` is the same synchronous
+  set-state/store/apply triple Appearance uses, with no server round trip, no optimistic
+  revert, and no `prefError` path to wire up.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,
