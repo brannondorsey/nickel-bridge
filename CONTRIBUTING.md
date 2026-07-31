@@ -806,15 +806,16 @@ switch: the SAME component at different arities, deliberately, which is why the 
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
 
-**Where a preference lives is a decision, not an accident.** Both new rows are columns on
-`users` (`fast_forward`, `ladder_listed`), written through one partial-update endpoint,
-`POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is plain
-per-user booleans and still growing (`difficulty` is already a column waiting for a UI).
-Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't look
-like a successful write. Appearance is the ONE device-local row, and only because it has
-to be applied before first paint by the inline script in `index.html` — no round trip can
-answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer says that
-once rather than tagging rows. Each of the two new settings has one thing worth knowing:
+**Where a preference lives is a decision, not an accident.** The non-appearance rows are
+columns on `users` (`fast_forward`, `ladder_listed`, `bid_feedback`), written through one
+partial-update endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself
+when the list is plain per-user booleans and still growing (`difficulty` is already a column
+waiting for a UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a
+typo can't look like a successful write. Appearance is the ONE device-local row, and only
+because it has to be applied before first paint by the inline script in `index.html` — no
+round trip can answer in time, and `SYSTEM`/`ADAPT` are per-device ideas anyway. The footer
+says that once rather than tagging rows. Each of the three new settings has one thing worth
+knowing:
 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
   preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
@@ -841,6 +842,19 @@ once rather than tagging rows. Each of the two new settings has one thing worth 
   (`Leaderboard.tsx`), so an omitted player leaves no gap; a signed-out visitor's #3 can
   differ from a signed-in one's, which beats a hole in the numbering advertising that
   somebody opted out.
+- **Bid feedback** (`users.bid_feedback`, default on) gates only whether the post-call
+  grading toast (`GradeToast`, driven by `lastEval` in `Board.tsx`) renders — it is
+  deliberately excellent for a learner and unwanted noise for a stronger player using the
+  app to compete rather than study. Grading itself is computed and stored unconditionally
+  by `submitCall` on every call regardless of this flag (`bidEvals`, the bid-accuracy stats
+  pools, and the post-board "YOUR BIDDING" review table all stay populated either way) — the
+  server never sees this preference and nothing about scoring or Elo changes. `Board.tsx`
+  substitutes `null` for `lastEval` at both the `BiddingPhase` and `PlayPhase` call sites
+  when the setting is off, which lands on exactly the same "nothing graded yet" branch those
+  components already have, so there is no new empty state to design. `Tour.tsx` is
+  unaffected: it carries its own scripted `lastEval` and never reads this preference, since
+  the tour's pedagogical point is teaching the grading loop regardless of the visitor's (or
+  signed-in tester's) own setting.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,
