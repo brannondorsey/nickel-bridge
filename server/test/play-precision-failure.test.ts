@@ -57,6 +57,12 @@ describe('capturePlayPrecision failure is best-effort (server/src/game.ts)', () 
     // reaches a contract, so capturePlayPrecision actually runs.
     const t = makeTournament('hunt-1');
     const b = game.loadBoard(t, userId, 2, true)!;
+    // Mirrors the real GET-board route (app.ts), which calls ensureAdvanced
+    // before ever handing a view back to the client: a freshly loaded board
+    // may not have the human on lead (dealer can be any seat), so without
+    // this the very first view can have no legal action for South and the
+    // loop below finds itself stuck before a single human decision is made.
+    await game.ensureAdvanced(b);
     let view = game.boardView(t, b, 1200) as any;
     let safety = 250;
     while (view.state !== 'done' && safety-- > 0) {

@@ -275,13 +275,19 @@ describe('Stats', () => {
       'AVG SCORE',
       'BEST CROSSING',
       'TOPS',
+      'PLAY PRECISION',
     ]);
     // STREAK sits one row up and one column left; the best-crossing/tops pair
-    // is the final row (indices 6 and 7 of an 8-tile, 2-column grid) —
-    // horizontal together on the bottom, best tournament beside best boards.
+    // is the final row of the original 8-tile, 2-column grid (indices 6 and
+    // 7) — horizontal together on the bottom, best tournament beside best
+    // boards. PLAY PRECISION is a conditional 9th tile appended after TOPS
+    // (gated on playPrecision.boards > 0, see Player.tsx) — it stands alone
+    // on its own row rather than pairing with anything, since unlike the
+    // other tiles it has no natural partner.
     expect(labels.indexOf('STREAK')).toBe(4);
     expect(labels.indexOf('BEST CROSSING')).toBe(6);
     expect(labels.indexOf('TOPS')).toBe(7);
+    expect(labels.indexOf('PLAY PRECISION')).toBe(8);
   });
 
   it('shows the best crossing tile, linking to that tournament', async () => {
