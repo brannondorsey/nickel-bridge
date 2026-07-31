@@ -290,22 +290,30 @@ whole batch belongs to the claiming side. See invariant 1 below — claims chang
 `advanceRobots` records for a human's untaken decisions, so they interact directly with the
 robot-trace fixture.
 
-**Table speed** (settings gate, `users.brisk_pacing`, default off) is a second, independent
-pacing dial on top of the ones above — it does NOT touch claims. `stagePlaySteps` takes an
-optional `brisk` argument (default false, so every pre-existing call site is byte-identical)
-that scales only the "think"/"read" gap terms in its own delay math (`ROBOT_GAP_MS`/`HOLD_MS`/
-`STAMP_MS`, via an internal `pace()` helper and `BRISK_SCALE`) — `GLIDE_MS`/`COLLECT_MS`
-(`TrickArea.tsx`'s own WAAPI animation durations) and the one-shot `LEAD_SETTLE_MS` layout-settle
-beat are never scaled, the same split `CLAIM_SPEEDUP_FACTOR` already uses for the claim
-fast-forward. `stageClaimSteps` and `TrickArea.tsx` have zero lines of code that reference
-`brisk_pacing` at all: the claim tail (both "Fast forward settled tricks" modes) keeps using its
-own fixed gap sets exactly as before this setting existed, matching the reasoning under "Fast
-forward settled tricks" below for why the two settings deliberately don't interact. Note that
-because `stagePlaySteps` only ever stages a play-phase transition (`intoPlay`/`withinPlay`
-above), a bidding→bidding response has nothing to stage — Table Speed paces ordinary robot CARD
-PLAY only, never the auction, despite its name. `Board.tsx` and `Tour.tsx` read it off
-`MeContext` the same way they read `fastForward`, with the opposite default comparison
-(`=== true`, not `!== false`) since `brisk_pacing`'s schema default is 0/false.
+**Table speed** (settings gate, `users.table_speed`, an integer `TABLE_SPEED_MIN`..
+`TABLE_SPEED_MAX` — a five-position slider, not a switch) is a second, independent pacing dial
+on top of the ones above — it does NOT touch claims. `stagePlaySteps` takes an optional
+`tableSpeed` argument (default `TABLE_SPEED_DEFAULT`, the slider's own midpoint, so every
+pre-existing call site is byte-identical) that scales only the "think"/"read" gap terms in its
+own delay math (`ROBOT_GAP_MS`/`HOLD_MS`/`STAMP_MS`, via an internal `pace()` helper and the
+`TABLE_SPEED_SCALE` lookup array) — `GLIDE_MS`/`COLLECT_MS` (`TrickArea.tsx`'s own WAAPI
+animation durations) and the one-shot `LEAD_SETTLE_MS` layout-settle beat are never scaled, the
+same split `CLAIM_SPEEDUP_FACTOR` already uses for the claim fast-forward. `TABLE_SPEED_SCALE`'s
+midpoint entry is exactly `1` (a true no-op scale), which is what makes the default reproduce
+the table's pre-slider pace byte for byte rather than merely "close to it" — moving the slider
+LEFT of the midpoint stretches the gaps (`TABLE_SPEED_SCALE[level] > 1`, table runs slower than
+it always has), moving RIGHT compresses them (`< 1`, faster), and the fast end (`TABLE_SPEED_MAX`,
+scale `0.5`) is the exact factor the setting's original two-state ("brisk") version shipped and
+was calibrated against, so that endpoint didn't move when the toggle became a slider.
+`stageClaimSteps` and `TrickArea.tsx` have zero lines of code that reference `table_speed` at
+all: the claim tail (both "Fast forward settled tricks" modes) keeps using its own fixed gap
+sets exactly as before this setting existed, matching the reasoning under "Fast forward settled
+tricks" below for why the two settings deliberately don't interact. Note that because
+`stagePlaySteps` only ever stages a play-phase transition (`intoPlay`/`withinPlay` above), a
+bidding→bidding response has nothing to stage — Table Speed paces ordinary robot CARD PLAY
+only, never the auction, despite its name. `Board.tsx` and `Tour.tsx` read it off `MeContext`
+the same way they read `fastForward`, falling back to `TABLE_SPEED_DEFAULT` (not a `!== false`/
+`=== true` comparison, since this is an integer, not a boolean) when signed out or unset.
 
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
@@ -862,12 +870,14 @@ system still has no on/off toggle. Night mode and sign-out moved here off the St
 which is the ledger and now holds nothing that isn't a record of play.
 
 **Where a preference lives is a decision, not an accident.** The account rows are columns on
-`users` (`fast_forward`, `ladder_listed`, `bid_feedback`, `brisk_pacing`), written through one
+`users` (`fast_forward`, `ladder_listed`, `bid_feedback`, `table_speed`), written through one
 partial-update endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself when
-the list is plain per-user booleans and still growing (`difficulty` is already a column
-waiting for a UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a
-typo can't look like a successful write. Appearance and suit colors are the TWO device-local
-rows, and only because they have to be applied before first paint by an inline script in
+the list is plain per-user preferences and still growing (`difficulty` is already a column
+waiting for a UI). Absent keys are left alone; an unknown key is a 400, and each known key is
+validated against its OWN type — boolean for a switch, an in-range integer for `tableSpeed`,
+the endpoint's one non-boolean field — so a typo, a stray string, or an out-of-range drag can't
+silently no-op or wedge the column. Appearance and suit colors are the TWO device-local rows,
+and only because they have to be applied before first paint by an inline script in
 `index.html` — no round trip can answer in time, and both `SYSTEM`/`ADAPT` and a colorblind
 palette are per-device ideas anyway. The footer says that once rather than tagging rows. Each
 of the newer settings has one thing worth knowing:
@@ -889,16 +899,24 @@ of the newer settings has one thing worth knowing:
   walking the practice deal). Letting a player actually *play* the settled tail would mean
   not claiming for that user, which is a server change with a real fairness cost — see the
   note under invariant 1.
-- **Table speed** (`users.brisk_pacing`, default OFF/NORMAL — unlike the other three, which
-  default on) paces ORDINARY robot card play (see the "Table speed" paragraph under "Auto-play
-  and claims" above for the mechanism) and nothing else — it deliberately does not reach
-  `stageClaimSteps` or `TrickArea.tsx`'s WAAPI durations in either "Fast forward settled
-  tricks" mode. Ships opt-in because, unlike `fast_forward`, it changes the felt pacing of
-  ordinary play itself — a taste call, not a QoL fix — so every existing account's experience
-  is unchanged until the player flips it. `Board.tsx` and `Tour.tsx` read it off `MeContext`
-  the same way they read `fastForward`, with the opposite default comparison (`=== true`, not
-  `!== false`) to match its opposite schema default — copying `fastForward`'s comparison here
-  would silently default every account to BRISK.
+- **Table speed** (`users.table_speed`, an integer `TABLE_SPEED_MIN`..`TABLE_SPEED_MAX`,
+  default `TABLE_SPEED_DEFAULT` — the ONE slider among these rows, not a switch) paces
+  ORDINARY robot card play (see the "Table speed" paragraph under "Auto-play and claims" above
+  for the mechanism) and nothing else — it deliberately does not reach `stageClaimSteps` or
+  `TrickArea.tsx`'s WAAPI durations at any position. The default is the midpoint, and the
+  midpoint's scale factor is exactly `1` — a genuine no-op — so, unlike a two-state toggle that
+  has to pick a side, every existing account's felt pacing is completely unchanged until the
+  player actually drags the slider, in whichever direction they want (slower to the left,
+  faster to the right). `TableSpeedSlider` (`Settings.tsx`) is a native `<input type="range">`:
+  its `onChange` moves `prefs.tableSpeed` on every drag tick so the thumb never fights the
+  finger, but only `onMouseUp`/`onTouchEnd`/`onKeyUp` calls `commitTableSpeed`, which is why
+  this is the one row that does NOT go through the shared `change()` helper the switches use —
+  `change()` computes its revert target from `prefs[key]` at call time, which is wrong for a
+  slider (by the time a drag releases, `prefs.tableSpeed` already IS the new position, not the
+  one to revert to on a failed write); `commitTableSpeed` keeps that revert target in a ref
+  instead, updated only on a confirmed write. `Board.tsx` and `Tour.tsx` read the value off
+  `MeContext` the same way they read `fastForward`, falling back to `TABLE_SPEED_DEFAULT` when
+  signed out or unset.
 - **Name on the ladder** (`users.ladder_listed`, default on) governs whether `/api/leaderboard` includes this
   player for an **anonymous** caller. That is the whole of it because the ladder is the
   whole anonymous surface: profiles already refuse a signed-out caller for every human and

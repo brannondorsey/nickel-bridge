@@ -208,24 +208,24 @@ describe('handle (first-login username)', () => {
 
     // defaults, and a partial patch leaves the untouched key alone
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.briskPacing, me.user.bidFeedback]).toEqual([
+    expect([me.user.ladderListed, me.user.fastForward, me.user.tableSpeed, me.user.bidFeedback]).toEqual([
       true,
       true,
-      false,
+      2,
       true,
     ]);
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
-      briskPacing: false,
+      tableSpeed: 2,
       bidFeedback: true,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.briskPacing, me.user.bidFeedback]).toEqual([
+    expect([me.user.ladderListed, me.user.fastForward, me.user.tableSpeed, me.user.bidFeedback]).toEqual([
       false,
       false,
-      false,
+      2,
       true,
     ]);
 
@@ -234,7 +234,7 @@ describe('handle (first-login username)', () => {
     expect(await pete.post('/api/me/prefs', {})).toEqual({
       ladderListed: false,
       fastForward: false,
-      briskPacing: false,
+      tableSpeed: 2,
       bidFeedback: true,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
@@ -245,7 +245,7 @@ describe('handle (first-login username)', () => {
     expect(await pete.post('/api/me/prefs', { bidFeedback: false })).toEqual({
       ladderListed: false,
       fastForward: false,
-      briskPacing: false,
+      tableSpeed: 2,
       bidFeedback: false,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
@@ -255,26 +255,32 @@ describe('handle (first-login username)', () => {
     ).toBe(401);
   });
 
-  it('round-trips briskPacing independently of the other prefs, and rejects a non-boolean', async () => {
+  it('round-trips tableSpeed independently of the other prefs, and rejects an out-of-range or non-integer value', async () => {
     const priya = new TestClient(app, 'Priya');
     await priya.login();
 
     let me = await priya.get('/api/me');
-    expect(me.user.briskPacing).toBe(false);
+    expect(me.user.tableSpeed).toBe(2);
 
-    expect(await priya.post('/api/me/prefs', { briskPacing: true })).toEqual({
+    expect(await priya.post('/api/me/prefs', { tableSpeed: 4 })).toEqual({
       ladderListed: true,
       fastForward: true,
-      briskPacing: true,
+      tableSpeed: 4,
       bidFeedback: true,
     });
     me = await priya.get('/api/me');
-    expect(me.user.briskPacing).toBe(true);
+    expect(me.user.tableSpeed).toBe(4);
     // untouched keys survive the patch
     expect([me.user.ladderListed, me.user.fastForward]).toEqual([true, true]);
 
-    expect((await priya.raw('POST', '/api/me/prefs', { briskPacing: 'fast' })).statusCode).toBe(400);
-    expect((await priya.get('/api/me')).user.briskPacing).toBe(true); // rejected patch didn't move it
+    // the ends of the range are legal...
+    expect(await priya.post('/api/me/prefs', { tableSpeed: 0 })).toMatchObject({ tableSpeed: 0 });
+    // ...one past either end, a fraction, and a non-number are not
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: -1 })).statusCode).toBe(400);
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 5 })).statusCode).toBe(400);
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 2.5 })).statusCode).toBe(400);
+    expect((await priya.raw('POST', '/api/me/prefs', { tableSpeed: 'fast' })).statusCode).toBe(400);
+    expect((await priya.get('/api/me')).user.tableSpeed).toBe(0); // rejected patches didn't move it
   });
 
   // Play is still the toll: opening the game up to anonymous callers is

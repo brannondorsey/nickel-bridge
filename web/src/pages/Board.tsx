@@ -42,6 +42,7 @@ import {
   CLAIM_ANNOUNCE_HOLD_MS,
   ClaimAnnouncement,
   StagedStep,
+  TABLE_SPEED_DEFAULT,
   captureFanOriginIfVisible,
   claimAnnouncement,
   motionOK,
@@ -68,9 +69,10 @@ export default function Board() {
   const { me } = useMe();
   const fastForward = me?.user?.fastForward !== false;
   // "Table speed" (settings gate) — paces ORDINARY robot card play only; see
-  // applyBoard below and stagePlaySteps' doc comment. Default off (unlike
-  // fastForward), matching the brisk_pacing schema default.
-  const briskPacing = me?.user?.briskPacing === true;
+  // applyBoard below and stagePlaySteps' doc comment. Falls back to
+  // TABLE_SPEED_DEFAULT (the pre-slider pace, byte-identical) when signed
+  // out or unset, matching the table_speed schema default.
+  const tableSpeed = me?.user?.tableSpeed ?? TABLE_SPEED_DEFAULT;
   // "Bid feedback" (settings gate) — gates only whether the post-call grading
   // toast renders below; grading is computed and stored (bidEvals)
   // unconditionally, so turning this off never affects scoring, stats, or
@@ -189,7 +191,7 @@ export default function Board() {
         prev && motionOK()
           ? next.claimed
             ? stageClaimSteps(prev, next)
-            : stagePlaySteps(prev, next, briskPacing)
+            : stagePlaySteps(prev, next, tableSpeed)
           : [];
       if (!steps.length) {
         cancelStaging();
@@ -198,7 +200,7 @@ export default function Board() {
       }
       scheduleSteps(prev!, steps);
     },
-    [briskPacing, cancelStaging, scheduleSteps],
+    [tableSpeed, cancelStaging, scheduleSteps],
   );
 
   // Bracket a claim in two beats: the ClaimOverlay holds the board for

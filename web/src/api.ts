@@ -12,8 +12,8 @@ export interface Me {
     ladderListed: boolean;
     /** replay a claim's settled tricks compressed (settings: "Fast forward settled tricks") */
     fastForward: boolean;
-    /** replay ordinary robot card play at a compressed pace (settings: "Table speed") */
-    briskPacing: boolean;
+    /** pace of ordinary robot card play, TABLE_SPEED_MIN..TABLE_SPEED_MAX, default TABLE_SPEED_DEFAULT (settings: "Table speed") */
+    tableSpeed: number;
     /** show the post-call grading toast (settings: "Bid feedback") */
     bidFeedback: boolean;
   } | null;
@@ -345,8 +345,8 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; briskPacing?: boolean; bidFeedback?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean; briskPacing: boolean; bidFeedback: boolean }>(
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; tableSpeed?: number; bidFeedback?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean; tableSpeed: number; bidFeedback: boolean }>(
       '/api/me/prefs',
       { method: 'POST', body: JSON.stringify(prefs) },
     ),

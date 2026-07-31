@@ -29,7 +29,7 @@ const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id =
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
-const stmtSetBriskPacing = db.prepare(`UPDATE users SET brisk_pacing = ? WHERE id = ?`);
+const stmtSetTableSpeed = db.prepare(`UPDATE users SET table_speed = ? WHERE id = ?`);
 const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
@@ -207,7 +207,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             onboardedAt: user.onboarded_at,
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
-            briskPacing: user.brisk_pacing !== 0,
+            tableSpeed: user.table_speed,
             bidFeedback: user.bid_feedback !== 0,
           }
         : null,
@@ -233,14 +233,24 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     });
   });
 
+  // The settings-gate slider's valid range — kept in sync BY CONVENTION, not
+  // import, with TABLE_SPEED_MIN/MAX in web/src/components/game/playAnim.ts.
+  // The server bundle doesn't depend on the web bundle (see CONTRIBUTING's
+  // core/ai/web boundary rules), so this can't be a shared constant; if you
+  // change the slider's step count on one side, change it here too.
+  const TABLE_SPEED_MIN = 0;
+  const TABLE_SPEED_MAX = 4;
+
   /**
    * The settings gate's account-backed preferences (web/src/pages/Settings.tsx).
    *
    * One partial-update endpoint rather than a route per switch: these are
-   * plain per-user flags with no side effects, and the list will keep growing
-   * (difficulty already exists as a backend-only preference and wants a UI).
-   * Absent keys are left alone; a present key must be a boolean, so a typo'd
-   * field can't silently no-op.
+   * plain per-user preferences with no side effects, and the list will keep
+   * growing (difficulty already exists as a backend-only preference and
+   * wants a UI). Absent keys are left alone; a present key must match its
+   * field's own type — boolean for a switch, an in-range integer for a
+   * slider — so a typo'd field or an out-of-range drag can't silently no-op
+   * or wedge the column.
    *
    * - ladderListed — whether a visitor WITHOUT an account sees this player on
    *   /leaderboard. Deliberately narrow: it is not a general "make me
@@ -251,13 +261,16 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    * - fastForward — pacing of the claim replay. On the account and not in
    *   localStorage because it describes the person, not the browser; see the
    *   fast_forward migration in db.ts.
-   * - briskPacing — pacing of ORDINARY robot card play replay only, never the
-   *   auction (the gaps stagePlaySteps computes for a non-claim response),
-   *   independent of
-   *   fastForward. Account state for the same reason as fastForward.
-   *   Deliberately does not affect stageClaimSteps or TrickArea's WAAPI
-   *   glide/collect durations in either mode — see brisk_pacing's migration
-   *   comment and stagePlaySteps' own doc comment in playAnim.ts.
+   * - tableSpeed — the ONE non-boolean preference: an integer slider
+   *   position, TABLE_SPEED_MIN..TABLE_SPEED_MAX, pacing ORDINARY robot card
+   *   play replay only, never the auction (the gaps stagePlaySteps computes
+   *   for a non-claim response), independent of fastForward. Account state
+   *   for the same reason as fastForward. Deliberately does not affect
+   *   stageClaimSteps or TrickArea's WAAPI glide/collect durations at any
+   *   position — see table_speed's migration comment and stagePlaySteps'
+   *   own doc comment in playAnim.ts. The midpoint is also the default, so
+   *   an account that has never touched the slider gets the exact pacing
+   *   that shipped before this setting existed.
    * - bidFeedback — whether the post-call grading toast renders. Grading
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
@@ -267,25 +280,33 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const user = requireUser(req, reply);
     if (!user) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const fields: [key: string, apply: (on: boolean) => void][] = [
+    const boolFields: [key: string, apply: (on: boolean) => void][] = [
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
-      ['briskPacing', (on) => stmtSetBriskPacing.run(on ? 1 : 0, user.id)],
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
     ];
-    const known = new Set(fields.map(([key]) => key));
+    const known = new Set([...boolFields.map(([key]) => key), 'tableSpeed']);
     for (const key of Object.keys(body)) {
       if (!known.has(key)) return reply.code(400).send({ error: `unknown preference: ${key}` });
-      if (typeof body[key] !== 'boolean') return reply.code(400).send({ error: `${key} must be a boolean` });
     }
-    for (const [key, apply] of fields) {
+    for (const [key] of boolFields) {
+      if (key in body && typeof body[key] !== 'boolean') return reply.code(400).send({ error: `${key} must be a boolean` });
+    }
+    if ('tableSpeed' in body) {
+      const v = body.tableSpeed;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < TABLE_SPEED_MIN || v > TABLE_SPEED_MAX) {
+        return reply.code(400).send({ error: `tableSpeed must be an integer between ${TABLE_SPEED_MIN} and ${TABLE_SPEED_MAX}` });
+      }
+    }
+    for (const [key, apply] of boolFields) {
       if (key in body) apply(body[key] as boolean);
     }
+    if ('tableSpeed' in body) stmtSetTableSpeed.run(body.tableSpeed as number, user.id);
     const row = stmtUserById.get(user.id) as UserRow;
     return reply.send({
       ladderListed: row.ladder_listed !== 0,
       fastForward: row.fast_forward !== 0,
-      briskPacing: row.brisk_pacing !== 0,
+      tableSpeed: row.table_speed,
       bidFeedback: row.bid_feedback !== 0,
     });
   });

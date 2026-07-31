@@ -127,18 +127,18 @@ if (!userColumns.has('ladder_listed')) {
 if (!userColumns.has('fast_forward')) {
   db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
 }
-// Migration: `brisk_pacing` — replay ordinary robot card play (the "think
-// time" gaps between plays, not the glide/collect animation itself) at a
-// compressed pace (1) or the shipped table pace (0, default). Account state,
-// not localStorage, for the same reason as fast_forward: it says how this
-// PERSON wants to watch a hand play out, independent of device. Defaults to
-// 0 (unlike fast_forward's default-on): this changes the felt pacing of
-// ordinary play itself, a matter of taste rather than a QoL fix, so it ships
-// opt-in and every existing account's experience is unchanged until they
-// flip it. Deliberately does NOT reach stageClaimSteps or TrickArea's WAAPI
+// Migration: `table_speed` — replay ordinary robot card play (the "think
+// time" gaps between plays, not the glide/collect animation itself) at one
+// of five paces, TABLE_SPEED_MIN..TABLE_SPEED_MAX (playAnim.ts). Account
+// state, not localStorage, for the same reason as fast_forward: it says how
+// this PERSON wants to watch a hand play out, independent of device.
+// Defaults to 2, the midpoint AND the exact pace the table already shipped
+// at before this setting existed — an untouched account reproduces that
+// pacing byte for byte, never faster or slower until the player moves the
+// slider. Deliberately does NOT reach stageClaimSteps or TrickArea's WAAPI
 // glide/collect durations in playAnim.ts — see stagePlaySteps' doc comment.
-if (!userColumns.has('brisk_pacing')) {
-  db.exec(`ALTER TABLE users ADD COLUMN brisk_pacing INTEGER NOT NULL DEFAULT 0`);
+if (!userColumns.has('table_speed')) {
+  db.exec(`ALTER TABLE users ADD COLUMN table_speed INTEGER NOT NULL DEFAULT 2`);
 }
 
 // Migration: `bid_feedback` — show the post-call grading toast (1, the
@@ -207,8 +207,8 @@ export interface UserRow {
   ladder_listed: number;
   /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
   fast_forward: number;
-  /** 1 = replay ordinary robot card play at a compressed pace; 0 (default) = table pace */
-  brisk_pacing: number;
+  /** TABLE_SPEED_MIN..TABLE_SPEED_MAX (playAnim.ts); default TABLE_SPEED_DEFAULT reproduces the pre-setting pace exactly */
+  table_speed: number;
   /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
   bid_feedback: number;
   elo: number;

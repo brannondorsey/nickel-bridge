@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
 import { boardPlaying } from '../../test/fixtures';
 import {
-  BRISK_SCALE,
   CLAIM_GAP_MS,
   CLAIM_SPEEDUP_FACTOR,
   CLAIM_TRICK_GAP_MS,
@@ -12,6 +11,9 @@ import {
   LEAD_SETTLE_MS,
   ROBOT_GAP_MS,
   STAMP_MS,
+  TABLE_SPEED_MAX,
+  TABLE_SPEED_MIN,
+  TABLE_SPEED_SCALE,
   captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
@@ -298,10 +300,12 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
   });
 
-  // "Table speed" (settings tab, users.brisk_pacing) — omitting the arg (every
-  // pre-existing call site) must stay byte-identical to brisk=false.
-  describe('brisk (Table speed)', () => {
-    it('omitting `brisk` is identical to passing false', () => {
+  // "Table speed" (settings tab, users.table_speed) — a TABLE_SPEED_MIN..
+  // TABLE_SPEED_MAX slider; omitting the arg (every pre-existing call site)
+  // must stay byte-identical to the midpoint, TABLE_SPEED_DEFAULT, since
+  // that's the exact pace the table ran at before this dial existed.
+  describe('tableSpeed (Table speed)', () => {
+    it('omitting `tableSpeed` is identical to passing the default (the midpoint, scale 1)', () => {
       const lead = { seat: 2, card: myCard };
       const r1 = { seat: 3, card: H(2) };
       const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
@@ -312,10 +316,11 @@ describe('stagePlaySteps', () => {
         myTurn: true,
         handToPlay: 0,
       };
-      expect(stagePlaySteps(emptyPrev, next)).toEqual(stagePlaySteps(emptyPrev, next, false));
+      expect(TABLE_SPEED_SCALE[2]).toBe(1); // the midpoint is a true no-op scale
+      expect(stagePlaySteps(emptyPrev, next)).toEqual(stagePlaySteps(emptyPrev, next, 2));
     });
 
-    it('scales the robot "think" gap between plays, never the glide itself', () => {
+    it('scales the robot "think" gap between plays in BOTH directions, never the glide itself', () => {
       const lead = { seat: 2, card: myCard };
       const r1 = { seat: 3, card: H(2) };
       const emptyPrev: BoardView = { ...prev, currentTrick: [], handToPlay: 2 };
@@ -326,22 +331,28 @@ describe('stagePlaySteps', () => {
         myTurn: true,
         handToPlay: 0,
       };
-      const table = stagePlaySteps(emptyPrev, next);
-      const brisk = stagePlaySteps(emptyPrev, next, true);
+      const table = stagePlaySteps(emptyPrev, next); // default (2, NORMAL)
+      const fastest = stagePlaySteps(emptyPrev, next, TABLE_SPEED_MAX);
+      const slowest = stagePlaySteps(emptyPrev, next, TABLE_SPEED_MIN);
       // table: [lead(0), r1(GLIDE+ROBOT_GAP), final(GLIDE+160)] — no trick
       // boundary here (only 2 of the trick's cards are in), so the final
       // step is the lastWasPlay hand-off beat, not a STAMP_MS tally.
       expect(table[1].delayBefore).toBe(GLIDE_MS + ROBOT_GAP_MS);
-      expect(brisk[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * BRISK_SCALE));
-      // GLIDE_MS itself never moves — only ROBOT_GAP_MS does
-      expect(brisk[1].delayBefore).toBeLessThan(table[1].delayBefore);
-      expect(brisk[1].delayBefore).toBeGreaterThan(GLIDE_MS);
+      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
+      expect(slowest[1].delayBefore).toBe(GLIDE_MS + Math.round(ROBOT_GAP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MIN]));
+      // GLIDE_MS itself never moves — only ROBOT_GAP_MS does, and it moves
+      // in both directions around the default: faster below it, slower above
+      expect(fastest[1].delayBefore).toBeLessThan(table[1].delayBefore);
+      expect(fastest[1].delayBefore).toBeGreaterThan(GLIDE_MS);
+      expect(slowest[1].delayBefore).toBeGreaterThan(table[1].delayBefore);
       // the lastWasPlay hand-off beat (GLIDE_MS + 160) scales too — it's a
       // "wait before you get control back" read gap like ROBOT_GAP_MS/
       // HOLD_MS/STAMP_MS, not a WAAPI duration like GLIDE_MS/COLLECT_MS
       expect(table[2].delayBefore).toBe(GLIDE_MS + 160);
-      expect(brisk[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * BRISK_SCALE));
-      expect(brisk[2].delayBefore).toBeLessThan(table[2].delayBefore);
+      expect(fastest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
+      expect(fastest[2].delayBefore).toBeLessThan(table[2].delayBefore);
+      expect(slowest[2].delayBefore).toBe(GLIDE_MS + Math.round(160 * TABLE_SPEED_SCALE[TABLE_SPEED_MIN]));
+      expect(slowest[2].delayBefore).toBeGreaterThan(table[2].delayBefore);
     });
 
     it('scales HOLD_MS and the post-collect STAMP_MS at a trick boundary, never COLLECT_MS', () => {
@@ -359,19 +370,19 @@ describe('stagePlaySteps', () => {
         legalCards: [prev.legalCards![0]],
       };
       const table = stagePlaySteps(prev, next);
-      const brisk = stagePlaySteps(prev, next, true);
+      const fastest = stagePlaySteps(prev, next, TABLE_SPEED_MAX);
       // steps: [my card(0), hold+collect-sweep(GLIDE+HOLD), tally(COLLECT+80), final(STAMP)]
       expect(table[1].delayBefore).toBe(GLIDE_MS + HOLD_MS);
-      expect(brisk[1].delayBefore).toBe(GLIDE_MS + Math.round(HOLD_MS * BRISK_SCALE));
+      expect(fastest[1].delayBefore).toBe(GLIDE_MS + Math.round(HOLD_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
       // COLLECT_MS+80 never scales
       expect(table[2].delayBefore).toBe(COLLECT_MS + 80);
-      expect(brisk[2].delayBefore).toBe(COLLECT_MS + 80);
+      expect(fastest[2].delayBefore).toBe(COLLECT_MS + 80);
       // the final (real server view) step is a STAMP_MS beat here, and scales
       expect(table[3].delayBefore).toBe(STAMP_MS);
-      expect(brisk[3].delayBefore).toBe(Math.round(STAMP_MS * BRISK_SCALE));
+      expect(fastest[3].delayBefore).toBe(Math.round(STAMP_MS * TABLE_SPEED_SCALE[TABLE_SPEED_MAX]));
     });
 
-    it('never scales LEAD_SETTLE_MS (the opening-lead layout-settle beat)', () => {
+    it('never scales LEAD_SETTLE_MS (the opening-lead layout-settle beat), at either end of the slider', () => {
       const lead = { seat: 3, card: H(9) };
       const biddingPrev: BoardView = { ...prev, state: 'bidding', currentTrick: undefined, completedTricks: undefined };
       const next: BoardView = {
@@ -384,8 +395,10 @@ describe('stagePlaySteps', () => {
         myTurn: true,
         handToPlay: 0,
       };
-      const brisk = stagePlaySteps(biddingPrev, next, true);
-      expect(brisk[1].delayBefore).toBe(LEAD_SETTLE_MS);
+      const fastest = stagePlaySteps(biddingPrev, next, TABLE_SPEED_MAX);
+      const slowest = stagePlaySteps(biddingPrev, next, TABLE_SPEED_MIN);
+      expect(fastest[1].delayBefore).toBe(LEAD_SETTLE_MS);
+      expect(slowest[1].delayBefore).toBe(LEAD_SETTLE_MS);
     });
   });
 });

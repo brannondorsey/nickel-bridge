@@ -23,6 +23,7 @@ import {
   CLAIM_ANNOUNCE_HOLD_MS,
   ClaimAnnouncement,
   StagedStep,
+  TABLE_SPEED_DEFAULT,
   claimAnnouncement,
   motionOK,
   stageClaimSteps,
@@ -321,11 +322,10 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
   // The tour is public, so there may be no account to have set this; the
   // default matches the live board's.
   const fastForward = useMe().me?.user?.fastForward !== false;
-  // "Table speed" — same reasoning, but its default matches the live board's
-  // brisk_pacing default (off) rather than fastForward's (on): a signed-out
-  // visitor's `me?.user` is null either way, so `=== true` already resolves
-  // correctly without needing fastForward's `!== false` flip.
-  const briskPacing = useMe().me?.user?.briskPacing === true;
+  // "Table speed" — same reasoning as fastForward above: a signed-out
+  // visitor's `me?.user` is null, so this falls back to TABLE_SPEED_DEFAULT,
+  // the same pre-slider pace the live board falls back to.
+  const tableSpeed = useMe().me?.user?.tableSpeed ?? TABLE_SPEED_DEFAULT;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   const [view, setView] = useState<BoardView | null>(null);
@@ -401,7 +401,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
 
   const applyTransition = useCallback(
     (prev: BoardView, next: BoardView, speed: number) => {
-      const steps = motionOK() ? stagePlaySteps(prev, next, briskPacing) : [];
+      const steps = motionOK() ? stagePlaySteps(prev, next, tableSpeed) : [];
       if (!steps.length) {
         // bidding→bidding (or reduced motion): land after a beat, as if the
         // robots took a moment to reply
@@ -412,7 +412,7 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       }
       scheduleSteps(steps, speed);
     },
-    [briskPacing, clearTimers, scheduleSteps],
+    [tableSpeed, clearTimers, scheduleSteps],
   );
 
   // Bracket a claim the same two ways Board.tsx does: an unmissable,

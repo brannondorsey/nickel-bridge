@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { useMe } from '../App';
 import { SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { TABLE_SPEED_DEFAULT, TABLE_SPEED_MAX, TABLE_SPEED_MIN } from '../components/game/playAnim';
 import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -11,10 +12,11 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * The settings gate.
  *
  * One panel, one row per preference: tracked-caps label, the aside that says
- * what the setting actually does, then a full-width segmented lever. Every row
- * is the same control at a different arity — four segments for appearance, two
- * for the switches — so the screen reads as one printed form rather than as a
- * theme picker with toggles bolted under it.
+ * what the setting actually does, then a full-width control. Every row is
+ * mostly the same control at a different arity — four segments for
+ * appearance, two for the switches — with Table speed the one exception: a
+ * five-position drag slider, since "how fast" is a continuum a segmented
+ * lever can't represent as legibly as a track + thumb can.
  *
  * Everything here is account state (columns on `users`, written through
  * POST /api/me/prefs) EXCEPT appearance and suit colors, which are device-local
@@ -24,9 +26,12 @@ import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '.
  * they're on rather than of their account. The footer says that once rather
  * than tagging individual rows.
  *
- * The four account switches are optimistic: they move under the finger and
- * revert if the write is refused, since a switch that waits on a round trip
- * before moving reads as a dead control on a slow connection.
+ * The four account controls are optimistic: they move under the finger and
+ * revert if the write is refused, since a control that waits on a round trip
+ * before moving reads as dead on a slow connection. The slider's drag needs
+ * this split further than a switch does — see TableSpeedSlider's own doc
+ * comment for why the local drag state and the server-committed value are
+ * deliberately two different pieces of state.
  */
 
 const THEME_OPTIONS: { pref: ThemePref; label: string }[] = [
@@ -75,10 +80,64 @@ const OFF_ON = [
   { value: true, label: 'ON' },
 ];
 
-const SPEED_OPTIONS = [
-  { value: false, label: 'NORMAL' },
-  { value: true, label: 'BRISK' },
-];
+// index i <-> TABLE_SPEED_MIN..TABLE_SPEED_MAX; TABLE_SPEED_DEFAULT (2) is
+// NORMAL, the exact pace the table ran at before this slider existed.
+const TABLE_SPEED_LABELS = ['SLOWER', 'SLOW', 'NORMAL', 'BRISK', 'BRISKEST'];
+
+/**
+ * A native <input type="range"> in the toll-bridge idiom: a 1px ink track,
+ * a square ink thumb (the same "filled ink plate" look PrefSwitch gives its
+ * active segment), and tracked-caps tick labels underneath — the slider's
+ * equivalent of a segmented lever's row of buttons, just laid under a
+ * continuous track instead of being the tappable surface itself.
+ *
+ * `value` is the CURRENT DRAG POSITION, updated on every native `input`
+ * tick so the thumb tracks the finger/cursor with no lag — a controlled
+ * range input that only updated on commit would visibly fight the drag,
+ * snapping back between ticks. `onCommit` fires once, on release (mouseup/
+ * touchend) or after a keyboard step (keyup) — reading the value directly
+ * off the DOM element (e.currentTarget.value) rather than closing over
+ * React state, so it can never fire with a stale position from a prior
+ * render. The caller (Settings' change()) is what actually knows the
+ * difference between "where the thumb is" and "what the account has saved"
+ * — see change()'s own comment.
+ */
+function TableSpeedSlider({
+  value,
+  onChange,
+  onCommit,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  const commit = (e: SyntheticEvent<HTMLInputElement>) => onCommit(Number(e.currentTarget.value));
+  return (
+    <div className="ds-slider">
+      <input
+        type="range"
+        className="ds-slider-input"
+        min={TABLE_SPEED_MIN}
+        max={TABLE_SPEED_MAX}
+        step={1}
+        value={value}
+        aria-label="Table speed"
+        aria-valuetext={TABLE_SPEED_LABELS[value]}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onMouseUp={commit}
+        onTouchEnd={commit}
+        onKeyUp={commit}
+      />
+      <div className="ds-slider-ticks" aria-hidden="true">
+        {TABLE_SPEED_LABELS.map((label, i) => (
+          <span key={label} className={i === value ? 'active' : ''}>
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function SettingRow({ label, note, children }: { label: string; note: string; children: ReactNode }) {
   return (
@@ -90,7 +149,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean; briskPacing: boolean; bidFeedback: boolean };
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean; tableSpeed: number; bidFeedback: boolean };
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -99,17 +158,22 @@ export default function Settings() {
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
-    // Opposite comparison from the other rows: brisk_pacing defaults to
-    // 0/false in the schema (unlike the others' 1/true), so `!== false` here
-    // would silently default every account to BRISK.
-    briskPacing: me?.user?.briskPacing === true,
+    tableSpeed: me?.user?.tableSpeed ?? TABLE_SPEED_DEFAULT,
     bidFeedback: me?.user?.bidFeedback !== false,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
-  const change = async (patch: Partial<AccountPrefs>) => {
-    const revert: Partial<AccountPrefs> = {};
-    for (const key of Object.keys(patch) as (keyof AccountPrefs)[]) revert[key] = prefs[key];
+  // change() is for the switches ONLY — never route tableSpeed through it.
+  // It captures its revert target from `prefs[key]` at call time, which is
+  // correct for a switch (one click == one atomic commit, so prefs hasn't
+  // moved since the click), but would be wrong for the slider: by the time
+  // a drag's onCommit fires, prefs.tableSpeed has already been updated by
+  // every onChange tick along the way, so `prefs.tableSpeed` at commit time
+  // IS the new value, not the one to revert to. See committedTableSpeedRef
+  // and commitTableSpeed below for the slider's own version of this.
+  const change = async (patch: Partial<Omit<AccountPrefs, 'tableSpeed'>>) => {
+    const revert: Partial<Omit<AccountPrefs, 'tableSpeed'>> = {};
+    for (const key of Object.keys(patch) as (keyof Omit<AccountPrefs, 'tableSpeed'>)[]) revert[key] = prefs[key];
     setPrefs((p) => ({ ...p, ...patch }));
     setPrefError(null);
     try {
@@ -119,6 +183,26 @@ export default function Settings() {
       // Revert only the key(s) this call touched — a concurrent, already-
       // succeeded write to a different key must not be clobbered back.
       setPrefs((p) => ({ ...p, ...revert }));
+      setPrefError("That didn't save — try again.");
+    }
+  };
+
+  // The slider's own revert target: the last value the ACCOUNT actually
+  // confirmed, kept out of React state on purpose so dragging (which moves
+  // prefs.tableSpeed on every tick, for a lag-free thumb) never overwrites
+  // it. Only commitTableSpeed's success path moves it.
+  const committedTableSpeedRef = useRef(prefs.tableSpeed);
+  const commitTableSpeed = async (tableSpeed: number) => {
+    const prevCommitted = committedTableSpeedRef.current;
+    setPrefs((p) => ({ ...p, tableSpeed }));
+    setPrefError(null);
+    try {
+      await api.setPrefs({ tableSpeed });
+      committedTableSpeedRef.current = tableSpeed;
+      refresh();
+    } catch {
+      committedTableSpeedRef.current = prevCommitted;
+      setPrefs((p) => ({ ...p, tableSpeed: prevCommitted }));
       setPrefError("That didn't save — try again.");
     }
   };
@@ -170,13 +254,12 @@ export default function Settings() {
 
           <SettingRow
             label="Table speed"
-            note="How quickly the robots play their cards once the bidding ends. Normal is table speed; brisk moves the hand along."
+            note="How quickly the robots play their cards once the bidding ends. Normal is today's table speed either way — slide left to slow the hand down, right to move it along."
           >
-            <PrefSwitch
-              label="Table speed"
-              value={prefs.briskPacing}
-              options={SPEED_OPTIONS}
-              onChange={(briskPacing) => change({ briskPacing })}
+            <TableSpeedSlider
+              value={prefs.tableSpeed}
+              onChange={(tableSpeed) => setPrefs((p) => ({ ...p, tableSpeed }))}
+              onCommit={commitTableSpeed}
             />
           </SettingRow>
 
