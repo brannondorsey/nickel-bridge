@@ -178,7 +178,7 @@
 /* ---- colorblind suit palette — a SECOND, INDEPENDENT axis from night mode, not a
    third theme option (see suitPalette.ts). Standard red/gold hearts+diamonds are a
    known collision under red-green colorblindness (~8% of men); this swaps ONLY
-   --suit-h/--suit-d (and their --cardface-suit-*/--onprimary-suit-* derivatives) to
+   --suit-h/--suit-d (and their --cardface-suit-* / --onprimary-suit-* derivatives) to
    a blue/orange pair ("stamp-ink blue" / "rust orange") — the standard safe
    substitute, since blue/orange sit on the tritan axis that red-green deficiency
    leaves intact. --suit-s/--suit-c are untouched: clubs already sits off the
