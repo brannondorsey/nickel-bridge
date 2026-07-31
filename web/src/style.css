@@ -193,20 +193,32 @@
    - [data-suit-palette="colorblind"] — day. Day cardface tokens are PINNED LITERALS
      in the base :root (not var()-chained to --suit-*), so --cardface-suit-h/-d are
      redeclared here explicitly with the same hex values.
-   - [data-theme="night"][data-suit-palette="colorblind"] — night. The existing
-     night block already chains --cardface-suit-h/-d to var(--suit-h)/var(--suit-d),
-     so they inherit the new value automatically — redeclaring them here would be
-     the exact hand-drift risk already called out for --onprimary-suit-* above.
+   - [data-theme="night"][data-suit-palette="colorblind"] — night. MUST ALSO redeclare
+     --cardface-suit-h/-d as literals, even though the night :root block chains them
+     to var(--suit-h)/var(--suit-d) and it looks like they'd inherit the new value
+     for free. They don't: this selector and the DAY block above are both (0,1,0) —
+     [data-theme="night"] alone is (0,1,0) too, and this compound selector only beats
+     it on properties it actually declares — so on --cardface-suit-h/-d specifically,
+     which the compound selector left undeclared, the cascade falls back to comparing
+     [data-theme="night"]'s var()-chain against the day block's literal, both (0,1,0),
+     and the day block wins the tie by sitting later in the file. That silently fed
+     the WRONG (day) hex to card faces in explicit Night mode — redeclaring the two
+     properties here, exactly like --onprimary-suit-* already does, gives this
+     selector (0,2,0) and settles it outright.
    - the @media (prefers-color-scheme: dark) mirror, for 'system' appearance with no
      explicit data-theme. THIS ONE BLOCK IS ORDER-SENSITIVE: it and the standard
      @media dark mirror above are both single-descendant-combinator overrides of
      :root at equal specificity, so which wins for "system-dark OS + colorblind, no
      explicit Appearance override" is decided by which is textually LATER in this
-     file, not by specificity — keep this block after the standard one. (Every
-     other pairing here — day vs :root, [data-theme=night][data-suit-palette] vs
-     either single-attribute block — wins outright on specificity and has no such
-     ordering requirement.) e2e/smoke.spec.ts has a computed-style test for exactly
-     this combination. ---- */
+     file, not by specificity — keep this block after the standard one. The DAY
+     block above is order-sensitive against :root the exact same way (both (0,1,0),
+     day wins only because it's later) — it isn't "outright on specificity" either,
+     it's just already in the right order. [data-theme=night][data-suit-palette] is
+     the ONE pairing here that truly settles on specificity alone, and only because
+     it now redeclares every property the tie could otherwise be lost on — see
+     above. e2e/smoke.spec.ts has a computed-style test for the system-dark
+     combination; there is no equivalent test for explicit Night — this exact bug
+     shipped once already because of that gap. ---- */
 [data-suit-palette='colorblind'] {
   --suit-h: #0a5c99; /* stamp-ink blue */
   --suit-d: #98490a; /* rust/kiln orange */
@@ -218,6 +230,8 @@
 [data-theme='night'][data-suit-palette='colorblind'] {
   --suit-h: #6fb3e0; /* harbor blue — lighter, for dark stock */
   --suit-d: #e0995a; /* amber-rust — lighter, for dark stock */
+  --cardface-suit-h: #6fb3e0;
+  --cardface-suit-d: #e0995a;
   --onprimary-suit-h: #0a5c99;
   --onprimary-suit-d: #98490a;
 }
