@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { recentActivity } from './activity.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
+import { buildCompare, compareMin } from './compare.js';
 import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
 import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
@@ -48,6 +49,7 @@ const ACTIVITY_WINDOW_S = 8 * 86400;
  */
 const provisionalMin = () =>
   process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
+
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -276,6 +278,30 @@ export async function buildApp(): Promise<FastifyInstance> {
     const stats = kind ? playerStats(id) : null;
     if (!stats) return reply.code(404).send({ error: 'not found' });
     return reply.send(stats);
+  });
+
+  /**
+   * Compare — the caller's record beside another player's.
+   *
+   * Always gated, with no house exemption like the stats route above: this is
+   * scoped to the VIEWER, so there is no version of it that means anything
+   * without a session. That is also why it lives at /api/compare/:id rather
+   * than under /api/users/:id — and why the web route is /compare/:id and not
+   * /players/:id/compare, which `isPublicPath` would have swept into the public
+   * prefix by `startsWith` (see server/src/seo.ts).
+   *
+   * Comparing yourself to yourself is a degenerate page — every margin zero —
+   * so it is refused rather than rendered. The entry points never offer it.
+   */
+  app.get('/api/compare/:id', (req, reply) => {
+    const me = requireUserWithHandle(req, reply);
+    if (!me) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(404).send({ error: 'not found' });
+    if (id === me.id) return reply.code(400).send({ error: 'cannot compare with yourself' });
+    const view = buildCompare(me.id, id, { provisionalMin: provisionalMin(), minBoards: compareMin() });
+    if (!view) return reply.code(404).send({ error: 'not found' });
+    return reply.send(view);
   });
 
   // ---- discoverability ----

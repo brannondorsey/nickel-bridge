@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AppHeader, ScreenHeader } from './AppHeader';
+import { BeamBar } from './BeamBar';
 import { BridgeMark } from './BridgeMark';
 import { Button } from './Button';
 import { Chip } from './Chip';
@@ -318,6 +319,77 @@ describe('PctBar', () => {
     const { container } = render(<PctBar pct={64} />);
     const fill = container.querySelector('.pctbar-fill') as HTMLElement;
     expect(fill.style.right).toBe('36%');
+  });
+});
+
+describe('BeamBar', () => {
+  // Full tilt is half the track, so a margin of fullTilt/2 fills 25%.
+  it('grows leftward from the centre when the viewer leads', () => {
+    const { container } = render(<BeamBar margin={10} gate={4} fullTilt={20} verdict="you" />);
+    const fill = container.querySelector('.beam-fill') as HTMLElement;
+    expect(fill).toHaveClass('beam-fill-you');
+    expect(fill.style.right).toBe('50%');
+    expect(fill.style.left).toBe('');
+    expect(fill.style.width).toBe('25%');
+  });
+
+  it('grows rightward when the other player leads', () => {
+    const { container } = render(<BeamBar margin={-10} gate={4} fullTilt={20} verdict="them" />);
+    const fill = container.querySelector('.beam-fill') as HTMLElement;
+    expect(fill).toHaveClass('beam-fill-them');
+    expect(fill.style.left).toBe('50%');
+    expect(fill.style.width).toBe('25%');
+  });
+
+  /**
+   * The design decision this pins: a level row still shows its lean, so a
+   * reader can see how close it was — it just does so in grey and claims
+   * nothing. Drawing it as an empty track would throw that information away.
+   */
+  it('draws the lean but takes no side when the margin has not cleared its gate', () => {
+    const { container } = render(<BeamBar margin={-2} gate={8} fullTilt={20} verdict="level" />);
+    const fill = container.querySelector('.beam-fill') as HTMLElement;
+    expect(fill).toHaveClass('beam-fill-level');
+    expect(fill).not.toHaveClass('beam-fill-you');
+    expect(fill).not.toHaveClass('beam-fill-them');
+    expect(fill.style.width).toBe('5%'); // still leaning, still visible
+  });
+
+  it('places a gate mark either side of centre, clamped to the track', () => {
+    const { container } = render(<BeamBar margin={10} gate={8} fullTilt={20} verdict="you" />);
+    const gates = [...container.querySelectorAll('.beam-gate')] as HTMLElement[];
+    expect(gates).toHaveLength(2);
+    expect(gates[0].style.left).toBe('30%'); // 50 - (8/20)*50
+    expect(gates[1].style.left).toBe('70%');
+
+    // A gate wider than the scale renders at the edges rather than overflowing.
+    const wide = render(<BeamBar margin={4} gate={90} fullTilt={20} verdict="level" />);
+    const wideGates = [...wide.container.querySelectorAll('.beam-gate')] as HTMLElement[];
+    expect(wideGates[0].style.left).toBe('0%');
+    expect(wideGates[1].style.left).toBe('100%');
+  });
+
+  it('renders a hatched track with no bar when the row is set aside', () => {
+    const { container } = render(<BeamBar margin={15} gate={46} fullTilt={20} verdict="aside" />);
+    expect(container.querySelector('.beam-aside')).toBeInTheDocument();
+    // A large margin must NOT be drawn here: the gate could never be cleared,
+    // so a bar would invite a verdict the data cannot support.
+    expect(container.querySelector('.beam-fill')).toBeNull();
+    expect(container.querySelector('.beam-gate')).toBeNull();
+  });
+
+  it('is hidden from assistive tech, because the row prints the reading itself', () => {
+    const { container } = render(<BeamBar margin={10} gate={4} fullTilt={20} verdict="you" label="10" />);
+    expect(container.querySelector('.beam')).toHaveAttribute('aria-hidden', 'true');
+    // No interactive elements: this is a readout, not a control.
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('drops the margin label when the fill is too narrow to hold it', () => {
+    const wide = render(<BeamBar margin={18} gate={4} fullTilt={20} verdict="you" label="18" />);
+    expect(wide.container.querySelector('.beam-margin')?.textContent).toBe('18');
+    const narrow = render(<BeamBar margin={1} gate={4} fullTilt={20} verdict="level" label="1" />);
+    expect(narrow.container.querySelector('.beam-margin')).toBeNull();
   });
 });
 

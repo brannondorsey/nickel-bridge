@@ -35,6 +35,25 @@ const DEMO_HANDLE = 'Inspector';
 const NEW_CROSSER_HANDLE = 'New Crosser';
 /** A seeded bot (see demo-seed.ts's DEFAULT_PROFILE) with a genuinely rich history — the "populated stats page" exhibit points here. */
 const RICH_PROFILE_HANDLE = 'Margaret';
+/**
+ * A seeded bot the Inspector has provably NEVER shared a field with — the
+ * Compare "common ground" exhibit needs one, since that panel only appears
+ * when two players have no head-to-head at all.
+ *
+ * Harold is bot index 3 in demo-seed.ts's DEFAULT_PROFILE, which puts him in
+ * tournaments 'demo-ambient-b' and '-d' — the two the Inspector is not seeded
+ * into (only 'a' and 'c' carry `inspector: true`). That gives him 8 completed
+ * boards, comfortably over DEMO_COMPARE_MIN_BOARDS, so the comparison is
+ * eligible AND unmet, which is exactly the pair the panel needs.
+ *
+ * Deliberately not Pearl, the other unshared bot: she is seeded into
+ * 'demo-ambient-e', the young under-filled tournament a tester's first
+ * PLAY THE TOLL force-joins — so a tester who plays one board stops being a
+ * stranger to her, and the exhibit would quietly start showing head-to-head
+ * instead. Change this only to another bot whose tournaments carry neither
+ * `inspector: true` nor the grace-window slot.
+ */
+const STRANGER_HANDLE = 'Harold';
 
 function demoEnabled(): boolean {
   return process.env.DEMO === '1';
@@ -183,10 +202,12 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     // module-load-time circular import between demo.ts and demo-seed.ts.
     const { ensureBot } = await import('./demo-seed.js');
     const richProfile = ensureBot(RICH_PROFILE_HANDLE);
+    const stranger = ensureBot(STRANGER_HANDLE);
     return reply.send({
       scenarios: SCENARIOS.map(({ id, label, description, category }) => ({ id, label, description, category })),
       newCrosserId: newCrosser.id,
       richProfileId: richProfile.id,
+      strangerId: stranger.id,
       // Guaranteed taken (just claimed above, in this same request) — the
       // handle-collision exhibit prefills the picker with this so the live
       // 409 fires on the very first submit, with no dependency on the

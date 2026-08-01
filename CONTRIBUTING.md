@@ -61,6 +61,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
+                compare.ts (the Compare screen's gate arithmetic — full-tilt
+                constants, three error models, verdict classification; a pure
+                function of two PlayerStats, see "Compare and the gate" below),
                 activity.ts (the TRAFFIC feed's flat, ungrouped events — see
                 "The activity feed" below),
                 ai-players.ts (benchmark AI personas — the "house" rows ranked in
@@ -117,7 +120,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 isPublicPath — the only test that imports across the workspace
                 boundary, and the reason App.tsx exports the gate),
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
-                components/ds/ (design-system pieces, incl. SignInBar — the logged-out
+                pages/Compare.tsx (the Compare screen — draws the server's
+                verdicts, re-derives no statistics),
+                components/ds/ (design-system pieces, incl. BeamBar — the
+                diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
                 that resolves which sign-in doors a deployment has) + components/game/
                 (auction, bid box,
@@ -164,7 +170,10 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 checked-in social share card web/public/og-image.png — offline, no
                 running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
-docs            design-brief.md — requirements spec for the visual redesign;
+docs            compare.md — why most Compare rows refuse to name a winner: the
+                three error models, the Agresti-Coull requirement, and the
+                production measurement behind FULL_TILT;
+                design-brief.md — requirements spec for the visual redesign;
                 rule-based-bidding.md — why robot bids are SAYC-guardrailed and the
                 shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
@@ -731,6 +740,33 @@ switch stays hidden entirely until the 11th crossing and never shows a button th
 nothing. A stored preference the history has outgrown resolves to ALL rather than clamping.
 None of this costs the server anything — see `DEFAULT_LOOKBACK`'s doc comment for why
 `fieldPercentiles()` already pays for every tournament a profile could plot.
+
+**Compare and the gate.** `/compare/:id` puts the viewer's record beside another player's, each
+measure drawn as a bar tipping left or right from a centre line by the *margin*. Three facts
+about it are load-bearing, and [docs/compare.md](docs/compare.md) has the full reasoning:
+
+- **Every judged row carries a gate** — `GATE_SIGMA (1.0) × √(seA² + seB²)` — and a row whose gate
+  exceeds its `fullTilt` is *set aside* rather than drawn, because it could never be called
+  whatever the figures say. The error model differs per measure and two of them are easy to get
+  backwards: rates use the binomial SE **with the Agresti-Coull adjustment** (`p̃ = (x+2)/(n+4)`),
+  which is required rather than cosmetic — the textbook formula is exactly zero at p=0/p=1, and
+  when this shipped 11 of the 24 players with any declared board sat at exactly 0% or 100% — while
+  **bid accuracy** is the mean of a four-point discrete score (`gradeFromProbs`) and uses `σ/√n`,
+  even though `bidTypes[]` one panel below it genuinely is binomial. `FULL_TILT` was measured
+  against production (2026-07-31, n=5); it is load-bearing twice, since it scales every bar *and*
+  decides what gets set aside. The provisional quota arrives as an **argument**, never read from
+  the constant — the same `DEMO=1` trap that once made `entered-rankings` unreachable.
+- **Direction is the encoding; colour only reinforces it.** `--positive` is byte-identical to
+  `--suit-c` and `--negative` to `--suit-h`, and the colourblind suit palette rewrites the suit
+  tokens while leaving these alone — so a red/green-only verdict would fail exactly the players
+  that setting exists for. Flatten every fill to one ink and the screen must still read correctly.
+- **The route is `/compare/:id`, deliberately not `/players/:id/compare`.** `isPublicPath` matches
+  the `/players/` prefix with `startsWith`, so mounting it there would have made a viewer-scoped
+  screen public *while `seo.test.ts` kept passing*, because the table and the gate would have
+  agreed on the wrong answer. One endpoint (`GET /api/compare/:id`) builds both profiles under a
+  single `memoizedStandings()` closure — two `playerStats()` calls would run `fieldPercentiles`'s
+  site-wide sweep twice — and eligibility is settled with two cheap `COUNT`s first, so a pair below
+  `COMPARE_MIN_BOARDS` (16, both sides) never triggers the expensive path.
 
 **Elo is recomputed from scratch** every time a board completes: `recomputeElo` wipes
 `elo_history`, resets everyone to 1200, and replays all tournaments **in tournament-id

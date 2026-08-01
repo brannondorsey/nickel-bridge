@@ -91,6 +91,7 @@ export default function Scenarios() {
   const [scenarios, setScenarios] = useState<DemoScenario[] | null>(null);
   const [newCrosserId, setNewCrosserId] = useState<number | null>(null);
   const [richProfileId, setRichProfileId] = useState<number | null>(null);
+  const [strangerId, setStrangerId] = useState<number | null>(null);
   const [collisionHandle, setCollisionHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export default function Scenarios() {
         setScenarios(r.scenarios);
         setNewCrosserId(r.newCrosserId ?? null);
         setRichProfileId(r.richProfileId ?? null);
+        setStrangerId(r.strangerId ?? null);
         setCollisionHandle(r.collisionHandle ?? '');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'failed to load the exhibits'));
@@ -330,6 +332,69 @@ export default function Scenarios() {
               <Button
                 variant="secondary"
                 onClick={() => newCrosserId != null && navigate(`/players/${newCrosserId}`)}
+                disabled={newCrosserId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+            {/* Compare's two states. Client-only rows rather than replay
+                recipes: nothing here needs a scripted board, only two players
+                with (and without) a shared history — and neither state is
+                reachable by clicking around a fresh database, which is the
+                rule that says an exhibit has to exist. */}
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Compare, against someone you have met</b>
+                <span className="exhibit-row-desc">
+                  Your record beside a well-travelled bot's: the head-to-head slip, then the beam — bars that tip
+                  toward whoever leads, with dashed gates marking the margin below which nothing is called. Grey
+                  bars are the ones the ledger will not certify.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => richProfileId != null && navigate(`/compare/${richProfileId}`)}
+                disabled={richProfileId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+            {/* A bot the Inspector has provably never shared a field with (see
+                STRANGER_HANDLE in demo.ts), so head-to-head is genuinely empty
+                while both records still clear the board floor. Pointing this at
+                the never-played persona instead — which was the first attempt —
+                only ever reached the ineligible screen below, since zero boards
+                can never clear the floor. */}
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Compare, against a stranger</b>
+                <span className="exhibit-row-desc">
+                  Someone you have never crossed with, so there is no head-to-head — the COMMON GROUND panel stands
+                  in. On a fresh exhibition it opens on its no-shared-opponent state, because the house players only
+                  join a tournament once somebody lands in one; play a board or two against the house first and their
+                  record against each of you fills the panel in.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => strangerId != null && navigate(`/compare/${strangerId}`)}
+                disabled={strangerId == null}
+              >
+                ENTER →
+              </Button>
+            </div>
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Compare, with too thin a record</b>
+                <span className="exhibit-row-desc">
+                  The never-played persona: zero boards, so the comparison is refused. Below the board floor almost
+                  every difference between two players is the shuffle rather than the play, so the screen says what
+                  is missing instead of drawing a beam nobody should trust.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => newCrosserId != null && navigate(`/compare/${newCrosserId}`)}
                 disabled={newCrosserId == null}
               >
                 ENTER →
