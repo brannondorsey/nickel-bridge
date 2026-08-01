@@ -91,6 +91,15 @@ const deep = JSON.parse(readFileSync(resolve(root, 'src/glossary/deep.json'), 'u
 const { SITE_ROUTES, covers, crawlerDisallow } = await import(resolve(root, '../server/src/seo.ts'));
 
 /**
+ * The app's own title function, imported for the same reason as the route
+ * table above: the SPA boots over every page this script writes and sets
+ * document.title itself, so a title computed twice is a tab that rewrites
+ * itself a beat after a shared link opens. Titles here are therefore derived,
+ * not matched by hand — see web/src/pageTitle.ts.
+ */
+const { pageTitle } = await import(resolve(root, 'src/pageTitle.ts'));
+
+/**
  * Every page this run wrote, in the order it wrote them. The sitemap is built
  * from this at the end, so "prerendered a page and forgot the sitemap" is not
  * a state this script can reach.
@@ -228,7 +237,7 @@ mkdirSync(outDir, { recursive: true });
 const bySlug = new Map(TERMS.map((t) => [t.slug, t]));
 for (const t of TERMS) {
   const url = `${ORIGIN}/glossary/${t.slug}`;
-  const title = `${t.term} — bridge term | Nickel Bridge`;
+  const title = pageTitle(`/glossary/${t.slug}`, '');
   const description = clamp(t.def);
   const related = (t.related ?? []).map((s) => bySlug.get(s)).filter(Boolean);
 
@@ -285,7 +294,7 @@ for (const t of TERMS) {
 // them indexable prose would be thin, duplicative content competing with the
 // source we adapted them from. They remain in the app, behind the toggle.
 const indexUrl = `${ORIGIN}/glossary`;
-const indexTitle = `Glossary of bridge terms — ${TERMS.length} definitions | Nickel Bridge`;
+const indexTitle = pageTitle('/glossary', '');
 const indexDesc = `A plain-language glossary of ${TERMS.length} contract bridge terms — bidding, card play, defense, scoring and SAYC conventions — each with an example.`;
 
 const indexBody = `<article class="pr">
@@ -327,7 +336,10 @@ emit(
 // One CTA, pointing at the page itself, is the honest static fallback.
 mkdirSync(homeDir, { recursive: true });
 
-const homeTitle = 'Nickel Bridge — learn & play duplicate bridge';
+// web/index.html's shell <title> is the one copy of this that can't be
+// derived — no module graph in a raw HTML file — so it is checked by
+// web/src/pageTitle.test.ts instead.
+const homeTitle = pageTitle('/', '');
 const homeDesc =
   'Play duplicate bridge free in your browser — SAYC bidding with instant feedback on every call, matchpoint scoring, and a tournament always open.';
 

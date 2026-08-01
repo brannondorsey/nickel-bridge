@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { Me, api } from './api';
 import { reportsAnalytics, useAnalytics } from './analytics';
+import { HOME_TITLE, pageTitle } from './pageTitle';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
 import { SignInBar } from './components/ds/SignInBar';
@@ -155,6 +156,20 @@ export default function App() {
   // `me` is null while /api/me is in flight AND after it fails, and reading
   // the flags off null would report a preview into the production property.
   useAnalytics({ enabled: reportsAnalytics(me), pathname, search });
+
+  // What the browser tab, the history entry and any bookmark say (pageTitle.ts).
+  // Applied on every navigation, so a page that later refines the title with
+  // data only it has — a handle, a date — is a last-write-wins override that
+  // resets cleanly when you navigate away.
+  //
+  // The gate matters: a signed-out visitor at a private URL is shown the
+  // LANDING page, not that route, so titling the tab "Crossing 17" would
+  // describe a screen they aren't looking at and can't reach. Public routes
+  // render for real either way, so those keep their own title.
+  const titled = Boolean(me?.user) || isPublicPath(pathname);
+  useEffect(() => {
+    document.title = titled ? pageTitle(pathname, search) : HOME_TITLE;
+  }, [titled, pathname, search]);
 
   // Scroll offset belongs to the page you left, not the one you asked for.
   // A router navigation swaps the DOM without touching the window, so a link

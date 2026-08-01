@@ -3,6 +3,14 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // So src/pageTitle.ts can import './glossary/terms.ts' with its extension.
+    // Vite resolves either form, but web/scripts/prerender.mjs imports that
+    // module from BARE NODE at build time, and Node's ESM resolver requires
+    // the extension — without this the prerender would have to keep its own
+    // copy of every title format. Safe with noEmit (tsc never rewrites these
+    // paths); it permits the extension, it doesn't require it, so the rest of
+    // the codebase's extensionless imports are unaffected.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "strict": true,

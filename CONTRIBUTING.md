@@ -81,6 +81,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), analytics.ts (the Google Analytics tag +
                 its SPA page-view hook — see "Analytics" below),
+                pageTitle.ts (what the browser tab says, per route — see
+                "Page titles" below),
                 splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
@@ -471,6 +473,26 @@ Raw samples are age-dependent too (15s yesterday, 30s a few days back, 60s a wee
 samples dropped rather than merely thinned), so **two days at different resolutions are not
 comparable** and a before/after baseline has to be recorded while it is fresh.
 `scripts/fly-uptime.mjs` does all of that and prints the resolution it inferred per row.
+
+**Page titles are per-route, and there are three copies of the home one.** `pageTitle.ts` is a
+pure function from (pathname, `?term=`) to the tab title, applied by `App.tsx` on every
+navigation; without it the SPA wore `index.html`'s site-wide title on every screen, so three
+open tabs, the history and every bookmark all read the same. It uses the app's own vocabulary
+(Rankings, Traffic, the first crossing) but never the tracked-caps *look* of those labels — a
+tab has no typography, so caps there is just shouting, and the brand's period flavour stays
+out of functional copy. Screens that know more than the URL (a handle, a date) may set
+`document.title` themselves afterwards; that's a last-write-wins override this effect resets
+on the next navigation. **The constraint to respect: it must agree with
+`web/scripts/prerender.mjs` byte for byte** — a shared `/glossary/<slug>` link is served a
+static page whose `<title>` is already right and the SPA boots over it, so any difference
+shows up as the tab rewriting itself a beat later. So it isn't matched by hand: the prerender
+imports `pageTitle()` and titles all 127 pages with it, the same derive-don't-duplicate move
+`seo.ts` makes for robots.txt and the sitemap. That import is why `pageTitle.ts` stays
+Node-importable (no DOM, no React) and why it imports `./glossary/terms.ts` **with the
+extension** — the prerender runs under bare Node, whose resolver won't guess it, which is what
+`allowImportingTsExtensions` in `web/tsconfig.json` is for. The one copy that can't be derived
+is `index.html`'s shell `<title>` (a raw HTML file has no module graph); `pageTitle.test.ts`
+reads that file and asserts it, rather than restating the string.
 
 **Analytics is Google Analytics 4 (`web/src/analytics.ts`), and nothing else.** Page views go
 to the GA property `G-ZTL1SZ7ZKZ`. Four things about it:
