@@ -1,0 +1,189 @@
+/**
+ * Analytics — Google Analytics 4 (gtag.js), and nothing else.
+ *
+ * The app has no other measurement: the only other signal about whether anyone
+ * reads the glossary, finishes the tour, or bounces off the landing page is the
+ * request log, which answers "who woke the machine" (see server/src/logging.ts)
+ * and not much more.
+ *
+ * WHAT THIS MEANS FOR VISITORS, stated plainly because it is a real property of
+ * the app rather than an implementation detail. Page views leave our
+ * infrastructure and go to Google, tied to GA's own `_ga` cookies — so the app
+ * now sets a cookie that isn't the session it can't work without, on a site
+ * whose public surface is other people's handles, ratings and reading habits.
+ * If that is ever revisited, the two dials are `client_storage: 'none'` in the
+ * config below (no cookies, much weaker attribution) and Google's Consent Mode;
+ * a cookie banner is the other half of that conversation. Today neither is
+ * wired up, and this is the stock gtag.js behaviour.
+ *
+ * One thing it does NOT cost: the Fly machine. gtag.js is served by
+ * googletagmanager.com and hits land on Google's collectors, so none of this
+ * shows up as a request that wakes or holds the app's dedicated core (see
+ * CLAUDE.md, "Machine time is bought by the request"). It is outside the
+ * Cloudflare rules derived from seo.ts for the same reason: different host.
+ *
+ * WHY NOT THE STOCK <script> SNIPPET. `gtag('config', ID)` sends one page_view
+ * on load, which for a client-rendered SPA means every visit is recorded as a
+ * single hit on whatever URL the visitor entered on — the glossary term they
+ * went on to read, the tour they walked and the boards they played are all
+ * invisible. So `send_page_view` is off in the config and `useAnalytics` below
+ * sends every view itself, including the first, from App.tsx's router state.
+ * (Enhanced measurement — outbound clicks, scroll depth, site search — is
+ * configured in the GA property rather than here; unlike Matomo's link
+ * tracking it needs no re-arming after each SPA navigation.)
+ *
+ * WHERE IT IS DISABLED, and why the check is a round trip rather than a
+ * hostname: the demo app and every PR preview serve a byte-identical bundle
+ * from their own hostnames, and their traffic is bots, seeders and
+ * click-testing — exactly the same reason seo.ts's `throwaway` flag shuts
+ * crawlers out of them. `/api/me` already reports `demo`/`devAuth` and App.tsx
+ * already fetches it before rendering anything, so that flag is reused here
+ * instead of pinning a production hostname into the bundle. Local development
+ * is excluded by hostname on top of that, since a locally built server with
+ * neither flag set would otherwise report into the live property.
+ */
+import { useEffect, useRef } from 'react';
+import type { Me } from './api';
+
+/** The GA4 measurement id for Nickel Bridge. */
+const MEASUREMENT_ID = 'G-ZTL1SZ7ZKZ';
+
+declare global {
+  interface Window {
+    /**
+     * gtag.js's command queue: `arguments` objects, pushed before and after
+     * the tag itself loads and replayed by it on arrival. Typed loosely
+     * because that is genuinely what it holds — see `gtag` below for why the
+     * rows are `arguments` and not arrays.
+     */
+    dataLayer?: unknown[];
+  }
+}
+
+function dataLayer(): unknown[] {
+  window.dataLayer = window.dataLayer ?? [];
+  return window.dataLayer;
+}
+
+/**
+ * Queue one gtag command.
+ *
+ * Pushes `arguments` rather than the rest array, exactly as Google's snippet
+ * does. gtag.js reads each queued row as an arguments-like object and is
+ * documented against that shape; an array happens to work today, but this is
+ * not the place to bet on an undocumented equivalence. The rest parameter is
+ * here for the call-site types only.
+ */
+function gtag(..._args: unknown[]): void {
+  dataLayer().push(arguments);
+}
+
+/**
+ * Hosts that must never report. Everything else is decided by the demo/devAuth
+ * flags in `reportsAnalytics` — this covers only the case those flags can't
+ * see, a production-configured server run on a developer's own machine.
+ */
+function isTrackableHost(hostname: string): boolean {
+  return hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '[::1]' && !hostname.endsWith('.local');
+}
+
+/**
+ * Does this deployment report at all?
+ *
+ * Note what it takes to say yes: a RESOLVED `/api/me`, saying neither demo nor
+ * DEV_AUTH. `null` is not "a deployment with no flags set" — it is App.tsx
+ * before the request lands, and equally App.tsx after it FAILED, since
+ * `api.me()` throws on any non-2xx and refresh()'s `.finally` flips `loaded`
+ * either way. Reading the flags off a null `me` gives `!undefined && !undefined`
+ * — true — so the gate would turn analytics ON in exactly the case where the
+ * app could not tell whether this is production or a preview, and the
+ * measurement id is hardcoded. A cold-start 5xx while the Fly machine wakes is
+ * a realistic way to reach that, so this fails CLOSED: an unknown deployment
+ * reports nothing, which costs a few page views on a bad request and never
+ * puts preview or demo traffic into the production property. Same shape as
+ * pages/Scenarios.tsx's `Boolean(me?.demo)`, which hides the demo gallery
+ * rather than guessing.
+ */
+export function reportsAnalytics(me: Me | null): boolean {
+  return me != null && !me.demo && !me.devAuth;
+}
+
+/**
+ * Load gtag.js and configure the property, once per page load. Deliberately
+ * does NOT send a page view — `send_page_view: false`, because the first one
+ * comes from `useAnalytics` like every other, so it carries the same URL
+ * treatment as the rest.
+ *
+ * Idempotency is a DOM check rather than a module flag so that the tag itself
+ * is the record — a second call after a hot reload, or in a second test in the
+ * same file, is a no-op for the same reason it is on a live page.
+ */
+function loadGtag(): void {
+  if (document.querySelector('script[data-gtag]')) return;
+  const script = document.createElement('script');
+  script.dataset.gtag = '';
+  script.async = true;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
+  document.head.appendChild(script);
+  gtag('js', new Date());
+  gtag('config', MEASUREMENT_ID, { send_page_view: false });
+}
+
+/**
+ * The URL a page view is recorded against.
+ *
+ * Path plus `?term=` and nothing else. The term sheet is a search param on
+ * whatever route you are reading (glossary/GlossaryContext.tsx), so dropping
+ * the query would collapse ~125 term reads — the single most useful thing this
+ * measures — into one row for the page they were opened from. Every other
+ * param is discarded rather than enumerated, so a future one can't start
+ * reporting itself by accident.
+ *
+ * Path segments are left alone: player, tournament and board ids are already
+ * in the request log, and GA's page-path reports group a hierarchy well enough
+ * that /t/17/b/3 stays navigable.
+ */
+export function trackedUrl(pathname: string, search: string): string {
+  const term = new URLSearchParams(search).get('term');
+  return term ? `${pathname}?term=${encodeURIComponent(term)}` : pathname;
+}
+
+/**
+ * Record one page view. `referrer` is the URL of the previous in-app view for
+ * a router navigation, and null for the first view of a page load — where
+ * gtag's own `document.referrer` default is the right answer and this must not
+ * overwrite it.
+ */
+function trackPageView(url: string, referrer: string | null): void {
+  gtag('event', 'page_view', {
+    page_location: url,
+    page_title: document.title,
+    ...(referrer ? { page_referrer: referrer } : {}),
+  });
+}
+
+/**
+ * Track router navigations as page views.
+ *
+ * `enabled` is the caller's judgment about whether this deployment reports at
+ * all (App.tsx: `reportsAnalytics(me)`), so nothing loads — not even gtag.js —
+ * until it is true. The first view fires on the same edge, which is why the
+ * tag is loaded lazily here rather than at import: on a preview or the demo
+ * app it is never requested.
+ */
+export function useAnalytics(opts: { enabled: boolean; pathname: string; search: string }): void {
+  const { enabled, pathname, search } = opts;
+  // The URL of the last view recorded, and the guard against recording the
+  // same one twice — App re-renders for reasons that have nothing to do with
+  // navigation, and a term sheet closing restores a URL already counted.
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    if (!enabled || !isTrackableHost(window.location.hostname)) return;
+    const url = `${window.location.origin}${trackedUrl(pathname, search)}`;
+    if (url === last.current) return;
+    const previous = last.current;
+    last.current = url;
+    loadGtag();
+    trackPageView(url, previous);
+  }, [enabled, pathname, search]);
+}
