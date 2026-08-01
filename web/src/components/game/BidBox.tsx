@@ -76,7 +76,7 @@ export function BidBox({
         ))}
         {lastLevel < 7 && (
           <button type="button" className="bidbox-fold" onClick={() => setExpanded(true)}>
-            ▾ levels {lastLevel + 1}–7 below the fold ▾
+            ▾ {lastLevel === 6 ? 'level 7' : `levels ${lastLevel + 1}–7`} below the fold ▾
           </button>
         )}
         <div className="callrow">

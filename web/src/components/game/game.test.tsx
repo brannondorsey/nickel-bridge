@@ -201,6 +201,13 @@ describe('BidBox', () => {
     expect(container.querySelectorAll('button.bid')).toHaveLength(33);
   });
 
+  it('names a single folded level in the singular', () => {
+    // auction at 2NT: the window is 3–6, so only level 7 is left below the fold
+    const from3 = [0, ...Array.from({ length: 25 }, (_, i) => i + 13)];
+    render(<BidBox legalCalls={from3} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />);
+    expect(screen.getByRole('button', { name: /▾ level 7 below the fold ▾/ })).toBeInTheDocument();
+  });
+
   it('shrinks to the levels that are left when the auction is already high', () => {
     // auction at 5♦: legal bids are 5♥+ only, so the box is three rows with no fold
     const highOnly = [0, ...Array.from({ length: 13 }, (_, i) => i + 25)];
