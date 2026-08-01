@@ -178,6 +178,32 @@ describe('Compare', () => {
     expect(verdict.textContent).toContain('3 are set aside for want of boards');
   });
 
+  /**
+   * Zero counts are omitted from both the chips and the sentence. A "0 theirs"
+   * chip labels an empty set and reads as a score; a run of zeroes in the
+   * sentence makes a page that certified one thing sound like a scoreboard.
+   */
+  it('names only the counts that happened', async () => {
+    apiMock.compare.mockResolvedValue({ ...compareMet, tally: { you: 1, them: 0, level: 0, aside: 3 } });
+    renderCompare();
+
+    const verdict = (await screen.findByText('1 yours')).closest('.cmp-verdict') as HTMLElement;
+    expect(within(verdict).queryByText(/theirs/)).not.toBeInTheDocument();
+    expect(within(verdict).queryByText(/level/)).not.toBeInTheDocument();
+    expect(verdict.textContent).toContain('1 measure to you.');
+    expect(verdict.textContent).not.toContain('0 ');
+  });
+
+  it('drops the chip strip entirely when nothing was called or levelled', async () => {
+    apiMock.compare.mockResolvedValue({ ...compareMet, tally: { you: 0, them: 0, level: 0, aside: 6 } });
+    renderCompare();
+    await screen.findByText('WHERE THE BEAM TIPS');
+
+    expect(document.querySelector('.cmp-chips')).toBeNull();
+    // The sentence still carries the outcome on its own.
+    expect(screen.getByText(/Nothing between you that the ledger will certify yet/)).toBeInTheDocument();
+  });
+
   it('explains itself rather than erroring when a record is too thin', async () => {
     apiMock.compare.mockResolvedValue(compareThin);
     renderCompare(70);

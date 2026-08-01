@@ -110,6 +110,26 @@ function MeasureRow({ m, them, themIsHouse }: { m: CompareMeasure; them: string;
 }
 
 /**
+ * "3 measures to you, 1 to Holland, 6 too close to call."
+ *
+ * Lists only the counts that happened, for the same reason the chips above it
+ * do: "0 to Holland" is a clause about nothing, and reading a run of zeroes
+ * aloud makes a page that certified one thing sound like a scoreboard. The noun
+ * rides the first surviving clause, whichever it turns out to be.
+ */
+function verdictLine(tally: CompareView['tally'], them: string): string {
+  const bits: [number, string][] = [
+    [tally.you, 'to you'],
+    [tally.them, `to ${them}`],
+    [tally.level, 'too close to call'],
+  ];
+  return `${bits
+    .filter(([n]) => n > 0)
+    .map(([n, tail], i) => (i === 0 ? `${n} measure${n === 1 ? '' : 's'} ${tail}` : `${n} ${tail}`))
+    .join(', ')}.`;
+}
+
+/**
  * The tally strip: one mark per shared crossing, oldest at left.
  *
  * Position is the encoding — above the rule is yours, below is theirs, a short
@@ -346,17 +366,25 @@ export default function Compare() {
       </PerforatedPanel>
 
       <div className="cmp-verdict">
-        <div className="cmp-chips">
-          <span className="cmp-chip cmp-chip-you">{view.tally.you} yours</span>
-          <span className="cmp-chip cmp-chip-them">{view.tally.them} theirs</span>
-          <span className="cmp-chip cmp-chip-level">{view.tally.level} level</span>
-        </div>
+        {/* Only the counts that happened. A "0 THEIRS" chip is a label for an
+            empty set — it takes the eye, reads as a score, and says nothing the
+            sentence below doesn't. The strip's width varies between pairs as a
+            result, which is the right trade: it reports what is there.
+            All three zero means nothing was called at all, and the sentence
+            below covers that on its own. */}
+        {view.tally.you + view.tally.them + view.tally.level > 0 ? (
+          <div className="cmp-chips">
+            {view.tally.you > 0 ? <span className="cmp-chip cmp-chip-you">{view.tally.you} yours</span> : null}
+            {view.tally.them > 0 ? <span className="cmp-chip cmp-chip-them">{view.tally.them} theirs</span> : null}
+            {view.tally.level > 0 ? <span className="cmp-chip cmp-chip-level">{view.tally.level} level</span> : null}
+          </div>
+        ) : null}
         <div className="cmp-verdict-txt">
           <GlossaryProse
             text={
               view.tally.you + view.tally.them === 0
                 ? 'Nothing between you that the ledger will certify yet — every difference so far is inside its own margin of error.'
-                : `${view.tally.you} measure${view.tally.you === 1 ? '' : 's'} to you, ${view.tally.them} to ${them}, ${view.tally.level} too close to call.`
+                : verdictLine(view.tally, them)
             }
           />
           {aside > 0 ? (
