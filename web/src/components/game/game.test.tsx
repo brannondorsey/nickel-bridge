@@ -179,30 +179,77 @@ describe('CallInspector', () => {
 describe('BidBox', () => {
   const legal = boardBidding.legalCalls!;
 
-  it('renders levels 1–4 plus Pass/X/XX, with levels 5–7 behind the fold', () => {
+  it('windows four levels from the cheapest legal bid, dropping the levels below it', () => {
+    // the fixture's auction is at 1NT: legal leveled bids are 2♣ and up
     render(<BidBox legalCalls={legal} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />);
-    // 20 leveled bids visible + 3 calls = 23 buttons + fold toggle + confirm
-    expect(screen.getByRole('button', { name: '1♣' })).toBeDisabled();
+    // level 1 can never be legal again, so it isn't rendered at all
+    expect(screen.queryByRole('button', { name: '1♣' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '2♥' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: '5♣' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '5♣' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '6♣' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pass' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'X' })).toBeDisabled();
   });
 
-  it('expands the fold to reveal all 38 targets', async () => {
+  it('expands the fold to reveal every level above the window', async () => {
     const { container } = render(
       <BidBox legalCalls={legal} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: /levels 5–7/i }));
+    await userEvent.click(screen.getByRole('button', { name: /levels 6–7/i }));
     expect(screen.getByRole('button', { name: '7NT' })).toBeInTheDocument();
-    expect(container.querySelectorAll('button.bid')).toHaveLength(38);
+    // levels 2–7 (30 bids) + Pass/X/XX — level 1 stays gone, fold or not
+    expect(container.querySelectorAll('button.bid')).toHaveLength(33);
   });
 
-  it('auto-expands when every legal bid lives above level 4', () => {
-    // pathological auction already at 5♦: legal bids are 5♥+ only
-    const highOnly = [0, ...Array.from({ length: 11 }, (_, i) => i + 27)];
-    render(<BidBox legalCalls={highOnly} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />);
-    expect(screen.getByRole('button', { name: '7NT' })).toBeInTheDocument();
+  it('names a single folded level in the singular', () => {
+    // auction at 2NT: the window is 3–6, so only level 7 is left below the fold
+    const from3 = [0, ...Array.from({ length: 25 }, (_, i) => i + 13)];
+    render(<BidBox legalCalls={from3} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />);
+    expect(screen.getByRole('button', { name: /▾ level 7 below the fold ▾/ })).toBeInTheDocument();
+  });
+
+  it('shrinks to the levels that are left when the auction is already high', () => {
+    // auction at 5♦: legal bids are 5♥+ only, so the box is three rows with no fold
+    const highOnly = [0, ...Array.from({ length: 13 }, (_, i) => i + 25)];
+    const { container } = render(
+      <BidBox legalCalls={highOnly} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    expect(screen.getByRole('button', { name: '5♣' })).toBeDisabled(); // its row still aligns
+    expect(screen.getByRole('button', { name: '7NT' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '4♠' })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('.grid')).toHaveLength(3);
+    expect(container.querySelector('.bidbox-fold')).toBeNull();
+  });
+
+  it('lets an opened fold lapse once the auction climbs past the window it was opened on', async () => {
+    // BidBox stays mounted between the human's turns, so a sticky `expanded`
+    // would undo the windowing for the whole rest of the auction after one tap.
+    const { container, rerender } = render(
+      <BidBox legalCalls={legal} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /levels 6–7/i }));
+    expect(container.querySelectorAll('.grid')).toHaveLength(6); // levels 2–7
+    // …the auction moves on to 2NT, and the box is back to its four-row window
+    const from3 = [0, ...Array.from({ length: 25 }, (_, i) => i + 13)];
+    rerender(
+      <BidBox legalCalls={from3} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    expect(container.querySelectorAll('.grid')).toHaveLength(4); // levels 3–6
+    expect(screen.getByRole('button', { name: /below the fold/ })).toBeInTheDocument();
+  });
+
+  it('spends down to a single row at the top of the ladder', () => {
+    // 7NT has been bid: nothing leveled is legal, so the window is the one
+    // level that could still hold a bid rather than twenty dead buttons at the
+    // bottom of the ladder. Pass/X/XX live outside it and stay live.
+    const { container } = render(
+      <BidBox legalCalls={[0, 1]} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    expect(container.querySelectorAll('.grid')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '7NT' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '1♣' })).not.toBeInTheDocument();
+    expect(container.querySelector('.bidbox-fold')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Pass' })).toBeEnabled();
   });
 
   it('two-step commit: select shows the confirm CTA; confirm disabled without a selection', async () => {

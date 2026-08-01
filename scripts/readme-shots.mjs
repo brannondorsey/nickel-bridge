@@ -21,7 +21,7 @@
  * for retina, except the desktop one.
  */
 import { chromium } from 'playwright';
-import { BID_OFFSET, auctionState } from '../packages/core/dist/index.js';
+import { BID_OFFSET, auctionState, callName } from '../packages/core/dist/index.js';
 import { Bidder, loadPolicyModel } from '../packages/ai/dist/index.js';
 
 const base = process.argv[2] ?? 'http://localhost:3997';
@@ -156,9 +156,12 @@ if (!featured) {
 // 01 — bidding: a call selected, its SAYC meaning read before you commit
 await page.goto(`${base}/t/${tid}/b/${featured}`);
 await page.waitForSelector('.bidbox', { timeout: 30000 });
-if (best >= 23) await page.click('.bidbox-fold'); // levels 5–7 sit below the fold
-// .grid holds the 35 contract bids in call order, so call → button is direct.
-await page.locator('.bidbox .grid button.bid').nth(best - BID_OFFSET).click();
+// The box shows a sliding four-level window from the cheapest legal bid, so a
+// button's index in .grid depends on the auction — address it by its label and
+// open the fold only when the target sits above the window.
+const target = page.locator(`.bidbox button.bid[aria-label="${callName(best)}"]`);
+if (!(await target.count())) await page.click('.bidbox-fold');
+await target.click();
 await page.waitForSelector('.meaning-panel .mtitle');
 await page.waitForTimeout(400);
 await shot('01-bidding-meaning');
