@@ -7,7 +7,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { trackedUrl, useAnalytics } from './analytics';
+import type { Me } from './api';
+import { reportsAnalytics, trackedUrl, useAnalytics } from './analytics';
 
 /** Rows queued for Matomo so far, as `[method, ...args]` tuples. */
 const commands = () => (window._paq ?? []).map((row) => row as unknown[]);
@@ -21,6 +22,27 @@ beforeEach(() => {
 
 afterEach(() => {
   delete window._paq;
+});
+
+describe('reportsAnalytics', () => {
+  const me = (over: Partial<Me> = {}): Me => ({ user: null, ...over });
+
+  it('reports on a plain deployment, signed in or not', () => {
+    expect(reportsAnalytics(me())).toBe(true);
+    expect(reportsAnalytics(me({ googleAuth: true }))).toBe(true);
+  });
+
+  it('never reports from the demo app or a PR preview', () => {
+    expect(reportsAnalytics(me({ demo: true }))).toBe(false);
+    expect(reportsAnalytics(me({ devAuth: true }))).toBe(false);
+  });
+
+  it('fails CLOSED on an unresolved /api/me — in flight or failed', () => {
+    // api.me() throws on any non-2xx, so App.tsx's `loaded` flips with `me`
+    // still null. Reading the flags off null would answer "not demo, not
+    // devAuth" and report a preview into the production site.
+    expect(reportsAnalytics(null)).toBe(false);
+  });
 });
 
 describe('trackedUrl', () => {

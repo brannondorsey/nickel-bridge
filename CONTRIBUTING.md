@@ -489,6 +489,12 @@ none of that needs to leave infrastructure this project already runs. Four thing
   check on purpose: the production origin stays out of the bundle, and `App.tsx` already awaits
   `/api/me` before rendering. `matomo.js` is loaded lazily on the first tracked view, so a
   preview never requests it at all. Local development is excluded by hostname on top of that.
+  **The gate is `reportsAnalytics(me)`, and it fails CLOSED** — the one part of this worth
+  reading twice. `null` is not "a deployment with no flags set": `api.me()` throws on any
+  non-2xx and `refresh()`'s `.finally` flips `loaded` regardless, so a cold-start 5xx while the
+  Fly machine wakes leaves `me` null with the app rendering. Testing the flags on that gives
+  `!undefined && !undefined` — true — which would report a preview into the production site,
+  and the site id is hardcoded. An unknown deployment therefore reports nothing.
 - **The tracked URL is path plus `?term=` and nothing else.** The term sheet is a search param
   on whatever route you're reading (`GlossaryContext`), so dropping the query would collapse
   ~125 term reads — the most useful thing here — into the page they were opened from. Every

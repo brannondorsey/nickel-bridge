@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { Me, api } from './api';
-import { useAnalytics } from './analytics';
+import { reportsAnalytics, useAnalytics } from './analytics';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
 import { SignInBar } from './components/ds/SignInBar';
@@ -149,10 +149,12 @@ export default function App() {
 
   // Analytics (self-hosted Matomo, see analytics.ts). A client-rendered SPA
   // has to report its own navigations — the stock snippet would record one hit
-  // per visit and miss every screen after the entry one. Gated on `loaded` as
-  // well as the flags, because until /api/me answers we don't yet know whether
-  // this is production or a throwaway deployment whose traffic must not report.
-  useAnalytics({ enabled: loaded && !me?.demo && !me?.devAuth, pathname, search });
+  // per visit and miss every screen after the entry one. The gate is
+  // reportsAnalytics rather than a flag test written out here, because "we
+  // don't know yet" and "we couldn't find out" both have to resolve to OFF:
+  // `me` is null while /api/me is in flight AND after it fails, and reading
+  // the flags off null would report a preview into the production site.
+  useAnalytics({ enabled: reportsAnalytics(me), pathname, search });
 
   // Scroll offset belongs to the page you left, not the one you asked for.
   // A router navigation swaps the DOM without touching the window, so a link

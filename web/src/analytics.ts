@@ -45,6 +45,7 @@
  * neither flag set would otherwise report into the live site.
  */
 import { useEffect, useRef } from 'react';
+import type { Me } from './api';
 
 /** Our Matomo instance. Trailing slash included — both URLs below append to it. */
 const MATOMO_ORIGIN = 'https://piwik.brannon.online/';
@@ -101,6 +102,27 @@ function loadMatomo(): void {
   script.defer = true;
   script.src = `${MATOMO_ORIGIN}matomo.js`;
   document.head.appendChild(script);
+}
+
+/**
+ * Does this deployment report at all?
+ *
+ * Note what it takes to say yes: a RESOLVED `/api/me`, saying neither demo nor
+ * DEV_AUTH. `null` is not "a deployment with no flags set" — it is App.tsx
+ * before the request lands, and equally App.tsx after it FAILED, since
+ * `api.me()` throws on any non-2xx and refresh()'s `.finally` flips `loaded`
+ * either way. Reading the flags off a null `me` gives `!undefined && !undefined`
+ * — true — so the gate would turn analytics ON in exactly the case where the
+ * app could not tell whether this is production or a preview, and the site id
+ * is hardcoded. A cold-start 5xx while the Fly machine wakes is a realistic
+ * way to reach that, so this fails CLOSED: an unknown deployment reports
+ * nothing, which costs a few page views on a bad request and never puts
+ * preview or demo traffic into the production site. Same shape as
+ * pages/Scenarios.tsx's `Boolean(me?.demo)`, which hides the demo gallery
+ * rather than guessing.
+ */
+export function reportsAnalytics(me: Me | null): boolean {
+  return me != null && !me.demo && !me.devAuth;
 }
 
 /**
