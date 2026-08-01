@@ -77,10 +77,12 @@ describe('useAnalytics', () => {
     expect(injected()[0].getAttribute('src')).toContain('googletagmanager.com/gtag/js?id=G-');
     expect(names()).toEqual(['js:', 'config:G-ZTL1SZ7ZKZ', 'event:page_view']);
 
-    // The config must suppress gtag's own load-time page view, or the entry
-    // URL is counted twice and every later screen still goes unrecorded.
+    // Two non-default settings, both load-bearing: suppress gtag's own
+    // load-time page view (or the entry URL is counted twice and every later
+    // screen still goes unrecorded), and store nothing on the device (no _ga
+    // cookie, so the session stays the only cookie the app sets).
     const config = commands().find((row) => row[0] === 'config');
-    expect(config?.[2]).toMatchObject({ send_page_view: false });
+    expect(config?.[2]).toMatchObject({ send_page_view: false, client_storage: 'none' });
 
     const view = commands().find((row) => row[1] === 'page_view');
     expect(view?.[2]).toMatchObject({ page_location: `${window.location.origin}/glossary` });

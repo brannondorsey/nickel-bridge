@@ -8,13 +8,25 @@
  *
  * WHAT THIS MEANS FOR VISITORS, stated plainly because it is a real property of
  * the app rather than an implementation detail. Page views leave our
- * infrastructure and go to Google, tied to GA's own `_ga` cookies — so the app
- * now sets a cookie that isn't the session it can't work without, on a site
- * whose public surface is other people's handles, ratings and reading habits.
- * If that is ever revisited, the two dials are `client_storage: 'none'` in the
- * config below (no cookies, much weaker attribution) and Google's Consent Mode;
- * a cookie banner is the other half of that conversation. Today neither is
- * wired up, and this is the stock gtag.js behaviour.
+ * infrastructure and go to Google — but `client_storage: 'none'` in the config
+ * below means gtag.js stores nothing on the device, so the session cookie the
+ * app can't work without stays the only cookie it sets, on a site whose public
+ * surface is other people's handles, ratings and reading habits.
+ *
+ * The cost is real and worth knowing before reading any report: the client id
+ * lives in memory for one page load and is regenerated on the next. Within a
+ * visit that is fine — this is an SPA, so every navigation shares one id — but
+ * a reload, a return tomorrow, or a second tab is a brand-new "user" to GA. So
+ * Users ≈ page loads, returning-visitor/retention/cohort reports are
+ * meaningless, and acquisition attribution can't survive a session boundary.
+ * What stays honest is the thing this was added for: which pages and which
+ * glossary terms get read, and in what order within a visit.
+ *
+ * Note also what this does NOT settle. Storing nothing on the device is the
+ * ePrivacy/cookie-banner question; whether sending a visitor's IP and user
+ * agent to a US analytics provider needs a lawful basis under GDPR is a
+ * separate one this config does not answer. Consent Mode is the other dial if
+ * that is ever revisited.
  *
  * One thing it does NOT cost: the Fly machine. gtag.js is served by
  * googletagmanager.com and hits land on Google's collectors, so none of this
@@ -109,10 +121,18 @@ export function reportsAnalytics(me: Me | null): boolean {
 }
 
 /**
- * Load gtag.js and configure the property, once per page load. Deliberately
- * does NOT send a page view — `send_page_view: false`, because the first one
- * comes from `useAnalytics` like every other, so it carries the same URL
- * treatment as the rest.
+ * Load gtag.js and configure the property, once per page load. Two non-default
+ * settings, both load-bearing:
+ *
+ *   - `send_page_view: false`, because the first view comes from
+ *     `useAnalytics` like every other, so it carries the same URL treatment as
+ *     the rest. Left on, gtag would send its own view of the entry URL and
+ *     every visit would be double-counted at its front door.
+ *   - `client_storage: 'none'`, so gtag.js writes no `_ga` cookies and nothing
+ *     to localStorage. See this file's header for what that costs — Users
+ *     becomes roughly page loads, and nothing joins two visits by the same
+ *     person. Deliberate: reading it back is not worth being the first
+ *     non-essential cookie the app sets.
  *
  * Idempotency is a DOM check rather than a module flag so that the tag itself
  * is the record — a second call after a hot reload, or in a second test in the
@@ -126,7 +146,7 @@ function loadGtag(): void {
   script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
   document.head.appendChild(script);
   gtag('js', new Date());
-  gtag('config', MEASUREMENT_ID, { send_page_view: false });
+  gtag('config', MEASUREMENT_ID, { send_page_view: false, client_storage: 'none' });
 }
 
 /**

@@ -502,12 +502,15 @@ to the GA property `G-ZTL1SZ7ZKZ`. Four things about it:
   the glossary's own numbers knowing that closing a sheet reports the page underneath again —
   ten terms opened off the index is eleven views of `/glossary` — since each is a real
   navigation and the dedupe is one slot deep, not a history.
-- **This sets cookies and sends visitor data to Google**, which is a property of the app rather
-  than a detail of this file: GA's `_ga` cookies are the first the app sets that aren't the
-  session it can't work without, on a site whose public surface is other people's handles,
-  ratings and reading habits. No cookie banner and no Consent Mode are wired up today. The two
-  dials if that is revisited are `client_storage: 'none'` in the config (no cookies, much
-  weaker attribution) and Consent Mode.
+- **It is cookieless** (`client_storage: 'none'`), so gtag.js writes no `_ga` cookie and
+  nothing to localStorage — the session cookie stays the only one the app sets. Know what that
+  costs before reading a report: the client id lives in memory for one page load, so a whole
+  SPA visit shares one id but a reload, a return tomorrow or a second tab is a new "user".
+  **Users ≈ page loads**, and retention, cohort and cross-session attribution reports are
+  meaningless; which pages and which glossary terms get read, in order, within a visit, stays
+  honest. Note what it doesn't settle: storing nothing on the device answers the
+  cookie-banner/ePrivacy question, not whether sending a visitor's IP and user agent to a US
+  analytics provider needs a lawful basis under GDPR. Consent Mode is the other dial.
 
 None of this costs the Fly machine anything, and it's outside the Cloudflare rules below for
 the same reason: `gtag.js` is served by googletagmanager.com and hits land on Google's
