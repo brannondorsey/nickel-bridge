@@ -215,8 +215,12 @@ export default function Compare() {
       <span className="cmp-vs">VS</span>
       <div className="cmp-side cmp-side-them">
         <div className="cmp-name-block cmp-name-block-them">
+          {/* The name ellipsises, the tag does not. Inlining the tag inside the
+              truncated text made text-overflow measure both together, so a
+              persona lost the tail of its handle AND got a HOUSE box clipped to
+              an empty outline. */}
           <div className="cmp-handle">
-            {them}
+            <span className="cmp-handle-name">{them}</span>
             {view.them.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
           </div>
           <div className="cmp-sub">{view.them.boards} boards</div>

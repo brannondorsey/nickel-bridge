@@ -2888,7 +2888,11 @@ a.stat-tile:hover {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1;
+  /* basis auto, not 0: an even split gives each side half the row, and the
+     viewer's side is always the short word "You" while the other can be a long
+     handle plus a HOUSE tag. Sizing from content first lets the longer side
+     borrow the slack instead of ellipsising against an empty half. */
+  flex: 1 1 auto;
 }
 .cmp-side-them {
   justify-content: flex-end;
@@ -2922,9 +2926,23 @@ a.stat-tile:hover {
   font-size: 13px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  /* Flex so the HOUSE tag sits beside the name rather than inside the ellipsised
+     run — see the comment at the markup. */
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.cmp-name-block-them .cmp-handle {
+  justify-content: flex-end;
+}
+.cmp-handle-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+.cmp-handle .house-tag {
+  flex: none;
 }
 .cmp-sub {
   font-size: 11px;
