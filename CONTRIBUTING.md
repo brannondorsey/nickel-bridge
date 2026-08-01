@@ -482,7 +482,13 @@ open tabs, the history and every bookmark all read the same. It uses the app's o
 tab has no typography, so caps there is just shouting, and the brand's period flavour stays
 out of functional copy. Screens that know more than the URL (a handle, a date) may set
 `document.title` themselves afterwards; that's a last-write-wins override this effect resets
-on the next navigation. **The constraint to respect: it must agree with
+on the next navigation. **`App.tsx` computes the title once and hands it to BOTH the tab and
+`useAnalytics`** — not two derivations of one value. React runs effects in hook-registration
+order and the analytics hook is registered first, so an ambient `document.title` read inside
+`trackPageView` reports every view against the *previous* screen's title, one navigation
+behind forever (and the first view of a deep-linked session against the shell's). Threading
+the value removes the ordering dependency rather than relying on someone preserving it;
+`analytics.test.ts` sets the tab to the wrong string and asserts the payload ignores it. **The constraint to respect: it must agree with
 `web/scripts/prerender.mjs` byte for byte** — a shared `/glossary/<slug>` link is served a
 static page whose `<title>` is already right and the SPA boots over it, so any difference
 shows up as the tab rewriting itself a beat later. So it isn't matched by hand: the prerender

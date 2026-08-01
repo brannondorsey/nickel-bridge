@@ -148,6 +148,19 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // This screen's title, computed ONCE and used by both the tab and the
+  // analytics page view below. Not two derivations of the same thing: the
+  // analytics hook registers its effect before the title effect, so if it read
+  // document.title instead of being handed this, every page view would carry
+  // the PREVIOUS screen's title — effects run in registration order, and the
+  // tab hasn't been updated yet when the view is sent.
+  //
+  // The gate matters: a signed-out visitor at a private URL is shown the
+  // LANDING page, not that route, so titling the tab "Crossing 17" would
+  // describe a screen they aren't looking at and can't reach. Public routes
+  // render for real either way, so those keep their own title.
+  const title = Boolean(me?.user) || isPublicPath(pathname) ? pageTitle(pathname, search) : HOME_TITLE;
+
   // Analytics (Google Analytics 4, see analytics.ts). A client-rendered SPA
   // has to send its own page views — gtag's config-time one would record a
   // single hit on the entry URL and miss every screen after it. The gate is
@@ -155,21 +168,15 @@ export default function App() {
   // don't know yet" and "we couldn't find out" both have to resolve to OFF:
   // `me` is null while /api/me is in flight AND after it fails, and reading
   // the flags off null would report a preview into the production property.
-  useAnalytics({ enabled: reportsAnalytics(me), pathname, search });
+  useAnalytics({ enabled: reportsAnalytics(me), pathname, search, title });
 
   // What the browser tab, the history entry and any bookmark say (pageTitle.ts).
   // Applied on every navigation, so a page that later refines the title with
   // data only it has — a handle, a date — is a last-write-wins override that
   // resets cleanly when you navigate away.
-  //
-  // The gate matters: a signed-out visitor at a private URL is shown the
-  // LANDING page, not that route, so titling the tab "Crossing 17" would
-  // describe a screen they aren't looking at and can't reach. Public routes
-  // render for real either way, so those keep their own title.
-  const titled = Boolean(me?.user) || isPublicPath(pathname);
   useEffect(() => {
-    document.title = titled ? pageTitle(pathname, search) : HOME_TITLE;
-  }, [titled, pathname, search]);
+    document.title = title;
+  }, [title]);
 
   // Scroll offset belongs to the page you left, not the one you asked for.
   // A router navigation swaps the DOM without touching the window, so a link
