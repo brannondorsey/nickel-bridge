@@ -303,15 +303,22 @@ function rateMeasure(
   const pctA = a.n ? (a.made / a.n) * 100 : null;
   const pctB = b.n ? (b.made / b.n) * 100 : null;
   const gate = combine(rateSe(a.made, a.n), rateSe(b.made, b.n)) * 100 * GATE_SIGMA;
-  const margin = pctA !== null && pctB !== null ? pctA - pctB : 0;
+  const dispA = pctA === null ? null : Math.round(pctA);
+  const dispB = pctB === null ? null : Math.round(pctB);
+  // The margin is the difference of the DISPLAYED (rounded) figures, not the
+  // raw rates — matching bidAccuracy/avgPct/elo below, whose margins are also
+  // differences of already-rounded values. Subtracting the raw rates instead
+  // let a row print e.g. "71% vs 66%" (a 5-point gap by eye) while reporting
+  // a margin of 4.3, which reads as the page disagreeing with itself.
+  const margin = dispA !== null && dispB !== null ? dispA - dispB : 0;
   const { verdict, reason } =
-    pctA === null || pctB === null ? { verdict: 'aside' as Verdict, reason: 'no-data' as AsideReason } : classify(margin, gate, fullTilt);
+    dispA === null || dispB === null ? { verdict: 'aside' as Verdict, reason: 'no-data' as AsideReason } : classify(margin, gate, fullTilt);
   return {
     key,
     label,
     panel,
-    a: pctA === null ? null : Math.round(pctA),
-    b: pctB === null ? null : Math.round(pctB),
+    a: dispA,
+    b: dispB,
     unit: 'pct',
     margin: round1(margin),
     gate: wireGate(gate),
