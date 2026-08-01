@@ -498,7 +498,10 @@ to the GA property `G-ZTL1SZ7ZKZ`. Four things about it:
 - **The tracked URL is path plus `?term=` and nothing else.** The term sheet is a search param
   on whatever route you're reading (`GlossaryContext`), so dropping the query would collapse
   ~125 term reads — the most useful thing here — into the page they were opened from. Every
-  other param is discarded rather than enumerated. Path ids (`/t/17/b/3`) are left alone.
+  other param is discarded rather than enumerated. Path ids (`/t/17/b/3`) are left alone. Read
+  the glossary's own numbers knowing that closing a sheet reports the page underneath again —
+  ten terms opened off the index is eleven views of `/glossary` — since each is a real
+  navigation and the dedupe is one slot deep, not a history.
 - **This sets cookies and sends visitor data to Google**, which is a property of the app rather
   than a detail of this file: GA's `_ga` cookies are the first the app sets that aren't the
   session it can't work without, on a site whose public surface is other people's handles,

@@ -100,6 +100,27 @@ describe('useAnalytics', () => {
     });
   });
 
+  it('reports the page underneath again when a term sheet closes', () => {
+    // Deliberate, and the limit of what the one-slot `last` ref can do: it
+    // dedupes only a repeat of the URL just reported, so returning to
+    // /glossary after reading a term is three views rather than two. Each is
+    // a real navigation, and GA counts a return to a page as a view
+    // everywhere else in the app — pinned here so it stays a decision.
+    const { rerender } = renderHook(
+      (props: { search: string }) => useAnalytics({ enabled: true, pathname: '/glossary', ...props }),
+      { initialProps: { search: '' } },
+    );
+    window.dataLayer = [];
+
+    rerender({ search: '?term=finesse' });
+    rerender({ search: '' });
+
+    expect(commands().map((row) => (row[2] as { page_location: string }).page_location)).toEqual([
+      `${window.location.origin}/glossary?term=finesse`,
+      `${window.location.origin}/glossary`,
+    ]);
+  });
+
   it('does not re-report a re-render that changed no URL', () => {
     const { rerender } = renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
     window.dataLayer = [];

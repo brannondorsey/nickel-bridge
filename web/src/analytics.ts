@@ -173,9 +173,18 @@ function trackPageView(url: string, referrer: string | null): void {
  */
 export function useAnalytics(opts: { enabled: boolean; pathname: string; search: string }): void {
   const { enabled, pathname, search } = opts;
-  // The URL of the last view recorded, and the guard against recording the
-  // same one twice — App re-renders for reasons that have nothing to do with
-  // navigation, and a term sheet closing restores a URL already counted.
+  // The URL of the last view recorded. It guards against reporting the same
+  // URL twice in a row — App re-renders for reasons that have nothing to do
+  // with navigation, StrictMode double-invokes this effect, and `enabled`
+  // flipping re-runs it — and that is ALL it guards: one slot, not a history.
+  //
+  // So closing a term sheet does record a fresh view of the page underneath
+  // (/glossary → ?term=finesse → /glossary is three views, not two), and a
+  // reader opening ten terms off the index credits /glossary eleven times.
+  // That's kept deliberately: each of those is a real navigation the reader
+  // made, and GA counts a return to a page as a view everywhere else in the
+  // app. Suppressing it would need a history of visited URLs and would
+  // undercount genuine back-navigation to say something less true.
   const last = useRef<string | null>(null);
   useEffect(() => {
     if (!enabled || !isTrackableHost(window.location.hostname)) return;
