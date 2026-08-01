@@ -8,25 +8,29 @@
  *
  * WHAT THIS MEANS FOR VISITORS, stated plainly because it is a real property of
  * the app rather than an implementation detail. Page views leave our
- * infrastructure and go to Google — but `client_storage: 'none'` in the config
- * below means gtag.js stores nothing on the device, so the session cookie the
- * app can't work without stays the only cookie it sets, on a site whose public
- * surface is other people's handles, ratings and reading habits.
+ * infrastructure and go to Google, and whether that comes with a cookie depends
+ * on where the visitor is: Consent Mode defaults deny `analytics_storage` in
+ * CONSENT_REGIONS (the EEA and the UK, where analytics storage needs opt-in
+ * consent this app has no way to ask for) and grant it everywhere else. Ad
+ * storage is denied for everyone, in every region — the app runs no ads and
+ * there is nothing here worth an advertising cookie.
  *
- * The cost is real and worth knowing before reading any report: the client id
- * lives in memory for one page load and is regenerated on the next. Within a
- * visit that is fine — this is an SPA, so every navigation shares one id — but
- * a reload, a return tomorrow, or a second tab is a brand-new "user" to GA. So
- * Users ≈ page loads, returning-visitor/retention/cohort reports are
- * meaningless, and acquisition attribution can't survive a session boundary.
- * What stays honest is the thing this was added for: which pages and which
- * glossary terms get read, and in what order within a visit.
+ * So there are two populations in the reports, and reading them as one is the
+ * mistake this comment exists to prevent. A granted visitor carries a `_ga`
+ * cookie and behaves like normal GA: returning visits join up, retention and
+ * attribution mean what they say. A denied visitor stores nothing, so their
+ * client id lives in memory for one page load — an SPA visit shares one id, but
+ * a reload, a return tomorrow or a second tab is a brand-new "user", and GA
+ * receives cookieless pings it may model from. **Users is therefore inflated in
+ * the EEA/UK relative to everywhere else, and any retention or cohort figure
+ * that mixes the two is a blend of two different measurements.** Segment by
+ * region or don't read it. What is honest for everyone is the within-visit
+ * path: which pages and which glossary terms get read, and in what order.
  *
- * Note also what this does NOT settle. Storing nothing on the device is the
- * ePrivacy/cookie-banner question; whether sending a visitor's IP and user
+ * Note what this does NOT settle. Consent Mode answers the storage question —
+ * ePrivacy, the cookie-banner one. Whether sending a visitor's IP and user
  * agent to a US analytics provider needs a lawful basis under GDPR is a
- * separate one this config does not answer. Consent Mode is the other dial if
- * that is ever revisited.
+ * separate question this config does not answer, and no region list can.
  *
  * One thing it does NOT cost: the Fly machine. gtag.js is served by
  * googletagmanager.com and hits land on Google's collectors, so none of this
@@ -59,6 +63,29 @@ import type { Me } from './api';
 
 /** The GA4 measurement id for Nickel Bridge. */
 const MEASUREMENT_ID = 'G-ZTL1SZ7ZKZ';
+
+/**
+ * Where analytics storage is denied by default: the EEA (EU 27 + Iceland,
+ * Liechtenstein, Norway) and the UK. ISO 3166-1 country codes, which Consent
+ * Mode's `region` accepts alongside finer ISO 3166-2 subdivisions.
+ *
+ * The line these draw is ePrivacy's: storing or reading anything on a device
+ * needs opt-in consent there, and this app has no consent UI to ask with — so
+ * a visitor in one of these gets the cookieless treatment automatically rather
+ * than a banner. Everywhere else keeps the ordinary `_ga` cookie, which is
+ * what makes returning visitors visible at all.
+ *
+ * Switzerland is deliberately NOT here: the revised FADP requires transparency
+ * rather than ePrivacy-style opt-in for analytics storage. Add 'CH' if you'd
+ * rather be conservative than accurate — it costs one country's returning-user
+ * data and nothing else.
+ */
+const CONSENT_REGIONS = [
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
+  'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+  'IS', 'LI', 'NO',
+  'GB',
+];
 
 declare global {
   interface Window {
@@ -121,18 +148,26 @@ export function reportsAnalytics(me: Me | null): boolean {
 }
 
 /**
- * Load gtag.js and configure the property, once per page load. Two non-default
- * settings, both load-bearing:
+ * Queue the consent defaults, the `js` stamp and the config, then load
+ * gtag.js — once per page load.
  *
- *   - `send_page_view: false`, because the first view comes from
- *     `useAnalytics` like every other, so it carries the same URL treatment as
- *     the rest. Left on, gtag would send its own view of the entry URL and
- *     every visit would be double-counted at its front door.
- *   - `client_storage: 'none'`, so gtag.js writes no `_ga` cookies and nothing
- *     to localStorage. See this file's header for what that costs — Users
- *     becomes roughly page loads, and nothing joins two visits by the same
- *     person. Deliberate: reading it back is not worth being the first
- *     non-essential cookie the app sets.
+ * ORDER IS LOAD-BEARING. The consent defaults must be queued before the config
+ * command, or gtag applies its own defaults (storage granted everywhere) and
+ * the EEA/UK denial arrives too late to have prevented the cookie it exists to
+ * prevent. Queueing before the <script> tag is inserted isn't required —
+ * gtag.js replays the queue in order and can't execute until this synchronous
+ * block finishes — but it keeps the reading order the same as the running one.
+ *
+ * Two defaults, as Consent Mode resolves them (most specific region wins): the
+ * region-scoped one denies analytics storage across CONSENT_REGIONS, and the
+ * unscoped one grants it everywhere else. Ad storage is denied in both, in
+ * every region — the app runs no ads under any flag, so there is nothing here
+ * an advertising cookie could be for.
+ *
+ * `send_page_view: false` is the other non-default: the first view comes from
+ * `useAnalytics` like every other, so it carries the same URL treatment as the
+ * rest. Left on, gtag would send its own view of the entry URL and every visit
+ * would be double-counted at its front door.
  *
  * Idempotency is a DOM check rather than a module flag so that the tag itself
  * is the record — a second call after a hot reload, or in a second test in the
@@ -140,13 +175,16 @@ export function reportsAnalytics(me: Me | null): boolean {
  */
 function loadGtag(): void {
   if (document.querySelector('script[data-gtag]')) return;
+  const noAds = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' } as const;
+  gtag('consent', 'default', { ...noAds, analytics_storage: 'denied', region: CONSENT_REGIONS });
+  gtag('consent', 'default', { ...noAds, analytics_storage: 'granted' });
+  gtag('js', new Date());
+  gtag('config', MEASUREMENT_ID, { send_page_view: false });
   const script = document.createElement('script');
   script.dataset.gtag = '';
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
   document.head.appendChild(script);
-  gtag('js', new Date());
-  gtag('config', MEASUREMENT_ID, { send_page_view: false, client_storage: 'none' });
 }
 
 /**

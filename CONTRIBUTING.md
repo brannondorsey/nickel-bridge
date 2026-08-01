@@ -502,15 +502,20 @@ to the GA property `G-ZTL1SZ7ZKZ`. Four things about it:
   the glossary's own numbers knowing that closing a sheet reports the page underneath again —
   ten terms opened off the index is eleven views of `/glossary` — since each is a real
   navigation and the dedupe is one slot deep, not a history.
-- **It is cookieless** (`client_storage: 'none'`), so gtag.js writes no `_ga` cookie and
-  nothing to localStorage — the session cookie stays the only one the app sets. Know what that
-  costs before reading a report: the client id lives in memory for one page load, so a whole
-  SPA visit shares one id but a reload, a return tomorrow or a second tab is a new "user".
-  **Users ≈ page loads**, and retention, cohort and cross-session attribution reports are
-  meaningless; which pages and which glossary terms get read, in order, within a visit, stays
-  honest. Note what it doesn't settle: storing nothing on the device answers the
-  cookie-banner/ePrivacy question, not whether sending a visitor's IP and user agent to a US
-  analytics provider needs a lawful basis under GDPR. Consent Mode is the other dial.
+- **Cookies are region-conditional, via Consent Mode defaults.** `analytics_storage` is denied
+  across `CONSENT_REGIONS` (the EEA + the UK, where storing anything on a device needs opt-in
+  consent this app has no UI to ask for) and granted everywhere else; ad storage is denied in
+  every region, since the app runs no ads. Order is load-bearing — both defaults are queued
+  **before** the config command, or gtag grants storage everywhere first and the denial arrives
+  too late; a test pins that. **This puts two populations in one property**, which is the part
+  worth knowing before reading a report: a granted visitor carries `_ga` and behaves like
+  normal GA, while a denied visitor stores nothing, so their client id lasts one page load and
+  a reload or a next-day return is a new "user". Users is inflated in the EEA/UK relative to
+  elsewhere, and any retention or cohort figure mixing the two is a blend of two different
+  measurements — segment by region or don't read it. The within-visit path (which pages, which
+  glossary terms, in what order) is honest for everyone. Note what none of this settles:
+  Consent Mode answers the storage/ePrivacy question, not whether sending a visitor's IP and
+  user agent to a US analytics provider needs a lawful basis under GDPR.
 
 None of this costs the Fly machine anything, and it's outside the Cloudflare rules below for
 the same reason: `gtag.js` is served by googletagmanager.com and hits land on Google's

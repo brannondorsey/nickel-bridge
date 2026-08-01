@@ -66,6 +66,50 @@ describe('trackedUrl', () => {
   });
 });
 
+describe('consent defaults', () => {
+  /** The consent rows, in queue order, after one enabled render. */
+  function consentRows() {
+    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
+    return commands()
+      .filter((row) => row[0] === 'consent')
+      .map((row) => row[2] as Record<string, unknown>);
+  }
+
+  it('denies analytics storage across the EEA and the UK, and grants it elsewhere', () => {
+    const [scoped, fallback] = consentRows();
+
+    expect(scoped).toMatchObject({ analytics_storage: 'denied' });
+    const region = scoped.region as string[];
+    // Spot-check rather than restate the list: a member state, the three EEA
+    // non-members, the UK, and one country that must NOT be in it.
+    expect(region).toEqual(expect.arrayContaining(['DE', 'FR', 'IS', 'LI', 'NO', 'GB']));
+    expect(region).not.toContain('US');
+
+    // Unscoped, so it applies everywhere the row above didn't claim.
+    expect(fallback).toMatchObject({ analytics_storage: 'granted' });
+    expect(fallback).not.toHaveProperty('region');
+  });
+
+  it('denies advertising storage in every region — the app runs no ads', () => {
+    for (const row of consentRows()) {
+      expect(row).toMatchObject({
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      });
+    }
+  });
+
+  it('queues both defaults before the config command', () => {
+    // Consent Mode applies defaults to configs that follow them. Queued after,
+    // gtag would have already granted storage everywhere and the EEA/UK denial
+    // would arrive too late to prevent the cookie it exists to prevent.
+    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
+    const order = commands().map((row) => row[0]);
+    expect(order.lastIndexOf('consent')).toBeLessThan(order.indexOf('config'));
+  });
+});
+
 describe('useAnalytics', () => {
   it('loads gtag.js once, configures with send_page_view off, and sends the view itself', () => {
     const { rerender } = renderHook(
@@ -75,14 +119,19 @@ describe('useAnalytics', () => {
 
     expect(injected()).toHaveLength(1);
     expect(injected()[0].getAttribute('src')).toContain('googletagmanager.com/gtag/js?id=G-');
-    expect(names()).toEqual(['js:', 'config:G-ZTL1SZ7ZKZ', 'event:page_view']);
+    // Consent defaults FIRST — see the ordering note in loadGtag.
+    expect(names()).toEqual([
+      'consent:default',
+      'consent:default',
+      'js:',
+      'config:G-ZTL1SZ7ZKZ',
+      'event:page_view',
+    ]);
 
-    // Two non-default settings, both load-bearing: suppress gtag's own
-    // load-time page view (or the entry URL is counted twice and every later
-    // screen still goes unrecorded), and store nothing on the device (no _ga
-    // cookie, so the session stays the only cookie the app sets).
+    // Suppress gtag's own load-time page view, or the entry URL is counted
+    // twice and every later screen still goes unrecorded.
     const config = commands().find((row) => row[0] === 'config');
-    expect(config?.[2]).toMatchObject({ send_page_view: false, client_storage: 'none' });
+    expect(config?.[2]).toMatchObject({ send_page_view: false });
 
     const view = commands().find((row) => row[1] === 'page_view');
     expect(view?.[2]).toMatchObject({ page_location: `${window.location.origin}/glossary` });
