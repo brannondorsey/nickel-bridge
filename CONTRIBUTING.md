@@ -79,7 +79,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 against it, and web imports it too; dependency-free on purpose, see
                 "Discoverability" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
-                api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
+                api.ts (typed API client), analytics.ts (the Google Analytics tag +
+                its SPA page-view hook — see "Analytics" below),
+                splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
                 device-local axis, orthogonal to theme.ts — see "Night mode" below),
@@ -469,6 +471,55 @@ Raw samples are age-dependent too (15s yesterday, 30s a few days back, 60s a wee
 samples dropped rather than merely thinned), so **two days at different resolutions are not
 comparable** and a before/after baseline has to be recorded while it is fresh.
 `scripts/fly-uptime.mjs` does all of that and prints the resolution it inferred per row.
+
+**Analytics is Google Analytics 4 (`web/src/analytics.ts`), and nothing else.** Page views go
+to the GA property `G-ZTL1SZ7ZKZ`. Four things about it:
+
+- **The stock `gtag('config', …)` snippet is wrong for this app** and was deliberately not used
+  as-is. It sends one page view at config time, so a client-rendered SPA records every visit as
+  a single hit on the entry URL and never sees the glossary terms read, the tour walked or the
+  boards played after it. The config here sets `send_page_view: false`, and `useAnalytics`
+  (called from `App.tsx`) sends every view itself — including the first — off router state.
+  Enhanced measurement (outbound clicks, scroll depth) is configured in the GA property, not
+  here; unlike Matomo's link tracking it needs no re-arming per navigation.
+- **It is off on throwaway deployments**, gated on `/api/me`'s `demo`/`devAuth` — the same
+  signal `seo.ts`'s `throwaway` uses to shut crawlers out of the demo app and PR previews,
+  whose traffic is bots, seeders and click-testing. That's a round trip rather than a hostname
+  check on purpose: the production origin stays out of the bundle, and `App.tsx` already awaits
+  `/api/me` before rendering. `gtag.js` is loaded lazily on the first tracked view, so a
+  preview never requests it at all. Local development is excluded by hostname on top of that.
+  **The gate is `reportsAnalytics(me)`, and it fails CLOSED** — the one part of this worth
+  reading twice. `null` is not "a deployment with no flags set": `api.me()` throws on any
+  non-2xx and `refresh()`'s `.finally` flips `loaded` regardless, so a cold-start 5xx while the
+  Fly machine wakes leaves `me` null with the app rendering. Testing the flags on that gives
+  `!undefined && !undefined` — true — which would report a preview into the production
+  property, and the measurement id is hardcoded. An unknown deployment therefore reports
+  nothing.
+- **The tracked URL is path plus `?term=` and nothing else.** The term sheet is a search param
+  on whatever route you're reading (`GlossaryContext`), so dropping the query would collapse
+  ~125 term reads — the most useful thing here — into the page they were opened from. Every
+  other param is discarded rather than enumerated. Path ids (`/t/17/b/3`) are left alone. Read
+  the glossary's own numbers knowing that closing a sheet reports the page underneath again —
+  ten terms opened off the index is eleven views of `/glossary` — since each is a real
+  navigation and the dedupe is one slot deep, not a history.
+- **Cookies are region-conditional, via Consent Mode defaults.** `analytics_storage` is denied
+  across `CONSENT_REGIONS` (the EEA + the UK, where storing anything on a device needs opt-in
+  consent this app has no UI to ask for) and granted everywhere else; ad storage is denied in
+  every region, since the app runs no ads. Order is load-bearing — both defaults are queued
+  **before** the config command, or gtag grants storage everywhere first and the denial arrives
+  too late; a test pins that. **This puts two populations in one property**, which is the part
+  worth knowing before reading a report: a granted visitor carries `_ga` and behaves like
+  normal GA, while a denied visitor stores nothing, so their client id lasts one page load and
+  a reload or a next-day return is a new "user". Users is inflated in the EEA/UK relative to
+  elsewhere, and any retention or cohort figure mixing the two is a blend of two different
+  measurements — segment by region or don't read it. The within-visit path (which pages, which
+  glossary terms, in what order) is honest for everyone. Note what none of this settles:
+  Consent Mode answers the storage/ePrivacy question, not whether sending a visitor's IP and
+  user agent to a US analytics provider needs a lawful basis under GDPR.
+
+None of this costs the Fly machine anything, and it's outside the Cloudflare rules below for
+the same reason: `gtag.js` is served by googletagmanager.com and hits land on Google's
+collectors, so no analytics request wakes or holds the app's dedicated core.
 
 **The edge (Cloudflare) is derived from `seo.ts`, like everything else that answers "is this
 URL crawlable?"** The measurement behind it: production ran 20.1 h/day and the demo app —
