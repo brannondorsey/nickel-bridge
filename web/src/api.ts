@@ -518,12 +518,15 @@ const SUIT_CLASSES = ['suit-s', 'suit-h', 'suit-d', 'suit-c'];
 export const suitClass = (suit: number) => SUIT_CLASSES[suit];
 /** strain (♣♦♥♠NT bid order) → color class */
 export const strainClass = (strain: number) => (strain === 4 ? 'suit-nt' : SUIT_CLASSES[3 - strain]);
+/** a leveled bid (1♣–7NT) rather than Pass/X/XX */
+export const isBid = (call: number) => call >= 3;
+/** contract level (1–7) of a leveled bid — meaningless for Pass/X/XX */
+export const bidLevel = (call: number) => Math.floor((call - 3) / 5) + 1;
 export const callDisplay = (call: number): string => {
   if (call === 0) return 'Pass';
   if (call === 1) return 'X';
   if (call === 2) return 'XX';
-  const level = Math.floor((call - 3) / 5) + 1;
-  return `${level}${STRAIN_SYMBOLS[(call - 3) % 5]}`;
+  return `${bidLevel(call)}${STRAIN_SYMBOLS[(call - 3) % 5]}`;
 };
 export const makeBid = (level: number, strain: number) => 3 + (level - 1) * 5 + strain;
 

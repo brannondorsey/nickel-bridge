@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
-import { callDisplay } from '../../api';
+import { bidLevel, callDisplay, isBid, makeBid } from '../../api';
 import { CallText } from './CallText';
+
+/** how many level rows the box shows before folding the rest away */
+const VISIBLE_LEVELS = 4;
 
 /**
  * The 38-call bid box, shown as a sliding window of VISIBLE_LEVELS level rows.
@@ -20,12 +23,6 @@ import { CallText } from './CallText';
  * play) while the confirm CTA remains an equal path. Class names
  * .bidbox/.bid/.callrow/.confirm-row are selected on by the e2e smoke test.
  */
-/** how many level rows the box shows before folding the rest away */
-const VISIBLE_LEVELS = 4;
-/** calls 3..37 are the 35 leveled bids, five strains per level, 1♣ = 3 */
-const levelOf = (call: number) => Math.floor((call - 3) / 5) + 1;
-const firstCallOfLevel = (level: number) => 3 + (level - 1) * 5;
-
 export function BidBox({
   legalCalls,
   selected,
@@ -47,8 +44,8 @@ export function BidBox({
   // leveled bid legal at all (the auction is one pass from over) the ladder is
   // moot, so fall back to the opening window rather than an empty box.
   const firstLevel = useMemo(() => {
-    const bids = legalCalls.filter((c) => c >= 3);
-    return bids.length > 0 ? levelOf(Math.min(...bids)) : 1;
+    const bids = legalCalls.filter(isBid);
+    return bids.length > 0 ? bidLevel(Math.min(...bids)) : 1;
   }, [legalCalls]);
   const [expanded, setExpanded] = useState(false);
   const lastLevel = expanded ? 7 : Math.min(7, firstLevel + VISIBLE_LEVELS - 1);
@@ -74,7 +71,7 @@ export function BidBox({
       <div className="bidbox">
         {Array.from({ length: lastLevel - firstLevel + 1 }, (_, i) => firstLevel + i).map((level) => (
           <div className="grid" key={level}>
-            {Array.from({ length: 5 }, (_, i) => firstCallOfLevel(level) + i).map(bidButton)}
+            {Array.from({ length: 5 }, (_, strain) => makeBid(level, strain)).map(bidButton)}
           </div>
         ))}
         {lastLevel < 7 && (
