@@ -221,6 +221,37 @@ describe('BidBox', () => {
     expect(container.querySelector('.bidbox-fold')).toBeNull();
   });
 
+  it('lets an opened fold lapse once the auction climbs past the window it was opened on', async () => {
+    // BidBox stays mounted between the human's turns, so a sticky `expanded`
+    // would undo the windowing for the whole rest of the auction after one tap.
+    const { container, rerender } = render(
+      <BidBox legalCalls={legal} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /levels 6–7/i }));
+    expect(container.querySelectorAll('.grid')).toHaveLength(6); // levels 2–7
+    // …the auction moves on to 2NT, and the box is back to its four-row window
+    const from3 = [0, ...Array.from({ length: 25 }, (_, i) => i + 13)];
+    rerender(
+      <BidBox legalCalls={from3} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    expect(container.querySelectorAll('.grid')).toHaveLength(4); // levels 3–6
+    expect(screen.getByRole('button', { name: /below the fold/ })).toBeInTheDocument();
+  });
+
+  it('spends down to a single row at the top of the ladder', () => {
+    // 7NT has been bid: nothing leveled is legal, so the window is the one
+    // level that could still hold a bid rather than twenty dead buttons at the
+    // bottom of the ladder. Pass/X/XX live outside it and stay live.
+    const { container } = render(
+      <BidBox legalCalls={[0, 1]} selected={null} onSelect={() => {}} onConfirm={() => {}} busy={false} />,
+    );
+    expect(container.querySelectorAll('.grid')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '7NT' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '1♣' })).not.toBeInTheDocument();
+    expect(container.querySelector('.bidbox-fold')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Pass' })).toBeEnabled();
+  });
+
   it('two-step commit: select shows the confirm CTA; confirm disabled without a selection', async () => {
     const onSelect = vi.fn();
     const onConfirm = vi.fn();

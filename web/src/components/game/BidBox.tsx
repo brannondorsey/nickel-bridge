@@ -13,10 +13,11 @@ const VISIBLE_LEVELS = 4;
  * are dead weight, not "maybe later" targets. The window therefore STARTS at
  * the level holding the lowest legal bid and is never expandable downward:
  * there is nothing to reveal. Levels above the window sit behind the in-place
- * fold, so the box is at most VISIBLE_LEVELS rows tall and gets SHORTER as the
- * auction climbs, which is the whole point — the docked box (.bidding-dock)
- * eats the auction's scroll region, and a slam auction used to render all
- * seven rows with 20+ of them greyed out, pushing the auction off screen.
+ * fold, so unless the reader opens it the box is at most VISIBLE_LEVELS rows
+ * tall and gets SHORTER as the auction climbs, which is the whole point — the
+ * docked box (.bidding-dock) eats the auction's scroll region, and a slam
+ * auction used to render all seven rows with 20+ of them greyed out, pushing
+ * the auction off screen.
  *
  * Every tap just calls onSelect; the parent decides select-vs-commit, so a
  * second tap on the already-selected call bids it (tap-to-bid, mirroring card
@@ -40,14 +41,24 @@ export function BidBox({
   hint?: number | null;
 }) {
   const legal = useMemo(() => new Set(legalCalls), [legalCalls]);
-  // Where the window starts: the level of the cheapest still-legal bid. With no
-  // leveled bid legal at all (the auction is one pass from over) the ladder is
-  // moot, so fall back to the opening window rather than an empty box.
+  // Where the window starts: the level of the cheapest still-legal bid. The one
+  // auction with no leveled bid legal at all is 7NT, the TOP of the ladder — so
+  // it falls back to 7, one spent row, rather than an empty box (nothing to
+  // show) or level 1 (twenty dead buttons and a fold promising fifteen more).
   const firstLevel = useMemo(() => {
     const bids = legalCalls.filter(isBid);
-    return bids.length > 0 ? bidLevel(Math.min(...bids)) : 1;
+    return bids.length > 0 ? bidLevel(Math.min(...bids)) : 7;
   }, [legalCalls]);
-  const [expanded, setExpanded] = useState(false);
+  // The fold is a per-decision affordance — someone reaching for a slam this
+  // turn hasn't asked to be shown levels 5-7 for the rest of the auction. So we
+  // remember the window it was opened on, and the expansion LAPSES when the
+  // auction climbs past it. Left sticky, one tap during a preempt would undo
+  // the windowing for every later turn, which is the bug this box exists to
+  // fix; BidBox stays mounted between the human's turns (Board.tsx swaps in
+  // "Robots are thinking…" only when the response says it's not our turn, and
+  // mid-auction it never does), so nothing else would ever reset it.
+  const [expandedAt, setExpandedAt] = useState<number | null>(null);
+  const expanded = expandedAt === firstLevel;
   const lastLevel = expanded ? 7 : Math.min(7, firstLevel + VISIBLE_LEVELS - 1);
 
   // While a call is in flight (busy) every button locks: a click landing on a
@@ -75,7 +86,7 @@ export function BidBox({
           </div>
         ))}
         {lastLevel < 7 && (
-          <button type="button" className="bidbox-fold" onClick={() => setExpanded(true)}>
+          <button type="button" className="bidbox-fold" onClick={() => setExpandedAt(firstLevel)}>
             ▾ {lastLevel === 6 ? 'level 7' : `levels ${lastLevel + 1}–7`} below the fold ▾
           </button>
         )}
