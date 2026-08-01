@@ -2855,6 +2855,16 @@ a.stat-tile:hover {
 }
 .stats-compare-cta {
   margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+/* A quieter door than a full-bleed slab: the same weight as the rating hero
+   above it shouldn't be — Compare is a secondary action on this screen, not
+   the point of it. */
+.stats-compare-btn {
+  width: auto;
+  padding: 8px 16px;
+  font-size: 11.5px;
 }
 .stats-rival-record {
   font-family: var(--font-label);

@@ -411,8 +411,8 @@ export default function Player() {
             CROSSING tile below: don't render an affordance that bounces. */}
         {!isMe && me?.user && me.user.boards >= compareFloor && t.boardsCompleted >= compareFloor ? (
           <div className="stats-compare-cta">
-            <Button variant="secondary" to={`/compare/${stats.user.id}`}>
-              COMPARE RECORDS →
+            <Button variant="secondary" className="stats-compare-btn" to={`/compare/${stats.user.id}`}>
+              COMPARE →
             </Button>
           </div>
         ) : null}
