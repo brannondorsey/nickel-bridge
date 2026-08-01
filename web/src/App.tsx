@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { Me, api } from './api';
+import { useAnalytics } from './analytics';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
 import { SignInBar } from './components/ds/SignInBar';
@@ -113,7 +114,7 @@ export default function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [splash, setSplash] = useState(false);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   const refresh = () => {
     api
@@ -145,6 +146,13 @@ export default function App() {
     }, 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Analytics (self-hosted Matomo, see analytics.ts). A client-rendered SPA
+  // has to report its own navigations — the stock snippet would record one hit
+  // per visit and miss every screen after the entry one. Gated on `loaded` as
+  // well as the flags, because until /api/me answers we don't yet know whether
+  // this is production or a throwaway deployment whose traffic must not report.
+  useAnalytics({ enabled: loaded && !me?.demo && !me?.devAuth, pathname, search });
 
   // Scroll offset belongs to the page you left, not the one you asked for.
   // A router navigation swaps the DOM without touching the window, so a link

@@ -79,7 +79,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 against it, and web imports it too; dependency-free on purpose, see
                 "Discoverability" below)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
-                api.ts (typed API client), splash.ts (nb:lastVisit returning-visitor gate),
+                api.ts (typed API client), analytics.ts (the self-hosted Matomo tracker +
+                its SPA page-view hook — see "Analytics" below),
+                splash.ts (nb:lastVisit returning-visitor gate),
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
                 device-local axis, orthogonal to theme.ts — see "Night mode" below),
@@ -469,6 +471,36 @@ Raw samples are age-dependent too (15s yesterday, 30s a few days back, 60s a wee
 samples dropped rather than merely thinned), so **two days at different resolutions are not
 comparable** and a before/after baseline has to be recorded while it is fresh.
 `scripts/fly-uptime.mjs` does all of that and prints the resolution it inferred per row.
+
+**Analytics is one self-hosted Matomo (`web/src/analytics.ts`), and nothing else.** It reports
+to our own instance at `piwik.brannon.online` (site 4) rather than to Google or any hosted
+product: the app's public surface is other people's handles, ratings and reading habits, and
+none of that needs to leave infrastructure this project already runs. Four things about it:
+
+- **The stock copy-paste `<script>` snippet is wrong for this app** and was deliberately not
+  used. It fires one `trackPageView` on load, so a client-rendered SPA records every visit as a
+  single hit on the entry URL and never sees the glossary terms read, the tour walked or the
+  boards played after it. `useAnalytics` (called from `App.tsx`) tracks router navigations
+  instead, pushing `setReferrerUrl`/`setCustomUrl`/`trackPageView`, then re-arming
+  `enableLinkTracking` over the DOM the navigation just rendered.
+- **It is off on throwaway deployments**, gated on `/api/me`'s `demo`/`devAuth` — the same
+  signal `seo.ts`'s `throwaway` uses to shut crawlers out of the demo app and PR previews,
+  whose traffic is bots, seeders and click-testing. That's a round trip rather than a hostname
+  check on purpose: the production origin stays out of the bundle, and `App.tsx` already awaits
+  `/api/me` before rendering. `matomo.js` is loaded lazily on the first tracked view, so a
+  preview never requests it at all. Local development is excluded by hostname on top of that.
+- **The tracked URL is path plus `?term=` and nothing else.** The term sheet is a search param
+  on whatever route you're reading (`GlossaryContext`), so dropping the query would collapse
+  ~125 term reads — the most useful thing here — into the page they were opened from. Every
+  other param is discarded rather than enumerated. Path ids (`/t/17/b/3`) are left alone;
+  Matomo groups a path hierarchy into folders.
+- **Cookies are off** (`disableCookies`, plus `setDoNotTrack`), so unique-visitor counts get
+  fuzzier and the site keeps needing no cookie banner — the honest trade for an app whose only
+  other cookie is the session it can't work without.
+
+None of this costs the Fly machine anything, and it's outside the Cloudflare rules below for
+the same reason: `matomo.js`/`matomo.php` are served by a different host, so no analytics
+request wakes or holds the app's dedicated core.
 
 **The edge (Cloudflare) is derived from `seo.ts`, like everything else that answers "is this
 URL crawlable?"** The measurement behind it: production ran 20.1 h/day and the demo app —
