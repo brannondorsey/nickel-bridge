@@ -442,6 +442,17 @@ export default function Compare() {
         </div>
       </PerforatedPanel>
 
+      {/* The gate is named in four places above (the legend, the foot note, every
+          row's spoken reading, the verdict line) and defined in none of them.
+          A reader who has got this far has seen "threshold" enough times to want
+          to know what sets it — so say it once, at the end, in words that assume
+          no statistics. Deliberately not a definition of standard error: the
+          useful idea is that the same two players would produce different
+          figures on a different night, and the gate is the size of that wobble. */}
+      <div className="cmp-colophon">
+        <GlossaryProse text="A gate is one standard error wide. Loosely: if the two of you played the same stretch again, that is about how much these figures would wander on their own, with nobody playing any better. A margin inside it is weather, not skill." />
+      </div>
+
       <div className="cmp-footer">
         <Button variant="secondary" to={`/players/${view.them.id}`}>
           Read {them}'s record →

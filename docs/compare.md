@@ -161,3 +161,12 @@ is ever wanted it needs its own control on this screen, not an inherited one.
 - **Volume and best crossing are never judged.** Playing more boards is not being better at them,
   and a maximum has no error term to test against. Trick delta has no winner at all — nearer zero
   is not better, since overtricks earn matchpoints.
+- **The gate is explained in one place, at the end.** The word "threshold" appears in the legend,
+  the panel foot, every row's spoken reading and the verdict line, and none of them says what sets
+  it. A closing colophon (`.cmp-colophon` in `Compare.tsx`) does, in words that assume no
+  statistics: *"A gate is one standard error wide. Loosely: if the two of you played the same
+  stretch again, that is about how much these figures would wander on their own, with nobody
+  playing any better. A margin inside it is weather, not skill."* Deliberately not a definition of
+  standard error — the useful idea for a reader is that the same two players produce different
+  figures on a different night, and the gate is the size of that wobble. It renders only on a page
+  that actually drew gates, so the too-thin screen omits it.

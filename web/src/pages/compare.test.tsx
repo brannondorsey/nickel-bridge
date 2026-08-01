@@ -204,9 +204,25 @@ describe('Compare', () => {
     expect(screen.getByText(/Nothing between you that the ledger will certify yet/)).toBeInTheDocument();
   });
 
+  /**
+   * The gate is named in the legend, the panel foot, every row's reading and
+   * the verdict line, and defined in none of them. The colophon is the one
+   * place that says what sets it — and it belongs only to a page that actually
+   * drew gates, so the too-thin screen must not carry it.
+   */
+  it('closes with a plain-language note on what a gate is', async () => {
+    apiMock.compare.mockResolvedValue(compareMet);
+    renderCompare();
+
+    expect(await screen.findByText(/A gate is one standard error wide/)).toBeInTheDocument();
+    expect(screen.getByText(/weather, not skill/)).toBeInTheDocument();
+  });
+
   it('explains itself rather than erroring when a record is too thin', async () => {
     apiMock.compare.mockResolvedValue(compareThin);
     renderCompare(70);
+
+    expect(document.querySelector('.cmp-colophon')).toBeNull();
 
     // Names the shortfall on the side that actually has it, with real numbers.
     expect(await screen.findByText(/Newcomer has 4 boards/)).toBeInTheDocument();

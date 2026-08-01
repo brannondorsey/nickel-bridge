@@ -3266,6 +3266,16 @@ a.stat-tile:hover {
   font-size: 14px;
   margin: 0 0 16px;
 }
+/* The one place the gate is explained. Sits outside the panels — it is a note
+   on the whole screen rather than on the panel above it, so it gets no border
+   and no heading. */
+.cmp-colophon {
+  margin: 16px 16px 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.45;
+}
 .cmp-footer {
   margin: 20px 16px 0;
 }
