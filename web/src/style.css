@@ -2979,7 +2979,10 @@ a.stat-tile:hover {
   gap: 3px;
   justify-content: center;
   align-items: center;
-  height: 28px;
+  /* Tall enough to keep the marks close to the 22px the flat design used: the
+     tier split costs height, so the container carries it rather than the marks
+     shrinking to weediness. 18px marks either side of a 1px rule, 2px clear. */
+  height: 40px;
   margin-top: 12px;
   flex-wrap: wrap;
 }
@@ -2998,19 +3001,19 @@ a.stat-tile:hover {
   border: 1px solid var(--ink);
 }
 .cmp-tick-you {
-  height: 12px;
+  height: 18px;
   align-self: flex-start;
   background: var(--positive);
   border-color: var(--positive);
 }
 .cmp-tick-them {
-  height: 12px;
+  height: 18px;
   align-self: flex-end;
   background: var(--negative);
   border-color: var(--negative);
 }
 .cmp-tick-level {
-  height: 4px;
+  height: 5px;
   align-self: center;
   background: var(--chart-track);
   border-color: var(--line-dashed);

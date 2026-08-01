@@ -134,6 +134,40 @@ describe('Compare', () => {
     expect(screen.getByText(/defending —.*too few boards between you/i)).toBeInTheDocument();
   });
 
+  /**
+   * A panel where every row is set aside carries nothing the verdict line
+   * hasn't already counted, so it is dropped rather than rendered as a heading
+   * over a "too few between you" note. On a thin pair that was two headed boxes
+   * saying the same thing in bigger type. The divider goes with them, since
+   * there is then nothing left to divide.
+   */
+  it('drops detail panels with nothing to draw, and the divider with them', async () => {
+    apiMock.compare.mockResolvedValue({
+      ...compareMet,
+      measures: compareMet.measures.map((m) =>
+        m.panel === 'headline' ? m : { ...m, verdict: 'aside' as const, reason: 'thin' as const },
+      ),
+    });
+    renderCompare();
+    await screen.findByText('WHERE THE BEAM TIPS');
+
+    expect(screen.queryByText('BIDDING BY TYPE')).not.toBeInTheDocument();
+    expect(screen.queryByText('CONTRACTS MADE')).not.toBeInTheDocument();
+    expect(screen.queryByText('IN DETAIL')).not.toBeInTheDocument();
+    // The context panel is not a detail panel and always stays.
+    expect(screen.getByText('FOR CONTEXT')).toBeInTheDocument();
+  });
+
+  it('keeps a detail panel that has something to draw, naming what it set aside', async () => {
+    apiMock.compare.mockResolvedValue(compareMet);
+    renderCompare();
+
+    expect(await screen.findByText('IN DETAIL')).toBeInTheDocument();
+    // bidType has one drawable row in the fixture; contract has only an aside.
+    expect(screen.getByText('BIDDING BY TYPE')).toBeInTheDocument();
+    expect(screen.queryByText('CONTRACTS MADE')).not.toBeInTheDocument();
+  });
+
   it('summarises the verdict as chips and counts what was set aside', async () => {
     apiMock.compare.mockResolvedValue(compareMet);
     renderCompare();

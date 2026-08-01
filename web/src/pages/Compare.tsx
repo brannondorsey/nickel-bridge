@@ -27,6 +27,12 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
  * context panel is last and is never judged at all.
  */
 
+/**
+ * The divider between the headline verdict and the per-bucket panels below it.
+ * Only rendered when at least one of those panels survives.
+ */
+const DETAIL_HEADING = 'IN DETAIL';
+
 const PANEL_ORDER: { panel: ComparePanel; heading: string; tag?: string }[] = [
   { panel: 'bidType', heading: 'BIDDING BY TYPE', tag: '★★ OR BETTER' },
   { panel: 'convention', heading: 'BIDDING BY CONVENTION', tag: 'BOTH HAVE CALLED' },
@@ -162,6 +168,19 @@ export default function Compare() {
 
   const them = view.them.handle;
   const themIsHouse = view.them.kind === 'ai';
+  // Only panels with at least one drawable row survive — see the note at the
+  // render site. Computed here because the divider above them has to know
+  // whether there is anything left to divide.
+  const detailPanels = PANEL_ORDER.map(({ panel, heading, tag }) => {
+    const rows = view.measures.filter((m) => m.panel === panel);
+    return {
+      panel,
+      heading,
+      tag,
+      drawn: rows.filter((m) => m.verdict !== 'aside'),
+      setAside: rows.filter((m) => m.verdict === 'aside'),
+    };
+  }).filter((p) => p.drawn.length > 0);
   const initial = (h: string) => (h ? [...h][0].toUpperCase() : '');
 
   const who = (
@@ -346,40 +365,39 @@ export default function Compare() {
         </div>
       </div>
 
-      <div className="cmp-cut">
-        <span>THE LONG LEDGER</span>
-      </div>
+      {/* A panel with nothing drawn is omitted entirely rather than rendered as
+          a heading over a set-aside note. On a thin pair that was two headed
+          boxes saying only "too few between you", which the verdict above has
+          already counted in one line — a reader gains nothing from being told
+          the same thing twice more, in bigger type. The names of the set-aside
+          rows only appear where the panel has something to compare them to. */}
+      {detailPanels.length > 0 ? (
+        <div className="cmp-cut">
+          <span>{DETAIL_HEADING}</span>
+        </div>
+      ) : null}
 
-      {PANEL_ORDER.map(({ panel, heading, tag }) => {
-        const rows = view.measures.filter((m) => m.panel === panel);
-        if (rows.length === 0) return null;
-        const setAside = rows.filter((m) => m.verdict === 'aside');
-        const drawn = rows.filter((m) => m.verdict !== 'aside');
-        return (
-          <PerforatedPanel key={panel} heading={heading} className="cmp-beam-panel">
-            {tag ? <div className="cmp-panel-tag">{tag}</div> : null}
-            {drawn.length > 0 ? (
-              <ul className="cmp-rows">
-                {drawn.map((m) => (
-                  <MeasureRow key={m.key} m={m} them={them} themIsHouse={themIsHouse} />
-                ))}
-              </ul>
-            ) : null}
-            {setAside.length > 0 ? (
-              <div className="cmp-aside-note">
-                <GlossaryProse
-                  text={`Set aside — ${setAside
-                    .map((m) => m.label.toLowerCase())
-                    .join(', ')}: too few between you for a difference to mean anything.`}
-                />
-              </div>
-            ) : null}
-          </PerforatedPanel>
-        );
-      })}
+      {detailPanels.map(({ panel, heading, tag, drawn, setAside }) => (
+        <PerforatedPanel key={panel} heading={heading} className="cmp-beam-panel">
+          {tag ? <div className="cmp-panel-tag">{tag}</div> : null}
+          <ul className="cmp-rows">
+            {drawn.map((m) => (
+              <MeasureRow key={m.key} m={m} them={them} themIsHouse={themIsHouse} />
+            ))}
+          </ul>
+          {setAside.length > 0 ? (
+            <div className="cmp-aside-note">
+              <GlossaryProse
+                text={`Set aside — ${setAside
+                  .map((m) => m.label.toLowerCase())
+                  .join(', ')}: too few between you for a difference to mean anything.`}
+              />
+            </div>
+          ) : null}
+        </PerforatedPanel>
+      ))}
 
       <PerforatedPanel heading="FOR CONTEXT" className="cmp-context">
-        <div className="cmp-panel-tag">NEVER JUDGED</div>
         {view.context.map((c) => (
           <div key={c.key} className="cmp-common-row">
             <span className="cmp-common-name">{c.label}</span>
