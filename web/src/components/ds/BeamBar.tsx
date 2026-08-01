@@ -29,8 +29,8 @@ export type BeamVerdict = 'you' | 'them' | 'level' | 'aside';
 export interface BeamBarProps {
   /** viewer's figure minus the other player's, in display units */
   margin: number;
-  /** the threshold the margin must clear to be called, same units */
-  gate: number;
+  /** the threshold the margin must clear to be called, same units; null = unbounded, only ever on an `aside` row */
+  gate: number | null;
   /** the margin at which the bar reaches the end of the track */
   fullTilt: number;
   verdict: BeamVerdict;
@@ -52,7 +52,9 @@ export function BeamBar({ margin, gate, fullTilt, verdict, label }: BeamBarProps
   const fill = Math.min(HALF, (Math.abs(margin) / fullTilt) * HALF);
   // Clamped so a gate wider than the track still renders at the edge rather
   // than overflowing — the same treatment StemChart gives an out-of-range mean.
-  const gateAt = Math.min(HALF, (gate / fullTilt) * HALF);
+  // A null gate is unbounded, which only reaches here on an `aside` row (drawn
+  // above). Pinned to the track edge rather than NaN if it ever does arrive.
+  const gateAt = gate === null ? HALF : Math.min(HALF, (gate / fullTilt) * HALF);
   const ahead = margin > 0;
 
   return (

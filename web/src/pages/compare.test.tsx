@@ -30,6 +30,41 @@ describe('Compare', () => {
     expect(screen.queryByText('COMMON GROUND')).not.toBeInTheDocument();
   });
 
+  /**
+   * The tally strip must not encode its verdict in colour alone — the rule the
+   * rest of this screen obeys, and the one thing on it that used to break the
+   * rule. `--positive`/`--negative` are byte-identical to the suit tokens the
+   * colourblind palette replaces, and it deliberately does not remap them, so
+   * three identically-shaped rects distinguished only by fill are unreadable
+   * for exactly the players that setting exists for.
+   */
+  it('distinguishes tally marks by class, not fill alone, and speaks the run', async () => {
+    apiMock.compare.mockResolvedValue(compareMet);
+    renderCompare();
+    await screen.findByText('HEAD TO HEAD');
+
+    // Distinct classes per outcome — the stylesheet hangs position off these,
+    // so a flattened palette still leaves three distinguishable marks.
+    const ticks = [...document.querySelectorAll('.cmp-tick')];
+    expect(ticks).toHaveLength(6);
+    expect(document.querySelectorAll('.cmp-tick-you')).toHaveLength(2);
+    expect(document.querySelectorAll('.cmp-tick-them')).toHaveLength(3);
+    expect(document.querySelectorAll('.cmp-tick-level')).toHaveLength(1);
+
+    // The strip is aria-hidden, so the run has to be said in words somewhere.
+    expect(screen.getByText(/Crossings, oldest first: you, Marge, Marge, you, level, Marge\./)).toBeInTheDocument();
+  });
+
+  it('says so when the tally strip is only a window on a longer record', async () => {
+    apiMock.compare.mockResolvedValue({
+      ...compareMet,
+      headToHead: { ...compareMet.headToHead!, shared: 20 },
+    });
+    renderCompare();
+    // Six marks against twenty crossings must not read as the whole record.
+    expect(await screen.findByText('Last 6 of 20, oldest at left')).toBeInTheDocument();
+  });
+
   it('substitutes common ground when the two have never crossed', async () => {
     apiMock.compare.mockResolvedValue(compareUnmet);
     renderCompare(60);

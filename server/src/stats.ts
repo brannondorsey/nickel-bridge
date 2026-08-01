@@ -486,10 +486,20 @@ export function commonGround(
   bId: number,
   getStandings: (id: number) => StandingDetail[],
 ): CommonGroundRow[] {
-  const house = stmtHousePlayers.all() as { id: number; handle: string }[];
+  const house = (stmtHousePlayers.all() as { id: number; handle: string }[])
+    // Never either of the two being compared. Comparing against a house
+    // persona is reachable from the UI — their profiles are public and their
+    // board counts clear any floor — and without this that persona appears in
+    // its own common-ground panel as `pairRecord(them, them)`: a record against
+    // itself, every crossing "level".
+    .filter((h) => h.id !== aId && h.id !== bId);
   return house
     .map((h) => ({ userId: h.id, handle: h.handle, you: pairRecord(aId, h.id, getStandings), them: pairRecord(bId, h.id, getStandings) }))
-    .filter((r) => r.you.shared > 0 || r.them.shared > 0);
+    // BOTH, not either. A persona only one side has faced is not common
+    // ground, and rendering it prints "0 of 0" beside a real record — which
+    // reads as a player who lost every crossing rather than one who never
+    // played, the exact misreading this screen exists to prevent.
+    .filter((r) => r.you.shared > 0 && r.them.shared > 0);
 }
 
 /** share of *other* players this value beats, 0..100; null without a comparison field */

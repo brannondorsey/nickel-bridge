@@ -237,6 +237,73 @@ describe('compare', () => {
    * untestable, so the floor is read from the environment in exactly one place
    * and passed everywhere else as an argument.
    */
+  /**
+   * Common ground means an opponent BOTH have faced, and never one of the two
+   * being compared.
+   *
+   * Both halves were live bugs. Comparing against a house persona is reachable
+   * from the UI — their profiles are public and their board counts clear any
+   * floor — and the persona used to appear in its own common-ground panel as a
+   * record against itself, every crossing "level". Separately, an `||` filter
+   * let a persona only one side had met through, printing "0 of 0" beside a
+   * real record: a player who never played reads as one who lost every time,
+   * which is the single misreading this screen exists to prevent.
+   */
+  it('never lists a compared player, or a persona only one side has faced, as common ground', async () => {
+    const app = await makeApp();
+    const me = new TestClient(app, 'CmpHouse');
+    await me.login();
+    const myId = (await me.get('/api/me')).user.id;
+
+    // Two personas: one only the viewer has faced, one nobody has.
+    const shark = mkUser('The Shark');
+    db.prepare(`UPDATE users SET kind = 'ai' WHERE id = ?`).run(shark);
+    const novice = mkUser('The Novice');
+    db.prepare(`UPDATE users SET kind = 'ai' WHERE id = ?`).run(novice);
+
+    seedRecord(myId, 20, { declared: 8, made: 5, score: 300 });
+    // The Shark shares the viewer's tournaments, but not the target's.
+    seedRecord(shark, 20, { declared: 8, made: 4, score: 100 });
+
+    // A target in tournaments of its own, so there is no head-to-head at all.
+    const stranger = mkUser('CmpHouseStranger');
+    for (let i = 0; i < 20; i++) {
+      insert.run(farTournament(100 + Math.floor(i / 4)), stranger, (i % 4) + 1, 200, EXCELLENT, null, null, 5000 + i);
+    }
+
+    const view = await me.get(`/api/compare/${stranger}`);
+    expect(view.headToHead).toBeNull();
+    // The Shark is the viewer's opponent alone, so he is not common ground.
+    expect(view.commonGround.map((c: { handle: string }) => c.handle)).not.toContain('The Shark');
+    expect(view.commonGround).toEqual([]);
+
+    // And comparing directly against a persona must never list that persona.
+    const vsShark = await me.get(`/api/compare/${shark}`);
+    const listed = (vsShark.commonGround ?? []).map((c: { userId: number }) => c.userId);
+    expect(listed).not.toContain(shark);
+    expect(listed).not.toContain(myId);
+  });
+
+  it('sends an unbounded gate as null rather than a broken number', async () => {
+    const app = await makeApp();
+    const me = new TestClient(app, 'CmpGate');
+    await me.login();
+    const myId = (await me.get('/api/me')).user.id;
+    const other = mkUser('CmpGateOther');
+    // No slam contracts on either side, so that row's rate has n = 0.
+    seedRecord(myId, 20, { declared: 4, made: 2, score: 300 });
+    seedRecord(other, 20, { declared: 4, made: 3, score: 100 });
+
+    const view = await me.get(`/api/compare/${other}`);
+    const slam = view.measures.find((m: { key: string }) => m.key === 'contract:slam');
+    // JSON.stringify(Infinity) is null anyway — this pins that the type says so.
+    expect(slam.gate).toBeNull();
+    expect(slam.verdict).toBe('aside');
+    for (const m of view.measures) {
+      expect(m.gate === null || Number.isFinite(m.gate)).toBe(true);
+    }
+  });
+
   it('relaxes the board floor under DEMO so the exhibits can reach a real comparison', async () => {
     const { compareMin, COMPARE_MIN_BOARDS, DEMO_COMPARE_MIN_BOARDS } = await import('../src/compare.js');
     expect(compareMin()).toBe(COMPARE_MIN_BOARDS);

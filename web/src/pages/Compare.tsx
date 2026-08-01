@@ -52,24 +52,37 @@ const marginLabel = (m: number) => String(Math.abs(Math.round(m * 10) / 10));
  * means it has to carry the verdict AND the reason, not just the two figures.
  * Same split Sparkline makes between its aria-valuetext and its visual detail.
  */
-function reading(m: CompareMeasure, them: string): string {
+function reading(m: CompareMeasure, them: string, themIsHouse: boolean): string {
   const mine = fig(m.a, m.unit);
   const theirs = fig(m.b, m.unit);
   const head = `${m.label.toLowerCase()} — you ${mine}, ${them} ${theirs}`;
   if (m.verdict === 'aside') {
-    if (m.reason === 'provisional') return `${head}. Not compared: a rating needs more rated crossings first.`;
+    if (m.reason === 'provisional') {
+      // A house persona is not provisional, it is unratable: their scores count
+      // in everyone's matchpoints but never in a rating. "Needs more crossings"
+      // would promise something that is never going to happen.
+      return themIsHouse
+        ? `${head}. Not compared: house players never take a rating.`
+        : `${head}. Not compared: a rating needs more rated crossings first.`;
+    }
     if (m.reason === 'no-data') return `${head}. Not compared: one of you has no record for this yet.`;
     return `${head}. Not compared: too few boards between you for any difference to mean anything.`;
   }
-  const by = `by ${marginLabel(m.margin)}`;
-  if (m.verdict === 'level') return `${head}. Too close to call — the ${marginLabel(m.margin)} point gap is inside the ${m.gate} point threshold.`;
-  return `${head}. ${m.verdict === 'you' ? 'You lead' : `${them} leads`} ${by}, past the ${m.gate} point threshold.`;
+  // A null gate is unbounded and only ever reaches an `aside` row, handled
+  // above — but drop the clause rather than announcing "null point threshold"
+  // if that ever stops being true.
+  const threshold = m.gate === null ? '' : `, past the ${m.gate} point threshold`;
+  if (m.verdict === 'level') {
+    const inside = m.gate === null ? '' : ` — the ${marginLabel(m.margin)} point gap is inside the ${m.gate} point threshold`;
+    return `${head}. Too close to call${inside}.`;
+  }
+  return `${head}. ${m.verdict === 'you' ? 'You lead' : `${them} leads`} by ${marginLabel(m.margin)}${threshold}.`;
 }
 
-function MeasureRow({ m, them }: { m: CompareMeasure; them: string }) {
+function MeasureRow({ m, them, themIsHouse }: { m: CompareMeasure; them: string; themIsHouse: boolean }) {
   return (
     <li className="cmp-row">
-      <span className="sr-only">{reading(m, them)}</span>
+      <span className="sr-only">{reading(m, them, themIsHouse)}</span>
       <div className="cmp-row-top" aria-hidden="true">
         <span className="cmp-fig num">{fig(m.a, m.unit)}</span>
         <span className="cmp-name">{m.label}</span>
@@ -90,14 +103,27 @@ function MeasureRow({ m, them }: { m: CompareMeasure; them: string }) {
   );
 }
 
-/** The tally strip: one mark per shared crossing, oldest at left. */
-function Tally({ record }: { record: PairRecord }) {
+/**
+ * The tally strip: one mark per shared crossing, oldest at left.
+ *
+ * Position is the encoding — above the rule is yours, below is theirs, a short
+ * mark on the rule is level — for the same reason BeamBar grows from a centre
+ * line rather than relying on its fill. The marks are aria-hidden because the
+ * sentence beneath states the same run in words.
+ */
+function Tally({ record, them }: { record: PairRecord; them: string }) {
+  const spoken = record.sequence
+    .map((s) => (s === 'you' ? 'you' : s === 'them' ? them : 'level'))
+    .join(', ');
   return (
-    <div className="cmp-tally" aria-hidden="true">
-      {record.sequence.map((s, i) => (
-        <span key={i} className={`cmp-tick cmp-tick-${s}`} />
-      ))}
-    </div>
+    <>
+      <div className="cmp-tally" aria-hidden="true">
+        {record.sequence.map((s, i) => (
+          <span key={i} className={`cmp-tick cmp-tick-${s}`} />
+        ))}
+      </div>
+      <span className="sr-only">Crossings, oldest first: {spoken}.</span>
+    </>
   );
 }
 
@@ -135,6 +161,7 @@ export default function Compare() {
   }
 
   const them = view.them.handle;
+  const themIsHouse = view.them.kind === 'ai';
   const initial = (h: string) => (h ? [...h][0].toUpperCase() : '');
 
   const who = (
@@ -227,8 +254,15 @@ export default function Compare() {
               }`}
             />
           </div>
-          <Tally record={view.headToHead} />
-          <div className="cmp-tally-key">Oldest at left</div>
+          <Tally record={view.headToHead} them={them} />
+          {/* The server caps the sequence (SEQUENCE_MAX) while the record above
+              counts every crossing, so on a long rivalry the marks deliberately
+              do not reconcile with the score — say which it is. */}
+          <div className="cmp-tally-key">
+            {view.headToHead.sequence.length < view.headToHead.shared
+              ? `Last ${view.headToHead.sequence.length} of ${view.headToHead.shared}, oldest at left`
+              : 'Oldest at left'}
+          </div>
         </div>
       ) : (
         // No head-to-head. The panel renders EITHER WAY: common ground is the
@@ -278,7 +312,7 @@ export default function Compare() {
         </div>
         <ul className="cmp-rows">
           {headline.map((m) => (
-            <MeasureRow key={m.key} m={m} them={them} />
+            <MeasureRow key={m.key} m={m} them={them} themIsHouse={themIsHouse} />
           ))}
         </ul>
         {/* Three states, three sentences — a reader meeting a page of hatching
@@ -327,7 +361,7 @@ export default function Compare() {
             {drawn.length > 0 ? (
               <ul className="cmp-rows">
                 {drawn.map((m) => (
-                  <MeasureRow key={m.key} m={m} them={them} />
+                  <MeasureRow key={m.key} m={m} them={them} themIsHouse={themIsHouse} />
                 ))}
               </ul>
             ) : null}

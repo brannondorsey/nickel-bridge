@@ -172,8 +172,16 @@ export interface Measure {
   unit: 'elo' | 'pct' | 'pct1';
   /** a − b in display units; 0 when either side is null */
   margin: number;
-  /** GATE_SIGMA × combined standard error, in display units */
-  gate: number;
+  /**
+   * GATE_SIGMA × combined standard error, in display units.
+   *
+   * NULL when the error is unbounded — a rate over zero boards, or a sample too
+   * small to estimate spread. Explicitly null rather than Infinity because
+   * `JSON.stringify(Infinity)` is `null` anyway, so typing it `number` was a
+   * wire-type lie: the `contract:slam` row hits this in most real comparisons.
+   * Such a row is always `aside`, so nothing draws or prints the gate.
+   */
+  gate: number | null;
   fullTilt: number;
   verdict: Verdict;
   reason?: AsideReason;
@@ -276,6 +284,13 @@ function classify(margin: number, gate: number, fullTilt: number): { verdict: Ve
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * A gate for the wire: rounded, or null when the error is unbounded.
+ * `JSON.stringify(Infinity)` is `null` regardless, so emitting it
+ * deliberately keeps the declared type honest — see Measure.gate.
+ */
+const wireGate = (n: number) => (Number.isFinite(n) ? round1(n) : null);
+
 /** Build one rate-based row (declaring, defending, tops, and every bucket panel). */
 function rateMeasure(
   key: string,
@@ -299,7 +314,7 @@ function rateMeasure(
     b: pctB === null ? null : Math.round(pctB),
     unit: 'pct',
     margin: round1(margin),
-    gate: round1(gate),
+    gate: wireGate(gate),
     fullTilt,
     verdict,
     ...(reason ? { reason } : {}),
@@ -355,7 +370,7 @@ export function buildMeasures(a: PlayerStats, b: PlayerStats, provisionalMin: nu
     b: tb.currentElo,
     unit: 'elo',
     margin: eloMargin,
-    gate: round1(eloGate),
+    gate: wireGate(eloGate),
     fullTilt: FULL_TILT.elo,
     ...(eloProvisional
       ? { verdict: 'aside' as Verdict, reason: 'provisional' as AsideReason }
@@ -376,7 +391,7 @@ export function buildMeasures(a: PlayerStats, b: PlayerStats, provisionalMin: nu
     b: tb.avgPct,
     unit: 'pct1',
     margin: round1(mpMargin),
-    gate: round1(mpGate),
+    gate: wireGate(mpGate),
     fullTilt: FULL_TILT.avgPct,
     ...(ta.avgPct === null || tb.avgPct === null
       ? { verdict: 'aside' as Verdict, reason: 'no-data' as AsideReason }
@@ -398,7 +413,7 @@ export function buildMeasures(a: PlayerStats, b: PlayerStats, provisionalMin: nu
     b: tb.avgBidAccuracy,
     unit: 'pct',
     margin: round1(accMargin),
-    gate: round1(accGate),
+    gate: wireGate(accGate),
     fullTilt: FULL_TILT.bidAccuracy,
     ...(ta.avgBidAccuracy === null || tb.avgBidAccuracy === null
       ? { verdict: 'aside' as Verdict, reason: 'no-data' as AsideReason }

@@ -2817,11 +2817,10 @@ a.stat-tile:hover {
 .stats-rival-row:last-child {
   border-bottom: none;
 }
-.stats-rival-row:hover {
-  background: var(--surface);
-  margin: 0 -12px;
-  padding: 8px 12px;
-}
+/* No whole-row hover: the row stopped being a single link when it gained a
+   second destination (the handle goes to the profile, COMPARE elsewhere), so a
+   row-wide highlight would advertise a target that isn't there. Each of the two
+   real targets carries its own hover instead. */
 .stats-rival-head {
   display: flex;
   align-items: baseline;
@@ -2968,28 +2967,53 @@ a.stat-tile:hover {
   color: var(--muted);
   font-size: 14px;
 }
+/* The tally strip carries its verdict in POSITION, not colour — a mark above
+   the rule is yours, below is theirs, and a short mark on the rule is level.
+   Same rule the beam obeys one panel down, for the same reason: --positive and
+   --negative are byte-identical to --suit-c/--suit-h, and the colourblind
+   palette deliberately doesn't remap them. Flatten these to one ink and the
+   sequence still reads. Colour only reinforces. */
 .cmp-tally {
+  position: relative;
   display: flex;
   gap: 3px;
   justify-content: center;
+  align-items: center;
+  height: 28px;
   margin-top: 12px;
   flex-wrap: wrap;
 }
+.cmp-tally::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
+}
 .cmp-tick {
+  position: relative;
   width: 7px;
-  height: 22px;
   border: 1px solid var(--ink);
 }
 .cmp-tick-you {
+  height: 12px;
+  align-self: flex-start;
   background: var(--positive);
   border-color: var(--positive);
 }
 .cmp-tick-them {
+  height: 12px;
+  align-self: flex-end;
   background: var(--negative);
   border-color: var(--negative);
 }
 .cmp-tick-level {
+  height: 4px;
+  align-self: center;
   background: var(--chart-track);
+  border-color: var(--line-dashed);
 }
 .cmp-tally-key {
   font-size: 12px;

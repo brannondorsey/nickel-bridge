@@ -320,8 +320,8 @@ export interface CompareMeasure {
   b: number | null;
   unit: 'elo' | 'pct' | 'pct1';
   margin: number;
-  /** the threshold the margin must clear to be called, in the same units */
-  gate: number;
+  /** the threshold the margin must clear to be called, same units; null when the error is unbounded (always an `aside` row) */
+  gate: number | null;
   fullTilt: number;
   verdict: CompareVerdict;
   reason?: CompareAsideReason;
