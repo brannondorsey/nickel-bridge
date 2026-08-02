@@ -37,12 +37,17 @@ export const AUTO_PLAY_DELAY_MS = 250;
 // gap after one, and it is READING time: a call is a sentence in a language
 // the player may still be learning ("2♠ over my 1♣ — that's an overcall"),
 // which is a slower thing to take in than watching a card land on the felt.
-// So it sits just under a robot card's GLIDE_MS + ROBOT_GAP_MS = 710ms while
-// carrying more to read — tried at 420 (too quick to digest) and 840 (a
-// noticeable wait for three replies) before landing here. Three robot
-// replies cost ~2s, and this is the one number to move if the reveal ever
-// reads as either.
-export const BID_GAP_MS = 650;
+// Tried at 420 (too quick to digest) and 840 (a noticeable wait across three
+// replies); 710 matches what a robot CARD costs (GLIDE_MS + ROBOT_GAP_MS) so
+// the auction and the play read at one tempo. Three robot replies cost ~2.8s,
+// and this is the one number to move if the reveal reads as either extreme.
+//
+// Written as its own literal rather than `GLIDE_MS + ROBOT_GAP_MS` on
+// purpose: the two happen to agree today, but they are different events
+// measured for different reasons — a card's beat is a glide plus a robot's
+// think, this one is time to read a sentence — and retuning either should
+// not silently drag the other along.
+export const BID_GAP_MS = 710;
 
 // The call that ends the auction changes the entire screen — bid dock out,
 // trick area and dummy in — so it holds longer still before the table turns

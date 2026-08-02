@@ -102,7 +102,7 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
   // Finish the auction by passing. The robots' replies are revealed one call
-  // at a time (stageBidSteps), and the bid box sits inert for the ~2.6s that
+  // at a time (stageBidSteps), and the bid box sits inert for the ~2.8s that
   // takes — so "no enabled Pass yet" is an ordinary transient, and one that
   // stretches further on a loaded runner (the AI personas are solving
   // double-dummy on the same two cores). This whole block is best-effort by

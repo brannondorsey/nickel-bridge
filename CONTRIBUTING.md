@@ -275,11 +275,12 @@ phase that's `stagePlaySteps` (card-by-card glides, trick collect, tally stamp),
 `TrickArea.tsx`; in the auction it's `stageBidSteps`, which reveals the robots' calls one at a
 time on `BID_GAP_MS` — the human's own call lands instantly, since waiting to see your own tap
 register reads as lag rather than deliberation. `BID_GAP_MS` is reading time, not a gap after
-an animation — a call is a sentence to digest rather than a card to watch land, so it sits in
-the same range as a robot card's `GLIDE_MS + ROBOT_GAP_MS` while carrying more to take in;
-it has been tried at 420 (too quick) and 840 (a noticeable wait across three replies), and is
-the one number to move if the reveal reads as either. `AUCTION_END_MS` is derived from it so
-the auction-ending beat can't silently stop being the heavier of the two.
+an animation — a call is a sentence to digest rather than a card to watch land — and it has
+been tried at 420 (too quick) and 840 (a noticeable wait across three replies) before settling
+on 710, which is what a robot CARD costs, so the auction and the play read at one tempo. It is
+deliberately its own literal rather than `GLIDE_MS + ROBOT_GAP_MS`: the two agree today but
+measure different things, and retuning either shouldn't drag the other. `AUCTION_END_MS` *is*
+derived from it, so the auction-ending beat can't silently stop being the heavier of the two.
 That one needs no JS animation: each snapshot
 holds `myTurn: false`, so the thinking notice renders for real rather than for zero frames,
 and `AuctionGrid` marks the newest call `auction-latest` for a CSS drop-in. Note what those
