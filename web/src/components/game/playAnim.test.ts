@@ -334,12 +334,57 @@ describe('optimisticPlayView', () => {
     expect(view.handToPlay).toBe(1);
   });
 
-  it('follows the flipped board: North plays, East is next', () => {
-    const card = boardPlayingFlipped.legalCards![0];
-    const view = optimisticPlayView(boardPlayingFlipped, card)!;
-    expect(view.currentTrick).toEqual([{ seat: 0, card }]);
-    expect(view.handToPlay).toBe(1);
-    expect(view.hand).not.toContain(card);
+  // boardPlayingFlipped as shipped is a position the server cannot produce:
+  // trick 1, nothing played, North (the declarer the human is running) on
+  // lead — but a flipped board's opening lead belongs to East. Both fans on
+  // it are human-controlled, so trick 1 is where the two of them diverge,
+  // and testing against an impossible deal would have hidden that.
+  const flipped = (trick: TrickCard[], handToPlay: number): BoardView => ({
+    ...boardPlayingFlipped,
+    currentTrick: trick,
+    handToPlay,
+    legalCards: handToPlay === 0 ? boardPlayingFlipped.hand : boardPlayingFlipped.dummyHand,
+  });
+  // cards nobody at the table is holding, so a fabricated trick can't collide
+  const [eastCard, southCard, westCard] = Array.from({ length: 52 }, (_, i) => i).filter(
+    (c) => !boardPlayingFlipped.hand.includes(c) && !boardPlayingFlipped.dummyHand!.includes(c),
+  );
+
+  it('follows the flipped board: East leads, the human answers from dummy, then from North', () => {
+    // East has led trick 1 — the human's first decision is dummy's (South's)
+    // card, out of the TOP fan, with their own North hand still to come
+    const fromDummy = optimisticPlayView(flipped([{ seat: 1, card: eastCard }], 2), southCard);
+    expect(fromDummy).toBeNull(); // southCard isn't in dummy's fan
+    const realDummyCard = boardPlayingFlipped.dummyHand![0];
+    const dummyView = optimisticPlayView(flipped([{ seat: 1, card: eastCard }], 2), realDummyCard)!;
+    expect(dummyView.currentTrick).toEqual([
+      { seat: 1, card: eastCard },
+      { seat: 2, card: realDummyCard },
+    ]);
+    expect(dummyView.dummyHand).not.toContain(realDummyCard);
+    expect(dummyView.hand).toBe(boardPlayingFlipped.hand); // North's fan untouched
+
+    // ...and North plays fourth, from the bottom fan
+    const northCard = boardPlayingFlipped.hand[0];
+    const trick: TrickCard[] = [
+      { seat: 1, card: eastCard },
+      { seat: 2, card: southCard },
+      { seat: 3, card: westCard },
+    ];
+    const northView = optimisticPlayView(flipped(trick, 0), northCard)!;
+    expect(northView.currentTrick).toEqual([...trick, { seat: 0, card: northCard }]);
+    expect(northView.handToPlay).toBe(1);
+    expect(northView.hand).not.toContain(northCard);
+  });
+
+  it('refuses trick 1 on lead even where the server has already tabled dummy', () => {
+    // The flipped board is the one case where dummyHand is public before the
+    // opening lead (game.ts sends it whenever dummy === HUMAN_SEAT), so the
+    // dummyHand check below cannot be what catches a lead here. The position
+    // is unreachable — East leads on a flipped board — and the guard is
+    // explicit about trick 1 precisely so it stays refused if that ever
+    // stops being true.
+    expect(optimisticPlayView(flipped([], 0), boardPlayingFlipped.hand[0])).toBeNull();
   });
 
   it('refuses to guess whenever the position is less than certain', () => {

@@ -205,6 +205,20 @@ export function optimisticPlayView(view: BoardView, card: number): BoardView | n
   // beat later with the robots' replies — a timing change to something other
   // than the tapped card, which this is deliberately not in the business of
   // making. One card per board keeps its old behavior instead.
+  //
+  // Stated directly rather than inferred from `dummyHand === undefined`
+  // below. That check does catch the lead whenever the human is DEFENDING,
+  // but game.ts's boardView also sends dummyHand when `dummy === HUMAN_SEAT`
+  // — the flipped board, North declaring — where it is public from the first
+  // card. That is safe today only because a flipped board's opening lead
+  // belongs to East, so the human is never on lead to trick 1 in the one
+  // case where dummyHand is already defined. Leaning on that would make this
+  // function's correctness depend on a condition in another file that has no
+  // reason to stay put, so the position is tested for what it actually is.
+  if ((view.completedTricks ?? 0) === 0 && trick.length === 0) return null;
+
+  // Needed on its own account too: the dummy fan is filtered below, so an
+  // untabled dummy is nothing to predict against.
   const dummyHand = view.dummyHand;
   if (dummyHand === undefined) return null;
 

@@ -77,6 +77,16 @@ export default function Board() {
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A REJECTED CARD PLAY is not a broken board. `error` replaces the whole
+  // screen with a "back to lobby" page, which is right for a board that
+  // failed to load and wrong for the race submitCard is actually exposed to
+  // (a second tab's play landing first, 409 from submitPlay's board lock):
+  // the position is intact, it just isn't yours to move in any more. So a
+  // play failure rolls the optimistic card back and says so in place, over a
+  // board that is still on screen — which is also the only way the rollback
+  // is observable at all, and therefore testable. Cleared by a fresh server
+  // view, by touching a card, or by dismissing it.
+  const [playError, setPlayError] = useState<string | null>(null);
   const [selectedCall, setSelectedCall] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [lastEval, setLastEval] = useState<BidEval | null>(null);
@@ -269,6 +279,7 @@ export default function Board() {
     setLastEval(null);
     setInspect(null);
     setError(null);
+    setPlayError(null);
     setShowReceipt(false);
     setClaimInfo(null);
     setClaimAnnounceOpen(false);
@@ -339,6 +350,7 @@ export default function Board() {
       if (!stillMyBoard()) return;
       setSelectedCard(null);
       setLastEval(null);
+      setPlayError(null);
       if (next.claimed && preTap) {
         await runClaim(preTap, next);
       } else {
@@ -359,7 +371,12 @@ export default function Board() {
         cancelStaging();
         setBoard(preTap);
       }
-      setError((e as Error).message);
+      // In place over the still-live board (see playError above), not the
+      // full-screen `error` page — unless there is no board to say it over,
+      // which means the tap raced a reload and the lobby route is all that's
+      // left to offer.
+      if (preTap) setPlayError((e as Error).message);
+      else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -369,11 +386,19 @@ export default function Board() {
   // so the human can see it happen without needing to tap it — this simulates
   // the same "second tap" a manual play would trigger, so it reuses the whole
   // submitCard/applyBoard pipeline unchanged. Cancelled by the effect cleanup
-  // whenever board/selectedCard/busy change — a manual tap, a fresher server
-  // response (including intermediate staged snapshots, which always set
-  // legalCards: undefined), or unmount all naturally invalidate the timer.
+  // whenever board/selectedCard/busy/playError change — a manual tap, a
+  // fresher server response (including intermediate staged snapshots, which
+  // always set legalCards: undefined), or unmount all naturally invalidate
+  // the timer.
+  //
+  // playError parks it, and that guard is load-bearing rather than tidy: a
+  // rejected forced play leaves the board back on a myTurn view with exactly
+  // one legal card and busy false, so without it this effect re-submits the
+  // card the server just refused every AUTO_PLAY_DELAY_MS, forever. The
+  // player dismisses (or touches a card) to arm it again, which turns an
+  // unbounded retry loop into one retry per deliberate act.
   useEffect(() => {
-    if (!board || board.state !== 'playing' || !board.myTurn || busy) return;
+    if (!board || board.state !== 'playing' || !board.myTurn || busy || playError) return;
     const legal = board.legalCards;
     if (!legal || legal.length !== 1 || selectedCard !== null) return;
     const card = legal[0];
@@ -382,7 +407,7 @@ export default function Board() {
       submitCard(card);
     }, AUTO_PLAY_DELAY_MS);
     return () => clearTimeout(id);
-  }, [board, selectedCard, busy]);
+  }, [board, selectedCard, busy, playError]);
 
   if (error) {
     return (
@@ -426,7 +451,13 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCard={selectedCard}
-          onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
+          playError={playError}
+          onDismissPlayError={() => setPlayError(null)}
+          onSelectCard={(c) => {
+            setPlayError(null);
+            if (selectedCard === c) submitCard(c);
+            else setSelectedCard(c);
+          }}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           claimInfo={claimInfo}
@@ -580,6 +611,8 @@ export function PlayPhase({
   claimInfo,
   claimAnnounceOpen,
   onSkipClaim,
+  playError = null,
+  onDismissPlayError,
   hint = null,
 }: {
   board: BoardView;
@@ -591,6 +624,9 @@ export function PlayPhase({
   claimInfo: ClaimAnnouncement | null;
   claimAnnounceOpen: boolean;
   onSkipClaim: () => void;
+  /** a rejected play, said over the still-live board — see Board's playError */
+  playError?: string | null;
+  onDismissPlayError?: () => void;
   /** tour only: pulse this card in whichever fan holds it */
   hint?: number | null;
 }) {
@@ -662,7 +698,22 @@ export function PlayPhase({
         />
       </div>
       <SeatLine label={bottomLabel} hcp={board.hcp} active={canPlayFrom(playingSeat)} />
-      {selectedCard !== null ? (
+      {playError ? (
+        // Takes the hint slot rather than sitting above it: it displaces
+        // "playing automatically…", which the parked auto-play timer is no
+        // longer doing, and lands where the player is already looking.
+        <div className="notice-error notice-play" role="alert">
+          <div>{playError}</div>
+          {/* the aside says what the rollback did, in the italic-Crimson
+              register every other hint on this screen uses */}
+          <div className="notice-play-aside">Your card is back in your hand.</div>
+          <div>
+            <Button variant="secondary" onClick={onDismissPlayError}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      ) : selectedCard !== null ? (
         <div className="board-hint num">
           {RANK_CHARS[cardRank(selectedCard)]}
           <span className={suitClass(cardSuit(selectedCard))}>{SUIT_SYMBOLS[cardSuit(selectedCard)]}</span> selected — tap again to

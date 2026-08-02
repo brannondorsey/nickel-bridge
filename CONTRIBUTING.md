@@ -291,10 +291,33 @@ animation was always going to spend between the human's card and the robot's rep
 round trip costs nothing visible until it exceeds that — and when it does, the stall lands on
 the robot's card, where a pause reads as thinking. Measured tap→card in Chromium at 6× CPU
 throttle: p50 33-39ms / p90 649-750ms before (tracking the round trip exactly), p50 10-14ms /
-p90 14-17ms after (flat, whatever the server does). A rejected play (`submitPlay`'s 409 under
-the board lock — a second tab racing) rolls the optimistic view back before the error surfaces.
-Claims are deliberately left out of the trim: `runClaim` owns that sequence and its
-announcement hold already separates the tap from the fast-forward.
+p90 14-17ms after (flat, whatever the server does). Claims are deliberately left out of the
+trim: `runClaim` owns that sequence and its announcement hold already separates the tap from
+the fast-forward.
+
+**A rejected play is not a broken board**, and that distinction is what makes the optimistic
+render safe to roll back. `submitCard`'s failure mode is a race (`submitPlay`'s 409 under the
+board lock — a second tab playing first), not a page that failed to load, so it sets
+`playError` rather than `error`: the optimistic card comes off the table, the pre-tap position
+is restored, and the reason is said in the hint slot under the fan over a board that is still
+on screen. `error` still means "there is no board" and still replaces the screen. Two
+consequences worth knowing. The rollback is **only observable because of this** — while a play
+failure evicted the player to a "back to lobby" page, `setBoard(preTap)` could be deleted with
+every test still green, so the guarantee the code claimed was untested. And `playError`
+**parks the auto-play timer** (`AUTO_PLAY_DELAY_MS`): a refused forced play lands back on a
+`myTurn` view with one legal card and `busy` false, which is exactly the state that timer fires
+on, so without the guard it re-POSTs the card the server just refused every 250 ms forever.
+Dismissing (or touching a card) arms it again — one retry per deliberate act.
+
+Two things about testing this area, both learned the hard way. jsdom ships no WAAPI, so
+`motionOK()` is false in every Board test by default and `stagePlaySteps`/`trimStagedPrefix`
+are simply never reached — the whole trim path could be deleted with all of `web`'s tests
+passing. Stubbing `Element.prototype.animate` turns the staged path on (TrickArea's
+`glideIn`/`collectSweep` both bail on a zero-width rect, so nothing actually animates), which
+is how `board.test.tsx` pins the pacing. And a staged step's `setBoard` fires from a bare
+`setTimeout`, outside `act()`, so React has committed nothing when `advanceTimersByTimeAsync`
+returns — a trailing zero-advance is needed before asserting, in both directions, since an
+uncommitted render reads exactly like a card that hasn't landed yet.
 
 **Auto-play and claims:** two QoL layers sit on top of the flow above, both client-driven so
 the server stays a plain request/response API. When `boardView.legalCards` has exactly one

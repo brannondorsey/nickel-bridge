@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, TrickCard } from '../api';
-import { AUTO_PLAY_DELAY_MS, CLAIM_ANNOUNCE_HOLD_MS } from '../components/game/playAnim';
+import {
+  AUTO_PLAY_DELAY_MS,
+  CLAIM_ANNOUNCE_HOLD_MS,
+  GLIDE_MS,
+  ROBOT_GAP_MS,
+  motionOK,
+} from '../components/game/playAnim';
 import {
   bid2H,
   boardBidding,
@@ -444,15 +450,184 @@ describe('Board — the tapped card does not wait for the server', () => {
 
   it('takes the card back off the table when the play is rejected', async () => {
     const { fail } = await tapWithRequestInFlight();
-    expect(southSlot()?.querySelector('.pcard')).toBeInTheDocument();
+    expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('Q');
+    expect(screen.queryByRole('button', { name: 'Q of ♠' })).not.toBeInTheDocument();
 
     // a genuine race: another tab's play landed first, so submitPlay 409s
     fail(new Error('not your turn'));
-
     expect(await screen.findByText('not your turn')).toBeInTheDocument();
-    // the optimistic card must not survive anywhere — the board it was
-    // painted on never existed
-    expect(document.querySelector('.trick')).not.toBeInTheDocument();
+
+    // The board it was painted on never existed, so every trace of it goes:
+    // the card is back in the fan and the trick is back to the three cards
+    // the server actually reported. Asserted against the LIVE board — a
+    // rejected play no longer evicts the player to a "back to lobby" page,
+    // which is also the only reason the rollback is observable at all.
+    expect(southSlot()?.querySelector('.pcard')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Q of ♠' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.trick .pcard')).toHaveLength(boardPlaying.currentTrick!.length);
+    // ...and it is playable again, so the race can simply be re-tried
+    expect(screen.getByRole('button', { name: 'Q of ♠' })).toBeEnabled();
+  });
+
+  it('does not re-submit a refused forced play on a loop', async () => {
+    // A rejected play leaves the board back on a myTurn view with busy
+    // false. With exactly one legal card that is precisely the state the
+    // auto-play timer fires on, so without a guard it re-POSTs the card the
+    // server just refused every AUTO_PLAY_DELAY_MS, forever.
+    const soleCard = boardPlaying.legalCards![1]; // Q♠
+    const forced: BoardView = { ...boardPlaying, legalCards: [soleCard] };
+    apiMock.board.mockResolvedValue(forced);
+    apiMock.playCard.mockRejectedValue(new Error('not your turn'));
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText(/playing automatically/)).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+      expect(apiMock.playCard).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(screen.getByText('not your turn')).toBeInTheDocument());
+
+      // ten delays' worth of nothing, rather than ten more requests
+      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS * 10);
+      expect(apiMock.playCard).toHaveBeenCalledTimes(1);
+
+      // dismissing arms it again — one retry per deliberate act, not a loop
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+      expect(apiMock.playCard).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Board — the robot reply is paced from the tap, not from the response', () => {
+  // Every other Board test runs with motionOK() false (jsdom ships no WAAPI),
+  // which means stagePlaySteps is never called and applyBoard's whole trim
+  // path is dead. That is not a gap worth leaving: without the trim the
+  // staged list still leads with the human's card — already on screen — so
+  // the robot's reply lands a full GLIDE_MS + ROBOT_GAP_MS beat AFTER the
+  // response instead of after the tap, which is the exact lag this feature
+  // exists to remove, and nothing else in the suite would notice.
+  //
+  // Stubbing animate() is enough to turn the staged path on: TrickArea's
+  // glideIn/collectSweep both bail on a zero-width getBoundingClientRect, so
+  // no animation actually runs in jsdom.
+  const withWaapi = () => {
+    const had = Object.prototype.hasOwnProperty.call(Element.prototype, 'animate');
+    const before = Element.prototype.animate;
+    Element.prototype.animate = (() => ({ onfinish: null, oncancel: null, cancel() {} })) as never;
+    return () => {
+      if (had) Element.prototype.animate = before;
+      else delete (Element.prototype as { animate?: unknown }).animate;
+    };
+  };
+
+  const myCard = boardPlaying.legalCards![1]; // Q♠
+  // South LEADS trick 5 (not the trick-in-progress boardPlaying ships with),
+  // so the burst is two cards in one trick and no boundary: my card, then
+  // West's reply, then it is dummy's turn. stagePlaySteps therefore emits
+  // [my card @0, West @GLIDE_MS+ROBOT_GAP_MS, server view @GLIDE_MS+160].
+  const onLead: BoardView = { ...boardPlaying, currentTrick: [], handToPlay: 2 };
+  const westCard = boardPlaying.dummyHand!.find((c) => !boardPlaying.hand.includes(c))! + 0;
+  const afterBurst: BoardView = {
+    ...onLead,
+    hand: onLead.hand.filter((c) => c !== myCard),
+    currentTrick: [
+      { seat: 2, card: myCard },
+      { seat: 3, card: westCard },
+    ],
+    myTurn: true,
+    handToPlay: 0,
+    legalCards: boardPlaying.dummyHand!,
+  };
+
+  // Deliberately generous margins rather than knife-edge boundaries: the
+  // claim under test is which EVENT the beat is measured from, and the two
+  // answers are 710ms and 1010ms apart from the tap. Asserting to the
+  // millisecond only buys flakiness from how the mocked promise's
+  // continuation interleaves with the fake clock.
+  const ROUND_TRIP_MS = 300;
+  const BEAT_MS = GLIDE_MS + ROBOT_GAP_MS; // 710 — the gap the animation always spent
+  const westOnTable = () => Boolean(document.querySelector('.trick .seatpos.w .pcard'));
+
+  // A staged step's setBoard fires from a bare setTimeout, outside act(), so
+  // React has committed nothing by the time advanceTimersByTimeAsync returns.
+  // The trailing zero-advance lets it, which matters in BOTH directions here:
+  // without it an uncommitted render reads exactly like a card that has not
+  // landed yet, and the "not yet" assertions would pass for the wrong reason.
+  const advance = async (ms: number) => {
+    await vi.advanceTimersByTimeAsync(ms);
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  it('subtracts the round trip from the beat before the robot answers', async () => {
+    const restore = withWaapi();
+    apiMock.board.mockResolvedValue(onLead);
+    let settle!: (value: { board: BoardView }) => void;
+    apiMock.playCard.mockReturnValue(new Promise<{ board: BoardView }>((resolve) => (settle = resolve)));
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      expect(motionOK()).toBe(true); // the staged path really is live here
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(queen);
+
+      // my card is on the table at once; the robot's is not
+      expect(document.querySelector('.trick .seatpos.s .pcard')).toHaveTextContent('Q');
+      expect(westOnTable()).toBe(false);
+
+      // the server takes ROUND_TRIP_MS to answer
+      await advance(ROUND_TRIP_MS);
+      settle({ board: afterBurst });
+      await advance(0);
+      expect(westOnTable()).toBe(false);
+
+      // Still inside the beat measured FROM THE TAP, so nothing has moved...
+      await advance(BEAT_MS - ROUND_TRIP_MS - 60);
+      expect(westOnTable()).toBe(false);
+      // ...and just past it, the robot answers. Without the subtraction this
+      // is still 240ms away: the beat would restart at the RESPONSE, putting
+      // the robot's card at tap + ROUND_TRIP_MS + BEAT_MS instead.
+      await advance(120);
+      expect(westOnTable()).toBe(true);
+
+      // and the real server view still lands after it, unlocking the fans
+      await advance(GLIDE_MS + 160);
+      await vi.waitFor(() => expect(screen.getByText(/playing from dummy/)).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it('never rushes the robot when the response beats the beat', async () => {
+    // The subtraction only ever spends time that has actually passed — a
+    // response faster than the beat must not shorten it.
+    const restore = withWaapi();
+    apiMock.board.mockResolvedValue(onLead);
+    apiMock.playCard.mockResolvedValue({ board: afterBurst });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(queen);
+      await advance(0);
+
+      await advance(BEAT_MS - 60);
+      expect(westOnTable()).toBe(false);
+      await advance(120);
+      expect(westOnTable()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      restore();
+    }
   });
 });
 
