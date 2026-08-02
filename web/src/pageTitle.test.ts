@@ -35,6 +35,30 @@ describe('pageTitle', () => {
     expect(pageTitle('/t/abc', '')).toBe('Refused at the gate | Nickel Bridge');
   });
 
+  it('matches the router on trailing slashes', () => {
+    // react-router resolves /leaderboard/ to the /leaderboard route, so the
+    // ladder renders. Before this was handled, the tab said "Refused at the
+    // gate" over a perfectly good screen — and the analytics hit for that URL
+    // looked like a 404 in the reports.
+    expect(pageTitle('/leaderboard/', '')).toBe('Rankings | Nickel Bridge');
+    expect(pageTitle('/glossary/', '')).toBe(pageTitle('/glossary', ''));
+    expect(pageTitle('/t/17/b/3/', '')).toBe('Board 3 · Crossing 17 | Nickel Bridge');
+    expect(pageTitle('/glossary/finesse/', '')).toBe('Finesse — bridge term | Nickel Bridge');
+    // The root is one character long and must survive the trim.
+    expect(pageTitle('/', '')).toBe(HOME_TITLE);
+  });
+
+  it('refuses the paths that render not-found, rather than naming their screen', () => {
+    // These are looser than the <Route>s they resemble: /players/ with nothing
+    // after it matches no route and renders the app's own not-found screen, so
+    // titling it "Stats" would name a screen that isn't there.
+    expect(pageTitle('/players/', '')).toBe('Refused at the gate | Nickel Bridge');
+    expect(pageTitle('/compare/', '')).toBe('Refused at the gate | Nickel Bridge');
+    expect(pageTitle('/t/17/nonsense', '')).toBe('Refused at the gate | Nickel Bridge');
+    expect(pageTitle('/t/17/b/', '')).toBe('Refused at the gate | Nickel Bridge');
+    expect(pageTitle('/players/42/extra', '')).toBe('Refused at the gate | Nickel Bridge');
+  });
+
   describe('the glossary, whose titles the prerender emits from this function', () => {
     // Spelled out as literals on purpose: web/scripts/prerender.mjs calls
     // pageTitle() for every page it writes, so the two can't disagree — but
@@ -66,13 +90,22 @@ describe('pageTitle', () => {
       expect(pageTitle('/leaderboard', '?term=not-a-term')).toBe('Rankings | Nickel Bridge');
     });
 
-    it('refuses an unknown term PATH, which the server answers 404 for', () => {
-      expect(pageTitle('/glossary/not-a-term', '')).toBe('Refused at the gate | Nickel Bridge');
+    it('titles an unknown term PATH as the glossary, which is where it lands', () => {
+      // Glossary.tsx replaces /glossary/<slug> with /glossary?term=<slug> on
+      // mount, and an unknown ?term= falls through to the index — so the
+      // visitor ends on the glossary with a "not in the ledger" sheet. Saying
+      // "Refused at the gate" here would be a flash of the wrong answer.
+      expect(pageTitle('/glossary/not-a-term', '')).toBe(
+        `Glossary of bridge terms — ${TERMS.length} definitions | Nickel Bridge`,
+      );
     });
+  });
 
-    it('agrees with the prerender about the home title', () => {
-      expect(HOME_TITLE).toBe('Nickel Bridge — learn & play duplicate bridge');
-    });
+  it('pins the home title, the string three places have to agree on', () => {
+    // prerender.mjs derives its copy from HOME_TITLE, so it cannot drift; the
+    // test below covers index.html, which can. This is the speed bump for
+    // changing the string itself.
+    expect(HOME_TITLE).toBe('Nickel Bridge — learn & play duplicate bridge');
   });
 
   it("matches web/index.html's shell title, the one copy that can't be derived", () => {

@@ -155,11 +155,15 @@ export default function App() {
   // the PREVIOUS screen's title — effects run in registration order, and the
   // tab hasn't been updated yet when the view is sent.
   //
-  // The gate matters: a signed-out visitor at a private URL is shown the
-  // LANDING page, not that route, so titling the tab "Crossing 17" would
-  // describe a screen they aren't looking at and can't reach. Public routes
-  // render for real either way, so those keep their own title.
-  const title = Boolean(me?.user) || isPublicPath(pathname) ? pageTitle(pathname, search) : HOME_TITLE;
+  // The gate matters, and it is about what is ON SCREEN rather than what the
+  // URL says. Two states render in place of the routes entirely: a signed-out
+  // visitor at a private URL gets the LANDING page, and an account without a
+  // handle gets CreateHandle at every URL. Titling either tab "Crossing 17"
+  // describes a screen the visitor isn't looking at. Public routes render for
+  // real in both cases... except the handle one, which renders over
+  // everything — so it loses its title too.
+  const routed = Boolean(me?.user?.handle) || (!me?.user && isPublicPath(pathname));
+  const title = routed ? pageTitle(pathname, search) : HOME_TITLE;
 
   // Analytics (Google Analytics 4, see analytics.ts). A client-rendered SPA
   // has to send its own page views — gtag's config-time one would record a
@@ -171,9 +175,11 @@ export default function App() {
   useAnalytics({ enabled: reportsAnalytics(me), pathname, search, title });
 
   // What the browser tab, the history entry and any bookmark say (pageTitle.ts).
-  // Applied on every navigation, so a page that later refines the title with
-  // data only it has — a handle, a date — is a last-write-wins override that
-  // resets cleanly when you navigate away.
+  // Note for anyone adding a page-level refinement (a handle, a date): React
+  // commits CHILD effects before the parent's, so a title set from a page's
+  // mount effect is overwritten by this one on that same navigation. It has to
+  // be written on a later render — once the data arrives — where `title` is
+  // unchanged and this effect doesn't re-run. Nothing does that today.
   useEffect(() => {
     document.title = title;
   }, [title]);

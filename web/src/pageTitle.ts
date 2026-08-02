@@ -39,7 +39,7 @@
  * prerender runs under bare Node, whose resolver won't guess it. See the note
  * in web/tsconfig.json.
  */
-import { TERMS } from './glossary/terms.ts';
+import { TERMS, TERM_BY_SLUG } from './glossary/terms.ts';
 
 /** The one title with no screen name in it: the front door's own pitch. */
 export const HOME_TITLE = 'Nickel Bridge — learn & play duplicate bridge';
@@ -49,34 +49,45 @@ const SITE = 'Nickel Bridge';
 /** `<what you are looking at> | Nickel Bridge`, the shape every other page takes. */
 const titled = (what: string) => `${what} | ${SITE}`;
 
-const termBySlug = new Map(TERMS.map((t) => [t.slug, t]));
-
 /**
  * The title for a URL. Pure and synchronous — it reads the path, the `?term=`
  * param and the static glossary data, and nothing else.
  *
- * Screens that know more than the URL does (a player's handle, a tournament's
- * date) can refine this later by setting document.title themselves once their
- * data arrives; App.tsx applies this on every navigation, so a page-level
- * refinement is a last-write-wins override that resets when you navigate away.
+ * A screen that knows more than the URL does (a player's handle, a tournament's
+ * date) can refine this by setting document.title itself — but NOT from its
+ * mount effect: React commits child effects before the parent's, so App.tsx's
+ * title effect runs afterwards on that same navigation and overwrites it. It
+ * has to happen on a later render, once the data arrives, where `title` is
+ * unchanged and App's effect doesn't re-run. Nothing does this today.
  */
 export function pageTitle(pathname: string, search: string): string {
+  // The router treats `/leaderboard/` as `/leaderboard`, so this must too —
+  // otherwise the ladder renders under a tab reading "Refused at the gate",
+  // and the analytics hit looks like a 404 in the reports. The SPA fallback
+  // answers 200 for any path, so trailing-slash URLs are genuinely reachable.
+  if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+
   // A term sheet is the foreground content wherever it is opened from, and
   // analytics.ts already counts it as its own URL — so the title follows the
   // sheet rather than the page underneath it. An unknown slug falls through
   // to the route's own title, exactly as the server treats an unknown
   // ?term= (a 200 on the index, never an error).
   const slug = new URLSearchParams(search).get('term');
-  const sheet = slug ? termBySlug.get(slug) : undefined;
+  const sheet = slug ? TERM_BY_SLUG.get(slug) : undefined;
   if (sheet) return titled(`${sheet.term} — bridge term`);
 
   if (pathname === '/') return HOME_TITLE;
   if (pathname === '/glossary') return titled(`Glossary of bridge terms — ${TERMS.length} definitions`);
   if (pathname.startsWith('/glossary/')) {
-    const term = termBySlug.get(pathname.slice('/glossary/'.length));
-    // Not in the ledger: the app shows its own "no such term" sheet on a path
-    // the server answered 404 for, so the title should say so too.
-    return term ? titled(`${term.term} — bridge term`) : titled('Refused at the gate');
+    const term = TERM_BY_SLUG.get(pathname.slice('/glossary/'.length));
+    if (term) return titled(`${term.term} — bridge term`);
+    // Not in the ledger. The tab reads as the glossary rather than as a
+    // refusal because that is where the visitor ACTUALLY lands: Glossary.tsx
+    // replaces /glossary/<slug> with /glossary?term=<slug> on mount, and an
+    // unknown ?term= falls through to the index (with its own "not in the
+    // ledger" sheet on top). Titling this a refusal would be a flash of the
+    // wrong answer on the way to the right one.
+    return titled(`Glossary of bridge terms — ${TERMS.length} definitions`);
   }
 
   if (pathname === '/leaderboard') return titled('Rankings');
@@ -84,15 +95,19 @@ export function pageTitle(pathname: string, search: string): string {
   if (pathname === '/settings') return titled('Settings');
   if (pathname === '/tour') return titled('The first crossing');
   if (pathname === '/scenarios') return titled('The Exhibit Hall');
-  if (pathname.startsWith('/players/')) return titled('Stats');
-  if (pathname.startsWith('/compare/')) return titled('Head to head');
+  // Anchored, not prefixed: `/players/` and `/compare/` with nothing after
+  // them match no <Route> and render the app's own not-found screen, so a
+  // prefix test would title a refusal "Stats".
+  if (/^\/players\/[^/]+$/.test(pathname)) return titled('Stats');
+  if (/^\/compare\/[^/]+$/.test(pathname)) return titled('Head to head');
 
   // A crossing, and the board within it. Both numbers come from the URL, which
   // is what makes two open boards tellable apart in a tab strip or a history
-  // list — the whole point of the exercise.
+  // list — the whole point of the exercise. Anchored for the same reason as
+  // above: /t/17/nonsense renders not-found, so it must not read "Crossing 17".
   const board = pathname.match(/^\/t\/(\d+)\/b\/(\d+)$/);
   if (board) return titled(`Board ${board[2]} · Crossing ${board[1]}`);
-  const crossing = pathname.match(/^\/t\/(\d+)(\/|$)/);
+  const crossing = pathname.match(/^\/t\/(\d+)(?:\/review)?$/);
   if (crossing) return titled(`Crossing ${crossing[1]}`);
 
   return titled('Refused at the gate');
