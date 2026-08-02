@@ -231,11 +231,24 @@ The same read is also a live demonstration of why this table exists. Re-reading 
 and 14.25 h/85 recorded at the time. Hours drifted up, episodes down ~14%, purely from age. The
 contemporaneous numbers are the real ones.
 
-Demo's spike (5.68 h on 07-30, 3.35 h on 07-31 against a ~1.3 h baseline) was **transient and
-self-inflicted**: two full e2e tournaments, repeated 131-URL comparison sweeps, three forced
-264-URL purges and extra deploys, all run against it while debugging the purge on those days. By
-08-01 it was back to 1.31 h/11 episodes, indistinguishable from before it was fronted. It was
-not evidence of fronting backfiring.
+Demo's spike was **transient and self-inflicted**: two full e2e tournaments, repeated 131-URL
+comparison sweeps, three forced 264-URL purges and extra deploys, all run against it while
+debugging the purge on 07-30 and 07-31. By 08-01 it was back to 1.31 h/11 episodes,
+indistinguishable from before it was fronted, so it was not evidence of fronting backfiring.
+
+The 07-30 peak is not in the table above because it is at a different resolution, and mixing the
+two is the mistake this whole section is about. From one `node scripts/fly-uptime.mjs
+nickel-bridge-demo 7` run on 08-02, comparing **only its 30s rows against each other**:
+
+| Day (UTC) | `nickel-bridge-demo` up | episodes | step |
+| --- | --- | --- | --- |
+| 2026-07-28 | 1.33 h | 11 | 30s |
+| 2026-07-29 | 1.28 h | 11 | 30s |
+| 2026-07-30 | 5.68 h | 36 | 30s |
+
+A 4× spike on the day the debugging happened, against its own neighbours at matching step. Note
+these 07-28/29 figures are the degraded 30s re-reads, not the 15s originals in the baseline table
+— usable here precisely because every row being compared is equally degraded.
 
 ### Why it did not help, and what would
 
