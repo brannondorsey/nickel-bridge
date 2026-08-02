@@ -44,8 +44,13 @@
  * Everything else — the module script tag, the pre-paint theme script — is
  * copied verbatim, so a real visitor who follows a search result still boots
  * the ordinary SPA. React clears #root on mount, so the prerendered markup is
- * a fallback for non-JS agents and a first paint for everyone else, never a
- * second copy of the UI to keep in sync.
+ * a fallback for non-JS agents, never a second copy of the UI to keep in sync.
+ *
+ * It is a first paint for a search arrival too — but NOT for anyone who has
+ * signed in on this browser before, who would otherwise watch the landing
+ * pitch paint and then be replaced by the lobby they asked for. The STYLE
+ * block below hides it under an attribute web/index.html sets pre-paint; the
+ * reasoning is written out there.
  *
  * Term data is imported straight from the TypeScript source. Node >= 24 (this
  * repo's engines floor, and what CI and the Dockerfile use) strips types
@@ -197,6 +202,16 @@ const STYLE = `<style>
       :root[data-theme='light'] .pr-aliases,
       :root[data-theme='light'] .pr-attrib { color: #6E6A62; }
       :root[data-theme='light'] .pr-terms li { border-bottom-color: #E4E1D8; }
+      /* And the one rule that decides whether any of the above is ever seen.
+         This markup is a fallback for agents that can't run JavaScript; a
+         browser that is about to boot the SPA over it, and that has held a
+         signed-in session before, gets nothing here at all — otherwise a player
+         refreshing the lobby watches the landing-page pitch paint and then
+         vanish. The attribute is set pre-paint from nb:lastVisit by the third
+         inline script in web/index.html; see there for why this is a
+         client-side guess rather than the server's exact answer. Scoped to .pr
+         rather than #root, since React empties #root and refills it. */
+      :root[data-returning-player] .pr { display: none; }
     </style>`;
 
 /** Swap the shell's site-wide SEO span and fill #root. */
