@@ -22,6 +22,7 @@ import {
   capturePlayOrigin,
   claimAnnouncement,
   optimisticPlayView,
+  planClaim,
   stageBidSteps,
   stageClaimSteps,
   stagePlaySteps,
@@ -621,8 +622,9 @@ const claimNext: BoardView = {
 
 describe('claimAnnouncement', () => {
   it('derives the claiming side and trick count from playHistory alone', () => {
-    // South (seat 2, the N-S side) wins both new tricks
-    expect(claimAnnouncement(claimPrev, claimNext)).toEqual({ side: 'NS', tricks: 2 });
+    // South (seat 2, the N-S side) wins both new tricks — nothing precedes
+    // the guaranteed run, so the announcement can go up straight away
+    expect(claimAnnouncement(claimPrev, claimNext)).toEqual({ side: 'NS', tricks: 2, priorTricks: 0 });
   });
 
   it('returns null without the claimed flag, playHistory, or a resolvable strain', () => {
@@ -771,8 +773,10 @@ const mixedNext: BoardView = {
 describe('claimAnnouncement — mixed leading trick', () => {
   it('does not count the in-progress trick toward the claim when it goes to the other side', () => {
     // if it blindly trusted the first new trick, this would wrongly report
-    // {side: 'EW', tricks: 3} — West's ace, not the actual N-S laydown
-    expect(claimAnnouncement(mixedPrev, mixedNext)).toEqual({ side: 'NS', tricks: 2 });
+    // {side: 'EW', tricks: 3} — West's ace, not the actual N-S laydown.
+    // priorTricks: 1 is that same boundary, handed to planClaim so the
+    // defense's trick is paid BEFORE the announcement goes up.
+    expect(claimAnnouncement(mixedPrev, mixedNext)).toEqual({ side: 'NS', tricks: 2, priorTricks: 1 });
   });
 });
 
@@ -793,5 +797,90 @@ describe('stageClaimSteps — mixed leading trick', () => {
     expect(last.view.completedTricks).toBe(12);
     expect(last.view.declarerTricks).toBe(8);
     expect(last.view.defenderTricks).toBe(4);
+  });
+});
+
+describe('stageClaimSteps — ranges', () => {
+  it('emits only the lead: the in-progress trick, ending on its collect', () => {
+    const lead = stageClaimSteps(mixedPrev, mixedNext, false, { to: 1 });
+    expect(lead).toHaveLength(2 + 2); // 2 cards finish trick 9, then hold + collect
+    expect(lead[0].delayBefore).toBe(0); // the human's own card, already tapped
+    const settled = lead[lead.length - 1].view;
+    expect(settled.currentTrick).toEqual([]);
+    expect(settled.completedTricks).toBe(10);
+    expect(settled.declarerTricks).toBe(6);
+    expect(settled.defenderTricks).toBe(4);
+  });
+
+  it('keeps the lead views holding the cards the TAIL will play', () => {
+    // The reconstruction spans the whole burst even when only the lead is
+    // emitted: slicing newTricks up front instead would make handAt() think
+    // the tail's cards were already gone, and South's remaining hand would
+    // empty out during the lead and refill when the fast-forward began.
+    const settled = stageClaimSteps(mixedPrev, mixedNext, false, { to: 1 }).at(-1)!.view;
+    expect(mixedNext.hand).toEqual([]); // the final view really is empty...
+    expect(settled.hand).toContain(C(2)); // ...but South still holds declTrick1's card
+    expect(settled.hand).toContain(C(5)); // ...and declTrick2's
+  });
+
+  it('emits only the guaranteed run, carrying the lead’s running tally', () => {
+    const tail = stageClaimSteps(mixedPrev, mixedNext, false, { from: 1 });
+    expect(tail).toHaveLength(6 + 6); // the two clean tricks
+    expect(tail[0].delayBefore).toBe(0); // the caller already held for the announcement
+    // the stale in-progress trick is not re-prepended, and the tally picks
+    // up where the lead left off
+    expect(tail[0].view.currentTrick).toEqual([declTrick1[0]]);
+    expect(tail[0].view.completedTricks).toBe(10);
+    expect(tail[0].view.declarerTricks).toBe(6);
+    expect(tail[0].view.defenderTricks).toBe(4);
+    expect(tail[0].view.lastTrick).toEqual(mixedTrick);
+  });
+
+  it('splits pacing only — lead + tail cover exactly the unranged views', () => {
+    const whole = stageClaimSteps(mixedPrev, mixedNext);
+    const split = [
+      ...stageClaimSteps(mixedPrev, mixedNext, false, { to: 1 }),
+      ...stageClaimSteps(mixedPrev, mixedNext, false, { from: 1 }),
+    ];
+    expect(split.map((s) => s.view)).toEqual(whole.map((s) => s.view));
+  });
+
+  it('treats an empty or absent range sensibly', () => {
+    const whole = stageClaimSteps(mixedPrev, mixedNext);
+    expect(stageClaimSteps(mixedPrev, mixedNext, false, {})).toEqual(whole);
+    expect(stageClaimSteps(mixedPrev, mixedNext, false, { to: 0 })).toEqual([]);
+    expect(stageClaimSteps(mixedPrev, mixedNext, false, { from: 2, to: 2 })).toEqual([]);
+    // out of range clamps rather than throwing
+    expect(stageClaimSteps(mixedPrev, mixedNext, false, { from: -5, to: 99 })).toEqual(whole);
+    expect(stageClaimSteps(mixedPrev, mixedNext, false, { from: 99 })).toEqual([]);
+  });
+});
+
+describe('planClaim', () => {
+  it('splits a mixed burst into the trick to pay first and the run to fast-forward', () => {
+    const plan = planClaim(mixedPrev, mixedNext, { fast: true, motion: true })!;
+    expect(plan.info).toEqual({ side: 'NS', tricks: 2, priorTricks: 1 });
+    // the lead is ordinary play, so it never takes the claim's compressed
+    // pacing however the fast-forward setting is set
+    expect(plan.lead).toEqual(stageClaimSteps(mixedPrev, mixedNext, false, { to: 1 }));
+    expect(plan.tail).toEqual(stageClaimSteps(mixedPrev, mixedNext, true, { from: 1 }));
+    expect(plan.tail[0].delayBefore).toBe(0);
+  });
+
+  it('still plans the lead without motion — its last view is what the board must show', () => {
+    const plan = planClaim(mixedPrev, mixedNext, { fast: true, motion: false })!;
+    expect(plan.lead.length).toBeGreaterThan(0);
+    expect(plan.tail).toEqual([]);
+  });
+
+  it('leaves a claim with nothing before it exactly as it was', () => {
+    const plan = planClaim(claimPrev, claimNext, { fast: true, motion: true })!;
+    expect(plan.info.priorTricks).toBe(0);
+    expect(plan.lead).toEqual([]);
+    expect(plan.tail).toEqual(stageClaimSteps(claimPrev, claimNext, true));
+  });
+
+  it('returns null when the transition is not a readable claim', () => {
+    expect(planClaim(claimPrev, { ...claimNext, claimed: false }, { fast: true, motion: true })).toBeNull();
   });
 });

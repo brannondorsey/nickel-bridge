@@ -6,7 +6,7 @@
  * A recipe is (seed, boardNo, human actions). Deals derive deterministically
  * from the seed and robots are deterministic (CLAUDE.md invariant 1), so
  * replaying the actions through the real engine always reproduces the same
- * state. Delta-driven UI (grade toast, claim banner + fast-forward, the live
+ * state. Delta-driven UI (grade toast, claim announcement + fast-forward, the live
  * toll receipt, staged trick animation) only appears on a live response
  * transition, so recipes deliberately stop ONE human action short of the
  * trigger — the description tells the tester what final step to take.
@@ -195,7 +195,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'claim-fires',
     label: 'The defense claims the rest',
     description:
-      'Your doubled 1NT is going down and the robots can prove it. One forced ♣Q left — watch it pay itself, and the claim banner goes up while the remaining tricks fast-forward to the score.',
+      'Your doubled 1NT is going down and the robots can prove it. One forced ♣Q left — it takes the trick, and only once that trick is paid does the claim ticket go up over the seven the defense can prove are theirs, then the fast-forward runs to the score.',
     category: 'claims',
     seed: 'hunt-6',
     boardNo: 1,

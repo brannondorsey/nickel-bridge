@@ -7,6 +7,7 @@ import {
   AUTO_PLAY_DELAY_MS,
   BID_GAP_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
+  CLAIM_LEAD_SETTLE_MS,
   GLIDE_MS,
   ROBOT_GAP_MS,
   motionOK,
@@ -814,6 +815,12 @@ describe('Board — claims', () => {
   // below on the ace of clubs — unlike placeholderTrick (used only for the
   // already-accounted-for history entries these tests slice off), these
   // ones' winners actually back the declarerTricks/defenderTricks tallies.
+  //
+  // Load-bearing: N/S also win the trick already in progress (South's ♠Q),
+  // so claimAnnouncement reports priorTricks: 0 and there is nothing to pay
+  // before the announcement. These two tests are therefore the pin for "a
+  // claim with nothing in front of it still pops immediately" — the mixed
+  // case, where the defense takes the trick first, is the test below them.
   const buildClaimed = (): BoardView => {
     const soleCard = boardPlaying.legalCards![1]; // Q♠ — completes the trick in progress
     const fullTrick: TrickCard[] = [...boardPlaying.currentTrick!, { seat: 2, card: soleCard }];
@@ -917,6 +924,99 @@ describe('Board — claims', () => {
       // tap dismisses well before CLAIM_ANNOUNCE_HOLD_MS would elapse on its own
       fireEvent.click(screen.getByRole('dialog'));
       await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The trick already in progress when the request went out goes to the
+  // DEFENSE: West leads ♥Q, dummy follows ♥2, East wins with ♥A and South's
+  // ♥9 can't touch it. Only the eight tricks after that are N/S's guaranteed
+  // run — so announcing "N/S CLAIM" the instant the response lands would put
+  // a claim notice over a trick the player is about to see the other side
+  // win. The board has to pay that trick first.
+  const HQ = 13 + 10;
+  const HA = 13 + 12;
+  const H2 = 13 + 0;
+  const H9 = 13 + 7;
+  const defensePrev: BoardView = {
+    ...boardPlaying,
+    currentTrick: [
+      { seat: 3, card: HQ },
+      { seat: 0, card: H2 },
+      { seat: 1, card: HA },
+    ],
+    legalCards: [13 + 11, 13 + 9, H9], // ♥K ♥J ♥9 — South must follow suit
+  };
+
+  const buildDefenseClaimed = (): BoardView => {
+    const heartTrick: TrickCard[] = [...defensePrev.currentTrick!, { seat: 2, card: H9 }];
+    const placeholderTrick: TrickCard[] = [
+      { seat: 0, card: 26 },
+      { seat: 1, card: 27 },
+      { seat: 2, card: 31 },
+      { seat: 3, card: 32 },
+    ];
+    const claimTrick: TrickCard[] = [
+      { seat: 0, card: 39 + 12 }, // North: A♣
+      { seat: 1, card: 39 + 1 },
+      { seat: 2, card: 39 + 2 },
+      { seat: 3, card: 39 + 3 },
+    ];
+    return {
+      ...boardPlaying,
+      contract: { level: 4, strain: 3, declarer: 2 }, // spades trump, South declares
+      state: 'done',
+      claimed: true,
+      myTurn: false,
+      legalCards: undefined,
+      currentTrick: [],
+      completedTricks: 13,
+      declarerTricks: 11,
+      defenderTricks: 2,
+      lastTrick: claimTrick,
+      hand: [],
+      dummyHand: [],
+      playHistory: [...Array(4).fill(placeholderTrick), heartTrick, ...Array(8).fill(claimTrick)],
+      result: boardDone.result,
+      allHands: boardDone.allHands,
+    };
+  };
+
+  it('pays the trick the other side just won before announcing the claim over it', async () => {
+    apiMock.board.mockResolvedValue(defensePrev);
+    apiMock.playCard.mockResolvedValue({ board: buildDefenseClaimed() });
+
+    // jsdom has no WAAPI, so this is the reduced-motion path: the lead isn't
+    // animated card by card, but its settled view still has to be on the
+    // board — and readable — before the overlay covers it.
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: '9 of ♥' }));
+      fireEvent.click(screen.getByRole('button', { name: '9 of ♥' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // no announcement yet — instead the trick is paid, to the defense
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(document.querySelector('.trick-meter-num')!.textContent).toBe('3–2');
+
+      // ...and it holds long enough for the tally to be read
+      await vi.advanceTimersByTimeAsync(CLAIM_LEAD_SETTLE_MS / 2);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      // only then does the claim go up, counting the eight guaranteed tricks
+      // and not the one just lost
+      await vi.advanceTimersByTimeAsync(CLAIM_LEAD_SETTLE_MS);
+      await vi.waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      expect(screen.getByText('N/S CLAIM')).toBeInTheDocument();
+      expect(screen.getByText('8 REMAINING TRICKS')).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(CLAIM_ANNOUNCE_HOLD_MS);
       await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     } finally {

@@ -40,15 +40,17 @@ import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
+  CLAIM_LEAD_SETTLE_MS,
   ClaimAnnouncement,
   StagedStep,
   captureFanOriginIfVisible,
-  claimAnnouncement,
   motionOK,
   optimisticPlayView,
+  planClaim,
   stageBidSteps,
   stageClaimSteps,
   stagePlaySteps,
+  totalDuration,
   trimStagedPrefix,
 } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
@@ -259,9 +261,14 @@ export default function Board() {
               ? stageBidSteps(prev, next)
               : stagePlaySteps(prev, next)
           : [];
-      // A claim is left alone: runClaim owns that sequence, its announcement
-      // hold already separates the tap from the fast-forward, and its first
-      // tail step re-applies the optimistic card harmlessly.
+      // A claim is left alone: runClaim owns that sequence, its own beats
+      // already separate the tap from the fast-forward, and whichever step
+      // comes first — the lead's, or the tail's when there is no lead —
+      // re-applies the optimistic card harmlessly. The cost of not trimming
+      // there is that the step AFTER it starts its gap from the response
+      // rather than from when the card appeared, i.e. the claim's first beat
+      // runs about a round trip long. Accepted rather than threaded through:
+      // that sequence is already paced by a 2s announcement hold.
       const steps = shown && !next.claimed ? trimStagedPrefix(staged, shown.view, Date.now() - shown.at) : staged;
       if (!steps.length) {
         cancelStaging();
@@ -275,27 +282,57 @@ export default function Board() {
     [cancelStaging, scheduleSteps],
   );
 
-  // Bracket a claim in two beats: the ClaimOverlay holds the board for
+  // Bracket a claim in three beats. First the LEAD: the newly-completed
+  // tricks that aren't part of the guaranteed run — in practice the trick
+  // that was already in progress when this request went out, which either
+  // side can still win — replay at ordinary table pace, exactly as they
+  // would have without a claim. Announcing over them was the bug: you play
+  // the card that wins a trick, and before the trick is finished or paid a
+  // modal says "E/W CLAIM" over it. Then the ClaimOverlay holds the board for
   // CLAIM_ANNOUNCE_HOLD_MS (tap/click/Escape dismisses early, via
-  // claimSkipRef/skipClaimAnnouncement above), THEN the tail plays out —
-  // paced per the "Fast forward settled tricks" setting — before handing off
-  // to the real (state: 'done') `next` view. Splitting it this way (rather
-  // than the overlay popping up alongside cards already moving) is the whole
-  // point: the announcement can't be missed if nothing else on the board is
-  // changing while it's up. Applies whether or not motion is on — even
-  // without a fast-forward to animate afterward, the announcement still
-  // deserves its full, deliberate, dismissible read before jumping straight
-  // to the result, same "always applies" reasoning as AUTO_PLAY_DELAY_MS.
+  // claimSkipRef/skipClaimAnnouncement above) — nothing else on the board is
+  // moving while it's up, which is the whole point of the overlay. Then the
+  // tail plays out, paced per the "Fast forward settled tricks" setting,
+  // before handing off to the real (state: 'done') `next` view.
+  //
+  // Only the tail is animation: the lead's final view and the announcement
+  // hold both apply whether or not motion is on, since a reduced-motion
+  // player still needs the board to agree with the modal covering it and
+  // still deserves a deliberate, dismissible read of the news.
+  //
+  // A tap during the lead deliberately skips nothing — claimSkipRef is only
+  // armed while the announcement is up, there's no affordance offering a
+  // skip before then, and skipping would jump the very trick this exists to
+  // show.
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
-      const info = claimAnnouncement(prev, next);
-      if (!info) {
+      const motion = motionOK();
+      const plan = planClaim(prev, next, { fast: fastForward, motion });
+      if (!plan) {
         applyBoard(prev, next); // data didn't line up — fall back to a plain (unanimated) jump
         return;
       }
       const gen = ++claimGenRef.current;
 
-      setClaimInfo(info);
+      // beat one: pay the trick in progress before saying anything about it
+      if (plan.lead.length) {
+        const settled = plan.lead[plan.lead.length - 1].view;
+        if (motion) {
+          scheduleSteps(prev, plan.lead);
+          await sleep(totalDuration(plan.lead));
+        } else {
+          cancelStaging();
+          setBoard(settled);
+        }
+        if (claimGenRef.current !== gen) return;
+        await sleep(CLAIM_LEAD_SETTLE_MS); // let the tally stamp land
+        if (claimGenRef.current !== gen) return;
+      }
+
+      // beat two: the announcement. claimInfo is set only now — non-null, it
+      // blanks PlayPhase's board hint for the whole sequence, and during the
+      // lead that hint should read like any other robot burst.
+      setClaimInfo(plan.info);
       setClaimAnnounceOpen(true);
       await new Promise<void>((resolve) => {
         const timer = window.setTimeout(finish, CLAIM_ANNOUNCE_HOLD_MS);
@@ -309,18 +346,18 @@ export default function Board() {
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
-      // The settings tab's "Fast forward settled tricks" (users.fast_forward)
-      // chooses the pacing of this replay and nothing else: the cards were
-      // played by the server before this response arrived either way, so off
-      // means "watch them at table speed", never "play them yourself".
-      if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, fastForward);
-        if (steps.length) {
-          scheduleSteps(prev, steps);
-          const totalMs = steps.reduce((sum, step) => sum + step.delayBefore, 0);
-          await sleep(totalMs);
-          if (claimGenRef.current !== gen) return;
-        }
+      // beat three: the settings tab's "Fast forward settled tricks"
+      // (users.fast_forward) chooses the pacing of this replay and nothing
+      // else — the cards were played by the server before this response
+      // arrived either way, so off means "watch them at table speed", never
+      // "play them yourself". Scheduled against whatever is actually on
+      // screen, so scheduleSteps' new-card diff (and with it the fan flight
+      // origin for the human's own next card) starts from the right trick.
+      if (plan.tail.length) {
+        const tailPrev = plan.lead.length ? plan.lead[plan.lead.length - 1].view : prev;
+        scheduleSteps(tailPrev, plan.tail);
+        await sleep(totalDuration(plan.tail));
+        if (claimGenRef.current !== gen) return;
       }
 
       setClaimInfo(null);

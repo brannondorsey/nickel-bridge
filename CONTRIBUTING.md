@@ -371,24 +371,45 @@ either side is DD-confirmed to win 100% of the remaining tricks, it marks the bo
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
 untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
-needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`); rather
-than starting the fast-forward the instant a claim is detected (easy to miss, since the old
-announcement banner popped up alongside cards already in motion), `Board.tsx`'s `runClaim` holds
-the board on a modal `ClaimOverlay` for `CLAIM_ANNOUNCE_HOLD_MS` — tap, click, or Escape
-dismisses early — before the remaining tricks play out through a separate `stageClaimSteps`
-staging function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
-response — a claim can span many), reusing the same glide-in/collect machinery `stagePlaySteps`
-uses for ordinary play but at `CLAIM_SPEEDUP_FACTOR` pacing (33% faster than the claim's already-
-compressed base gaps), before handing off to the normal completion view. The hold applies
-whether or not motion is on — without a fast-forward to animate afterward there's nothing to
-hold the announcement up *for*, but it still deserves its full, dismissible read before jumping
-straight to the result. Because the solve only runs at a decision point with more than one legal
-card, the trick already in progress when the client's last request went out can still finish for
-either side before the guaranteed run of claim tricks begins — `claimAnnouncement`/
-`stageClaimSteps` tally each newly-completed trick by its actual winner rather than assuming the
-whole batch belongs to the claiming side. See invariant 1 below — claims change what
-`advanceRobots` records for a human's untaken decisions, so they interact directly with the
-robot-trace fixture.
+needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`).
+`Board.tsx`'s `runClaim` plays that response back in **three beats**, and `planClaim` in
+`playAnim.ts` is the one pure place that decides which cards belong to which:
+
+1. **The lead.** Because the solve only runs at a decision point with more than one legal card,
+   the trick already in progress when the client's last request went out can still finish for
+   *either* side before the guaranteed run begins. `claimAnnouncement`'s backward walk finds
+   that boundary and reports it as `priorTricks`; those tricks replay first, at ordinary table
+   pace, exactly as they would have without a claim. This is not cosmetic sequencing — without
+   it you tap the card that wins a trick and a modal says "E/W CLAIM" before your card has even
+   glided in, which is the board contradicting itself. `CLAIM_LEAD_SETTLE_MS` then holds for the
+   trick tally's stamp (TrickArea's own 500ms) so the trick you just won is read, not just
+   technically painted.
+2. **The announcement.** A modal `ClaimOverlay` holds the board for `CLAIM_ANNOUNCE_HOLD_MS` —
+   tap, click, or Escape dismisses early. Nothing else is moving while it is up, which is the
+   point; the old in-flow banner popped up alongside cards already in motion and was easy to
+   miss. `claimInfo` is set only at this beat, since a non-null `claimInfo` blanks `PlayPhase`'s
+   board hint for the whole sequence and the lead should read like any other robot burst.
+3. **The fast-forward.** The rest plays out through a separate `stageClaimSteps` staging
+   function (kept apart from `stagePlaySteps`, which assumes at most one trick boundary per
+   response — a claim can span many), reusing the same glide-in/collect machinery
+   `stagePlaySteps` uses for ordinary play but at `CLAIM_SPEEDUP_FACTOR` pacing (33% faster than
+   the claim's already-compressed base gaps), before handing off to the normal completion view.
+
+The lead and the hold both apply whether or not motion is on — with no animation to wait out
+there is still a tally that just changed and a piece of news, and both deserve their beat before
+the jump to the result. Only the fast-forward is animation. A tap during the lead deliberately
+skips nothing: `claimSkipRef` is armed only while the overlay is up, there is no affordance
+offering a skip before then, and skipping would jump the very trick the lead exists to show.
+
+`stageClaimSteps`' optional `range` is how one response splits into those beats. It gates the
+pushes only — the accumulators, the per-trick winner tally and `allPlays` still span the whole
+burst, so every emitted view stays an absolute snapshot. Slicing `newTricks` up front instead
+would make `handAt` think the tail's cards were already played, and the human's remaining cards
+would vanish from their fan during the lead and reappear when the fast-forward started. Each
+trick is tallied by its actual winner rather than assumed to belong to the claiming side.
+
+See invariant 1 below — claims change what `advanceRobots` records for a human's untaken
+decisions, so they interact directly with the robot-trace fixture.
 
 **Robot difficulty (sampled-DD play):** difficulty is a **per-board** property — the
 duplicate-fairness unit is the board, so every player on (tournament, board) faces the same
@@ -882,9 +903,11 @@ doc comment). `Tour.tsx` replays those views through Board.tsx's exported
 an optional `hint` pulse threaded through BidBox/HandFan), staging ordinary robot bursts
 with the same `stageBidSteps`/`stagePlaySteps` the live board uses (before those existed for
 the auction it was a flat 500ms cut, which is still the reduced-motion path) and a captured
-claim tail with the same
-`ClaimOverlay` + `stageClaimSteps` fast-forward `Board.tsx` uses (see "Auto-play and claims"
-above); off-script selections show their real meanings but only the scripted line commits,
+claim tail through the same `planClaim` three beats — lead, `ClaimOverlay`, `stageClaimSteps`
+fast-forward — `Board.tsx` uses (see "Auto-play and claims" above; this capture's own tail
+happens to be the mixed case, where the trick the last decision completes goes to the other
+side, so the tour is a live exercise of the lead beat and `tour.test.tsx` pins that shape);
+off-script selections show their real meanings but only the scripted line commits,
 and the tail past the curated steps self-plays — a forced-but-guided step (one with real
 narration to read) gets a full `GUIDED_FORCED_DELAY_MS` beat rather than the live board's
 near-instant auto-play delay. That beat is *reading* time, so unlike the tail's pacing it
@@ -1116,7 +1139,9 @@ newer settings has one thing worth knowing:
   `CLAIM_SPEEDUP_FACTOR`; off reuses `stagePlaySteps`' own ordinary-play gaps
   (`GLIDE_MS`/`ROBOT_GAP_MS`/`HOLD_MS`/`COLLECT_MS`/`STAMP_MS`), so it's genuinely table
   speed rather than merely the claim pacing with the extra multiplier removed — an earlier
-  version conflated the two, so off still looked like a fast-forward. Under
+  version conflated the two, so off still looked like a fast-forward. It paces only the
+  *guaranteed run*: the tricks before it (`priorTricks`, the lead beat above) are ordinary
+  play and always replay at table speed whatever this is set to. Under
   `prefers-reduced-motion` there is no replay to pace, so the setting is inert. `Board.tsx`
   reads it off `MeContext` (so does `Tour.tsx`, defaulting to on for the signed-out visitor
   walking the practice deal). Letting a player actually *play* the settled tail would mean
