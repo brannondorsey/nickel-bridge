@@ -274,7 +274,11 @@ stages the transition into timed snapshots that `Board.tsx` applies on timers. I
 phase that's `stagePlaySteps` (card-by-card glides, trick collect, tally stamp), animated by
 `TrickArea.tsx`; in the auction it's `stageBidSteps`, which reveals the robots' calls one at a
 time on `BID_GAP_MS` — the human's own call lands instantly, since waiting to see your own tap
-register reads as lag rather than deliberation. That one needs no JS animation: each snapshot
+register reads as lag rather than deliberation. `BID_GAP_MS` is deliberately SLOWER than a
+robot card's `GLIDE_MS + ROBOT_GAP_MS`, not faster: a call is a sentence to read rather than a
+card to watch land, so the pause is there to digest each one, and `AUCTION_END_MS` is derived
+from it so the auction-ending beat can't silently stop being the heavier of the two.
+That one needs no JS animation: each snapshot
 holds `myTurn: false`, so the thinking notice renders for real rather than for zero frames,
 and `AuctionGrid` marks the newest call `auction-latest` for a CSS drop-in. Note what those
 snapshots deliberately do NOT blank, unlike their play-phase twin: `legalCalls` survives, so

@@ -102,7 +102,7 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
   // Finish the auction by passing. The robots' replies are revealed one call
-  // at a time (stageBidSteps), and the bid box sits inert for the ~1.7s that
+  // at a time (stageBidSteps), and the bid box sits inert for the ~3.4s that
   // takes — so "no enabled Pass yet" is an ordinary transient, and one that
   // stretches further on a loaded runner (the AI personas are solving
   // double-dummy on the same two cores). This whole block is best-effort by
@@ -110,11 +110,11 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   // and the assertion below is what judges where we actually ended up. A
   // hard wait in here just converts runner slowness into a red build.
   // Deadline-bounded rather than iteration-bounded, so the budget is time
-  // and not "how many polls the pacing happens to cost". 30s is ~2× what
+  // and not "how many polls the pacing happens to cost". 45s is ~3× what
   // four passes cost at this pacing, and leaves the 60s assertion below
   // inside the 120s per-test timeout even if this block runs out entirely.
   const enabledPass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
-  const auctionDeadline = Date.now() + 30_000;
+  const auctionDeadline = Date.now() + 45_000;
   while (Date.now() < auctionDeadline) {
     if (await page.locator('.trick, .result').first().isVisible().catch(() => false)) break;
     if (!(await enabledPass.isVisible().catch(() => false))) {

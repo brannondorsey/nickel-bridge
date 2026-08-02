@@ -32,19 +32,23 @@ export const STAMP_MS = 420;
 // making the player wait to see a card they had no choice over.
 export const AUTO_PLAY_DELAY_MS = 250;
 
-// One robot CALL at a time. Lighter than a robot card's GLIDE_MS +
-// ROBOT_GAP_MS = 710ms, because a call has no flight to animate — only the
-// auction cell's own drop-in — so the beat is the whole event rather than a
-// gap after one. Deliberately the same 420ms as STAMP_MS and the toll
-// receipt's per-row 0.4s stagger: the app already has a "one discrete thing,
-// read it, next" rhythm and this is that. Three robot replies cost 1.26s,
-// short of the ~1.5s where a pause starts reading as a stall.
-export const BID_GAP_MS = 420;
+// One robot CALL at a time. A call has no flight to animate — only the
+// auction cell's own drop-in — so this beat is the whole event rather than a
+// gap after one, and it is READING time: a call is a sentence in a language
+// the player may still be learning ("2♠ over my 1♣ — that's an overcall"),
+// which is a slower thing to take in than watching a card land on the felt.
+// So it runs at twice a robot card's GLIDE_MS + ROBOT_GAP_MS = 710ms rather
+// than under it. Three robot replies cost 2.5s; that is a deliberate pause to
+// digest the auction, not an accident of pacing, and it is the number to
+// revisit if the reveal ever reads as a stall.
+export const BID_GAP_MS = 840;
 
 // The call that ends the auction changes the entire screen — bid dock out,
-// trick area and dummy in — so it holds for a full ordinary-card beat before
-// the table turns over, rather than the lighter per-call one.
-export const AUCTION_END_MS = 700;
+// trick area and dummy in — so it holds longer still before the table turns
+// over. Derived rather than written as a literal: it has to stay the HEAVIER
+// beat, and the one time these were tuned independently the per-call gap
+// doubled straight past a hardcoded value and silently inverted them.
+export const AUCTION_END_MS = Math.round(BID_GAP_MS * 1.25);
 
 // The "Fast forward settled tricks" ON pacing: much shorter than
 // ROBOT_GAP_MS/HOLD_MS+STAMP_MS since a claim can span many tricks — the

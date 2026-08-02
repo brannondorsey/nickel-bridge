@@ -406,9 +406,15 @@ describe('stageBidSteps', () => {
     expect(steps[2].delayBefore).toBe(AUCTION_END_MS);
   });
 
-  it('keeps a full burst under two seconds — a reveal, not a stall', () => {
+  it('paces a full burst as a reveal to read, not a stall to sit through', () => {
+    // Three robot replies plus the turn coming back. The ceiling was 2s when
+    // BID_GAP_MS was 420; it was raised deliberately when the gap doubled to
+    // give each call time to be read, so this is a runaway guard now rather
+    // than a snappiness one. The floor is the half that still matters: a
+    // regression that collapsed the pacing would otherwise pass silently.
     const total = stageBidSteps(prev, next).reduce((sum, s) => sum + s.delayBefore, 0);
-    expect(total).toBeLessThan(2000);
+    expect(total).toBeGreaterThan(2000);
+    expect(total).toBeLessThan(5000);
   });
 });
 
