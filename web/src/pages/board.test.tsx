@@ -208,10 +208,34 @@ describe('Board — bidding', () => {
     expect(document.querySelector('.grade-toast')).not.toBeInTheDocument();
   });
 
-  it('lands the whole robot burst at once under reduced motion, thinking notice and all', async () => {
-    // The no-WAAPI contract, which is also every other test in this file:
-    // stageBidSteps never runs, applyBoard falls back to one setBoard, and
-    // the response's own myTurn drives the dock.
+  it('lands the whole robot burst at once under reduced motion', async () => {
+    // The no-WAAPI contract: motionOK() is false throughout this file, so
+    // stageBidSteps never runs and applyBoard falls back to one setBoard.
+    // The fixture has to be one whose auction GROWS (boardBiddingBurst, not
+    // boardBiddingRobots — that one's auction is a truncated slice, shorter
+    // than the board we started from, so stageBidSteps would bail on
+    // `next.auction.length <= from` and this would pass with motion on too).
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingBurst,
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(await screen.findByText('Excellent')).toBeInTheDocument();
+    // every reply is already on the tray, and the turn is back — no reveal
+    expect(inAuction().getByRole('button', { name: '2♥' })).toBeInTheDocument();
+    expect(inAuction().getByRole('button', { name: '2♠' })).toBeInTheDocument();
+    expect(inAuction().getAllByRole('button', { name: 'Pass' })).toHaveLength(6);
+    expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the bare notice when a response has no calls to show', async () => {
+    // The other arm of the dock condition (`myTurn || legalCalls?.length`):
+    // a server view that is genuinely not our turn AND carries no legal
+    // calls has no box to render, so the plain notice takes the dock.
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
       evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
@@ -223,6 +247,7 @@ describe('Board — bidding', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
     expect(await screen.findByText('Excellent')).toBeInTheDocument();
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
+    expect(document.querySelector('.bid-dock .bidbox')).not.toBeInTheDocument();
   });
 
   it('docks the bid box at the foot, with the auction + feedback scrolling above it', async () => {

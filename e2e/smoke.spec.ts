@@ -121,8 +121,13 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
       await page.waitForTimeout(500);
       continue;
     }
-    await enabledPass.click().catch(() => {});
-    await page.click('.confirm-row .btn-primary').catch(() => {});
+    // Bounded explicitly. Playwright's default actionTimeout is 0, so a
+    // click on something that never becomes actionable WAITS rather than
+    // rejecting — .catch() absorbs errors but not stalls, and the deadline
+    // above is only consulted between iterations. Without these the loop is
+    // best-effort in name only.
+    await enabledPass.click({ timeout: 5_000 }).catch(() => {});
+    await page.click('.confirm-row .btn-primary', { timeout: 5_000 }).catch(() => {});
   }
   // Generous: the transition into play runs the robots' first card burst, and
   // double-dummy solves have a documented heavy tail on rare deals (seconds,

@@ -173,6 +173,12 @@ await shot('01-bidding-meaning');
 // would NOT fix that: the box stays docked through the whole burst, merely
 // inert (BidBox's `waiting`). An ENABLED call button is the honest signal
 // that the turn is actually back, same one e2e/smoke.spec.ts waits on.
+//
+// The turn does not always come back: this board is chosen for having a real
+// bid available, but three robot passes end the auction and there is then no
+// bid box again, so this throws instead of shooting the play phase with a
+// grade toast on it — which is what the old fixed 500ms wait did, silently.
+// Re-run if that happens; the deal varies per run.
 await page.click('.confirm-row .btn-primary');
 await page.waitForSelector('.grade-toast', { timeout: 30000 });
 await page.waitForSelector('.bidbox .callrow button.bid:enabled', { timeout: 30000 });

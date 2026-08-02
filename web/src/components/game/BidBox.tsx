@@ -97,8 +97,13 @@ export function BidBox({
             {Array.from({ length: 5 }, (_, strain) => makeBid(level, strain)).map(bidButton)}
           </div>
         ))}
+        {/* Locked with everything else: the fold is the one control that
+            changes the box's HEIGHT, so leaving it live during the robots'
+            replies would let a tap grow the dock mid-reveal — the exact
+            layout shift `waiting` exists to prevent — and against a stale
+            window at that. */}
         {lastLevel < 7 && (
-          <button type="button" className="bidbox-fold" onClick={() => setExpandedAt(firstLevel)}>
+          <button type="button" className="bidbox-fold" disabled={locked} onClick={() => setExpandedAt(firstLevel)}>
             ▾ {lastLevel === 6 ? 'level 7' : `levels ${lastLevel + 1}–7`} below the fold ▾
           </button>
         )}

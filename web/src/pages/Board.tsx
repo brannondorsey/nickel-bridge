@@ -443,9 +443,13 @@ export default function Board() {
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      // Deliberately NOT awaited past the scheduling, unlike runClaim: every
-      // staged snapshot carries myTurn: false, so the bid box is off screen
-      // and there is no control left for `busy` to guard.
+      // Deliberately NOT awaited past the scheduling, unlike runClaim. The
+      // bid box is still ON SCREEN through the reveal — that is the whole
+      // point of the `waiting` treatment — so what makes releasing `busy`
+      // safe here is that every staged snapshot carries myTurn: false, which
+      // is exactly what BidBox reads to lock every control it owns. Remove
+      // `waiting`, or the dock condition that keeps the box mounted, and
+      // this needs revisiting.
       setBusy(false);
     }
   };
