@@ -21,11 +21,11 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
 import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import {
   CLAIM_ANNOUNCE_HOLD_MS,
+  CLAIM_LEAD_SETTLE_MS,
   ClaimAnnouncement,
   StagedStep,
-  claimAnnouncement,
   motionOK,
-  stageClaimSteps,
+  planClaim,
   stagePlaySteps,
 } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
@@ -410,19 +410,41 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
     [clearTimers, scheduleSteps],
   );
 
-  // Bracket a claim the same two ways Board.tsx does: an unmissable,
-  // dismissible announcement (tap/click/Escape via ClaimOverlay, rendered by
-  // the shared PlayPhase below), THEN the sped-up fast-forward, before
-  // handing off to the real (done) `next` view.
+  // Bracket a claim the same three ways Board.tsx does, off the same shared
+  // plan: the tricks that aren't part of the guaranteed run replay at
+  // ordinary table pace first (announcing over a trick the player just won
+  // reads as the board contradicting itself), THEN an unmissable, dismissible
+  // announcement (tap/click/Escape via ClaimOverlay, rendered by the shared
+  // PlayPhase below), THEN the sped-up fast-forward, before handing off to
+  // the real (done) `next` view. planClaim owns the arithmetic so the two
+  // copies of this glue can't drift about which cards belong to which beat.
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
-      const info = claimAnnouncement(prev, next);
-      if (!info) {
+      const motion = motionOK();
+      // Honours the settings gate's fast-forward the same way the live board
+      // does — and defaults to on for the signed-out visitor walking the
+      // practice deal, who has no account to have set it.
+      const plan = planClaim(prev, next, { fast: fastForward, motion });
+      if (!plan) {
         applyTransition(prev, next, 0.35); // data didn't line up — fall back to a plain cut
         return;
       }
       const gen = ++claimGenRef.current;
-      setClaimInfo(info);
+
+      if (plan.lead.length) {
+        const settled = plan.lead[plan.lead.length - 1].view;
+        if (motion) {
+          await sleep(scheduleSteps(plan.lead));
+        } else {
+          clearTimers();
+          setView(settled);
+        }
+        if (claimGenRef.current !== gen) return;
+        await sleep(CLAIM_LEAD_SETTLE_MS); // let the tally stamp land
+        if (claimGenRef.current !== gen) return;
+      }
+
+      setClaimInfo(plan.info);
       setClaimAnnounceOpen(true);
       await new Promise<void>((resolve) => {
         const timer = window.setTimeout(finish, CLAIM_ANNOUNCE_HOLD_MS);
@@ -436,16 +458,9 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
-      // Honours the settings gate's fast-forward the same way the live board
-      // does — and defaults to on for the signed-out visitor walking the
-      // practice deal, who has no account to have set it.
-      if (motionOK()) {
-        const steps = stageClaimSteps(prev, next, fastForward);
-        if (steps.length) {
-          const totalMs = scheduleSteps(steps);
-          await sleep(totalMs);
-          if (claimGenRef.current !== gen) return;
-        }
+      if (plan.tail.length) {
+        await sleep(scheduleSteps(plan.tail));
+        if (claimGenRef.current !== gen) return;
       }
       setClaimInfo(null);
       clearTimers();

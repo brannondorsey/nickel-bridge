@@ -50,6 +50,17 @@ export const CLAIM_TRICK_GAP_MS = 110;
 // read before Board.tsx jumps straight to the result.
 export const CLAIM_ANNOUNCE_HOLD_MS = 2000;
 
+// ...and the announcement itself waits for the tricks that are NOT part of
+// the claim (see claimAnnouncement's `priorTricks`) to be paid first. This is
+// the beat between that last trick collecting and the overlay covering the
+// board: TrickArea holds its `.stamp` class for 500ms driving a 0.42s
+// stamp-pop, so without it React batches the collect and the modal into one
+// commit and the trick the human just won is technically on screen and
+// perceptually not. Applies whether or not motion is on, same reasoning as
+// CLAIM_ANNOUNCE_HOLD_MS: with no animation to wait out there is still a
+// number that just changed and deserves to be read.
+export const CLAIM_LEAD_SETTLE_MS = 500;
+
 // Once the announcement is dismissed, the fast-forward itself runs 33%
 // faster than its base pacing above: scaling every gap's duration by 3/4
 // raises speed by 4/3 (⅓ = 33.3%), so this is applied directly to
@@ -301,6 +312,16 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
 export interface ClaimAnnouncement {
   side: 'NS' | 'EW';
   tricks: number;
+  /**
+   * How many of the newly-completed tricks come BEFORE the guaranteed run —
+   * the trick that was already in progress when the request went out, which
+   * either side can still win. Excluded from `tricks`, and (see planClaim)
+   * replayed at ordinary table pace BEFORE the announcement goes up: saying
+   * "E/W CLAIM" over a trick the human is about to see themselves win reads
+   * as the board contradicting itself. Always < the number of new tricks,
+   * since the backward walk below always consumes the last one.
+   */
+  priorTricks: number;
 }
 
 /**
@@ -313,7 +334,8 @@ export interface ClaimAnnouncement {
  * detection point onward are guaranteed to the claiming side. That's always
  * a suffix of the newly-completed tricks (the burst runs to the end of the
  * board once claimed), so walk backward from the last trick — which is
- * always part of the true claim — to find where the pure run starts.
+ * always part of the true claim — to find where the pure run starts. That
+ * boundary drives sequencing as well as the count: see `priorTricks`.
  */
 export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnouncement | null {
   if (!next.claimed || !next.playHistory) return null;
@@ -324,7 +346,7 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
   const lastParity = trickWinner(newTricks[newTricks.length - 1], strain) % 2;
   let tailStart = newTricks.length;
   while (tailStart > 0 && trickWinner(newTricks[tailStart - 1], strain) % 2 === lastParity) tailStart--;
-  return { side: lastParity === 0 ? 'NS' : 'EW', tricks: newTricks.length - tailStart };
+  return { side: lastParity === 0 ? 'NS' : 'EW', tricks: newTricks.length - tailStart, priorTricks: tailStart };
 }
 
 /**
@@ -354,8 +376,23 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
  * a real trick ever does). true uses CLAIM_GAP_MS/CLAIM_TRICK_GAP_MS scaled
  * by CLAIM_SPEEDUP_FACTOR, both needed since a claim can span many tricks
  * and nobody wants to wait through 13 of them at table speed.
+ *
+ * `range` emits only the newly-completed tricks in [from, to) — which is how
+ * planClaim splits one response into "the trick that was already in progress"
+ * (table pace, before the announcement) and "the guaranteed run" (paced by
+ * `fast`, after it). Only the PUSHES are gated: the accumulators, the winner
+ * tally and — most importantly — `allPlays` still span the whole burst, so
+ * every emitted view stays an absolute snapshot of the same board. Slicing
+ * `newTricks` up front instead would make handAt() think the tail's cards
+ * were already gone, and the human's remaining cards would vanish from their
+ * fan during the lead and reappear when the fast-forward started.
  */
-export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false): StagedStep[] {
+export function stageClaimSteps(
+  prev: BoardView,
+  next: BoardView,
+  fast = false,
+  range?: { from?: number; to?: number },
+): StagedStep[] {
   if (prev.state !== 'playing' || next.state !== 'done' || !next.claimed || !next.playHistory) return [];
   if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
 
@@ -395,6 +432,9 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false):
     return dummys.length ? [...next.dummyHand, ...dummys] : next.dummyHand;
   };
 
+  const lo = Math.max(0, Math.min(range?.from ?? 0, newTricks.length));
+  const hi = Math.max(lo, Math.min(range?.to ?? newTricks.length, newTricks.length));
+
   const steps: StagedStep[] = [];
   let played = 0;
   let doneCount = prevDone;
@@ -403,10 +443,17 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false):
 
   newTricks.forEach((trick, ti) => {
     const toPlay = ti === 0 ? trick.slice(prevTrick.length) : trick;
+    // outside the range the tallies still advance (an emitted view has to
+    // carry the running score), only the snapshots are withheld
+    const emit = ti >= lo && ti < hi;
     toPlay.forEach((play, i) => {
       played += 1;
+      if (!emit) return;
+      // the first step of whatever range this is lands immediately: the
+      // caller has already held for the announcement, or (for the lead) the
+      // human just tapped the card
       const delayBefore =
-        ti === 0 && i === 0
+        steps.length === 0
           ? 0
           : i === 0
             ? Math.round(fast ? CLAIM_TRICK_GAP_MS * CLAIM_SPEEDUP_FACTOR : STAMP_MS)
@@ -438,6 +485,7 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false):
       hand: handAt(played),
       dummyHand: dummyHandAt(played),
     });
+    if (!emit) return;
     if (fast) {
       // one beat: the compressed pace has no separate hold/collect split
       steps.push({ delayBefore: Math.round(CLAIM_GAP_MS * CLAIM_SPEEDUP_FACTOR), view: collected });
@@ -451,3 +499,47 @@ export function stageClaimSteps(prev: BoardView, next: BoardView, fast = false):
 
   return steps;
 }
+
+export interface ClaimPlan {
+  info: ClaimAnnouncement;
+  /**
+   * The newly-completed tricks that are NOT part of the guaranteed run — the
+   * trick that was already in progress when the request went out, which
+   * either side can still win. Always at ordinary table pace: the
+   * fast-forward setting paces the CLAIM, and this is not the claim. Empty
+   * when the claim begins at the first new trick, which is the common case
+   * (and byte-for-byte the behaviour that shipped before the split).
+   */
+  lead: StagedStep[];
+  /** The guaranteed run, paced by `fast`. Empty when motion is off. */
+  tail: StagedStep[];
+}
+
+/**
+ * The whole arithmetic of a claim's three beats, in one pure place: the lead
+ * (ordinary play, before the announcement), then the announcement, then the
+ * guaranteed run. Board.tsx and Tour.tsx share this rather than each
+ * re-deriving the split — their timer/React glue genuinely differs (different
+ * scheduleSteps signatures, one awaited and one fire-and-forget), but the
+ * question "which cards belong to which beat" must not drift between them.
+ *
+ * `lead` is computed regardless of `motion`: without WAAPI there's nothing to
+ * animate, but its LAST view is still what the board must show before the
+ * overlay covers it, so the caller applies that one directly.
+ */
+export function planClaim(
+  prev: BoardView,
+  next: BoardView,
+  opts: { fast: boolean; motion: boolean },
+): ClaimPlan | null {
+  const info = claimAnnouncement(prev, next);
+  if (!info) return null;
+  return {
+    info,
+    lead: info.priorTricks > 0 ? stageClaimSteps(prev, next, false, { to: info.priorTricks }) : [],
+    tail: opts.motion ? stageClaimSteps(prev, next, opts.fast, { from: info.priorTricks }) : [],
+  };
+}
+
+/** How long a staged sequence takes end to end. */
+export const totalDuration = (steps: StagedStep[]): number => steps.reduce((sum, step) => sum + step.delayBefore, 0);
