@@ -59,6 +59,12 @@ describe('the uniqueness key', () => {
     expect(key('Неnry')).toBe(key('Henry'));
   });
 
+  it('folds the lowercase-only lookalikes that have no uppercase twin here', () => {
+    // Greek ν (nu) reads as a Latin v; its uppercase Ν is already mapped as N,
+    // so the pair only collides if both cases are listed.
+    expect(key('Olivia')).toBe(key('Oliνia'));
+  });
+
   it('leaves genuinely different names alone', () => {
     expect(key('Margarete')).not.toBe(key('Margaret'));
     // Accented Latin is a different name, not a disguise: nothing here strips

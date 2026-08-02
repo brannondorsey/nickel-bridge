@@ -43,6 +43,7 @@ const CONFUSABLES: Record<string, string> = {
   // Greek
   Α: 'A', Β: 'B', Ε: 'E', Ζ: 'Z', Η: 'H', Ι: 'I', Κ: 'K', Μ: 'M', Ν: 'N',
   Ο: 'O', Ρ: 'P', Τ: 'T', Υ: 'Y', Χ: 'X', ο: 'o', ρ: 'p', ι: 'i', ϲ: 'c',
+  ν: 'v',
 };
 
 const CONFUSABLE_CHARS = new RegExp(`[${Object.keys(CONFUSABLES).join('')}]`, 'gu');

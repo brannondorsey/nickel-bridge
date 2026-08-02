@@ -191,7 +191,12 @@ export function inlineScriptHashes(html: string): string[] {
  *                        module to a build script's string literal for a much
  *                        smaller prize than script-src's.
  *   img-src              this origin, data: URIs (Vite inlines small assets),
- *                        Google avatars, and GA's fallback pixel.
+ *                        Google avatars, and GA's collectors — the same list
+ *                        connect-src gets, regional hosts included, because a
+ *                        hit that falls back to an image beacon picks its host
+ *                        the same way the beacon would. Narrowing this to the
+ *                        bare collector would cost a silently dropped page
+ *                        view, which is the kind of failure nobody notices.
  *   font-src 'self'      the faces are self-hosted via @fontsource. No CDN.
  *   connect-src          fetch/XHR/sendBeacon: this origin plus GA's
  *                        collectors.
@@ -211,7 +216,7 @@ export function contentSecurityPolicy(scriptHashes: readonly string[] = []): str
     `default-src 'self'`,
     `script-src 'self' ${[...scriptHashes, GTAG].join(' ')}`,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: ${AVATARS} ${GA_COLLECT[0]}`,
+    `img-src 'self' data: ${AVATARS} ${GA_COLLECT.join(' ')}`,
     `font-src 'self'`,
     `connect-src 'self' ${[GTAG, ...GA_COLLECT].join(' ')}`,
     `frame-ancestors 'none'`,
