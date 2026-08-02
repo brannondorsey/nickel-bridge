@@ -212,6 +212,53 @@ is written down here rather than re-queried later.
 Rolling windows on 2026-07-30T02:54Z, hours after demo went orange and before production was
 fronted: production 12.82 h of the last 24 h (53%, 83 episodes); demo 1.65 h (7%, 13 episodes).
 
+### Result, recorded 2026-08-02 (15s resolution, post-fronting)
+
+Production went orange 2026-07-30 ~20:30Z. Read on 2026-08-02 while both days were still at 15s:
+
+| Day (UTC) | `nickel-bridge` up | episodes | mean episode | `nickel-bridge-demo` up |
+| --- | --- | --- | --- | --- |
+| 2026-07-31 | 9.27 h | 61 | 9.1 min | 3.35 h |
+| 2026-08-01 | 14.58 h | 90 | 9.7 min | 1.31 h |
+
+**The fronting did not measurably reduce production's machine time.** Mean 11.93 h/day and 75.5
+episodes/day against a 13.05 h and 81 baseline — about 8% on hours and 7% on episodes, inside
+the day-to-day spread of the baseline itself (11.85–14.25 h). Two days per side cannot resolve
+a difference that small; treat it as "no effect detected", not as a measured 8% win.
+
+The same read is also a live demonstration of why this table exists. Re-reading 2026-07-28/29 on
+2026-08-02 returned them at 30s — 12.18 h/66 episodes and 14.68 h/72 — against the 11.85 h/77
+and 14.25 h/85 recorded at the time. Hours drifted up, episodes down ~14%, purely from age. The
+contemporaneous numbers are the real ones.
+
+Demo's spike (5.68 h on 07-30, 3.35 h on 07-31 against a ~1.3 h baseline) was **transient and
+self-inflicted**: two full e2e tournaments, repeated 131-URL comparison sweeps, three forced
+264-URL purges and extra deploys, all run against it while debugging the purge on those days. By
+08-01 it was back to 1.31 h/11 episodes, indistinguishable from before it was fronted. It was
+not evidence of fronting backfiring.
+
+### Why it did not help, and what would
+
+The cache is working exactly as designed — the four URLs the July log study identified as the
+wakers are all HIT with long ages (`/` 15 h, `/robots.txt` and `/sitemap.xml` 36 h,
+`/og-image.png` 67 h). The problem is that they are no longer what crawlers fetch. Every single
+origin-reaching request observed on 2026-08-02 was a **glossary term page**, and a sampled 10 of
+them showed 6 MISS / 4 HIT.
+
+That is structural, not a misconfiguration. Prerendering created 127 URLs, an edge cache is
+per-PoP, and a crawler visits each term page *once*. So each (page, PoP) pair is a first visit
+that must reach the origin — up to ~1,650 unavoidable cold fills across ~13 PoPs per full crawl,
+with no repeat traffic to amortize them. The discoverability work and the edge work pull against
+each other: the long tail that makes the site findable is the part a per-PoP cache cannot help.
+
+**Tiered Cache (Smart Topology) is the lever that fits this shape**, and it is free on all plans.
+It collapses those ~13 independent PoP fills into one upper-tier fetch, which is precisely the
+one-shot-per-PoP pattern above — worth roughly an order of magnitude more here than any TTL or
+purge-frequency change. It is a ZONE-WIDE setting on a shared zone, so it stays a human decision
+(see the note in `scripts/cloudflare.mjs`). Purge frequency is the second lever: with ~3
+deploys/day plus the weekly `--force`, a term page cached at a PoP is usually dropped before a
+second crawler ever reaches it.
+
 ### After
 
 Wait for at least three full UTC days behind the proxy, then, while those days are still at 15s
