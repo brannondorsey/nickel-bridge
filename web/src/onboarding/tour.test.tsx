@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { claimAnnouncement, stageClaimSteps } from '../components/game/playAnim';
+import { claimAnnouncement, planClaim, stageClaimSteps } from '../components/game/playAnim';
 import Tour, { TourPostmark } from '../pages/Tour';
 import { meFreshCrosser, meLoggedOut } from '../test/fixtures';
 import { GlossaryProvider } from '../glossary/GlossaryContext';
@@ -126,6 +126,22 @@ describe('first-crossing script ↔ capture drift guard', () => {
     const info = claimAnnouncement(last.view, data.final);
     expect(info).not.toBeNull();
     expect(stageClaimSteps(last.view, data.final).length).toBeGreaterThan(0);
+
+    // ...and this capture happens to be the mixed case: of the six tricks
+    // the last decision resolves, the FIRST goes to the other side and only
+    // the five after it are N/S's laydown. So the tour is a live exercise of
+    // the lead beat (pay that trick, then announce), not just the fast
+    // -forward. A regenerated board0.json landing on a different line may
+    // legitimately flip this — re-curate rather than delete it, and check
+    // COPY still reads right against whichever shape the new capture has.
+    const plan = planClaim(last.view, data.final, { fast: true, motion: true })!;
+    expect(plan.info.priorTricks).toBe(1);
+    expect(plan.info.tricks).toBe(5);
+    expect(plan.info.priorTricks + plan.info.tricks).toBe(
+      data.final.playHistory!.length - (last.view.completedTricks ?? 0),
+    );
+    expect(plan.lead.length).toBeGreaterThan(0);
+    expect(plan.tail.length).toBeGreaterThan(0);
   });
 });
 
