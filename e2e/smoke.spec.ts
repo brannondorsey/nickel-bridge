@@ -64,6 +64,15 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await page.click('.home-cta');
   await expect(page.locator('.bidbox')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.hcp-badge').first()).toBeVisible();
+  // Three boards in four are dealt by a robot, so the calls already on the
+  // tray are revealed one at a time before the turn comes back
+  // (stageOpeningBids) — ~2.8s at three calls, longer on a loaded runner.
+  // Everything below acts on the box, and every control in it is disabled for
+  // the whole reveal; Playwright's default actionTimeout is 0, so a click on
+  // one of them WAITS rather than failing. Wait for the box to be live rather
+  // than merely docked — an enabled call button, the same signal the pass
+  // loop and scripts/readme-shots.mjs use.
+  await expect(page.locator('.bidbox button.bid:enabled').first()).toBeVisible({ timeout: 30_000 });
   const boardUrl = new URL(page.url());
   const [, , tid, , no] = boardUrl.pathname.split('/'); // /t/:tid/b/:no
 

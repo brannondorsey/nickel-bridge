@@ -163,6 +163,23 @@ export const boardBiddingRobots: BoardView = {
 };
 
 /**
+ * A board exactly as a fresh GET hands it over: West dealt, so the robots'
+ * three opening calls are already on the tray and the human has not called at
+ * all. stageOpeningBids's case, and boardBidding can't stand in for it —
+ * South has bid there, which is precisely what makes a board a return visit
+ * rather than a first arrival.
+ */
+export const boardBiddingOpening: BoardView = {
+  ...base,
+  state: 'bidding',
+  myTurn: true,
+  dealer: 3,
+  auction: [entry(3, 0, 'Pass'), entry(0, bid1H, '1♥', meaning1H), entry(1, 0, 'Pass')],
+  legalCalls,
+  legalCallMeanings: {},
+};
+
+/**
  * The human's 2♥ plus the robots' three replies — a real bidding burst, i.e.
  * an auction that GROWS. boardBiddingRobots can't stand in for it: its
  * auction is a truncated slice, shorter than boardBidding's, which predates

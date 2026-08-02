@@ -16,6 +16,7 @@ import {
   bid2H,
   boardBidding,
   boardBiddingBurst,
+  boardBiddingOpening,
   boardBiddingRobots,
   boardDone,
   boardDoneLow,
@@ -103,6 +104,17 @@ describe('Board — bidding', () => {
     // CSS fallback (var(--ink)) kicks in instead of a red flourish over a
     // chip that was never red.
     expect(ewVulChip.style.getPropertyValue('--chip-color')).toBe('');
+  });
+
+  it('lands the whole opening tray at once under reduced motion', async () => {
+    // jsdom has no WAAPI, so motionOK() is false here (the reveal's own tests
+    // live in 'Board — staged bidding', which stubs it): load() applies the
+    // server view in one go and the turn is the player's from the first frame.
+    apiMock.board.mockResolvedValue(boardBiddingOpening);
+    renderBoard();
+    expect(await screen.findByText('SOUTH · YOU')).toBeInTheDocument();
+    expect(inAuction().getAllByRole('button')).toHaveLength(boardBiddingOpening.auction.length);
+    expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
   });
 
   it('walks the two-step commit: select shows the meaning, confirm submits', async () => {
@@ -787,6 +799,66 @@ describe('Board — staged bidding', () => {
       expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
       expect(document.querySelectorAll('.bidbox button.bid:not(:disabled)').length).toBeGreaterThan(0);
       expect(document.querySelector('.grade-toast')).toBe(toast);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reveals the calls already on the tray when a board is first opened', async () => {
+    apiMock.board.mockResolvedValue(boardBiddingOpening); // West dealt: three robot calls precede ours
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(0);
+
+      // the board arrives with an EMPTY tray: West's pass and North's 1♥ are
+      // news the player walked in on, not scenery the grid was born with
+      expect(inAuction().queryAllByRole('button')).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Robots are thinking' })).toBeInTheDocument();
+      expect(document.querySelector('.bid-dock .bidbox')).toBeInTheDocument();
+
+      // one beat, one call — and the drop-in fires on each in turn rather than
+      // on the last one alone, which is all a whole-tray arrival ever animated
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().queryAllByRole('button')).toHaveLength(1);
+      expect(document.querySelectorAll('.auction-latest')).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().getByRole('button', { name: '1♥' })).toBeInTheDocument();
+      expect(document.querySelectorAll('.auction-latest')).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().queryAllByRole('button')).toHaveLength(3);
+      expect(document.querySelector('.bidbox-waiting')).toBeInTheDocument();
+
+      // ...and only then is it the player's turn to call
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
+      expect(document.querySelectorAll('.bidbox button.bid:not(:disabled)').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a board the player has already bid on alone', async () => {
+    // boardBidding's auction carries South's own 1♥, so this is a return
+    // visit — a reload, a second device, the back button — and replaying an
+    // auction the player has read would be a delay bought with nothing.
+    apiMock.board.mockResolvedValue(boardBidding);
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().queryAllByRole('button')).toHaveLength(boardBidding.auction.length);
+      expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

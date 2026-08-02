@@ -295,6 +295,27 @@ opening-lead staging), so callers dispatch on `prev.state === 'bidding'` alone. 
 untouched throughout, so anything that changes what a response *contains* should keep both
 staging functions in mind.
 
+**The calls that were already on the tray get the same reveal.** A board's dealer is
+`(boardNo - 1) % 4`, so on three boards in four the human isn't the dealer and the GET that
+opens the board answers with one, two or three robot calls already made (`ensureAdvanced`
+in `game.ts` runs `advanceRobots` up to the human's turn before the view is built). Those
+used to arrive in a single `setBoard`, and only the LAST cell — the call immediately before
+yours — wore the drop-in, because `AuctionGrid` restricts `auction-latest` to the newest
+entry so a mid-play re-render can't cascade the whole tray in. So `stageOpeningBids`
+(`playAnim.ts`, applied by `load()` rather than `applyBoard`) is `stageBidSteps` run from an
+empty tray: every call before yours lands on its own `BID_GAP_MS` beat, under the same locked
+dock, so the auction has one reveal mechanism rather than one for the calls you sat through
+and another for the ones you walked in on. Two things it deliberately does. It only fires on
+a board the human has **not called on** (`isHuman` on the auction is the test — nothing is
+threaded down from `Board.tsx`), so a reload or a second device mid-auction doesn't restage
+calls the player has already read. And its leading step is the board with an **empty** tray
+at `delayBefore: 0`, because there's a loading spinner on screen until the first step lands
+and the beat before the first call belongs to the deal, not to the spinner. Note the knock-on
+for anything that drives the real UI: for up to ~2.8s after a board opens, the bid box is
+docked but every control in it is disabled, so `e2e/smoke.spec.ts`, `scripts/ui-check.mjs`
+and `scripts/readme-shots.mjs` all wait on an **enabled** call button rather than on
+`.bidbox`.
+
 **The human's own card does not wait for that round trip.** `submitCard` used to await
 `POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
 against production hardware, and worse on a woken machine — was dead time with the tapped card

@@ -97,7 +97,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'your-call',
     label: 'An opening bid, your call',
     description:
-      'A fresh deal with the auction to you. Tap calls in the bid box to read their SAYC meanings before you commit — then watch the robots answer, one call onto the tray at a time.',
+      'A fresh deal with the auction already under way — the three calls made before you sat down drop onto the tray one at a time as the board opens. Tap calls in the bid box to read their SAYC meanings before you commit, then watch the robots answer the same way.',
     category: 'bidding',
     seed: 'hunt2-2',
     boardNo: 4,
@@ -119,7 +119,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'passed-out',
     label: 'All four hands pass',
     description:
-      'Three passes on the tray already. Pass yourself and the board is thrown in — no contract, no toll — with your grade stamped on the way out.',
+      'Two passes drop onto the tray as the board opens. Pass yourself and the board is thrown in — no contract, no toll — with your grade stamped on the way out.',
     category: 'bidding',
     seed: 'hunt-1',
     boardNo: 1,
