@@ -130,6 +130,19 @@ export default function Scenarios() {
     setError(null);
     try {
       const { tournamentId, boardNo } = await api.runDemoScenario(id);
+      // One exhibit needs the board moved on AFTER the tester is looking at
+      // it: a refused play only happens when the screen is behind the server,
+      // and Board.tsx GETs the board fresh on mount, so nothing done before
+      // this navigation survives to be stale. Hence a bare window.setTimeout
+      // rather than an effect — this component unmounts on the next line, and
+      // an effect's cleanup would cancel the very thing being exhibited. The
+      // call is fire-and-forget for the same reason: nothing is left mounted
+      // to report a failure to, and the exhibit degrades to an ordinary
+      // playable board if it doesn't land.
+      const desyncAfterMs = scenarios?.find((s) => s.id === id)?.desyncAfterMs;
+      if (desyncAfterMs != null) {
+        window.setTimeout(() => void api.demoDesync(tournamentId, boardNo).catch(() => {}), desyncAfterMs);
+      }
       navigate(`/t/${tournamentId}/b/${boardNo}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'failed to prepare the exhibit');

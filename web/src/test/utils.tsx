@@ -46,6 +46,7 @@ function freshApiMock(): ApiMock {
     activity: stub(),
     demoScenarios: stub(),
     runDemoScenario: stub(),
+    demoDesync: stub(),
     resetDemo: stub(),
   };
 }

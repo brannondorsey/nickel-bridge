@@ -412,6 +412,20 @@ input {
   border-left: 1.5px dashed var(--negative);
 }
 
+/* A rejected play, said in the hint slot under the fan instead of replacing
+   the whole board (see Board.tsx's playError): tighter margins than the
+   full-screen .notice-error, and it must not push the fan off a phone. */
+.notice-error.notice-play {
+  margin: 8px 16px 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+.notice-play-aside {
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* neutral in-flow notice (e.g. "Robots are thinking…") */
 .notice {
   text-align: center;

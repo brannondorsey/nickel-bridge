@@ -374,6 +374,13 @@ export interface DemoScenario {
   label: string;
   description: string;
   category: string;
+  /**
+   * Set only on the exhibit that needs the board moved on behind the tester
+   * (server/src/scenarios.ts). Scenarios.tsx schedules api.demoDesync this
+   * many ms after entering — the one exhibit whose state is produced on the
+   * client rather than by the recipe.
+   */
+  desyncAfterMs?: number;
 }
 
 /**
@@ -470,6 +477,12 @@ export const api = {
     ),
   runDemoScenario: (id: string) =>
     request<{ tournamentId: number; boardNo: number }>(`/api/demo/scenarios/${id}`, { method: 'POST' }),
+  /** demo only: play one card on your own board, as a second tab of yours would */
+  demoDesync: (tournamentId: number, boardNo: number) =>
+    request<{ advanced: boolean }>('/api/demo/desync', {
+      method: 'POST',
+      body: JSON.stringify({ tournamentId, boardNo }),
+    }),
   resetDemo: () => request<{ ok: boolean }>('/api/demo/reset', { method: 'POST' }),
   leaderboard: () =>
     request<{

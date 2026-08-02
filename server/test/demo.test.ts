@@ -97,6 +97,43 @@ describe('demo mode', () => {
     expect(view.myTurn).toBe(true);
   }, 60_000);
 
+  it('desync moves the caller’s own board on, so their next play is refused', async () => {
+    // The stale-board exhibit's server half. Nothing about this is a special
+    // code path — it plays through the same submitPlay a second tab would, so
+    // the refusal the tester then sees is a genuine one.
+    const { tournamentId, boardNo } = await inspector.post('/api/demo/scenarios/stale-board');
+    const before = await inspector.get(`/api/tournaments/${tournamentId}/boards/${boardNo}`);
+    expect(before.state).toBe('playing');
+    expect(before.myTurn).toBe(true);
+    const card = before.legalCards[0];
+
+    expect(await inspector.post('/api/demo/desync', { tournamentId, boardNo })).toEqual({ advanced: true });
+
+    // the board really moved: replaying the card the stale screen still holds
+    // is exactly what Board.tsx's resync notice exists for
+    const refused = await inspector.raw('POST', `/api/tournaments/${tournamentId}/boards/${boardNo}/play`, { card });
+    expect(refused.statusCode).toBeGreaterThanOrEqual(400);
+
+    // And the exhibit is reliable for a tester tapping ANY card, not just the
+    // one this test picked: the two legal sets have to be disjoint, or some
+    // taps would quietly succeed and the exhibit would show nothing. This is
+    // deterministic (fixed recipe, deterministic robots, desync always plays
+    // legalCards[0]) but not self-evident, so it is pinned — a deliberate
+    // robot change that made them overlap would otherwise degrade the exhibit
+    // silently rather than failing here.
+    const after = await inspector.get(`/api/tournaments/${tournamentId}/boards/${boardNo}`);
+    expect(after.myTurn).toBe(true);
+    expect(before.legalCards.filter((c: number) => after.legalCards.includes(c))).toEqual([]);
+  }, 120_000);
+
+  it('desync answers rather than erroring when there is nothing left to play', async () => {
+    // a board the Inspector has never opened — no row, so nothing to move on
+    const { tournamentId } = await inspector.post('/api/demo/scenarios/stale-board');
+    expect(await inspector.post('/api/demo/desync', { tournamentId, boardNo: 4 })).toEqual({ advanced: false });
+    expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId })).statusCode).toBe(400);
+    expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId: 999999, boardNo: 1 })).statusCode).toBe(404);
+  }, 120_000);
+
   it('re-entering a scenario resets the board instead of stacking on it', async () => {
     const first = await inspector.post('/api/demo/scenarios/partner-declares');
     const v1 = await inspector.get(`/api/tournaments/${first.tournamentId}/boards/${first.boardNo}`);

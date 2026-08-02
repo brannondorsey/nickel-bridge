@@ -203,6 +203,118 @@ const lockedBidView = (prev: BoardView, auction: AuctionEntry[]): BoardView => (
 });
 
 /**
+ * The view to show the INSTANT a card is tapped, before the server answers.
+ *
+ * Board.tsx used to await POST /play before rendering anything, so the whole
+ * round trip — measured p50 64ms / p90 173ms against production hardware, and
+ * longer on a cold machine — was dead time in which the tapped card simply sat
+ * in the fan. Nothing about that wait is needed to draw the human's OWN card:
+ * `legalCards` came from the server, so it has already ruled the card legal,
+ * and the server is deterministic about where it lands. What the response
+ * actually carries is the ROBOTS' replies, and stagePlaySteps was always going
+ * to hold those back a beat anyway (GLIDE_MS + ROBOT_GAP_MS = 710ms after the
+ * human's card), so the round trip now hides inside a gap the animation was
+ * going to spend regardless — see trimStagedPrefix for the bookkeeping.
+ *
+ * This predicts ONLY the human's own card: one card into the trick, out of
+ * whichever fan it came from, turn passed to the next seat. Counts, dummy
+ * exposure and trick boundaries are deliberately left alone — those are the
+ * server's to report, and guessing them is how an optimistic UI ends up
+ * contradicting itself.
+ *
+ * Returns null whenever anything about the position is less than certain, in
+ * which case Board.tsx waits for the response exactly as it always did. That
+ * bar is on purpose: a wrong optimistic card is far worse than a slow honest
+ * one, so every doubt resolves to "don't guess".
+ */
+export function optimisticPlayView(view: BoardView, card: number): BoardView | null {
+  if (view.state !== 'playing' || !view.myTurn) return null;
+  // the server's own legality verdict for this exact position — not a
+  // re-derivation of the follow-suit rules, which web deliberately doesn't have
+  if (!view.legalCards?.includes(card)) return null;
+  const seat = view.handToPlay;
+  if (seat === undefined) return null;
+
+  const trick = view.currentTrick ?? [];
+  // A full trick means the collect hasn't been staged yet, so the next card
+  // does not belong to this trick — that is a boundary, and boundaries are
+  // the server's call.
+  if (trick.length >= 4) return null;
+  if (trick.some((t) => t.card === card)) return null;
+
+  // The human's OPENING LEAD is the one card whose staged step carries more
+  // than the card itself: dummy is public only after it (game.ts's boardView
+  // gates dummyHand on ps.dummyVisible), so the server's response is what
+  // tables dummy. Predicting the lead alone would leave dummy to appear a
+  // beat later with the robots' replies — a timing change to something other
+  // than the tapped card, which this is deliberately not in the business of
+  // making. One card per board keeps its old behavior instead.
+  //
+  // Stated directly rather than inferred from `dummyHand === undefined`
+  // below. That check does catch the lead whenever the human is DEFENDING,
+  // but game.ts's boardView also sends dummyHand when `dummy === HUMAN_SEAT`
+  // — the flipped board, North declaring — where it is public from the first
+  // card. That is safe today only because a flipped board's opening lead
+  // belongs to East, so the human is never on lead to trick 1 in the one
+  // case where dummyHand is already defined. Leaning on that would make this
+  // function's correctness depend on a condition in another file that has no
+  // reason to stay put, so the position is tested for what it actually is.
+  if ((view.completedTricks ?? 0) === 0 && trick.length === 0) return null;
+
+  // Needed on its own account too: the dummy fan is filtered below, so an
+  // untabled dummy is nothing to predict against.
+  const dummyHand = view.dummyHand;
+  if (dummyHand === undefined) return null;
+
+  // Which fan is it leaving? The human plays their own hand, and also dummy's
+  // when declaring (game.ts's humanControls). Membership is checked rather
+  // than assumed so a stale view can't produce a card in two places at once.
+  const fromOwnFan = seat === (view.playingSeat ?? 2) && view.hand.includes(card);
+  const fromDummyFan = !fromOwnFan && seat === view.dummy && dummyHand.includes(card);
+  if (!fromOwnFan && !fromDummyFan) return null;
+
+  return lockedView(view, {
+    hand: fromOwnFan ? view.hand.filter((c) => c !== card) : view.hand,
+    dummyHand: fromDummyFan ? dummyHand.filter((c) => c !== card) : dummyHand,
+    currentTrick: [...trick, { seat, card }],
+    handToPlay: (seat + 1) % 4,
+  });
+}
+
+/**
+ * Drop the leading staged step that an optimistic render has already put on
+ * screen, and charge the time it has been up against the next step's delay.
+ *
+ * The steps themselves are still computed from the PRE-TAP view, so
+ * stagePlaySteps produces byte-identically what it always did and none of its
+ * (load-bearing, well-tested) reasoning about trick boundaries moves. All that
+ * changes is which end of the list is still owed to the screen.
+ *
+ * Subtracting `elapsedMs` from the next step's delay is what keeps the pacing
+ * honest: that delay (GLIDE_MS + ROBOT_GAP_MS between two cards, or
+ * GLIDE_MS + HOLD_MS before a trick collects) is measured from the moment the
+ * human's card landed, which is now earlier than the response. Without it the
+ * robot's reply would arrive a full beat late on every trick.
+ *
+ * Every guard falls back to the untrimmed list, which is exactly today's
+ * behavior — re-applying a view already on screen is a no-op (TrickArea's
+ * glide is keyed on cards it hasn't seen), so the safe direction is to trim
+ * nothing rather than to trim wrongly.
+ */
+export function trimStagedPrefix(steps: StagedStep[], shown: BoardView | null, elapsedMs: number): StagedStep[] {
+  // Never trim to empty: the caller reads [] as "nothing to animate, jump
+  // straight to the server view", which would discard the rest of the burst.
+  if (!shown || steps.length < 2) return steps;
+  const first = steps[0].view;
+  if ((first.completedTricks ?? 0) !== (shown.completedTricks ?? 0)) return steps;
+  if (!sameCards(first.currentTrick ?? [], shown.currentTrick ?? [])) return steps;
+
+  const [, owed, ...rest] = steps;
+  const spent = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  return [{ ...owed, delayBefore: Math.max(0, owed.delayBefore - spent) }, ...rest];
+}
+
+/**
  * Stage the transition prev → next as timed snapshots. Returns [] whenever
  * there is nothing to animate (not a play-phase transition, no new cards, or
  * data that doesn't line up) — the caller then applies `next` directly.
