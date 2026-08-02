@@ -70,7 +70,15 @@ jobs:
       APP: nickel-bridge-pr-${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Pinned to a commit, not `@master`, in all four jobs that hold FLY_API_TOKEN (the
+      # three deploys here plus pr-preview-teardown.yml). A branch ref re-resolves on every
+      # run, so whatever sits on that branch at the moment a deploy starts executes with a
+      # token that can deploy arbitrary images, read the SQLite volume, or destroy the app —
+      # and unlike a release tag, a branch moves with every upstream commit rather than a
+      # deliberate publish. The other actions here stay on their major tags: they are
+      # GitHub's own or non-privileged, and .github/dependabot.yml now watches all of them,
+      # including this pin (it rewrites the SHA and the comment on each upstream release).
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       # The `github.event.action != 'closed'` guard above was evaluated before test/e2e/
       # docker ran, which is minutes ago — the PR may well have merged since. Creating the
       # app now would hand pr-preview-teardown.yml an app that did not exist when it ran,
@@ -129,7 +137,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       - name: Ensure demo app + volume exist
         run: |
           flyctl apps create "$APP" --org personal || true
@@ -172,7 +180,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       # Enforce CLAUDE.md invariant 5: DEV_AUTH (unauthenticated login) and
       # DEMO (auto-login + data reset) must never reach production. Fails the
       # deploy if either secret is set on the production app.

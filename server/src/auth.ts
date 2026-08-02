@@ -108,8 +108,9 @@ export function startSession(reply: FastifyReply, userId: number): void {
  * Claim `raw` as userId's display handle if it validates and is free; returns
  * the updated row, or null when invalid/taken. The one shared implementation
  * of the validate → uniqueness-check → set sequence — demo mode's Inspector
- * and seeded bots go through here too, so key derivation (NFC-normalized
- * lowercase, see handle.ts) can never diverge between signup paths.
+ * and seeded bots go through here too, so key derivation (case-folded, with
+ * cross-script lookalikes folded onto their Latin twin — see handle.ts) can
+ * never diverge between signup paths.
  */
 export function claimHandle(userId: number, raw: string): UserRow | null {
   const result = validateHandle(raw);
