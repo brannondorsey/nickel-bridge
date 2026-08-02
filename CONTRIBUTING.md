@@ -755,6 +755,17 @@ One gallery entry is not a replay recipe: `fresh-house-crossing` (`freshAiField`
 brand-new STANDARD `ai_field = 1` tournament per click and lands the tester on board 1, so
 the benchmark AI personas can be click-tested exactly as production behaves (exhibit-kind
 tournaments deliberately never get AI rows, so a canned exhibit couldn't show this).
+A second entry, `stale-board` (`desyncAfterMs`), is the one exhibit whose state a recipe
+**cannot** produce: a refused play needs the SCREEN to be behind the server, and `Board.tsx`
+GETs the board fresh on mount, so any staleness baked in before the navigation is gone by the
+time the tester sees it. So the recipe is ordinary and the desync happens on the client —
+`Scenarios.tsx` schedules `POST /api/demo/desync` on a bare `window.setTimeout` (deliberately
+not an effect: the gallery unmounts on the very next line, and a cleanup would cancel the
+thing being exhibited) and then navigates. That route plays the first card the caller could
+legally play right now, through the same `submitPlay` as any other request, on a board they
+own — exactly what a second tab does, so the 409 the tester then gets is genuine rather than
+simulated. It answers `{ advanced: false }` instead of erroring when there is nothing to play,
+since a click-testing aid that 500s on a lost race is worse than one that quietly no-ops.
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash and the automatic first-crossing tour
 (`App.tsx`) — the tour is click-testable from its FRONT DOOR gallery row, which opens
