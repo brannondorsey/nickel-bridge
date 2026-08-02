@@ -28,6 +28,7 @@ describe('demo mode disabled', () => {
     await client.login();
     expect((await client.raw('GET', '/api/demo/scenarios')).statusCode).toBe(404);
     expect((await client.raw('POST', '/api/demo/scenarios/your-call')).statusCode).toBe(404);
+    expect((await client.raw('POST', '/api/demo/desync')).statusCode).toBe(404);
     expect((await client.raw('POST', '/api/demo/reset')).statusCode).toBe(404);
   });
 

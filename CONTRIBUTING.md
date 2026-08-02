@@ -274,6 +274,79 @@ stages the transition into timed snapshots (card-by-card glides, trick collect, 
 that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
 so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
 
+**The human's own card does not wait for that round trip.** `submitCard` used to await
+`POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
+against production hardware, and worse on a woken machine — was dead time with the tapped card
+still sitting in the fan. Nothing in the response is needed to draw it: `legalCards` came from
+the server, so legality is already settled, and `advanceRobots` can't change where the human's
+own card lands. So `optimisticPlayView` (`playAnim.ts`) predicts **that one card and nothing
+else** — into the trick, out of whichever fan it came from, turn to the next seat — and
+`Board.tsx` shows it on the tap. Counts, trick boundaries and dummy exposure stay the server's
+to report; the function returns `null` for anything less than certain (not your turn, a card
+the server didn't list, a full trick, and the opening lead, which is the one card whose staged
+step also tables dummy), and the old await-then-render path runs unchanged.
+The steps are still computed from the PRE-TAP view, so `stagePlaySteps` produces byte-identically
+what it always did; `trimStagedPrefix` then drops the one step already on screen and subtracts
+the time it has been up from the next step's delay. That subtraction is the part worth
+understanding: the response now lands *inside* the `GLIDE_MS + ROBOT_GAP_MS` (710ms) beat the
+animation was always going to spend between the human's card and the robot's reply, so the
+round trip costs nothing visible until it exceeds that — and when it does, the stall lands on
+the robot's card, where a pause reads as thinking. Measured tap→card in Chromium at 6× CPU
+throttle: p50 33-39ms / p90 649-750ms before (tracking the round trip exactly), p50 10-14ms /
+p90 14-17ms after (flat, whatever the server does). Claims are deliberately left out of the
+trim: `runClaim` owns that sequence and its announcement hold already separates the tap from
+the fast-forward.
+
+**A rejected play means this screen is BEHIND THE SERVER**, and that is the only thing it
+means. Every rejection `submitPlay` can raise — `not in play phase`, `not your turn`,
+`illegal card` — is thrown after `refresh()` re-reads the row under the board lock, so all
+three say the same thing: another tab or device moved this board on. So the pre-tap position
+is not something to hand back. Restoring it and leaving the fan tappable is the worst of the
+options: the next tap is made against a trick that is no longer on the table, and if that card
+happens to still be legal in the position the server actually holds, it simply plays — a card
+chosen to follow a lead that isn't there any more. Replacing the screen with the "back to
+lobby" `error` page is the other extreme, and throws away something recoverable: the board
+isn't broken, its state is merely UNKNOWN, and one `GET` settles it.
+
+So `submitCard`'s catch sets `playNotice`, puts the pre-tap position back **locked** (`myTurn`
+false, no `legalCards`, exactly as a staged snapshot is locked) so nothing can be tapped
+against a stale trick, and calls `resync()` — a plain refetch of this board that leaves the
+notice up until the true position lands. Deliberately not `load()`, which would blank the
+board to a spinner and reset the screen for what is usually one round trip. `error` still
+means "there is no board" and still replaces the screen, and is still what a failed *resync*
+sets. This also covers the failure the client cannot tell this apart from: `api.ts`'s
+`request()` throws a bare `Error` with no status, so a dropped connection where the server
+never saw the play looks identical, and there the refetch simply returns the same position.
+
+**The notice owns that transition for `RESYNC_MIN_NOTICE_MS` (3s), and the new board lands
+with it.** The refetch is one `GET` against a board the server already holds in memory, so it
+usually answers in single-digit milliseconds — faster than the notice can be read, and often
+faster than it can be SEEN. Without the floor the player gets an unexplained flicker and a
+board that silently jumps to a different position, which is the one thing the notice exists to
+prevent: the point is telling them their screen was behind *before* the screen changes under
+them. Measured driving the demo exhibit in Chromium: 3004ms visible, with the position holding
+still underneath for all of it. It is a floor rather than a delay — a slower refetch costs
+nothing extra, and the board is locked either way, so it never keeps anyone from a move they
+could have made. The failed-resync path is held the same way, or an instant `error` screen
+would leave no trace that a resync was attempted at all.
+
+`rejectStreakRef`/`RESYNC_ATTEMPT_LIMIT` bound it. The resync only settles anything if the
+server eventually agrees with its own `GET`; a second device playing continuously could
+otherwise ping-pong refuse → refetch → auto-play → refuse indefinitely, at two round trips a
+lap. After the limit the screen stops trying and offers the player a reload. `playNotice` also
+**parks the auto-play timer** (`AUTO_PLAY_DELAY_MS`) while a resync is in flight — a refused
+forced play would otherwise re-fire it against the locked view.
+
+Two things about testing this area, both learned the hard way. jsdom ships no WAAPI, so
+`motionOK()` is false in every Board test by default and `stagePlaySteps`/`trimStagedPrefix`
+are simply never reached — the whole trim path could be deleted with all of `web`'s tests
+passing. Stubbing `Element.prototype.animate` turns the staged path on (TrickArea's
+`glideIn`/`collectSweep` both bail on a zero-width rect, so nothing actually animates), which
+is how `board.test.tsx` pins the pacing. And a staged step's `setBoard` fires from a bare
+`setTimeout`, outside `act()`, so React has committed nothing when `advanceTimersByTimeAsync`
+returns — a trailing zero-advance is needed before asserting, in both directions, since an
+uncommitted render reads exactly like a card that hasn't landed yet.
+
 **Auto-play and claims:** two QoL layers sit on top of the flow above, both client-driven so
 the server stays a plain request/response API. When `boardView.legalCards` has exactly one
 card, `Board.tsx` plays it automatically after a short delay (`AUTO_PLAY_DELAY_MS`) instead of
@@ -753,6 +826,17 @@ One gallery entry is not a replay recipe: `fresh-house-crossing` (`freshAiField`
 brand-new STANDARD `ai_field = 1` tournament per click and lands the tester on board 1, so
 the benchmark AI personas can be click-tested exactly as production behaves (exhibit-kind
 tournaments deliberately never get AI rows, so a canned exhibit couldn't show this).
+A second entry, `stale-board` (`desyncAfterMs`), is the one exhibit whose state a recipe
+**cannot** produce: a refused play needs the SCREEN to be behind the server, and `Board.tsx`
+GETs the board fresh on mount, so any staleness baked in before the navigation is gone by the
+time the tester sees it. So the recipe is ordinary and the desync happens on the client —
+`Scenarios.tsx` schedules `POST /api/demo/desync` on a bare `window.setTimeout` (deliberately
+not an effect: the gallery unmounts on the very next line, and a cleanup would cancel the
+thing being exhibited) and then navigates. That route plays the first card the caller could
+legally play right now, through the same `submitPlay` as any other request, on a board they
+own — exactly what a second tab does, so the 409 the tester then gets is genuine rather than
+simulated. It answers `{ advanced: false }` instead of erroring when there is nothing to play,
+since a click-testing aid that 500s on a lost race is worse than one that quietly no-ops.
 Recipes are mined offline with `tools/find_scenarios.mjs` and checked in; demo mode also
 suppresses the automatic returning-visitor splash and the automatic first-crossing tour
 (`App.tsx`) — the tour is click-testable from its FRONT DOOR gallery row, which opens
