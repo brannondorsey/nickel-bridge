@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, TrickCard } from '../api';
 import { AUTO_PLAY_DELAY_MS, CLAIM_ANNOUNCE_HOLD_MS } from '../components/game/playAnim';
@@ -393,6 +393,53 @@ describe('Board — the tapped card does not wait for the server', () => {
 
     settle({ board: afterPlay });
     await waitFor(() => expect(screen.getByRole('button', { name: 'A of ♠' })).toBeEnabled());
+  });
+
+  it('leaves the board you moved on to alone when the old board’s play settles late', async () => {
+    // Board.tsx stays mounted across a board change (params change, load()
+    // refetches), so a response for the board you left still lands in this
+    // component — with preTap/shown closed over from the old one.
+    let fail!: (err: Error) => void;
+    apiMock.board.mockImplementation((_tid: number, no: number) =>
+      Promise.resolve(no === 2 ? boardPlaying : { ...boardBidding, boardNo: 3 }),
+    );
+    apiMock.playCard.mockReturnValue(new Promise<{ board: BoardView }>((_resolve, reject) => (fail = reject)));
+
+    function GoToBoard3() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/t/12/b/3')}>
+          go to board 3
+        </button>
+      );
+    }
+    renderWithMe(
+      <>
+        <GoToBoard3 />
+        <Routes>
+          <Route path="/t/:tid/b/:no" element={<Board />} />
+        </Routes>
+      </>,
+      { me: meFixture, route: '/t/12/b/2' },
+    );
+
+    await screen.findByText('SOUTH · YOU');
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+
+    // leave for another board while the play is still out
+    await userEvent.click(screen.getByRole('button', { name: 'go to board 3' }));
+    expect(await screen.findByText(/Tap a bid to see what it means/)).toBeInTheDocument();
+
+    // ...and only now does the old board's play fail
+    fail(new Error('not your turn'));
+    await waitFor(() => expect(apiMock.playCard).toHaveBeenCalledTimes(1));
+
+    // board 3 is untouched: no rollback painted over it, and no error screen
+    // for a board the player is no longer looking at
+    expect(screen.getByText(/Tap a bid to see what it means/)).toBeInTheDocument();
+    expect(screen.queryByText('not your turn')).not.toBeInTheDocument();
+    expect(document.querySelector('.trick')).not.toBeInTheDocument();
   });
 
   it('takes the card back off the table when the play is rejected', async () => {

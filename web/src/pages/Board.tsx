@@ -323,8 +323,20 @@ export default function Board() {
       setSelectedCard(null);
       shown = { view: optimistic, at: Date.now() };
     }
+    // Everything past the await belongs to the board this tap was made on,
+    // and `preTap`/`shown` are closed over from that render. Board.tsx stays
+    // MOUNTED across a board change — the route params change and load()
+    // refetches into the same component — so a response landing after that
+    // must not paint this board over the one now on screen. load() bumps the
+    // staging generation on its way in (so does unmount), exactly as it
+    // already invalidates in-flight staged timers, so that same counter
+    // answers "is this still my board?". Read after the optimistic
+    // cancelStaging() above, which bumps it itself.
+    const gen = stagingRef.current.gen;
+    const stillMyBoard = () => stagingRef.current.gen === gen;
     try {
       const { board: next } = await api.playCard(tournamentId, boardNo, card);
+      if (!stillMyBoard()) return;
       setSelectedCard(null);
       setLastEval(null);
       if (next.claimed && preTap) {
@@ -333,6 +345,11 @@ export default function Board() {
         applyBoard(preTap, next, shown); // plays out card-by-card, then unlocks input
       }
     } catch (e) {
+      // Scoped the same way, and for the same reason the success path is: a
+      // failure on the board you left is not news on the board you are
+      // looking at now. (Before the optimistic render this path only ever
+      // called setError, so the rollback below is the new reason to care.)
+      if (!stillMyBoard()) return;
       // The optimistic card was never real — put the pre-tap board back
       // before surfacing the error, so nothing downstream (a retry, a
       // reload, the receipt) can read a fabricated position. A rejection
