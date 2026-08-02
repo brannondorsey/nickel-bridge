@@ -45,8 +45,10 @@ import {
   captureFanOriginIfVisible,
   claimAnnouncement,
   motionOK,
+  optimisticPlayView,
   stageClaimSteps,
   stagePlaySteps,
+  trimStagedPrefix,
 } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
@@ -179,15 +181,26 @@ export default function Board() {
     [cancelStaging],
   );
 
+  // `shown` is the optimistic view submitCard already put on screen (see
+  // there), with the timestamp it went up. `prev` stays the PRE-TAP view
+  // either way, so stagePlaySteps/stageClaimSteps compute exactly what they
+  // always computed; trimStagedPrefix then drops the one step the screen is
+  // already showing and charges the wait against the next one's delay.
   const applyBoard = useCallback(
-    (prev: BoardView | null, next: BoardView) => {
-      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+    (prev: BoardView | null, next: BoardView, shown?: { view: BoardView; at: number } | null) => {
+      const staged = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+      // A claim is left alone: runClaim owns that sequence, its announcement
+      // hold already separates the tap from the fast-forward, and its first
+      // tail step re-applies the optimistic card harmlessly.
+      const steps = shown && !next.claimed ? trimStagedPrefix(staged, shown.view, Date.now() - shown.at) : staged;
       if (!steps.length) {
         cancelStaging();
         setBoard(next);
         return;
       }
-      scheduleSteps(prev!, steps);
+      // The trimmed list is relative to what is ON SCREEN, so origin capture
+      // (scheduleSteps' newPlay) has to diff against that, not against prev.
+      scheduleSteps(shown?.view ?? prev!, steps);
     },
     [cancelStaging, scheduleSteps],
   );
@@ -287,16 +300,48 @@ export default function Board() {
   const submitCard = async (card: number) => {
     if (busy) return;
     setBusy(true);
+    // Put the tapped card on the table NOW rather than after the round trip.
+    // The server already ruled it legal (it came from legalCards) and is
+    // deterministic about where it lands, so there is nothing to wait for to
+    // draw it — what the response actually carries is the robots' replies,
+    // which stagePlaySteps holds back a beat anyway. optimisticPlayView
+    // returns null for anything it can't predict with certainty, and then
+    // this whole path is byte-for-byte the old one.
+    //
+    // The view it returns is a locked one (myTurn false, no legalCards), so
+    // the fans go non-interactive and the auto-play effect stays parked for
+    // the same reasons they do during an ordinary staged robot burst — a
+    // second tap can't land on a card that is already in flight.
+    const preTap = board;
+    const optimistic = preTap ? optimisticPlayView(preTap, card) : null;
+    let shown: { view: BoardView; at: number } | null = null;
+    if (optimistic) {
+      // HandFan (or the auto-play timer) captured this card's flight origin
+      // before calling in, so TrickArea still glides it from the fan.
+      cancelStaging();
+      setBoard(optimistic);
+      setSelectedCard(null);
+      shown = { view: optimistic, at: Date.now() };
+    }
     try {
       const { board: next } = await api.playCard(tournamentId, boardNo, card);
       setSelectedCard(null);
       setLastEval(null);
-      if (next.claimed && board) {
-        await runClaim(board, next);
+      if (next.claimed && preTap) {
+        await runClaim(preTap, next);
       } else {
-        applyBoard(board, next); // plays out card-by-card, then unlocks input
+        applyBoard(preTap, next, shown); // plays out card-by-card, then unlocks input
       }
     } catch (e) {
+      // The optimistic card was never real — put the pre-tap board back
+      // before surfacing the error, so nothing downstream (a retry, a
+      // reload, the receipt) can read a fabricated position. A rejection
+      // here is a genuine race (a second tab's play landing first, 409 from
+      // submitPlay's board lock), not just a network fault.
+      if (shown) {
+        cancelStaging();
+        setBoard(preTap);
+      }
       setError((e as Error).message);
     } finally {
       setBusy(false);

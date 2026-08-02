@@ -272,6 +272,30 @@ stages the transition into timed snapshots (card-by-card glides, trick collect, 
 that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
 so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
 
+**The human's own card does not wait for that round trip.** `submitCard` used to await
+`POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
+against production hardware, and worse on a woken machine — was dead time with the tapped card
+still sitting in the fan. Nothing in the response is needed to draw it: `legalCards` came from
+the server, so legality is already settled, and `advanceRobots` can't change where the human's
+own card lands. So `optimisticPlayView` (`playAnim.ts`) predicts **that one card and nothing
+else** — into the trick, out of whichever fan it came from, turn to the next seat — and
+`Board.tsx` shows it on the tap. Counts, trick boundaries and dummy exposure stay the server's
+to report; the function returns `null` for anything less than certain (not your turn, a card
+the server didn't list, a full trick, and the opening lead, which is the one card whose staged
+step also tables dummy), and the old await-then-render path runs unchanged.
+The steps are still computed from the PRE-TAP view, so `stagePlaySteps` produces byte-identically
+what it always did; `trimStagedPrefix` then drops the one step already on screen and subtracts
+the time it has been up from the next step's delay. That subtraction is the part worth
+understanding: the response now lands *inside* the `GLIDE_MS + ROBOT_GAP_MS` (710ms) beat the
+animation was always going to spend between the human's card and the robot's reply, so the
+round trip costs nothing visible until it exceeds that — and when it does, the stall lands on
+the robot's card, where a pause reads as thinking. Measured tap→card in Chromium at 6× CPU
+throttle: p50 33-39ms / p90 649-750ms before (tracking the round trip exactly), p50 10-14ms /
+p90 14-17ms after (flat, whatever the server does). A rejected play (`submitPlay`'s 409 under
+the board lock — a second tab racing) rolls the optimistic view back before the error surfaces.
+Claims are deliberately left out of the trim: `runClaim` owns that sequence and its
+announcement hold already separates the tap from the fast-forward.
+
 **Auto-play and claims:** two QoL layers sit on top of the flow above, both client-driven so
 the server stays a plain request/response API. When `boardView.legalCards` has exactly one
 card, `Board.tsx` plays it automatically after a short delay (`AUTO_PLAY_DELAY_MS`) instead of

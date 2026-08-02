@@ -332,6 +332,83 @@ describe('Board — play', () => {
   });
 });
 
+describe('Board — the tapped card does not wait for the server', () => {
+  const myCard = boardPlaying.legalCards![1]; // Q♠
+  const afterPlay: BoardView = {
+    ...boardPlaying,
+    hand: boardPlaying.hand.filter((c) => c !== myCard),
+    currentTrick: [],
+    completedTricks: 5,
+    declarerTricks: 4,
+    lastTrick: [...boardPlaying.currentTrick!, { seat: 2, card: myCard }],
+    myTurn: true,
+    handToPlay: 2,
+    legalCards: [boardPlaying.legalCards![0]],
+  };
+
+  /** Tap-select then tap-confirm, with POST /play left deliberately hanging. */
+  async function tapWithRequestInFlight() {
+    let settle!: (value: { board: BoardView }) => void;
+    let fail!: (err: Error) => void;
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockReturnValue(
+      new Promise<{ board: BoardView }>((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      }),
+    );
+    renderBoard();
+    await screen.findByText('SOUTH · YOU');
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(apiMock.playCard).toHaveBeenCalledWith(12, 2, myCard);
+    return { settle, fail };
+  }
+
+  const southSlot = () => document.querySelector('.trick .seatpos.s');
+
+  it('lands my card in the trick slot while the request is still out', async () => {
+    const { settle } = await tapWithRequestInFlight();
+
+    // the whole point: the card is on the table with no response yet
+    expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('Q');
+    // and it has left my fan, so the "tap again" prompt is gone
+    expect(screen.queryByRole('button', { name: 'Q of ♠' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/selected — tap again to play/)).not.toBeInTheDocument();
+    expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
+
+    settle({ board: afterPlay });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'A of ♠' })).toBeEnabled());
+  });
+
+  it('locks the fan while the request is out, so a second tap cannot land', async () => {
+    const { settle } = await tapWithRequestInFlight();
+
+    // every remaining card is non-interactive until the server answers —
+    // the same lock a staged robot burst applies (myTurn false, no legalCards)
+    for (const button of screen.getAllByRole('button', { name: /of [♠♥♦♣]$/ })) {
+      expect(button).toBeDisabled();
+    }
+    expect(apiMock.playCard).toHaveBeenCalledTimes(1);
+
+    settle({ board: afterPlay });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'A of ♠' })).toBeEnabled());
+  });
+
+  it('takes the card back off the table when the play is rejected', async () => {
+    const { fail } = await tapWithRequestInFlight();
+    expect(southSlot()?.querySelector('.pcard')).toBeInTheDocument();
+
+    // a genuine race: another tab's play landed first, so submitPlay 409s
+    fail(new Error('not your turn'));
+
+    expect(await screen.findByText('not your turn')).toBeInTheDocument();
+    // the optimistic card must not survive anywhere — the board it was
+    // painted on never existed
+    expect(document.querySelector('.trick')).not.toBeInTheDocument();
+  });
+});
+
 describe('Board — auto-play', () => {
   it('plays the only legal card by itself after a short delay, with no tap required', async () => {
     const soleCard = boardPlaying.legalCards![1]; // Q♠

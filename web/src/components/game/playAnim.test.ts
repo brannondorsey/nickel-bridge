@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
-import { boardPlaying } from '../../test/fixtures';
+import { boardPlaying, boardPlayingDummyTurn, boardPlayingFlipped } from '../../test/fixtures';
 import {
   CLAIM_GAP_MS,
   CLAIM_SPEEDUP_FACTOR,
@@ -13,10 +13,12 @@ import {
   captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
+  optimisticPlayView,
   stageClaimSteps,
   stagePlaySteps,
   takePlayOrigin,
   trickWinner,
+  trimStagedPrefix,
 } from './playAnim';
 
 // cards: suit*13 + rank, suit 0=♠ 1=♥ 2=♦ 3=♣, rank 0..12 = 2..A
@@ -294,6 +296,121 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, next)).toEqual([]);
     // two boundaries at once (stale tab): never animate a guess
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
+  });
+});
+
+describe('optimisticPlayView', () => {
+  const prev = boardPlaying; // trick 5 in progress [W♠3, N♠4, E♠2], South to play
+  const myCard = prev.legalCards![1]; // ♠Q
+
+  it('puts my card in the trick, out of my fan, and locks input', () => {
+    const view = optimisticPlayView(prev, myCard)!;
+    expect(view.currentTrick).toEqual([...prev.currentTrick!, { seat: 2, card: myCard }]);
+    expect(view.hand).not.toContain(myCard);
+    expect(view.hand).toHaveLength(prev.hand.length - 1);
+    expect(view.handToPlay).toBe(3); // South played; West is next
+    // locked exactly like a staged snapshot: PlayPhase's canPlayFrom goes
+    // false, so no second tap and no auto-play while the request is out
+    expect(view.myTurn).toBe(false);
+    expect(view.legalCards).toBeUndefined();
+    expect(view.state).toBe('playing');
+  });
+
+  it('predicts my card and nothing else — counts, boundaries and dummy stay the server’s', () => {
+    const view = optimisticPlayView(prev, myCard)!;
+    expect(view.completedTricks).toBe(prev.completedTricks);
+    expect(view.declarerTricks).toBe(prev.declarerTricks);
+    expect(view.defenderTricks).toBe(prev.defenderTricks);
+    expect(view.lastTrick).toBe(prev.lastTrick);
+    expect(view.dummyHand).toBe(prev.dummyHand);
+  });
+
+  it('plays out of the DUMMY fan when it is dummy’s turn', () => {
+    const dummyCard = boardPlayingDummyTurn.dummyHand![0];
+    const view = optimisticPlayView(boardPlayingDummyTurn, dummyCard)!;
+    expect(view.dummyHand).not.toContain(dummyCard);
+    expect(view.hand).toBe(boardPlayingDummyTurn.hand); // my own fan untouched
+    expect(view.currentTrick).toEqual([{ seat: 0, card: dummyCard }]);
+    expect(view.handToPlay).toBe(1);
+  });
+
+  it('follows the flipped board: North plays, East is next', () => {
+    const card = boardPlayingFlipped.legalCards![0];
+    const view = optimisticPlayView(boardPlayingFlipped, card)!;
+    expect(view.currentTrick).toEqual([{ seat: 0, card }]);
+    expect(view.handToPlay).toBe(1);
+    expect(view.hand).not.toContain(card);
+  });
+
+  it('refuses to guess whenever the position is less than certain', () => {
+    // not my turn / not in play
+    expect(optimisticPlayView({ ...prev, myTurn: false }, myCard)).toBeNull();
+    expect(optimisticPlayView({ ...prev, state: 'done' }, myCard)).toBeNull();
+    // the server has not ruled this card legal
+    expect(optimisticPlayView(prev, prev.hand.find((c) => !prev.legalCards!.includes(c))!)).toBeNull();
+    expect(optimisticPlayView({ ...prev, legalCards: undefined }, myCard)).toBeNull();
+    // no seat to attribute the card to
+    expect(optimisticPlayView({ ...prev, handToPlay: undefined }, myCard)).toBeNull();
+    // a full trick is a boundary waiting to be staged, not a slot to fill
+    expect(
+      optimisticPlayView({ ...prev, currentTrick: [...prev.currentTrick!, { seat: 2, card: myCard }] }, myCard),
+    ).toBeNull();
+    // the card isn't in the fan whose turn it is
+    expect(optimisticPlayView({ ...prev, hand: prev.hand.filter((c) => c !== myCard) }, myCard)).toBeNull();
+    expect(optimisticPlayView({ ...prev, handToPlay: 0 }, myCard)).toBeNull();
+    // the opening lead also tables dummy — left to the server
+    expect(optimisticPlayView({ ...prev, dummyHand: undefined }, myCard)).toBeNull();
+  });
+});
+
+describe('trimStagedPrefix', () => {
+  const prev = boardPlaying;
+  const myCard = prev.legalCards![1];
+  const shown = optimisticPlayView(prev, myCard)!;
+  // my card completes the trick, so the step after mine is the boundary hold
+  const next: BoardView = {
+    ...prev,
+    hand: prev.hand.filter((c) => c !== myCard),
+    currentTrick: [],
+    completedTricks: 5,
+    declarerTricks: 4,
+    lastTrick: [...prev.currentTrick!, { seat: 2, card: myCard }],
+    myTurn: true,
+    handToPlay: 2,
+  };
+  const steps = stagePlaySteps(prev, next);
+
+  it('drops the step already on screen and charges the wait against the next delay', () => {
+    const trimmed = trimStagedPrefix(steps, shown, 200);
+    expect(trimmed).toHaveLength(steps.length - 1);
+    expect(trimmed[0].view).toBe(steps[1].view); // views themselves are untouched
+    expect(steps[1].delayBefore).toBe(GLIDE_MS + HOLD_MS);
+    expect(trimmed[0].delayBefore).toBe(GLIDE_MS + HOLD_MS - 200);
+    // the rest of the schedule is left exactly as staged
+    expect(trimmed.slice(1)).toEqual(steps.slice(2));
+  });
+
+  it('never lets a slow response run the delay negative', () => {
+    expect(trimStagedPrefix(steps, shown, 99_999)[0].delayBefore).toBe(0);
+    expect(trimStagedPrefix(steps, shown, -5)[0].delayBefore).toBe(GLIDE_MS + HOLD_MS);
+    expect(trimStagedPrefix(steps, shown, NaN)[0].delayBefore).toBe(GLIDE_MS + HOLD_MS);
+  });
+
+  it('trims nothing — today’s behavior — when there was no optimistic render', () => {
+    expect(trimStagedPrefix(steps, null, 200)).toBe(steps);
+  });
+
+  it('trims nothing when the shown view does not match the step it would drop', () => {
+    // a different card on the table
+    const other = optimisticPlayView(prev, prev.legalCards![0])!;
+    expect(trimStagedPrefix(steps, other, 10)).toBe(steps);
+    // same cards, but a boundary has been counted since
+    expect(trimStagedPrefix(steps, { ...shown, completedTricks: 5 }, 10)).toBe(steps);
+  });
+
+  it('never trims to empty, since [] means "jump straight to the server view"', () => {
+    expect(trimStagedPrefix([steps[0]], shown, 10)).toHaveLength(1);
+    expect(trimStagedPrefix([], shown, 10)).toEqual([]);
   });
 });
 
