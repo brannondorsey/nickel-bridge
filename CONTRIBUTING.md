@@ -269,10 +269,31 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 the board ends → state saved to SQLite → if the board completed, `recomputeElo()` →
 response is `boardView`, which **redacts hidden hands** (dummy only after the opening lead).
 Never return raw board state to the client. Because one response can carry a whole burst of
-robot plays, the client doesn't apply it in one jump: `web/src/components/game/playAnim.ts`
-stages the transition into timed snapshots (card-by-card glides, trick collect, tally stamp)
-that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
-so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
+robot actions, the client doesn't apply it in one jump: `web/src/components/game/playAnim.ts`
+stages the transition into timed snapshots that `Board.tsx` applies on timers. In the play
+phase that's `stagePlaySteps` (card-by-card glides, trick collect, tally stamp), animated by
+`TrickArea.tsx`; in the auction it's `stageBidSteps`, which reveals the robots' calls one at a
+time on `BID_GAP_MS` — the human's own call lands instantly, since waiting to see your own tap
+register reads as lag rather than deliberation. `BID_GAP_MS` is reading time, not a gap after
+an animation — a call is a sentence to digest rather than a card to watch land — and it has
+been tried at 420 (too quick) and 840 (a noticeable wait across three replies) before settling
+on 710, which is what a robot CARD costs, so the auction and the play read at one tempo. It is
+deliberately its own literal rather than `GLIDE_MS + ROBOT_GAP_MS`: the two agree today but
+measure different things, and retuning either shouldn't drag the other. `AUCTION_END_MS` *is*
+derived from it, so the auction-ending beat can't silently stop being the heavier of the two.
+That one needs no JS animation: each snapshot
+holds `myTurn: false`, so the thinking notice renders for real rather than for zero frames,
+and `AuctionGrid` marks the newest call `auction-latest` for a CSS drop-in. Note what those
+snapshots deliberately do NOT blank, unlike their play-phase twin: `legalCalls` survives, so
+`BidBox` stays docked and merely inert (its `waiting` prop) rather than being swapped for a
+notice. The box sizes the dock and the decision cluster above hugs the dock's top edge, so
+anything shorter there slides the hand and feedback down the screen and back on every turn —
+and keeping it mounted is also what leaves its fold state to the lapse rule that owns it.
+`stageBidSteps` also owns the
+hand-off into play when the auction ends (`AUCTION_END_MS`, then `stagePlaySteps`' own
+opening-lead staging), so callers dispatch on `prev.state === 'bidding'` alone. Server data is
+untouched throughout, so anything that changes what a response *contains* should keep both
+staging functions in mind.
 
 **The human's own card does not wait for that round trip.** `submitCard` used to await
 `POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
@@ -887,11 +908,12 @@ to the ledger, which is exactly the bug that shipped before this was fixed; see 
 doc comment). `Tour.tsx` replays those views through Board.tsx's exported
 `BiddingPhase`/`PlayPhase` (the literal board UI, plus the tollkeeper narration ribbon and
 an optional `hint` pulse threaded through BidBox/HandFan), staging ordinary robot bursts
-with the same `stagePlaySteps` the live board uses and a captured claim tail through the same
-`planClaim` three beats — lead, `ClaimOverlay`, `stageClaimSteps` fast-forward — `Board.tsx`
-uses (see "Auto-play and claims" above; this capture's own tail happens to be the mixed case,
-where the trick the last decision completes goes to the other side, so the tour is a live
-exercise of the lead beat and `tour.test.tsx` pins that shape);
+with the same `stageBidSteps`/`stagePlaySteps` the live board uses (before those existed for
+the auction it was a flat 500ms cut, which is still the reduced-motion path) and a captured
+claim tail through the same `planClaim` three beats — lead, `ClaimOverlay`, `stageClaimSteps`
+fast-forward — `Board.tsx` uses (see "Auto-play and claims" above; this capture's own tail
+happens to be the mixed case, where the trick the last decision completes goes to the other
+side, so the tour is a live exercise of the lead beat and `tour.test.tsx` pins that shape);
 off-script selections show their real meanings but only the scripted line commits,
 and the tail past the curated steps self-plays — a forced-but-guided step (one with real
 narration to read) gets a full `GUIDED_FORCED_DELAY_MS` beat rather than the live board's

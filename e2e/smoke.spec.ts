@@ -101,17 +101,33 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.grade-toast')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
-  // finish the auction by passing (robot annotations may appear in between)
-  for (let i = 0; i < 12; i++) {
+  // Finish the auction by passing. The robots' replies are revealed one call
+  // at a time (stageBidSteps), and the bid box sits inert for the ~2.8s that
+  // takes — so "no enabled Pass yet" is an ordinary transient, and one that
+  // stretches further on a loaded runner (the AI personas are solving
+  // double-dummy on the same two cores). This whole block is best-effort by
+  // design and must NOT assert: it clicks Pass whenever Pass is clickable,
+  // and the assertion below is what judges where we actually ended up. A
+  // hard wait in here just converts runner slowness into a red build.
+  // Deadline-bounded rather than iteration-bounded, so the budget is time
+  // and not "how many polls the pacing happens to cost". 45s is ~3× what
+  // four passes cost at this pacing, and leaves the 60s assertion below
+  // inside the 120s per-test timeout even if this block runs out entirely.
+  const enabledPass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
+  const auctionDeadline = Date.now() + 45_000;
+  while (Date.now() < auctionDeadline) {
     if (await page.locator('.trick, .result').first().isVisible().catch(() => false)) break;
-    const pass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
-    if (!(await pass.isVisible().catch(() => false))) {
-      await page.waitForTimeout(400);
+    if (!(await enabledPass.isVisible().catch(() => false))) {
+      await page.waitForTimeout(500);
       continue;
     }
-    await pass.click();
-    await page.click('.confirm-row .btn-primary');
-    await page.waitForTimeout(400);
+    // Bounded explicitly. Playwright's default actionTimeout is 0, so a
+    // click on something that never becomes actionable WAITS rather than
+    // rejecting — .catch() absorbs errors but not stalls, and the deadline
+    // above is only consulted between iterations. Without these the loop is
+    // best-effort in name only.
+    await enabledPass.click({ timeout: 5_000 }).catch(() => {});
+    await page.click('.confirm-row .btn-primary', { timeout: 5_000 }).catch(() => {});
   }
   // Generous: the transition into play runs the robots' first card burst, and
   // double-dummy solves have a documented heavy tail on rare deals (seconds,

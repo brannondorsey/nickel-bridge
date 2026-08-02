@@ -166,9 +166,22 @@ await page.waitForSelector('.meaning-panel .mtitle');
 await page.waitForTimeout(400);
 await shot('01-bidding-meaning');
 
-// 02 — the grade toast that stamps the call you just made
+// 02 — the grade toast that stamps the call you just made. The robots' replies
+// are now revealed one call at a time (BID_GAP_MS × up to three, then the turn
+// returns), so a fixed beat here would catch "Robots are thinking…" mid-burst
+// — a different screen from the one this shot is of. Waiting on `.bidbox`
+// would NOT fix that: the box stays docked through the whole burst, merely
+// inert (BidBox's `waiting`). An ENABLED call button is the honest signal
+// that the turn is actually back, same one e2e/smoke.spec.ts waits on.
+//
+// The turn does not always come back: this board is chosen for having a real
+// bid available, but three robot passes end the auction and there is then no
+// bid box again, so this throws instead of shooting the play phase with a
+// grade toast on it — which is what the old fixed 500ms wait did, silently.
+// Re-run if that happens; the deal varies per run.
 await page.click('.confirm-row .btn-primary');
 await page.waitForSelector('.grade-toast', { timeout: 30000 });
+await page.waitForSelector('.bidbox .callrow button.bid:enabled', { timeout: 30000 });
 await page.waitForTimeout(500);
 await shot('02-grade-toast');
 

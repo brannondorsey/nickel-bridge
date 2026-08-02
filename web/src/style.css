@@ -1567,6 +1567,28 @@ a.ds-btn-secondary:hover {
 .auction td button.has-meaning {
   border-bottom: 2px dotted var(--ink);
 }
+/* the newest call drops onto the tray as it arrives — Board.tsx reveals a
+   robot burst one call at a time (stageBidSteps/BID_GAP_MS in playAnim.ts),
+   and AuctionGrid marks only that one cell, so they land in sequence rather
+   than the whole auction cascading in on first mount. A small offset on
+   purpose: .auction-scroll clips, and its 6px bottom padding (reserved for
+   the pending "?" outline) is what absorbs this. */
+@media (prefers-reduced-motion: no-preference) {
+  .auction td button.auction-latest {
+    opacity: 0;
+    animation: auction-call-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+}
+@keyframes auction-call-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .auction-pending {
   display: inline-block;
   outline: 1.5px solid var(--ink);
@@ -1725,6 +1747,24 @@ a.ds-btn-secondary:hover {
 }
 .confirm-row {
   margin-top: 12px;
+}
+/* The robots are answering (Board.tsx reveals their calls one at a time —
+   stageBidSteps). The box stays docked and inert rather than being swapped
+   for a notice, since the decision cluster above hugs its top edge and
+   anything shorter would slide the hand down the screen and back every turn.
+   The CTA carries the message, so it can't wear .ds-btn:disabled's 0.4 —
+   it's the only text on it. Drawn as the notice it now is: no plate, muted
+   italic, same box. */
+.bidbox-waiting .confirm-row .ds-btn.btn-primary:disabled {
+  opacity: 1;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 /* ---- docked bidding layout ---- the bid box is pinned to the foot of the

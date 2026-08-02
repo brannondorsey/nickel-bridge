@@ -30,6 +30,7 @@ export function BidBox({
   onSelect,
   onConfirm,
   busy,
+  waiting = false,
   hint = null,
 }: {
   legalCalls: number[];
@@ -37,6 +38,14 @@ export function BidBox({
   onSelect: (call: number) => void;
   onConfirm: () => void;
   busy: boolean;
+  /**
+   * The robots are answering (Board.tsx is revealing their calls one at a
+   * time — see stageBidSteps). The box stays on screen, inert, with the CTA
+   * carrying the notice: it is docked, and the hand and feedback above hug
+   * its top edge, so replacing it with something shorter would slide that
+   * whole cluster down the screen and back on every turn.
+   */
+  waiting?: boolean;
   /** first-crossing tour: pulse this call as the tollkeeper's suggestion */
   hint?: number | null;
 }) {
@@ -54,22 +63,25 @@ export function BidBox({
   // remember the window it was opened on, and the expansion LAPSES when the
   // auction climbs past it. Left sticky, one tap during a preempt would undo
   // the windowing for every later turn, which is the bug this box exists to
-  // fix; BidBox stays mounted between the human's turns (Board.tsx swaps in
-  // "Robots are thinking…" only when the response says it's not our turn, and
-  // mid-auction it never does), so nothing else would ever reset it.
+  // fix; BidBox stays mounted between the human's turns — including through
+  // the robots' staged replies, which lock it via `waiting` rather than
+  // swapping it out (see that prop) — so the lapse check is the only thing
+  // that ever resets this.
   const [expandedAt, setExpandedAt] = useState<number | null>(null);
   const expanded = expandedAt === firstLevel;
   const lastLevel = expanded ? 7 : Math.min(7, firstLevel + VISIBLE_LEVELS - 1);
 
-  // While a call is in flight (busy) every button locks: a click landing on a
-  // stale still-enabled button could toggle the selection off mid-submit and
-  // leave the confirm CTA dead until the user reselects.
+  // While a call is in flight (busy) — or while the robots are answering
+  // (waiting) — every button locks: a click landing on a stale still-enabled
+  // button could toggle the selection off mid-submit and leave the confirm
+  // CTA dead until the user reselects.
+  const locked = busy || waiting;
   const bidButton = (call: number) => (
     <button
       key={call}
       type="button"
       className={`bid${selected === call ? ' selected' : ''}${hint === call && selected !== call ? ' bid-hint' : ''}`}
-      disabled={busy || !legal.has(call)}
+      disabled={locked || !legal.has(call)}
       onClick={() => onSelect(call)}
       aria-label={callDisplay(call)}
     >
@@ -78,15 +90,20 @@ export function BidBox({
   );
 
   return (
-    <div className="bidbox-wrap">
+    <div className={`bidbox-wrap${waiting ? ' bidbox-waiting' : ''}`}>
       <div className="bidbox">
         {Array.from({ length: lastLevel - firstLevel + 1 }, (_, i) => firstLevel + i).map((level) => (
           <div className="grid" key={level}>
             {Array.from({ length: 5 }, (_, strain) => makeBid(level, strain)).map(bidButton)}
           </div>
         ))}
+        {/* Locked with everything else: the fold is the one control that
+            changes the box's HEIGHT, so leaving it live during the robots'
+            replies would let a tap grow the dock mid-reveal — the exact
+            layout shift `waiting` exists to prevent — and against a stale
+            window at that. */}
         {lastLevel < 7 && (
-          <button type="button" className="bidbox-fold" onClick={() => setExpandedAt(firstLevel)}>
+          <button type="button" className="bidbox-fold" disabled={locked} onClick={() => setExpandedAt(firstLevel)}>
             ▾ {lastLevel === 6 ? 'level 7' : `levels ${lastLevel + 1}–7`} below the fold ▾
           </button>
         )}
@@ -96,7 +113,7 @@ export function BidBox({
               key={call}
               type="button"
               className={`bid${selected === call ? ' selected' : ''}${call === 1 ? ' bid-x' : ''}`}
-              disabled={busy || !legal.has(call)}
+              disabled={locked || !legal.has(call)}
               onClick={() => onSelect(call)}
             >
               {callDisplay(call)}
@@ -108,11 +125,16 @@ export function BidBox({
         <button
           type="button"
           className="ds-btn btn-primary"
-          disabled={selected === null || busy}
+          disabled={selected === null || locked}
           onClick={onConfirm}
-          aria-label={selected !== null ? `Bid ${callDisplay(selected)}` : 'Select a bid'}
+          aria-label={waiting ? 'Robots are thinking' : selected !== null ? `Bid ${callDisplay(selected)}` : 'Select a bid'}
         >
-          {busy ? (
+          {waiting ? (
+            // sentence case, not the CTA's tracked caps: this slot is drawn
+            // as the app's italic .notice while it carries this, and caps
+            // would be the button shouting a status line
+            'Robots are thinking…'
+          ) : busy ? (
             '…'
           ) : selected !== null ? (
             <>

@@ -162,6 +162,27 @@ export const boardBiddingRobots: BoardView = {
   auction: biddingAuction.slice(0, 3),
 };
 
+/**
+ * The human's 2♥ plus the robots' three replies — a real bidding burst, i.e.
+ * an auction that GROWS. boardBiddingRobots can't stand in for it: its
+ * auction is a truncated slice, shorter than boardBidding's, which predates
+ * staged bidding and would leave stageBidSteps with nothing to reveal.
+ */
+export const boardBiddingBurst: BoardView = {
+  ...base,
+  state: 'bidding',
+  myTurn: true,
+  auction: [
+    ...biddingAuction, // 6 entries, South to call
+    entry(2, bid2H, '2♥', meaning2H), // the human's call
+    entry(3, makeBid(2, 3), '2♠'), // W
+    entry(0, 0, 'Pass'), // N
+    entry(1, 0, 'Pass'), // E — back to South
+  ],
+  legalCalls,
+  legalCallMeanings: {},
+};
+
 // ---- play: 4♠ by S, trick 5, spades led ----
 
 const playedFromSouth = [card(H, '3'), card(H, '6'), card(D, '2'), card(C, '5')];

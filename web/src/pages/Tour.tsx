@@ -26,6 +26,7 @@ import {
   StagedStep,
   motionOK,
   planClaim,
+  stageBidSteps,
   stagePlaySteps,
 } from '../components/game/playAnim';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
@@ -396,10 +397,10 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
 
   const applyTransition = useCallback(
     (prev: BoardView, next: BoardView, speed: number) => {
-      const steps = motionOK() ? stagePlaySteps(prev, next) : [];
+      const steps = motionOK() ? (prev.state === 'bidding' ? stageBidSteps(prev, next) : stagePlaySteps(prev, next)) : [];
       if (!steps.length) {
-        // bidding→bidding (or reduced motion): land after a beat, as if the
-        // robots took a moment to reply
+        // reduced motion, or a transition with nothing to stage: land after a
+        // beat, as if the robots took a moment to reply
         clearTimers();
         const id = window.setTimeout(() => setView(next), motionOK() ? 500 : 0);
         timersRef.current.push(id);

@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useNavigate } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, TrickCard } from '../api';
 import {
   AUTO_PLAY_DELAY_MS,
+  BID_GAP_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
   CLAIM_LEAD_SETTLE_MS,
   GLIDE_MS,
@@ -14,6 +15,7 @@ import {
 import {
   bid2H,
   boardBidding,
+  boardBiddingBurst,
   boardBiddingRobots,
   boardDone,
   boardDoneLow,
@@ -204,6 +206,48 @@ describe('Board — bidding', () => {
     // … but nothing renders the grade
     expect(screen.queryByText('Excellent')).not.toBeInTheDocument();
     expect(document.querySelector('.grade-toast')).not.toBeInTheDocument();
+  });
+
+  it('lands the whole robot burst at once under reduced motion', async () => {
+    // The no-WAAPI contract: motionOK() is false throughout this file, so
+    // stageBidSteps never runs and applyBoard falls back to one setBoard.
+    // The fixture has to be one whose auction GROWS (boardBiddingBurst, not
+    // boardBiddingRobots — that one's auction is a truncated slice, shorter
+    // than the board we started from, so stageBidSteps would bail on
+    // `next.auction.length <= from` and this would pass with motion on too).
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingBurst,
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(await screen.findByText('Excellent')).toBeInTheDocument();
+    // every reply is already on the tray, and the turn is back — no reveal
+    expect(inAuction().getByRole('button', { name: '2♥' })).toBeInTheDocument();
+    expect(inAuction().getByRole('button', { name: '2♠' })).toBeInTheDocument();
+    expect(inAuction().getAllByRole('button', { name: 'Pass' })).toHaveLength(6);
+    expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the bare notice when a response has no calls to show', async () => {
+    // The other arm of the dock condition (`myTurn || legalCalls?.length`):
+    // a server view that is genuinely not our turn AND carries no legal
+    // calls has no box to render, so the plain notice takes the dock.
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderBoard();
+    await screen.findByText(/Tap a bid to see what it means/);
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(await screen.findByText('Excellent')).toBeInTheDocument();
+    expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
+    expect(document.querySelector('.bid-dock .bidbox')).not.toBeInTheDocument();
   });
 
   it('docks the bid box at the foot, with the auction + feedback scrolling above it', async () => {
@@ -671,6 +715,80 @@ describe('Board — the robot reply is paced from the tap, not from the response
     } finally {
       vi.useRealTimers();
       restore();
+    }
+  });
+});
+
+describe('Board — staged bidding', () => {
+  // The motion path. jsdom has no WAAPI, so motionOK() is false everywhere
+  // else in this file and stageBidSteps never runs; stub `animate` to take
+  // the other branch. Safe here specifically because this fixture stays in
+  // the BIDDING phase throughout, so TrickArea's card-clone/onfinish flight
+  // machinery never mounts against the stub.
+  beforeEach(() => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+    );
+    (Element.prototype as unknown as { animate: unknown }).animate = () => ({ onfinish: null, cancel() {} });
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).animate;
+    vi.unstubAllGlobals();
+  });
+
+  it('reveals the robots’ calls one at a time, holding the dock until they are done', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingBurst,
+    });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: '2♥' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // my own call lands the instant I commit — but the robots' don't, and
+      // the dock says so for real rather than for zero frames
+      expect(inAuction().getByRole('button', { name: '2♥' })).toBeInTheDocument();
+      expect(inAuction().queryByRole('button', { name: '2♠' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Robots are thinking' })).toBeInTheDocument();
+      // ...with the box still docked and inert, not swapped out: it sizes the
+      // dock, and everything above hugs the dock's top edge
+      expect(document.querySelector('.bid-dock .bidbox')).toBeInTheDocument();
+      expect(document.querySelector('.bidbox-waiting')).toBeInTheDocument();
+      expect(document.querySelectorAll('.bidbox button.bid:not(:disabled)')).toHaveLength(0);
+      // the grade toast is up throughout, and never remounts under it
+      const toast = document.querySelector('.grade-toast')!;
+      expect(toast).toBeInTheDocument();
+
+      // one beat, one more call — and exactly one cell wearing the drop-in
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().getByRole('button', { name: '2♠' })).toBeInTheDocument();
+      expect(document.querySelectorAll('.auction-latest')).toHaveLength(1);
+      expect(document.querySelector('.grade-toast')).toBe(toast);
+
+      // ...the robots' last two passes (four were already on the tray), with
+      // the dock still theirs
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS * 2);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inAuction().getAllByRole('button', { name: 'Pass' })).toHaveLength(6);
+      expect(document.querySelector('.bidbox-waiting')).toBeInTheDocument();
+
+      // ...and only then does the turn come back
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelector('.bidbox-waiting')).not.toBeInTheDocument();
+      expect(document.querySelectorAll('.bidbox button.bid:not(:disabled)').length).toBeGreaterThan(0);
+      expect(document.querySelector('.grade-toast')).toBe(toast);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

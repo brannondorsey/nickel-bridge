@@ -47,6 +47,7 @@ import {
   motionOK,
   optimisticPlayView,
   planClaim,
+  stageBidSteps,
   stageClaimSteps,
   stagePlaySteps,
   totalDuration,
@@ -240,12 +241,26 @@ export default function Board() {
 
   // `shown` is the optimistic view submitCard already put on screen (see
   // there), with the timestamp it went up. `prev` stays the PRE-TAP view
-  // either way, so stagePlaySteps/stageClaimSteps compute exactly what they
-  // always computed; trimStagedPrefix then drops the one step the screen is
+  // either way, so the staging functions compute exactly what they always
+  // computed; trimStagedPrefix then drops the one step the screen is
   // already showing and charges the wait against the next one's delay.
+  //
+  // Which staging a response gets: a claim is its own thing; otherwise a
+  // response that STARTED in the auction goes through stageBidSteps, which
+  // owns the whole bidding-phase composition (the robots' calls, and the
+  // hand-off into play when the auction ends) and falls through to
+  // stagePlaySteps when there are no new calls to reveal. Only a card play
+  // ever has an optimistic view on screen, so the bid branch never trims.
   const applyBoard = useCallback(
     (prev: BoardView | null, next: BoardView, shown?: { view: BoardView; at: number } | null) => {
-      const staged = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+      const staged =
+        prev && motionOK()
+          ? next.claimed
+            ? stageClaimSteps(prev, next)
+            : prev.state === 'bidding'
+              ? stageBidSteps(prev, next)
+              : stagePlaySteps(prev, next)
+          : [];
       // A claim is left alone: runClaim owns that sequence, its own beats
       // already separate the tap from the fast-forward, and whichever step
       // comes first — the lead's, or the tail's when there is no lead —
@@ -422,10 +437,19 @@ export default function Board() {
       setLastEval(evaluation);
       setSelectedCall(null);
       setInspect(null);
-      applyBoard(board, next); // stages the opening lead if the auction just ended
+      // stages the robots' replies one at a time, and the opening lead if the
+      // auction just ended
+      applyBoard(board, next);
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      // Deliberately NOT awaited past the scheduling, unlike runClaim. The
+      // bid box is still ON SCREEN through the reveal — that is the whole
+      // point of the `waiting` treatment — so what makes releasing `busy`
+      // safe here is that every staged snapshot carries myTurn: false, which
+      // is exactly what BidBox reads to lock every control it owns. Remove
+      // `waiting`, or the dock condition that keeps the box mounted, and
+      // this needs revisiting.
       setBusy(false);
     }
   };
@@ -702,7 +726,7 @@ export function BiddingPhase({
   return (
     <div className="bid-phase">
       <div className="bid-scroll">
-        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} live onInspect={onInspect} />
         <div className="bid-decision">
           {feedback}
           <div className="board-fan">
@@ -712,13 +736,20 @@ export function BiddingPhase({
         </div>
       </div>
       <div className="bid-dock">
-        {board.myTurn ? (
+        {/* The box stays docked through the robots' staged replies, locked
+            rather than swapped out: it sizes the dock, and the decision
+            cluster above hugs the dock's top edge, so anything shorter here
+            slides the hand and feedback down the screen and back on every
+            turn. The bare notice is for a server view that genuinely has no
+            calls to show — nothing to render a box from. */}
+        {board.myTurn || board.legalCalls?.length ? (
           <BidBox
             legalCalls={board.legalCalls ?? []}
             selected={selectedCall}
             onSelect={onSelectCall}
             onConfirm={onConfirm}
             busy={busy}
+            waiting={!board.myTurn}
             hint={hint}
           />
         ) : (

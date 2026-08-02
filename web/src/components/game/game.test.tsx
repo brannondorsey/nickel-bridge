@@ -139,6 +139,19 @@ describe('AuctionGrid', () => {
     expect(screen.getByText('?')).toBeInTheDocument();
     expect(screen.getByText(/tap any call to inspect/i)).toBeInTheDocument();
   });
+
+  it('marks only the newest call for the drop-in, and only while the auction is live', () => {
+    // Board.tsx reveals a robot burst one call at a time; the class is what
+    // keeps the whole auction from cascading in together on first mount, and
+    // what keeps the finished auction beside the play from animating at all.
+    const live = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn live onInspect={() => {}} />);
+    const latest = live.container.querySelectorAll('.auction-latest');
+    expect(latest).toHaveLength(1);
+    expect(latest[0]).toHaveAccessibleName(biddingAuction[biddingAuction.length - 1].name);
+
+    const settled = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn={false} onInspect={() => {}} />);
+    expect(settled.container.querySelectorAll('.auction-latest')).toHaveLength(0);
+  });
 });
 
 describe('MeaningPanel', () => {
