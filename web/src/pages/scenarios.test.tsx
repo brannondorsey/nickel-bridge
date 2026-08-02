@@ -33,6 +33,53 @@ describe('Scenarios (the Exhibit Hall)', () => {
     expect(apiMock.demoScenarios).not.toHaveBeenCalled();
   });
 
+  it('schedules the desync behind the tester for the exhibit that declares one', async () => {
+    // The stale-board exhibit's client half: the board has to be moved on
+    // AFTER Board.tsx has fetched it, so this fires on a bare timer that
+    // outlives this component's unmount. Without it the tester lands on an
+    // ordinary playable board and the refusal never happens.
+    const withDesync = {
+      scenarios: [
+        { id: 'stale-board', label: 'A second device moves the board on', description: 'Wait, then tap.', category: 'card play', desyncAfterMs: 1500 },
+        { id: 'your-call', label: 'An opening bid, your call', description: 'Bid it yourself.', category: 'bidding' },
+      ],
+    };
+    apiMock.demoScenarios.mockResolvedValue(withDesync);
+    apiMock.runDemoScenario.mockResolvedValue({ tournamentId: 7, boardNo: 2 });
+    apiMock.demoDesync.mockResolvedValue({ advanced: true });
+
+    renderWithMe(<Scenarios />, { me: meDemo });
+    const row = (await screen.findByText('A second device moves the board on')).closest('.exhibit-row') as HTMLElement;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
+      await vi.waitFor(() => expect(apiMock.runDemoScenario).toHaveBeenCalledWith('stale-board'));
+
+      // not immediately — the tester has to be looking at the board first
+      expect(apiMock.demoDesync).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(apiMock.demoDesync).toHaveBeenCalledWith(7, 2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not desync an exhibit that did not ask for one', async () => {
+    apiMock.demoScenarios.mockResolvedValue(catalog);
+    apiMock.runDemoScenario.mockResolvedValue({ tournamentId: 7, boardNo: 2 });
+    renderWithMe(<Scenarios />, { me: meDemo });
+    const row = (await screen.findByText('An opening bid, your call')).closest('.exhibit-row') as HTMLElement;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
+      await vi.waitFor(() => expect(apiMock.runDemoScenario).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(apiMock.demoDesync).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('groups exhibits by category and runs one on ENTER', async () => {
     apiMock.demoScenarios.mockResolvedValue(catalog);
     let land!: (v: { tournamentId: number; boardNo: number }) => void;

@@ -4,8 +4,9 @@ import { aiPlayersEnabled, ensureAiPlayers, enqueueAiField, noteTournamentActivi
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
-import { ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
+import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
+import { getTournament } from './tournaments.js';
 
 /**
  * Demo mode (DEMO=1) — preview-deployment conveniences for click-testing.
@@ -204,7 +205,13 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     const richProfile = ensureBot(RICH_PROFILE_HANDLE);
     const stranger = ensureBot(STRANGER_HANDLE);
     return reply.send({
-      scenarios: SCENARIOS.map(({ id, label, description, category }) => ({ id, label, description, category })),
+      scenarios: SCENARIOS.map(({ id, label, description, category, desyncAfterMs }) => ({
+        id,
+        label,
+        description,
+        category,
+        desyncAfterMs,
+      })),
       newCrosserId: newCrosser.id,
       richProfileId: richProfile.id,
       strangerId: stranger.id,
@@ -223,6 +230,44 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     const s = scenarioById.get((req.params as { id: string }).id);
     if (!s) return reply.code(404).send({ error: 'unknown scenario' });
     return reply.send(await runScenario(user.id, s, req.log));
+  });
+
+  /**
+   * Move one of the caller's own boards on, behind their screen — the server
+   * half of the `desyncAfterMs` exhibit (scenarios.ts).
+   *
+   * This is NOT a special code path: it plays the first card the caller could
+   * legally play right now, through the same submitPlay every real request
+   * goes through, on a board they own. That is precisely what a second tab of
+   * theirs does, which is the whole point — the refused play the tester then
+   * sees on the board screen is a genuine 409 out of submitPlay's board lock,
+   * not a simulated one. The client's screen is stale afterward because it
+   * fetched before this landed, which is the state being exhibited.
+   *
+   * Answers `{ advanced: false }` rather than erroring when there is nothing
+   * to play (the tester got their tap in first, the board finished, a claim
+   * resolved it): a click-testing aid that 500s on a lost race is worse than
+   * one that quietly does nothing and can be re-entered.
+   */
+  app.post('/api/demo/desync', async (req, reply) => {
+    if (!demoEnabled()) return reply.code(404).send({ error: 'not found' });
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    const { tournamentId, boardNo } = (req.body ?? {}) as { tournamentId?: number; boardNo?: number };
+    if (typeof tournamentId !== 'number' || typeof boardNo !== 'number') {
+      return reply.code(400).send({ error: 'tournamentId and boardNo are required' });
+    }
+    const t = getTournament(tournamentId);
+    if (!t) return reply.code(404).send({ error: 'not found' });
+    // never creates: desyncing a board the caller has not started is meaningless
+    const b = loadBoard(t, user.id, boardNo, false);
+    if (!b) return reply.send({ advanced: false });
+    const view = boardView(t, b, 1200) as { state?: string; myTurn?: boolean; legalCards?: number[] };
+    if (view.state !== 'playing' || !view.myTurn || !view.legalCards?.length) {
+      return reply.send({ advanced: false });
+    }
+    await submitPlay(b, view.legalCards[0]);
+    return reply.send({ advanced: true });
   });
 
   // Full wipe + reseed, for starting a click-testing round from a pristine

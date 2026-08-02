@@ -67,6 +67,25 @@ export interface Scenario {
    * meaningful for this entry).
    */
   freshAiField?: boolean;
+  /**
+   * Milliseconds after the tester lands to move this board on BEHIND them,
+   * via POST /api/demo/desync — one real play through the real engine, which
+   * is exactly what a second tab or a second device does.
+   *
+   * The only exhibit flag the executor ignores: the recipe here is an
+   * ordinary one, and what makes the state reachable happens on the CLIENT
+   * (Scenarios.tsx schedules the call, then navigates). It has to, because
+   * this state is the one thing a replay recipe cannot produce — a refused
+   * play needs the screen to be BEHIND the server, and Board.tsx GETs the
+   * board fresh on mount, so any staleness baked in before the navigation is
+   * gone by the time the tester sees it. The desync therefore has to land
+   * after that GET, which is why it is a timer rather than a step in the
+   * recipe. The delay is generous on purpose: the tester still has to read
+   * the board and tap twice (select, then confirm), so beating it means
+   * tapping blind — and if they do, the play simply succeeds and the exhibit
+   * can be re-entered.
+   */
+  desyncAfterMs?: number;
 }
 
 const call = (value: number): ScenarioAction => ({ kind: 'call', value });
@@ -141,6 +160,23 @@ export const SCENARIOS: Scenario[] = [
     boardNo: 2,
     actions: [call(0), call(0), call(0)],
     expect: 'playing',
+  },
+  {
+    id: 'stale-board',
+    label: 'A second device moves the board on',
+    description:
+      'Give it a moment when you arrive — another session plays a card behind your back, exactly as a second tab of your own would. Then tap any card: the server refuses it, the fan locks, and the notice under it says the board is resyncing until the true position lands.',
+    category: 'card play',
+    // Deliberately the same (seed, board, actions) as 'west-declares': the
+    // recipe is not what this exhibit is about, and re-entering either one
+    // wipes and replays the board row (runScenarioNow), which is how two
+    // scenarios share a board. Reusing an already-verified triple also keeps
+    // this off tools/find_scenarios.mjs — there was no new position to mine.
+    seed: 'demo-0',
+    boardNo: 2,
+    actions: [call(0), call(0), call(0)],
+    expect: 'playing',
+    desyncAfterMs: 1500,
   },
   {
     id: 'sole-legal',
