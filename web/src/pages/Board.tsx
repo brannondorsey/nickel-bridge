@@ -56,6 +56,15 @@ import { signedScore, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
+/** A refused play, and whether resyncing has stopped trying — see playNotice. */
+export interface PlayNotice {
+  message: string;
+  stuck?: boolean;
+}
+export const RESYNC_MESSAGE = 'Board state got out of sync. Resyncing now.';
+export const RESYNC_STUCK_MESSAGE = 'Board state got out of sync, and resyncing has not settled it.';
+export const RESYNC_ATTEMPT_LIMIT = 3;
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** The board screen — bidding, card play, and the scored result, one route. */
@@ -77,16 +86,34 @@ export default function Board() {
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // A REJECTED CARD PLAY is not a broken board. `error` replaces the whole
-  // screen with a "back to lobby" page, which is right for a board that
-  // failed to load and wrong for the race submitCard is actually exposed to
-  // (a second tab's play landing first, 409 from submitPlay's board lock):
-  // the position is intact, it just isn't yours to move in any more. So a
-  // play failure rolls the optimistic card back and says so in place, over a
-  // board that is still on screen — which is also the only way the rollback
-  // is observable at all, and therefore testable. Cleared by a fresh server
-  // view, by touching a card, or by dismissing it.
-  const [playError, setPlayError] = useState<string | null>(null);
+  // A REJECTED CARD PLAY means this screen is BEHIND THE SERVER, and that is
+  // the only thing it means. Every rejection submitPlay can raise — 'not in
+  // play phase', 'not your turn', 'illegal card' — is thrown after refresh()
+  // re-reads the row under the board lock, so all three say the same thing:
+  // somebody else (a second tab, another device) moved this board on. The
+  // pre-tap view is therefore not a position to hand back to the player.
+  // Restoring it and leaving the fan tappable is actually the worst of the
+  // options: the next tap is made against a trick that is no longer on the
+  // table, and if that card happens to still be legal in the position the
+  // server actually holds, it simply plays — a card chosen to follow a lead
+  // that isn't there any more.
+  //
+  // But the board is not broken either, so replacing the screen with the
+  // "back to lobby" `error` page throws away something recoverable. The
+  // state isn't unrecoverable, it's UNKNOWN, and one GET settles it. So a
+  // refused play locks the board, says so, and refetches. That covers the
+  // failure this can't be told apart from, too — api.ts's request() throws a
+  // bare Error with no status, so a dropped connection where the server
+  // never saw the play looks identical here, and there the refetch simply
+  // returns the same position and the player taps again.
+  const [playNotice, setPlayNotice] = useState<PlayNotice | null>(null);
+  // Consecutive refused plays with no successful one in between. The resync
+  // is only a fix if the server eventually agrees with its own GET; a second
+  // tab playing continuously could otherwise ping-pong refuse → refetch →
+  // auto-play → refuse indefinitely, which is the unbounded retry loop this
+  // guard exists to stop being, just at two round trips a lap. After
+  // RESYNC_ATTEMPT_LIMIT the screen stops trying and hands it to the player.
+  const rejectStreakRef = useRef(0);
   const [selectedCall, setSelectedCall] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [lastEval, setLastEval] = useState<BidEval | null>(null);
@@ -270,16 +297,39 @@ export default function Board() {
     [applyBoard, cancelStaging, fastForward, scheduleSteps],
   );
 
+  // Refetch this board's true position after a refused play, leaving the
+  // notice up until it lands. Deliberately NOT load(): that blanks the board
+  // to a spinner and resets the screen, and there is nothing here worth
+  // resetting — the player keeps looking at the (locked) position they had
+  // while the real one is on its way, so the board doesn't jump to Loading
+  // and back for what is usually one round trip.
+  const resync = useCallback(() => {
+    cancelStaging();
+    const gen = stagingRef.current.gen;
+    api
+      .board(tournamentId, boardNo)
+      .then((fresh) => {
+        if (stagingRef.current.gen !== gen) return; // navigated away mid-resync
+        setBoard(fresh);
+        setPlayNotice(null);
+      })
+      .catch((e) => {
+        // the board itself won't load — that IS the "there is no board" case
+        if (stagingRef.current.gen === gen) setError((e as Error).message);
+      });
+  }, [tournamentId, boardNo, cancelStaging]);
+
   const load = useCallback(() => {
     cancelStaging();
     claimGenRef.current++;
+    rejectStreakRef.current = 0;
     setBoard(null);
     setSelectedCall(null);
     setSelectedCard(null);
     setLastEval(null);
     setInspect(null);
     setError(null);
-    setPlayError(null);
+    setPlayNotice(null);
     setShowReceipt(false);
     setClaimInfo(null);
     setClaimAnnounceOpen(false);
@@ -350,7 +400,8 @@ export default function Board() {
       if (!stillMyBoard()) return;
       setSelectedCard(null);
       setLastEval(null);
-      setPlayError(null);
+      setPlayNotice(null);
+      rejectStreakRef.current = 0;
       if (next.claimed && preTap) {
         await runClaim(preTap, next);
       } else {
@@ -367,16 +418,27 @@ export default function Board() {
       // reload, the receipt) can read a fabricated position. A rejection
       // here is a genuine race (a second tab's play landing first, 409 from
       // submitPlay's board lock), not just a network fault.
-      if (shown) {
-        cancelStaging();
-        setBoard(preTap);
+      // No board to say it over means the tap raced a reload, and the lobby
+      // route is all that's left to offer.
+      if (!preTap) {
+        setError((e as Error).message);
+        return;
       }
-      // In place over the still-live board (see playError above), not the
-      // full-screen `error` page — unless there is no board to say it over,
-      // which means the tap raced a reload and the lobby route is all that's
-      // left to offer.
-      if (preTap) setPlayError((e as Error).message);
-      else setError((e as Error).message);
+      // The optimistic card was never real, and neither is the pre-tap
+      // position any more (see playNotice above) — so put the position back
+      // but LOCKED, exactly as a staged snapshot is locked, so nothing can be
+      // tapped against a trick the server has already moved past. The real
+      // one replaces it when the resync lands.
+      cancelStaging();
+      setBoard({ ...preTap, myTurn: false, legalCards: undefined });
+      setSelectedCard(null);
+      rejectStreakRef.current += 1;
+      if (rejectStreakRef.current >= RESYNC_ATTEMPT_LIMIT) {
+        setPlayNotice({ message: RESYNC_STUCK_MESSAGE, stuck: true });
+        return;
+      }
+      setPlayNotice({ message: RESYNC_MESSAGE });
+      resync();
     } finally {
       setBusy(false);
     }
@@ -391,14 +453,13 @@ export default function Board() {
   // always set legalCards: undefined), or unmount all naturally invalidate
   // the timer.
   //
-  // playError parks it, and that guard is load-bearing rather than tidy: a
-  // rejected forced play leaves the board back on a myTurn view with exactly
-  // one legal card and busy false, so without it this effect re-submits the
-  // card the server just refused every AUTO_PLAY_DELAY_MS, forever. The
-  // player dismisses (or touches a card) to arm it again, which turns an
-  // unbounded retry loop into one retry per deliberate act.
+  // playNotice parks it, and that guard is load-bearing rather than tidy: a
+  // rejected forced play would otherwise leave this effect firing at the
+  // locked pre-tap view's expense, and once the resync lands on a genuinely
+  // forced position it fires again — which is right, and is exactly why
+  // rejectStreakRef bounds how many times that can go around.
   useEffect(() => {
-    if (!board || board.state !== 'playing' || !board.myTurn || busy || playError) return;
+    if (!board || board.state !== 'playing' || !board.myTurn || busy || playNotice) return;
     const legal = board.legalCards;
     if (!legal || legal.length !== 1 || selectedCard !== null) return;
     const card = legal[0];
@@ -407,7 +468,7 @@ export default function Board() {
       submitCard(card);
     }, AUTO_PLAY_DELAY_MS);
     return () => clearTimeout(id);
-  }, [board, selectedCard, busy, playError]);
+  }, [board, selectedCard, busy, playNotice]);
 
   if (error) {
     return (
@@ -451,13 +512,9 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCard={selectedCard}
-          playError={playError}
-          onDismissPlayError={() => setPlayError(null)}
-          onSelectCard={(c) => {
-            setPlayError(null);
-            if (selectedCard === c) submitCard(c);
-            else setSelectedCard(c);
-          }}
+          playNotice={playNotice}
+          onReloadBoard={load}
+          onSelectCard={(c) => (selectedCard === c ? submitCard(c) : setSelectedCard(c))}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           claimInfo={claimInfo}
@@ -611,8 +668,8 @@ export function PlayPhase({
   claimInfo,
   claimAnnounceOpen,
   onSkipClaim,
-  playError = null,
-  onDismissPlayError,
+  playNotice = null,
+  onReloadBoard,
   hint = null,
 }: {
   board: BoardView;
@@ -624,9 +681,9 @@ export function PlayPhase({
   claimInfo: ClaimAnnouncement | null;
   claimAnnounceOpen: boolean;
   onSkipClaim: () => void;
-  /** a rejected play, said over the still-live board — see Board's playError */
-  playError?: string | null;
-  onDismissPlayError?: () => void;
+  /** a rejected play, said over the locked board — see Board's playNotice */
+  playNotice?: PlayNotice | null;
+  onReloadBoard?: () => void;
   /** tour only: pulse this card in whichever fan holds it */
   hint?: number | null;
 }) {
@@ -698,20 +755,26 @@ export function PlayPhase({
         />
       </div>
       <SeatLine label={bottomLabel} hcp={board.hcp} active={canPlayFrom(playingSeat)} />
-      {playError ? (
+      {playNotice ? (
         // Takes the hint slot rather than sitting above it: it displaces
         // "playing automatically…", which the parked auto-play timer is no
         // longer doing, and lands where the player is already looking.
         <div className="notice-error notice-play" role="alert">
-          <div>{playError}</div>
-          {/* the aside says what the rollback did, in the italic-Crimson
-              register every other hint on this screen uses */}
-          <div className="notice-play-aside">Your card is back in your hand.</div>
-          <div>
-            <Button variant="secondary" onClick={onDismissPlayError}>
-              Dismiss
-            </Button>
+          <div>{playNotice.message}</div>
+          {/* the aside is the italic-Crimson register every other hint on
+              this screen uses */}
+          <div className="notice-play-aside">
+            {playNotice.stuck
+              ? 'Another device may still be playing this board.'
+              : 'Fetching the board’s real position…'}
           </div>
+          {playNotice.stuck ? (
+            <div>
+              <Button variant="secondary" onClick={onReloadBoard}>
+                Reload the board
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : selectedCard !== null ? (
         <div className="board-hint num">

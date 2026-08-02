@@ -24,7 +24,7 @@ import {
   meFixture,
 } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
-import Board from './Board';
+import Board, { RESYNC_ATTEMPT_LIMIT, RESYNC_MESSAGE, RESYNC_STUCK_MESSAGE } from './Board';
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -448,53 +448,79 @@ describe('Board — the tapped card does not wait for the server', () => {
     expect(document.querySelector('.trick')).not.toBeInTheDocument();
   });
 
-  it('takes the card back off the table when the play is rejected', async () => {
+  it('resyncs to the server’s real position when the play is rejected', async () => {
     const { fail } = await tapWithRequestInFlight();
     expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('Q');
-    expect(screen.queryByRole('button', { name: 'Q of ♠' })).not.toBeInTheDocument();
 
-    // a genuine race: another tab's play landed first, so submitPlay 409s
+    // Hold the resync's GET open so the in-flight state is observable, then
+    // answer it with what really happened: another device played the ♠A into
+    // this same trick, so the position the tap was made against is gone.
+    let settleBoard!: (view: BoardView) => void;
+    apiMock.board.mockReturnValue(new Promise<BoardView>((resolve) => (settleBoard = resolve)));
+
+    // a genuine race: another tab's play landed first, so submitPlay refuses
     fail(new Error('not your turn'));
-    expect(await screen.findByText('not your turn')).toBeInTheDocument();
+    expect(await screen.findByText(RESYNC_MESSAGE)).toBeInTheDocument();
 
-    // The board it was painted on never existed, so every trace of it goes:
-    // the card is back in the fan and the trick is back to the three cards
-    // the server actually reported. Asserted against the LIVE board — a
-    // rejected play no longer evicts the player to a "back to lobby" page,
-    // which is also the only reason the rollback is observable at all.
+    // While the refetch is out the board is LOCKED, not handed back: the
+    // optimistic card is gone, but nothing is tappable either, because the
+    // trick on screen is one the server has already moved past.
     expect(southSlot()?.querySelector('.pcard')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Q of ♠' })).toBeInTheDocument();
-    expect(document.querySelectorAll('.trick .pcard')).toHaveLength(boardPlaying.currentTrick!.length);
-    // ...and it is playable again, so the race can simply be re-tried
-    expect(screen.getByRole('button', { name: 'Q of ♠' })).toBeEnabled();
+    for (const button of screen.getAllByRole('button', { name: /of [♠♥♦♣]$/ })) {
+      expect(button).toBeDisabled();
+    }
+
+    settleBoard({
+      ...boardPlaying,
+      hand: boardPlaying.hand.filter((c) => c !== boardPlaying.legalCards![0]),
+      currentTrick: [...boardPlaying.currentTrick!, { seat: 2, card: boardPlaying.legalCards![0] }],
+      myTurn: false,
+      handToPlay: undefined,
+      legalCards: undefined,
+    });
+
+    // ...and the notice clears itself once the true position lands
+    await waitFor(() => expect(screen.queryByText(RESYNC_MESSAGE)).not.toBeInTheDocument());
+    expect(apiMock.board).toHaveBeenCalledTimes(2);
+    expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('A');
   });
 
-  it('does not re-submit a refused forced play on a loop', async () => {
-    // A rejected play leaves the board back on a myTurn view with busy
-    // false. With exactly one legal card that is precisely the state the
-    // auto-play timer fires on, so without a guard it re-POSTs the card the
-    // server just refused every AUTO_PLAY_DELAY_MS, forever.
+  it('gives up resyncing rather than ping-pong with a device that keeps refusing', async () => {
+    // The resync only settles anything if the server eventually agrees with
+    // its own GET. A second device playing continuously would otherwise loop
+    // refuse → refetch → auto-play → refuse forever, two round trips a lap.
     const soleCard = boardPlaying.legalCards![1]; // Q♠
     const forced: BoardView = { ...boardPlaying, legalCards: [soleCard] };
-    apiMock.board.mockResolvedValue(forced);
+    apiMock.board.mockImplementation(() => Promise.resolve({ ...forced }));
     apiMock.playCard.mockRejectedValue(new Error('not your turn'));
 
     vi.useFakeTimers();
     try {
       renderBoard();
       await vi.waitFor(() => expect(screen.getByText(/playing automatically/)).toBeInTheDocument());
-      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
-      expect(apiMock.playCard).toHaveBeenCalledTimes(1);
-      await vi.waitFor(() => expect(screen.getByText('not your turn')).toBeInTheDocument());
+      // let it try, resync, try again... one delay at a time, since each lap
+      // needs React to commit the resynced board before the timer re-arms
+      for (let i = 0; i < 12 && !screen.queryByText(RESYNC_STUCK_MESSAGE); i++) {
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(screen.getByText(RESYNC_STUCK_MESSAGE)).toBeInTheDocument();
+      expect(apiMock.playCard).toHaveBeenCalledTimes(RESYNC_ATTEMPT_LIMIT);
 
-      // ten delays' worth of nothing, rather than ten more requests
-      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS * 10);
-      expect(apiMock.playCard).toHaveBeenCalledTimes(1);
+      // ...and then stops, rather than going around again
+      for (let i = 0; i < 12; i++) {
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(apiMock.playCard).toHaveBeenCalledTimes(RESYNC_ATTEMPT_LIMIT);
 
-      // dismissing arms it again — one retry per deliberate act, not a loop
-      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-      await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
-      expect(apiMock.playCard).toHaveBeenCalledTimes(2);
+      // the way out is the player's, and it resets the count
+      fireEvent.click(screen.getByRole('button', { name: 'Reload the board' }));
+      for (let i = 0; i < 4 && apiMock.playCard.mock.calls.length === RESYNC_ATTEMPT_LIMIT; i++) {
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(apiMock.playCard.mock.calls.length).toBeGreaterThan(RESYNC_ATTEMPT_LIMIT);
     } finally {
       vi.useRealTimers();
     }

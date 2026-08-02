@@ -295,19 +295,33 @@ p90 14-17ms after (flat, whatever the server does). Claims are deliberately left
 trim: `runClaim` owns that sequence and its announcement hold already separates the tap from
 the fast-forward.
 
-**A rejected play is not a broken board**, and that distinction is what makes the optimistic
-render safe to roll back. `submitCard`'s failure mode is a race (`submitPlay`'s 409 under the
-board lock — a second tab playing first), not a page that failed to load, so it sets
-`playError` rather than `error`: the optimistic card comes off the table, the pre-tap position
-is restored, and the reason is said in the hint slot under the fan over a board that is still
-on screen. `error` still means "there is no board" and still replaces the screen. Two
-consequences worth knowing. The rollback is **only observable because of this** — while a play
-failure evicted the player to a "back to lobby" page, `setBoard(preTap)` could be deleted with
-every test still green, so the guarantee the code claimed was untested. And `playError`
-**parks the auto-play timer** (`AUTO_PLAY_DELAY_MS`): a refused forced play lands back on a
-`myTurn` view with one legal card and `busy` false, which is exactly the state that timer fires
-on, so without the guard it re-POSTs the card the server just refused every 250 ms forever.
-Dismissing (or touching a card) arms it again — one retry per deliberate act.
+**A rejected play means this screen is BEHIND THE SERVER**, and that is the only thing it
+means. Every rejection `submitPlay` can raise — `not in play phase`, `not your turn`,
+`illegal card` — is thrown after `refresh()` re-reads the row under the board lock, so all
+three say the same thing: another tab or device moved this board on. So the pre-tap position
+is not something to hand back. Restoring it and leaving the fan tappable is the worst of the
+options: the next tap is made against a trick that is no longer on the table, and if that card
+happens to still be legal in the position the server actually holds, it simply plays — a card
+chosen to follow a lead that isn't there any more. Replacing the screen with the "back to
+lobby" `error` page is the other extreme, and throws away something recoverable: the board
+isn't broken, its state is merely UNKNOWN, and one `GET` settles it.
+
+So `submitCard`'s catch sets `playNotice`, puts the pre-tap position back **locked** (`myTurn`
+false, no `legalCards`, exactly as a staged snapshot is locked) so nothing can be tapped
+against a stale trick, and calls `resync()` — a plain refetch of this board that leaves the
+notice up until the true position lands. Deliberately not `load()`, which would blank the
+board to a spinner and reset the screen for what is usually one round trip. `error` still
+means "there is no board" and still replaces the screen, and is still what a failed *resync*
+sets. This also covers the failure the client cannot tell this apart from: `api.ts`'s
+`request()` throws a bare `Error` with no status, so a dropped connection where the server
+never saw the play looks identical, and there the refetch simply returns the same position.
+
+`rejectStreakRef`/`RESYNC_ATTEMPT_LIMIT` bound it. The resync only settles anything if the
+server eventually agrees with its own `GET`; a second device playing continuously could
+otherwise ping-pong refuse → refetch → auto-play → refuse indefinitely, at two round trips a
+lap. After the limit the screen stops trying and offers the player a reload. `playNotice` also
+**parks the auto-play timer** (`AUTO_PLAY_DELAY_MS`) while a resync is in flight — a refused
+forced play would otherwise re-fire it against the locked view.
 
 Two things about testing this area, both learned the hard way. jsdom ships no WAAPI, so
 `motionOK()` is false in every Board test by default and `stagePlaySteps`/`trimStagedPrefix`
