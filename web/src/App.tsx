@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { Me, api } from './api';
 import { reportsAnalytics, useAnalytics } from './analytics';
+import { HOME_TITLE, pageTitle } from './pageTitle';
 import { Splash } from './components/Splash';
 import { Loading } from './components/ds/Loading';
 import { SignInBar } from './components/ds/SignInBar';
@@ -147,6 +148,23 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // This screen's title, computed ONCE and used by both the tab and the
+  // analytics page view below. Not two derivations of the same thing: the
+  // analytics hook registers its effect before the title effect, so if it read
+  // document.title instead of being handed this, every page view would carry
+  // the PREVIOUS screen's title — effects run in registration order, and the
+  // tab hasn't been updated yet when the view is sent.
+  //
+  // The gate matters, and it is about what is ON SCREEN rather than what the
+  // URL says. Two states render in place of the routes entirely: a signed-out
+  // visitor at a private URL gets the LANDING page, and an account without a
+  // handle gets CreateHandle at every URL. Titling either tab "Crossing 17"
+  // describes a screen the visitor isn't looking at. Public routes render for
+  // real in both cases... except the handle one, which renders over
+  // everything — so it loses its title too.
+  const routed = Boolean(me?.user?.handle) || (!me?.user && isPublicPath(pathname));
+  const title = routed ? pageTitle(pathname, search) : HOME_TITLE;
+
   // Analytics (Google Analytics 4, see analytics.ts). A client-rendered SPA
   // has to send its own page views — gtag's config-time one would record a
   // single hit on the entry URL and miss every screen after it. The gate is
@@ -154,7 +172,17 @@ export default function App() {
   // don't know yet" and "we couldn't find out" both have to resolve to OFF:
   // `me` is null while /api/me is in flight AND after it fails, and reading
   // the flags off null would report a preview into the production property.
-  useAnalytics({ enabled: reportsAnalytics(me), pathname, search });
+  useAnalytics({ enabled: reportsAnalytics(me), pathname, search, title });
+
+  // What the browser tab, the history entry and any bookmark say (pageTitle.ts).
+  // Note for anyone adding a page-level refinement (a handle, a date): React
+  // commits CHILD effects before the parent's, so a title set from a page's
+  // mount effect is overwritten by this one on that same navigation. It has to
+  // be written on a later render — once the data arrives — where `title` is
+  // unchanged and this effect doesn't re-run. Nothing does that today.
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   // Scroll offset belongs to the page you left, not the one you asked for.
   // A router navigation swaps the DOM without touching the window, so a link

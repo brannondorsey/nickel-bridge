@@ -400,3 +400,53 @@ describe('App — demo mode', () => {
     expect(screen.queryByRole('link', { name: 'TOURNEYS' })).not.toBeInTheDocument();
   });
 });
+
+describe('App — the browser tab', () => {
+  // The join between pageTitle() and the app is the only part of this a user
+  // can see, and it is exactly the part neither pageTitle.test.ts (pure
+  // function) nor analytics.test.ts (hook, hand-passed string) covers. Deleting
+  // App's title effect outright used to leave the whole suite green.
+  it('titles the tab for the route being viewed', async () => {
+    apiMock.me.mockResolvedValue(meFixture);
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    renderApp('/leaderboard');
+    await screen.findByText(leaderboardRows[0].handle);
+    expect(document.title).toBe('Rankings | Nickel Bridge');
+  });
+
+  it('keeps the landing title when a signed-out visitor is shown the landing page', async () => {
+    // /activity is private, so this visitor is looking at the pitch — not at
+    // Traffic — and the tab has to say so.
+    apiMock.me.mockResolvedValue(meLoggedOut);
+    renderApp('/activity');
+    await screen.findByRole('link', { name: /play the toll/i });
+    expect(document.title).toBe('Nickel Bridge — learn & play duplicate bridge');
+  });
+
+  it('keeps the landing title while an account without a handle is at the handle gate', async () => {
+    // CreateHandle renders in place of every route, so the URL's title would
+    // name a screen that isn't on the glass.
+    apiMock.me.mockResolvedValue(meNoHandle);
+    renderApp('/leaderboard');
+    await screen.findByRole('button', { name: /claim|continue|choose/i });
+    expect(document.title).toBe('Nickel Bridge — learn & play duplicate bridge');
+  });
+
+  it('retitles on navigation, and hands the SAME title to analytics', async () => {
+    // Effects run in hook-registration order and the analytics hook is first,
+    // so an ambient document.title read there would report one navigation
+    // behind. Both sides come from one computed value; this is the check that
+    // they agree at the moment a view is sent.
+    apiMock.me.mockResolvedValue(meFixture);
+    apiMock.tournaments.mockResolvedValue([]);
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    const { container } = renderApp('/');
+    await screen.findByRole('navigation');
+    expect(document.title).toBe('Nickel Bridge — learn & play duplicate bridge');
+
+    const rankings = container.querySelector('a[href="/leaderboard"]')!;
+    await userEvent.click(rankings);
+    await screen.findByText(leaderboardRows[0].handle);
+    expect(document.title).toBe('Rankings | Nickel Bridge');
+  });
+});

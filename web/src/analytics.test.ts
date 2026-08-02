@@ -69,7 +69,7 @@ describe('trackedUrl', () => {
 describe('consent defaults', () => {
   /** The consent rows, in queue order, after one enabled render. */
   function consentRows() {
-    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
+    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '', title: 'T' }));
     return commands()
       .filter((row) => row[0] === 'consent')
       .map((row) => row[2] as Record<string, unknown>);
@@ -104,7 +104,7 @@ describe('consent defaults', () => {
     // Consent Mode applies defaults to configs that follow them. Queued after,
     // gtag would have already granted storage everywhere and the EEA/UK denial
     // would arrive too late to prevent the cookie it exists to prevent.
-    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
+    renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '', title: 'T' }));
     const order = commands().map((row) => row[0]);
     expect(order.lastIndexOf('consent')).toBeLessThan(order.indexOf('config'));
   });
@@ -113,7 +113,7 @@ describe('consent defaults', () => {
 describe('useAnalytics', () => {
   it('loads gtag.js once, configures with send_page_view off, and sends the view itself', () => {
     const { rerender } = renderHook(
-      (props: { pathname: string }) => useAnalytics({ enabled: true, search: '', ...props }),
+      (props: { pathname: string }) => useAnalytics({ enabled: true, search: '', title: 'T', ...props }),
       { initialProps: { pathname: '/glossary' } },
     );
 
@@ -158,7 +158,7 @@ describe('useAnalytics', () => {
     // a real navigation, and GA counts a return to a page as a view
     // everywhere else in the app — pinned here so it stays a decision.
     const { rerender } = renderHook(
-      (props: { search: string }) => useAnalytics({ enabled: true, pathname: '/glossary', ...props }),
+      (props: { search: string }) => useAnalytics({ enabled: true, pathname: '/glossary', title: 'T', ...props }),
       { initialProps: { search: '' } },
     );
     window.dataLayer = [];
@@ -172,8 +172,28 @@ describe('useAnalytics', () => {
     ]);
   });
 
+  it('reports the title it was GIVEN, never the one in the tab', () => {
+    // The bug this prevents: React runs effects in hook-registration order,
+    // and App.tsx registers this hook before the effect that updates
+    // document.title. An ambient read here would therefore report every view
+    // against the PREVIOUS screen's title, one navigation behind forever —
+    // and the first view of a deep-linked session against the shell's title.
+    // So the tab is set to the wrong thing here on purpose: the payload must
+    // ignore it.
+    document.title = 'the previous screen, still in the tab';
+    renderHook(() =>
+      useAnalytics({ enabled: true, pathname: '/leaderboard', search: '', title: 'Rankings | Nickel Bridge' }),
+    );
+
+    const view = commands().find((row) => row[1] === 'page_view');
+    expect(view?.[2]).toMatchObject({
+      page_location: `${window.location.origin}/leaderboard`,
+      page_title: 'Rankings | Nickel Bridge',
+    });
+  });
+
   it('does not re-report a re-render that changed no URL', () => {
-    const { rerender } = renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '' }));
+    const { rerender } = renderHook(() => useAnalytics({ enabled: true, pathname: '/', search: '', title: 'T' }));
     window.dataLayer = [];
     rerender();
     expect(names()).toEqual([]);
@@ -181,7 +201,7 @@ describe('useAnalytics', () => {
 
   it('loads nothing at all while disabled — a preview or the demo app never calls Google', () => {
     const { rerender } = renderHook(
-      (props: { enabled: boolean }) => useAnalytics({ pathname: '/', search: '', ...props }),
+      (props: { enabled: boolean }) => useAnalytics({ pathname: '/', search: '', title: 'T', ...props }),
       { initialProps: { enabled: false } },
     );
     expect(injected()).toHaveLength(0);

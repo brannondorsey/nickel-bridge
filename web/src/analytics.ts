@@ -211,11 +211,19 @@ export function trackedUrl(pathname: string, search: string): string {
  * a router navigation, and null for the first view of a page load — where
  * gtag's own `document.referrer` default is the right answer and this must not
  * overwrite it.
+ *
+ * `title` is PASSED, never read off `document.title`, and that is not a
+ * stylistic preference. React runs a component's effects in hook-registration
+ * order, and this hook is registered before App.tsx's title effect — so an
+ * ambient read here happens while the tab still says whatever the PREVIOUS
+ * screen set, and every page view would be reported against the previous
+ * page's title, forever one step behind. Threading the value removes the
+ * ordering dependency instead of relying on someone preserving it.
  */
-function trackPageView(url: string, referrer: string | null): void {
+function trackPageView(url: string, referrer: string | null, title: string): void {
   gtag('event', 'page_view', {
     page_location: url,
-    page_title: document.title,
+    page_title: title,
     ...(referrer ? { page_referrer: referrer } : {}),
   });
 }
@@ -229,8 +237,8 @@ function trackPageView(url: string, referrer: string | null): void {
  * tag is loaded lazily here rather than at import: on a preview or the demo
  * app it is never requested.
  */
-export function useAnalytics(opts: { enabled: boolean; pathname: string; search: string }): void {
-  const { enabled, pathname, search } = opts;
+export function useAnalytics(opts: { enabled: boolean; pathname: string; search: string; title: string }): void {
+  const { enabled, pathname, search, title } = opts;
   // The URL of the last view recorded. It guards against reporting the same
   // URL twice in a row — App re-renders for reasons that have nothing to do
   // with navigation, StrictMode double-invokes this effect, and `enabled`
@@ -251,6 +259,10 @@ export function useAnalytics(opts: { enabled: boolean; pathname: string; search:
     const previous = last.current;
     last.current = url;
     loadGtag();
-    trackPageView(url, previous);
+    trackPageView(url, previous, title);
+    // `title` is deliberately NOT a dependency. It is derived from the same
+    // (pathname, search) this effect already keys on, so the closure always
+    // holds the right one; and a page that later refines its own title should
+    // not thereby record a second view of a URL already counted.
   }, [enabled, pathname, search]);
 }
