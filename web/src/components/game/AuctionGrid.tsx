@@ -13,11 +13,19 @@ export function AuctionGrid({
   auction,
   dealer,
   myTurn,
+  live = false,
   onInspect,
 }: {
   auction: AuctionEntry[];
   dealer: number;
   myTurn: boolean;
+  /**
+   * The auction is still being made, so the newest call drops onto the tray
+   * as it arrives (Board.tsx reveals a robot burst one call at a time — see
+   * stageBidSteps). Off by default so a finished auction, shown beside the
+   * play, doesn't animate its last call every time the board re-renders.
+   */
+  live?: boolean;
   onInspect: (entry: AuctionEntry) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -43,6 +51,11 @@ export function AuctionGrid({
   if (row.length || myTurn) rows.push([...row, ...new Array(4 - row.length).fill(null)]);
   if (!rows.length) rows.push([null, null, null, null]);
   const lastRow = rows.length - 1;
+  // Cells are keyed positionally and empties render null, so an arriving call
+  // mounts a brand-new <button> and a CSS animation on it fires with no JS.
+  // Restricting it to the newest entry is what stops a whole auction cascading
+  // in on the grid's own first mount.
+  const newest = live ? auction[auction.length - 1] : null;
 
   return (
     <div className="auction">
@@ -65,7 +78,9 @@ export function AuctionGrid({
                       {entry ? (
                         <button
                           type="button"
-                          className={entry.meaning?.exact ? 'has-meaning' : ''}
+                          className={[entry.meaning?.exact ? 'has-meaning' : '', entry === newest ? 'auction-latest' : '']
+                            .filter(Boolean)
+                            .join(' ')}
                           onClick={() => onInspect(entry)}
                           title="what does this call mean?"
                           aria-label={entry.name}

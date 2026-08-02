@@ -269,10 +269,24 @@ Fastify app, and suites drive it in-process with `app.inject()` against a temp `
 the board ends → state saved to SQLite → if the board completed, `recomputeElo()` →
 response is `boardView`, which **redacts hidden hands** (dummy only after the opening lead).
 Never return raw board state to the client. Because one response can carry a whole burst of
-robot plays, the client doesn't apply it in one jump: `web/src/components/game/playAnim.ts`
-stages the transition into timed snapshots (card-by-card glides, trick collect, tally stamp)
-that `Board.tsx` applies on timers and `TrickArea.tsx` animates — server data is untouched,
-so anything that changes what a response *contains* should keep `stagePlaySteps` in mind.
+robot actions, the client doesn't apply it in one jump: `web/src/components/game/playAnim.ts`
+stages the transition into timed snapshots that `Board.tsx` applies on timers. In the play
+phase that's `stagePlaySteps` (card-by-card glides, trick collect, tally stamp), animated by
+`TrickArea.tsx`; in the auction it's `stageBidSteps`, which reveals the robots' calls one at a
+time on `BID_GAP_MS` — the human's own call lands instantly, since waiting to see your own tap
+register reads as lag rather than deliberation. That one needs no JS animation: each snapshot
+holds `myTurn: false`, so the thinking notice renders for real rather than for zero frames,
+and `AuctionGrid` marks the newest call `auction-latest` for a CSS drop-in. Note what those
+snapshots deliberately do NOT blank, unlike their play-phase twin: `legalCalls` survives, so
+`BidBox` stays docked and merely inert (its `waiting` prop) rather than being swapped for a
+notice. The box sizes the dock and the decision cluster above hugs the dock's top edge, so
+anything shorter there slides the hand and feedback down the screen and back on every turn —
+and keeping it mounted is also what leaves its fold state to the lapse rule that owns it.
+`stageBidSteps` also owns the
+hand-off into play when the auction ends (`AUCTION_END_MS`, then `stagePlaySteps`' own
+opening-lead staging), so callers dispatch on `prev.state === 'bidding'` alone. Server data is
+untouched throughout, so anything that changes what a response *contains* should keep both
+staging functions in mind.
 
 **Auto-play and claims:** two QoL layers sit on top of the flow above, both client-driven so
 the server stays a plain request/response API. When `boardView.legalCards` has exactly one
@@ -782,7 +796,9 @@ to the ledger, which is exactly the bug that shipped before this was fixed; see 
 doc comment). `Tour.tsx` replays those views through Board.tsx's exported
 `BiddingPhase`/`PlayPhase` (the literal board UI, plus the tollkeeper narration ribbon and
 an optional `hint` pulse threaded through BidBox/HandFan), staging ordinary robot bursts
-with the same `stagePlaySteps` the live board uses and a captured claim tail with the same
+with the same `stageBidSteps`/`stagePlaySteps` the live board uses (before those existed for
+the auction it was a flat 500ms cut, which is still the reduced-motion path) and a captured
+claim tail with the same
 `ClaimOverlay` + `stageClaimSteps` fast-forward `Board.tsx` uses (see "Auto-play and claims"
 above); off-script selections show their real meanings but only the scripted line commits,
 and the tail past the curated steps self-plays — a forced-but-guided step (one with real

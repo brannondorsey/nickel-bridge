@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardView, TrickCard } from '../../api';
-import { boardPlaying } from '../../test/fixtures';
+import { boardBidding, boardBiddingBurst, boardPlaying } from '../../test/fixtures';
 import {
+  AUCTION_END_MS,
+  BID_GAP_MS,
   CLAIM_GAP_MS,
   CLAIM_SPEEDUP_FACTOR,
   CLAIM_TRICK_GAP_MS,
@@ -13,6 +15,7 @@ import {
   captureFanOriginIfVisible,
   capturePlayOrigin,
   claimAnnouncement,
+  stageBidSteps,
   stageClaimSteps,
   stagePlaySteps,
   takePlayOrigin,
@@ -294,6 +297,109 @@ describe('stagePlaySteps', () => {
     expect(stagePlaySteps(prev, next)).toEqual([]);
     // two boundaries at once (stale tab): never animate a guess
     expect(stagePlaySteps(prev, { ...prev, completedTricks: 7, currentTrick: [] })).toEqual([]);
+  });
+});
+
+// ---- bidding ----
+
+describe('stageBidSteps', () => {
+  const prev = boardBidding; // 6 calls on the tray, South to call
+  const next = boardBiddingBurst; // + South's 2♥ and the robots' three replies
+  const mkEntry = (seat: number, call: number, name: string) => ({ seat, call, name, isHuman: seat === 2, meaning: null });
+
+  it('returns [] outside the bidding phase and across boards', () => {
+    expect(stageBidSteps(boardPlaying, boardPlaying)).toEqual([]);
+    expect(stageBidSteps(prev, { ...next, boardNo: prev.boardNo + 1 })).toEqual([]);
+    expect(stageBidSteps(prev, { ...next, tournamentId: prev.tournamentId + 1 })).toEqual([]);
+  });
+
+  it('falls through to stagePlaySteps when there are no new calls to reveal', () => {
+    // an echoed board — stagePlaySteps says [] for bidding→bidding too
+    expect(stageBidSteps(prev, prev)).toEqual([]);
+    // ...and an auction that isn't an extension of the one on screen (a
+    // reload, a race) is never guessed at
+    const divergent = { ...next, auction: [...next.auction.slice(1), next.auction[0]] };
+    expect(stageBidSteps(prev, divergent)).toEqual([]);
+  });
+
+  it('reveals one call at a time, the human’s own immediately and the robots on a beat', () => {
+    const steps = stageBidSteps(prev, next);
+    expect(steps).toHaveLength(4 + 1); // four new calls, then the real view
+
+    // the human's own call is already theirs — waiting to see your own tap
+    // land reads as lag, not deliberation
+    expect(steps[0].delayBefore).toBe(0);
+    expect(steps[1].delayBefore).toBe(BID_GAP_MS);
+    expect(steps[2].delayBefore).toBe(BID_GAP_MS);
+    expect(steps[3].delayBefore).toBe(BID_GAP_MS);
+    expect(steps[4].delayBefore).toBe(BID_GAP_MS);
+
+    // each snapshot is the auction one call longer than the last
+    expect(steps.slice(0, 4).map((s) => s.view.auction.length)).toEqual([7, 8, 9, 10]);
+    for (const [i, step] of steps.slice(0, 4).entries()) {
+      expect(step.view.auction).toEqual(next.auction.slice(0, 7 + i));
+    }
+
+    // locked while the robots reply: this is what makes the thinking notice
+    // render for real instead of for zero frames
+    for (const step of steps.slice(0, 4)) {
+      expect(step.view.state).toBe('bidding');
+      expect(step.view.myTurn).toBe(false);
+      // ...but the legal calls SURVIVE, unlike a locked play-phase view. They
+      // size the docked bid box, which stays on screen inert so the hand and
+      // feedback above it don't slide down the screen and back every turn.
+      expect(step.view.legalCalls).toBe(prev.legalCalls);
+      // ...and everything else is still PREV's board — see lockedBidView
+      expect(step.view.hand).toBe(prev.hand);
+      expect(step.view.hcp).toBe(prev.hcp);
+    }
+
+    // the response itself lands last, by identity — Tour.tsx's caption gate
+    // compares the staged view against its own step's view by reference
+    expect(steps[4].view).toBe(next);
+  });
+
+  it('hands the auction’s last call off to the opening-lead staging, on a longer beat', () => {
+    // South passes out partner's contract: the auction ends and West leads
+    const intoPlay: BoardView = {
+      ...boardPlaying,
+      auction: [...prev.auction, mkEntry(2, 0, 'Pass')],
+      currentTrick: [{ seat: 3, card: S(1) }],
+      completedTricks: 0,
+      declarerTricks: 0,
+      defenderTricks: 0,
+      lastTrick: null,
+    };
+    const steps = stageBidSteps(prev, intoPlay);
+    const play = stagePlaySteps(prev, intoPlay);
+    expect(play.length).toBeGreaterThan(0);
+    expect(steps).toHaveLength(1 + play.length);
+    expect(steps[0].view.state).toBe('bidding');
+    expect(steps[0].view.auction.length).toBe(prev.auction.length + 1);
+    // the table turning over is a bigger event than one more call
+    expect(steps[1].delayBefore).toBe(AUCTION_END_MS);
+    expect(steps.slice(1).map((s) => s.view)).toEqual(play.map((s) => s.view));
+    expect(steps[steps.length - 1].view).toBe(intoPlay);
+  });
+
+  it('still reveals the calls when the board ends without entering play', () => {
+    // passed out: no contract, so stagePlaySteps has nothing to stage
+    const passedOut: BoardView = {
+      ...prev,
+      state: 'done',
+      myTurn: false,
+      legalCalls: undefined,
+      auction: [...prev.auction, mkEntry(2, 0, 'Pass'), mkEntry(3, 0, 'Pass')],
+    };
+    const steps = stageBidSteps(prev, passedOut);
+    expect(steps).toHaveLength(2 + 1);
+    expect(steps[2].view).toBe(passedOut);
+    expect(steps[2].delayBefore).toBe(AUCTION_END_MS);
+  });
+
+  it('keeps a full burst under two seconds — a reveal, not a stall', () => {
+    const total = stageBidSteps(prev, next).reduce((sum, s) => sum + s.delayBefore, 0);
+    expect(total).toBeLessThan(2000);
   });
 });
 

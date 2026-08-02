@@ -101,17 +101,19 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.grade-toast')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
-  // finish the auction by passing (robot annotations may appear in between)
+  // Finish the auction by passing. The robots' replies are revealed one call
+  // at a time (stageBidSteps), and the bid box is unmounted for "Robots are
+  // thinking…" while they arrive — so an absent bid box is a normal transient
+  // of ~1.7s per turn, not a reason to keep polling. Wait for whichever comes
+  // back first rather than budgeting fixed sleeps against it.
+  const passOrPlay = page.locator('.bidbox .callrow button.bid:enabled, .trick, .result').first();
   for (let i = 0; i < 12; i++) {
     if (await page.locator('.trick, .result').first().isVisible().catch(() => false)) break;
+    await expect(passOrPlay).toBeVisible({ timeout: 30_000 });
     const pass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
-    if (!(await pass.isVisible().catch(() => false))) {
-      await page.waitForTimeout(400);
-      continue;
-    }
+    if (!(await pass.isVisible().catch(() => false))) continue;
     await pass.click();
     await page.click('.confirm-row .btn-primary');
-    await page.waitForTimeout(400);
   }
   // Generous: the transition into play runs the robots' first card burst, and
   // double-dummy solves have a documented heavy tail on rare deals (seconds,

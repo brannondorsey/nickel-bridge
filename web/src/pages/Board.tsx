@@ -45,6 +45,7 @@ import {
   captureFanOriginIfVisible,
   claimAnnouncement,
   motionOK,
+  stageBidSteps,
   stageClaimSteps,
   stagePlaySteps,
 } from '../components/game/playAnim';
@@ -179,9 +180,21 @@ export default function Board() {
     [cancelStaging],
   );
 
+  // Which staging a response gets. A claim is its own thing; otherwise a
+  // response that STARTED in the auction goes through stageBidSteps, which
+  // owns the whole bidding-phase composition (the robots' calls, and the
+  // hand-off into play when the auction ends) and falls through to
+  // stagePlaySteps when there are no new calls to reveal.
   const applyBoard = useCallback(
     (prev: BoardView | null, next: BoardView) => {
-      const steps = prev && motionOK() ? (next.claimed ? stageClaimSteps(prev, next) : stagePlaySteps(prev, next)) : [];
+      const steps =
+        prev && motionOK()
+          ? next.claimed
+            ? stageClaimSteps(prev, next)
+            : prev.state === 'bidding'
+              ? stageBidSteps(prev, next)
+              : stagePlaySteps(prev, next)
+          : [];
       if (!steps.length) {
         cancelStaging();
         setBoard(next);
@@ -276,10 +289,15 @@ export default function Board() {
       setLastEval(evaluation);
       setSelectedCall(null);
       setInspect(null);
-      applyBoard(board, next); // stages the opening lead if the auction just ended
+      // stages the robots' replies one at a time, and the opening lead if the
+      // auction just ended
+      applyBoard(board, next);
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      // Deliberately NOT awaited past the scheduling, unlike runClaim: every
+      // staged snapshot carries myTurn: false, so the bid box is off screen
+      // and there is no control left for `busy` to guard.
       setBusy(false);
     }
   };
@@ -480,7 +498,7 @@ export function BiddingPhase({
   return (
     <div className="bid-phase">
       <div className="bid-scroll">
-        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} onInspect={onInspect} />
+        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} live onInspect={onInspect} />
         <div className="bid-decision">
           {feedback}
           <div className="board-fan">
@@ -490,13 +508,20 @@ export function BiddingPhase({
         </div>
       </div>
       <div className="bid-dock">
-        {board.myTurn ? (
+        {/* The box stays docked through the robots' staged replies, locked
+            rather than swapped out: it sizes the dock, and the decision
+            cluster above hugs the dock's top edge, so anything shorter here
+            slides the hand and feedback down the screen and back on every
+            turn. The bare notice is for a server view that genuinely has no
+            calls to show — nothing to render a box from. */}
+        {board.myTurn || board.legalCalls?.length ? (
           <BidBox
             legalCalls={board.legalCalls ?? []}
             selected={selectedCall}
             onSelect={onSelectCall}
             onConfirm={onConfirm}
             busy={busy}
+            waiting={!board.myTurn}
             hint={hint}
           />
         ) : (

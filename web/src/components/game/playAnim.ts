@@ -1,10 +1,10 @@
-import type { BoardView, TrickCard } from '../../api';
+import type { AuctionEntry, BoardView, TrickCard } from '../../api';
 import { cardRank, cardSuit } from '../../api';
 
 /**
- * Card-play animation support: turns one server board transition into a
- * timed sequence of intermediate views, so the table plays out one card at a
- * time instead of jumping straight to the final state.
+ * Play and auction animation support: turns one server board transition into
+ * a timed sequence of intermediate views, so the table plays out one card (or
+ * one call) at a time instead of jumping straight to the final state.
  *
  * The server resolves a whole burst of robot actions per request
  * (advanceRobots runs until it's the human's turn again), so the response can
@@ -12,8 +12,10 @@ import { cardRank, cardSuit } from '../../api';
  * boundary, and the robot leads of the next trick. stagePlaySteps
  * reconstructs that burst as snapshots; Board.tsx applies them on timers, and
  * TrickArea animates each diff (glide-in, collect sweep, tally stamp) as the
- * snapshots land. Everything here is pure and unit-tested; the DOM work
- * lives in TrickArea.
+ * snapshots land. stageBidSteps does the same for a bidding burst — up to
+ * three robot calls per response, which otherwise all appeared in one frame.
+ * Everything here is pure and unit-tested; the DOM work lives in TrickArea
+ * and (for a call landing on the tray) one CSS keyframe on AuctionGrid.
  */
 
 // Timing (ms) — approved in the design mockup: a 260ms ease-out glide per
@@ -29,6 +31,20 @@ export const STAMP_MS = 420;
 // enough to register as a deliberate play (not an instant jump) without
 // making the player wait to see a card they had no choice over.
 export const AUTO_PLAY_DELAY_MS = 250;
+
+// One robot CALL at a time. Lighter than a robot card's GLIDE_MS +
+// ROBOT_GAP_MS = 710ms, because a call has no flight to animate — only the
+// auction cell's own drop-in — so the beat is the whole event rather than a
+// gap after one. Deliberately the same 420ms as STAMP_MS and the toll
+// receipt's per-row 0.4s stagger: the app already has a "one discrete thing,
+// read it, next" rhythm and this is that. Three robot replies cost 1.26s,
+// short of the ~1.5s where a pause starts reading as a stall.
+export const BID_GAP_MS = 420;
+
+// The call that ends the auction changes the entire screen — bid dock out,
+// trick area and dummy in — so it holds for a full ordinary-card beat before
+// the table turns over, rather than the lighter per-call one.
+export const AUCTION_END_MS = 700;
 
 // The "Fast forward settled tricks" ON pacing: much shorter than
 // ROBOT_GAP_MS/HOLD_MS+STAMP_MS since a claim can span many tricks — the
@@ -156,6 +172,34 @@ const lockedView = (next: BoardView, over: Partial<BoardView>): BoardView => ({
   myTurn: false,
   legalCards: undefined,
   ...over,
+});
+
+/**
+ * A mid-auction snapshot: PREV's board with one more call on the tray.
+ *
+ * Built from `prev`, not `next`, on purpose — the twin above can use `next`
+ * because a play-phase burst starts and ends in the play phase, but a bidding
+ * burst can END the auction, and by then `next` is a play-phase view carrying
+ * a contract, a dummy, a reduced hand, and (on a board partner declares) the
+ * NORTH seat's hand and HCP. BiddingPhase renders board.hand and board.hcp,
+ * so re-labelling one of those `state: 'bidding'` would flash the wrong hand
+ * under the last call. The only thing that legitimately changes during a
+ * bidding burst is the auction.
+ *
+ * `legalCalls` is deliberately NOT cleared, which is the one place this
+ * diverges from lockedView's "blank what the human could act on". Those calls
+ * are what size the bid box (BidBox windows itself to the levels still
+ * biddable), and the box is DOCKED so the hand and the feedback above it hug
+ * its top edge — swap it for something shorter and that whole cluster slides
+ * down the screen and back on every turn. So the box stays, rendered inert:
+ * `myTurn: false` is what BiddingPhase reads to lock it and say the robots
+ * are thinking, and nothing can be submitted from it meanwhile.
+ */
+const lockedBidView = (prev: BoardView, auction: AuctionEntry[]): BoardView => ({
+  ...prev,
+  state: 'bidding',
+  myTurn: false,
+  auction,
 });
 
 /**
@@ -293,6 +337,56 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
   // the real server view last: restores myTurn/legalCards (or shows the result)
   const lastWasPlay = !boundary || after.length > 0;
   steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : STAMP_MS, view: next });
+  return steps;
+}
+
+/**
+ * Stage a whole BIDDING-phase transition: the human's own call, then the
+ * robots' replies one at a time, then whatever the response actually left the
+ * board in — a fresh turn for the human, a contract entering play, or a
+ * passed-out board.
+ *
+ * advanceRobots runs until it's the human's turn again, so a single response
+ * can carry three robot calls. Applied in one setBoard they all appear in the
+ * same frame, "Robots are thinking…" renders for zero frames, and the auction
+ * reads as though nobody else bid at all. Each snapshot here holds
+ * `myTurn: false`, so the dock shows that notice for real while the calls
+ * arrive.
+ *
+ * This owns the composition rather than leaving it to callers: a bidding
+ * response can end the auction, and the fact that the reveal then has to hand
+ * off to stagePlaySteps' opening-lead staging is exactly the kind of thing
+ * that gets copied into one call site and forgotten in the other. A
+ * transition with no new calls falls through to stagePlaySteps unchanged, so
+ * a caller can dispatch on `prev.state === 'bidding'` alone.
+ */
+export function stageBidSteps(prev: BoardView, next: BoardView): StagedStep[] {
+  if (prev.state !== 'bidding') return [];
+  if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
+  const from = prev.auction.length;
+  if (next.auction.length <= from) return stagePlaySteps(prev, next);
+  // a reload or a race can hand us an auction that isn't an extension of the
+  // one on screen — don't guess a reveal order for it
+  if (!prev.auction.every((e, i) => e.call === next.auction[i]?.call && e.seat === next.auction[i]?.seat)) {
+    return stagePlaySteps(prev, next);
+  }
+
+  const steps: StagedStep[] = [];
+  for (let k = from + 1; k <= next.auction.length; k++) {
+    // the human's own call lands the instant they commit — they made it, and
+    // waiting a beat to see your own tap land reads as lag, not deliberation
+    const own = steps.length === 0 && next.auction[k - 1].isHuman;
+    steps.push({ delayBefore: own ? 0 : BID_GAP_MS, view: lockedBidView(prev, next.auction.slice(0, k)) });
+  }
+
+  // ...and then the real view. When the auction ended, stagePlaySteps has its
+  // own staging to run (the layout settle, then the opening lead) — its first
+  // step is a delayBefore: 0 that assumed it was starting from the response,
+  // so it gets the turn-over beat instead.
+  const tail = next.state === 'bidding' ? [] : stagePlaySteps(prev, next);
+  const gap = next.state === 'bidding' ? BID_GAP_MS : AUCTION_END_MS;
+  if (tail.length) steps.push({ ...tail[0], delayBefore: gap }, ...tail.slice(1));
+  else steps.push({ delayBefore: gap, view: next });
   return steps;
 }
 

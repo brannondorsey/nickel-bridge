@@ -78,7 +78,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'your-call',
     label: 'An opening bid, your call',
     description:
-      'A fresh deal with the auction to you. Tap calls in the bid box to read their SAYC meanings before you commit — the robots answer in kind.',
+      'A fresh deal with the auction to you. Tap calls in the bid box to read their SAYC meanings before you commit — then watch the robots answer, one call onto the tray at a time.',
     category: 'bidding',
     seed: 'hunt2-2',
     boardNo: 4,
@@ -89,7 +89,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'pass-ends-auction',
     label: 'Your pass seals the contract',
     description:
-      'The auction stands at 2♥ by your partner. Pass, and everything lands at once: your bid is graded, the board flips, and the opening lead is staged into play.',
+      'The auction stands at 2♥ by your partner. Pass, and the rest follows in order: your bid is graded, the tray fills out, then the board flips and the opening lead is staged into play.',
     category: 'bidding',
     seed: 'hunt-1',
     boardNo: 2,
