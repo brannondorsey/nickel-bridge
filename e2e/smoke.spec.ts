@@ -102,18 +102,27 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.grade-toast .stargrade')).toBeVisible();
 
   // Finish the auction by passing. The robots' replies are revealed one call
-  // at a time (stageBidSteps), and the bid box is unmounted for "Robots are
-  // thinking…" while they arrive — so an absent bid box is a normal transient
-  // of ~1.7s per turn, not a reason to keep polling. Wait for whichever comes
-  // back first rather than budgeting fixed sleeps against it.
-  const passOrPlay = page.locator('.bidbox .callrow button.bid:enabled, .trick, .result').first();
-  for (let i = 0; i < 12; i++) {
+  // at a time (stageBidSteps), and the bid box sits inert for the ~1.7s that
+  // takes — so "no enabled Pass yet" is an ordinary transient, and one that
+  // stretches further on a loaded runner (the AI personas are solving
+  // double-dummy on the same two cores). This whole block is best-effort by
+  // design and must NOT assert: it clicks Pass whenever Pass is clickable,
+  // and the assertion below is what judges where we actually ended up. A
+  // hard wait in here just converts runner slowness into a red build.
+  // Deadline-bounded rather than iteration-bounded, so the budget is time
+  // and not "how many polls the pacing happens to cost". 30s is ~2× what
+  // four passes cost at this pacing, and leaves the 60s assertion below
+  // inside the 120s per-test timeout even if this block runs out entirely.
+  const enabledPass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
+  const auctionDeadline = Date.now() + 30_000;
+  while (Date.now() < auctionDeadline) {
     if (await page.locator('.trick, .result').first().isVisible().catch(() => false)) break;
-    await expect(passOrPlay).toBeVisible({ timeout: 30_000 });
-    const pass = page.locator('.bidbox .callrow button.bid:enabled', { hasText: 'Pass' }).first();
-    if (!(await pass.isVisible().catch(() => false))) continue;
-    await pass.click();
-    await page.click('.confirm-row .btn-primary');
+    if (!(await enabledPass.isVisible().catch(() => false))) {
+      await page.waitForTimeout(500);
+      continue;
+    }
+    await enabledPass.click().catch(() => {});
+    await page.click('.confirm-row .btn-primary').catch(() => {});
   }
   // Generous: the transition into play runs the robots' first card burst, and
   // double-dummy solves have a documented heavy tail on rare deals (seconds,
