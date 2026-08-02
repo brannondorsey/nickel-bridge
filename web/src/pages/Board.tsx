@@ -64,6 +64,24 @@ export interface PlayNotice {
 export const RESYNC_MESSAGE = 'Board state got out of sync. Resyncing now.';
 export const RESYNC_STUCK_MESSAGE = 'Board state got out of sync, and resyncing has not settled it.';
 export const RESYNC_ATTEMPT_LIMIT = 3;
+/**
+ * How long the resync notice stays up before the true position replaces it.
+ *
+ * The refetch is one GET against a board the server already has in memory, so
+ * it usually answers in a few milliseconds — faster than the notice can be
+ * read, and often faster than it can be SEEN at all. Without this the player
+ * gets an unexplained flicker and a board that silently jumps to a different
+ * position, which is the one thing this notice exists to prevent: the whole
+ * point is telling them their screen was behind before the screen changes
+ * under them. So the notice owns the transition for a fixed beat and the new
+ * board lands with it, rather than the board arriving whenever the network
+ * happens to answer.
+ *
+ * A floor, not a delay: a refetch slower than this costs nothing extra, and
+ * the board is locked either way, so the player is never kept from a move
+ * they could have made.
+ */
+export const RESYNC_MIN_NOTICE_MS = 3000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -306,17 +324,34 @@ export default function Board() {
   const resync = useCallback(() => {
     cancelStaging();
     const gen = stagingRef.current.gen;
+    const noticeShownAt = Date.now();
+    // Hold the notice for its full read before anything replaces it (see
+    // RESYNC_MIN_NOTICE_MS). Measured from when the notice went up rather
+    // than from when the response landed, so a slow refetch spends the beat
+    // instead of adding to it. The gen is re-checked on the far side the same
+    // way runClaim re-checks claimGenRef across its own hold — navigating
+    // away mid-beat must not paint this board over the next one.
+    const afterHold = async (apply: () => void) => {
+      if (stagingRef.current.gen !== gen) return; // navigated away mid-resync
+      const remaining = RESYNC_MIN_NOTICE_MS - (Date.now() - noticeShownAt);
+      if (remaining > 0) await sleep(remaining);
+      if (stagingRef.current.gen !== gen) return;
+      apply();
+    };
     api
       .board(tournamentId, boardNo)
-      .then((fresh) => {
-        if (stagingRef.current.gen !== gen) return; // navigated away mid-resync
-        setBoard(fresh);
-        setPlayNotice(null);
-      })
-      .catch((e) => {
-        // the board itself won't load — that IS the "there is no board" case
-        if (stagingRef.current.gen === gen) setError((e as Error).message);
-      });
+      .then((fresh) =>
+        afterHold(() => {
+          setBoard(fresh);
+          setPlayNotice(null);
+        }),
+      )
+      .catch((e) =>
+        // the board itself won't load — that IS the "there is no board" case.
+        // Held too: replacing the notice instantly would leave the player
+        // with an error screen and no idea a resync had been attempted.
+        afterHold(() => setError((e as Error).message)),
+      );
   }, [tournamentId, boardNo, cancelStaging]);
 
   const load = useCallback(() => {

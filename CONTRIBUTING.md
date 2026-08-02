@@ -316,6 +316,18 @@ sets. This also covers the failure the client cannot tell this apart from: `api.
 `request()` throws a bare `Error` with no status, so a dropped connection where the server
 never saw the play looks identical, and there the refetch simply returns the same position.
 
+**The notice owns that transition for `RESYNC_MIN_NOTICE_MS` (3s), and the new board lands
+with it.** The refetch is one `GET` against a board the server already holds in memory, so it
+usually answers in single-digit milliseconds — faster than the notice can be read, and often
+faster than it can be SEEN. Without the floor the player gets an unexplained flicker and a
+board that silently jumps to a different position, which is the one thing the notice exists to
+prevent: the point is telling them their screen was behind *before* the screen changes under
+them. Measured driving the demo exhibit in Chromium: 3004ms visible, with the position holding
+still underneath for all of it. It is a floor rather than a delay — a slower refetch costs
+nothing extra, and the board is locked either way, so it never keeps anyone from a move they
+could have made. The failed-resync path is held the same way, or an instant `error` screen
+would leave no trace that a resync was attempted at all.
+
 `rejectStreakRef`/`RESYNC_ATTEMPT_LIMIT` bound it. The resync only settles anything if the
 server eventually agrees with its own `GET`; a second device playing continuously could
 otherwise ping-pong refuse → refetch → auto-play → refuse indefinitely, at two round trips a

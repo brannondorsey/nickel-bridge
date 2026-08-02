@@ -24,7 +24,7 @@ import {
   meFixture,
 } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
-import Board, { RESYNC_ATTEMPT_LIMIT, RESYNC_MESSAGE, RESYNC_STUCK_MESSAGE } from './Board';
+import Board, { RESYNC_ATTEMPT_LIMIT, RESYNC_MESSAGE, RESYNC_MIN_NOTICE_MS, RESYNC_STUCK_MESSAGE } from './Board';
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -470,19 +470,36 @@ describe('Board — the tapped card does not wait for the server', () => {
       expect(button).toBeDisabled();
     }
 
-    settleBoard({
-      ...boardPlaying,
-      hand: boardPlaying.hand.filter((c) => c !== boardPlaying.legalCards![0]),
-      currentTrick: [...boardPlaying.currentTrick!, { seat: 2, card: boardPlaying.legalCards![0] }],
-      myTurn: false,
-      handToPlay: undefined,
-      legalCards: undefined,
-    });
+    // Fake timers from here so the HOLD is observable rather than raced: the
+    // refetch answers in microseconds under a mock, which is exactly the
+    // problem RESYNC_MIN_NOTICE_MS exists to solve on a real server too.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      settleBoard({
+        ...boardPlaying,
+        hand: boardPlaying.hand.filter((c) => c !== boardPlaying.legalCards![0]),
+        currentTrick: [...boardPlaying.currentTrick!, { seat: 2, card: boardPlaying.legalCards![0] }],
+        myTurn: false,
+        handToPlay: undefined,
+        legalCards: undefined,
+      });
 
-    // ...and the notice clears itself once the true position lands
-    await waitFor(() => expect(screen.queryByText(RESYNC_MESSAGE)).not.toBeInTheDocument());
-    expect(apiMock.board).toHaveBeenCalledTimes(2);
-    expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('A');
+      // The true position has arrived, but the notice owns the screen for its
+      // full read first — the board must NOT jump out from under the player.
+      await vi.advanceTimersByTimeAsync(RESYNC_MIN_NOTICE_MS - 500);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByText(RESYNC_MESSAGE)).toBeInTheDocument();
+      expect(southSlot()?.querySelector('.pcard')).toBeNull();
+
+      // ...and only then do the notice and the real board swap together
+      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(0); // the apply fires outside act()
+      expect(screen.queryByText(RESYNC_MESSAGE)).not.toBeInTheDocument();
+      expect(apiMock.board).toHaveBeenCalledTimes(2);
+      expect(southSlot()?.querySelector('.pcard')).toHaveTextContent('A');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('gives up resyncing rather than ping-pong with a device that keeps refusing', async () => {
@@ -501,7 +518,7 @@ describe('Board — the tapped card does not wait for the server', () => {
       // let it try, resync, try again... one delay at a time, since each lap
       // needs React to commit the resynced board before the timer re-arms
       for (let i = 0; i < 12 && !screen.queryByText(RESYNC_STUCK_MESSAGE); i++) {
-        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS + RESYNC_MIN_NOTICE_MS);
         await vi.advanceTimersByTimeAsync(0);
       }
       expect(screen.getByText(RESYNC_STUCK_MESSAGE)).toBeInTheDocument();
@@ -509,7 +526,7 @@ describe('Board — the tapped card does not wait for the server', () => {
 
       // ...and then stops, rather than going around again
       for (let i = 0; i < 12; i++) {
-        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS + RESYNC_MIN_NOTICE_MS);
         await vi.advanceTimersByTimeAsync(0);
       }
       expect(apiMock.playCard).toHaveBeenCalledTimes(RESYNC_ATTEMPT_LIMIT);
@@ -517,7 +534,7 @@ describe('Board — the tapped card does not wait for the server', () => {
       // the way out is the player's, and it resets the count
       fireEvent.click(screen.getByRole('button', { name: 'Reload the board' }));
       for (let i = 0; i < 4 && apiMock.playCard.mock.calls.length === RESYNC_ATTEMPT_LIMIT; i++) {
-        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(AUTO_PLAY_DELAY_MS + RESYNC_MIN_NOTICE_MS);
         await vi.advanceTimersByTimeAsync(0);
       }
       expect(apiMock.playCard.mock.calls.length).toBeGreaterThan(RESYNC_ATTEMPT_LIMIT);
