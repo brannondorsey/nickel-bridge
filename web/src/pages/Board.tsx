@@ -49,6 +49,7 @@ import {
   planClaim,
   stageBidSteps,
   stageClaimSteps,
+  stageOpeningBids,
   stagePlaySteps,
   totalDuration,
   trimStagedPrefix,
@@ -422,11 +423,35 @@ export default function Board() {
     setClaimAnnounceOpen(false);
     claimSkipRef.current = null;
     sawLiveRef.current = false;
+    // Everything past the await belongs to the board this load was started
+    // for. Board.tsx stays MOUNTED across a board change (the route params
+    // change and load() refetches into the same component), so the same
+    // staging generation submitCard uses to answer "is this still my board?"
+    // answers it here too — all the more so now that a load can SCHEDULE
+    // timers, where a stale response would otherwise cancel the new board's
+    // staging and then reveal the old board's auction over it.
+    const gen = stagingRef.current.gen;
+    const stillMyBoard = () => stagingRef.current.gen === gen;
     api
       .board(tournamentId, boardNo)
-      .then(setBoard)
-      .catch((e) => setError(e.message));
-  }, [tournamentId, boardNo, cancelStaging]);
+      .then((fresh) => {
+        if (!stillMyBoard()) return;
+        // The calls the robots made before this board was ever opened get the
+        // same one-at-a-time reveal as the ones they make in reply — see
+        // stageOpeningBids, which returns [] for anything that isn't a fresh
+        // arrival in the auction (and motionOK() gates it like every other
+        // staged sequence).
+        const steps = motionOK() ? stageOpeningBids(fresh) : [];
+        if (!steps.length) {
+          setBoard(fresh);
+          return;
+        }
+        scheduleSteps(steps[0].view, steps);
+      })
+      .catch((e) => {
+        if (stillMyBoard()) setError(e.message);
+      });
+  }, [tournamentId, boardNo, cancelStaging, scheduleSteps]);
   useEffect(load, [load]);
 
   const submitCall = async (call: number) => {

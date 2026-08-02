@@ -155,7 +155,12 @@ if (!featured) {
 
 // 01 — bidding: a call selected, its SAYC meaning read before you commit
 await page.goto(`${base}/t/${tid}/b/${featured}`);
-await page.waitForSelector('.bidbox', { timeout: 30000 });
+// Not `.bidbox`: a robot-dealt board reveals the calls already on the tray one
+// at a time before the turn comes back (stageOpeningBids), and the box is
+// docked but inert for all of it — so this shot would be of a half-filled
+// auction. Same enabled-call-button signal shot 02 below waits on, and for the
+// same reason.
+await page.waitForSelector('.bidbox button.bid:enabled', { timeout: 30000 });
 // The box shows a sliding four-level window from the cheapest legal bid, so a
 // button's index in .grid depends on the auction — address it by its label and
 // open the fold only when the target sits above the window.

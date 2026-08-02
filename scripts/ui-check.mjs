@@ -45,6 +45,14 @@ await shot('04-home-fresh');
 // 05 — bidding
 await page.click('.home-cta');
 await page.waitForSelector('.bidbox, .result', { timeout: 30000 });
+// A robot-dealt board reveals the calls already on the tray one at a time
+// before the turn comes back (stageOpeningBids), and the box is docked but
+// inert throughout — so shooting on `.bidbox` alone catches a half-filled
+// auction over a dead box, and the inspector shot below finds no past call to
+// tap. An enabled call button is the honest "the screen has settled" signal.
+await page
+  .waitForSelector('.bidbox button.bid:enabled, .result', { timeout: 30000 })
+  .catch(() => {});
 await shot('05-bidding');
 const [, , tid] = new URL(page.url()).pathname.split('/'); // /t/:tid/b/:no
 

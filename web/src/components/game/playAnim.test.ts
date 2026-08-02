@@ -3,6 +3,7 @@ import type { BoardView, TrickCard } from '../../api';
 import {
   boardBidding,
   boardBiddingBurst,
+  boardBiddingOpening,
   boardPlaying,
   boardPlayingDummyTurn,
   boardPlayingFlipped,
@@ -25,6 +26,7 @@ import {
   planClaim,
   stageBidSteps,
   stageClaimSteps,
+  stageOpeningBids,
   stagePlaySteps,
   takePlayOrigin,
   trickWinner,
@@ -415,6 +417,50 @@ describe('stageBidSteps', () => {
     const total = stageBidSteps(prev, next).reduce((sum, s) => sum + s.delayBefore, 0);
     expect(total).toBeGreaterThan(2000);
     expect(total).toBeLessThan(5000);
+  });
+});
+
+describe('stageOpeningBids', () => {
+  const fresh = boardBiddingOpening; // West dealt: three robot calls already on the tray
+
+  it('returns [] for anything that isn’t a first arrival in the auction', () => {
+    expect(stageOpeningBids(boardPlaying)).toEqual([]);
+    // South has already called here — restaging calls the player has read
+    // (their own among them) is a delay charged for nothing
+    expect(stageOpeningBids(boardBidding)).toEqual([]);
+    // the human dealt: there was never anything on the tray to reveal
+    expect(stageOpeningBids({ ...fresh, dealer: 2, auction: [] })).toEqual([]);
+  });
+
+  it('opens on an empty tray, then drops in EVERY call before yours', () => {
+    const steps = stageOpeningBids(fresh);
+    expect(steps).toHaveLength(1 + 3 + 1); // the empty tray, three calls, the real view
+
+    // the empty tray lands immediately — the caller has a spinner up until it
+    // does, and the deal is what there is to read while the auction comes in
+    expect(steps[0].delayBefore).toBe(0);
+    expect(steps[0].view.auction).toEqual([]);
+    // ...and then one call per beat, the same beat the robots' replies get.
+    // The point of the whole function is the middle of this list: the grid
+    // marks only its newest cell, so a tray delivered whole animates the call
+    // right before yours and paints the two in front of it.
+    expect(steps.slice(1).map((s) => s.delayBefore)).toEqual(new Array(4).fill(BID_GAP_MS));
+    expect(steps.map((s) => s.view.auction.length)).toEqual([0, 1, 2, 3, 3]);
+    for (const [i, step] of steps.slice(0, 4).entries()) {
+      expect(step.view.auction).toEqual(fresh.auction.slice(0, i));
+    }
+
+    // locked throughout, exactly as a robot burst is: the dock says the robots
+    // are thinking and nothing can be bid over the reveal
+    for (const step of steps.slice(0, 4)) {
+      expect(step.view.state).toBe('bidding');
+      expect(step.view.myTurn).toBe(false);
+      expect(step.view.legalCalls).toBe(fresh.legalCalls);
+      expect(step.view.hand).toBe(fresh.hand);
+    }
+    // the turn is the player's again only on the real view, which lands by
+    // identity like every other staged sequence's last step
+    expect(steps[4].view).toBe(fresh);
   });
 });
 

@@ -13,9 +13,11 @@ import { cardRank, cardSuit } from '../../api';
  * reconstructs that burst as snapshots; Board.tsx applies them on timers, and
  * TrickArea animates each diff (glide-in, collect sweep, tally stamp) as the
  * snapshots land. stageBidSteps does the same for a bidding burst — up to
- * three robot calls per response, which otherwise all appeared in one frame.
- * Everything here is pure and unit-tested; the DOM work lives in TrickArea
- * and (for a call landing on the tray) one CSS keyframe on AuctionGrid.
+ * three robot calls per response, which otherwise all appeared in one frame —
+ * and stageOpeningBids replays the calls the dealer's side had already made
+ * before the board was ever opened. Everything here is pure and unit-tested;
+ * the DOM work lives in TrickArea and (for a call landing on the tray) one
+ * CSS keyframe on AuctionGrid.
  */
 
 // Timing (ms) — approved in the design mockup: a 260ms ease-out glide per
@@ -521,6 +523,47 @@ export function stageBidSteps(prev: BoardView, next: BoardView): StagedStep[] {
   if (tail.length) steps.push({ ...tail[0], delayBefore: gap }, ...tail.slice(1));
   else steps.push({ delayBefore: gap, view: next });
   return steps;
+}
+
+/**
+ * The same reveal, for the calls that were ALREADY on the tray when the board
+ * first loaded.
+ *
+ * A board's dealer is (boardNo - 1) % 4, so on three boards in four the human
+ * is not the dealer and the GET that opens the board answers with one, two or
+ * three robot calls already made (server/src/game.ts's ensureAdvanced runs
+ * advanceRobots up to the human's turn before the view is ever built). Those
+ * arrived in a single setBoard: the whole auction painted with the grid's own
+ * first mount, and only the last cell — the call immediately before yours —
+ * wore the drop-in, because AuctionGrid deliberately restricts `auction-latest`
+ * to the newest entry so a mid-play re-render can't cascade the entire tray in.
+ * So the first thing a player saw of West's preempt was a tray that had always
+ * had it, with no more presence than the vulnerability chip beside it.
+ *
+ * This is stageBidSteps run from an empty tray, so the calls that opened the
+ * auction land on the same beat, in the same order and under the same locked
+ * dock as every call the robots make afterwards — one reveal mechanism for the
+ * auction rather than one for the calls you sat through and another for the
+ * ones you walked in on.
+ *
+ * Only for a board the human has NOT called on yet, which is what makes it a
+ * first impression rather than a replay: come back to a board mid-auction (a
+ * reload, a second device, the browser's back button) and re-staging calls
+ * you have already read — including your own — would be a delay charged for
+ * nothing. `isHuman` is the test rather than a flag threaded down from
+ * Board.tsx, since the auction already carries the answer.
+ *
+ * The leading step is the board with an EMPTY tray, at delayBefore 0: the
+ * caller has a loading spinner on screen until the first step lands, so
+ * without it the beat before the first call would be spent on the spinner
+ * rather than on the deal — and the hand, the vulnerability and the seat are
+ * exactly what there is to read while the auction comes in.
+ */
+export function stageOpeningBids(view: BoardView): StagedStep[] {
+  if (view.state !== 'bidding' || !view.auction.length) return [];
+  if (view.auction.some((entry) => entry.isHuman)) return [];
+  const empty = lockedBidView(view, []);
+  return [{ delayBefore: 0, view: empty }, ...stageBidSteps(empty, view)];
 }
 
 // ---- claims ----
