@@ -168,12 +168,14 @@ await shot('01-bidding-meaning');
 
 // 02 — the grade toast that stamps the call you just made. The robots' replies
 // are now revealed one call at a time (BID_GAP_MS × up to three, then the turn
-// returns), so this waits for the BID BOX to come back rather than a fixed
-// beat: shot at 500ms it would catch "Robots are thinking…" mid-burst, which
-// is a different screen from the one this shot is of.
+// returns), so a fixed beat here would catch "Robots are thinking…" mid-burst
+// — a different screen from the one this shot is of. Waiting on `.bidbox`
+// would NOT fix that: the box stays docked through the whole burst, merely
+// inert (BidBox's `waiting`). An ENABLED call button is the honest signal
+// that the turn is actually back, same one e2e/smoke.spec.ts waits on.
 await page.click('.confirm-row .btn-primary');
 await page.waitForSelector('.grade-toast', { timeout: 30000 });
-await page.waitForSelector('.bid-dock .bidbox', { timeout: 30000 });
+await page.waitForSelector('.bidbox .callrow button.bid:enabled', { timeout: 30000 });
 await page.waitForTimeout(500);
 await shot('02-grade-toast');
 
