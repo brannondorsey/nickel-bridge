@@ -56,7 +56,7 @@ const stmtCreateBoard = db.prepare(
 // recycled id belonging to a different user's board. With the full scope the
 // stale write matches nothing and drops harmlessly.
 const stmtSaveBoard = db.prepare(
-  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch()
+  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, claimed_at_ply = ?, updated_at = unixepoch()
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
@@ -194,6 +194,7 @@ function save(b: GameBoard): void {
     b.contract ? JSON.stringify(b.contract) : null,
     b.row.tricks_declarer,
     b.row.score_ns,
+    b.row.claimed_at_ply,
     b.row.id,
     b.row.tournament_id,
     b.row.user_id,
@@ -280,6 +281,13 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
           // the only way the claim's outcome is guaranteed identical to what
           // continued play would have produced.
           b.claimed = true;
+          // Persist the boundary: everything from this plays-index on is the
+          // server fast-playing the settled tail for both sides — including,
+          // when the claim fires on the human's own turn, cards from the
+          // human's hand. Analyze must never grade past it (see the
+          // claimed_at_ply migration comment in db.ts). At most one claim per
+          // board: resolveClaim finishes it.
+          b.row.claimed_at_ply = b.plays.length;
           b.plays.push(pickFromSolve(legal, solve));
           await resolveClaim(b, priority);
           continue;

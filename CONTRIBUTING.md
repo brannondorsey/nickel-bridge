@@ -43,15 +43,22 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
-                play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
+                play via vendor/bridge-dds WASM; solveVia/analysePlayVia/
+                ddTableVia/dealerParVia share ONE runVia pool-vs-main-thread
+                policy), play-mc.ts (sampled-DD card play
                 for non-expert difficulty tiers: K seeded hidden-hand layouts
                 constrained by the auction's SAYC `req`s + shown-out voids, solved
-                per layout, aggregate scores summed per legal card — then, per
+                per layout, aggregate scores summed per legal card
+                (scoreCardsSampled — the per-card score map, split out for
+                Analyze's findability verdict; test/play-mc-golden.test.ts pins
+                the split byte-identical) — then, per
                 PLAY_NOISE, either the flat argmax or a seeded weighted pick among
                 the top playTopN cards by that same score), difficulty.ts (tier
                 type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
-                (lazy worker_threads DDS pool for parallel sampled solves —
-                latency only, never outcomes), play-mc-forget.ts (EXPERIMENTAL,
+                (lazy worker_threads DDS pool — one enqueue path serving solve/
+                analysePlay/ddTable/dealerPar under shared priority+starvation+
+                timeout rules; latency only, never outcomes), play-mc-forget.ts
+                (EXPERIMENTAL,
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
@@ -411,7 +418,10 @@ Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
 either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
-untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
+untouched. The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
+server-played tail card; NULL = no claim, or a pre-migration board): `GameBoard.claimed` stays
+transient per-request, but a finished board must be able to say at rest where its tail stopped
+being the human's own play — Analyze must never grade past it. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
 needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`).
 `Board.tsx`'s `runClaim` plays that response back in **three beats**, and `planClaim` in
 `playAnim.ts` is the one pure place that decides which cards belong to which:
@@ -573,12 +583,13 @@ the **main-thread** `solveRequest()` — a synchronous WASM solve with no timeou
 event loop for every concurrent request, i.e. a worse freeze than the one being fixed. A
 background request that has waited the bound is promoted to interactive.
 That main-thread fallback is now a genuine last resort rather than the first thing tried:
-`play-ai.ts`'s `solveVia()` is the ONE place that chooses pool-vs-main-thread for every DD
-solve in the app, and it reaches `solveRequest()` only when there is no compiled worker at all
-(vitest on TS sources) or when a second pool has also failed. A pool that died mid-decision —
-which rejects every outstanding solve at once, so `chooseCardSampled`'s K layouts all land here
-together — is retried on the replacement `getSharedDdPool()` mints, instead of becoming K
-sequential event-loop-blocking solves.
+`play-ai.ts`'s private `runVia()` is the ONE policy that chooses pool-vs-main-thread for every
+DD call in the app — `solveVia()` plus the Analyze-era `analysePlayVia`/`ddTableVia`/
+`dealerParVia` are thin instances of it — and it reaches the main thread only when there is no
+compiled worker at all (vitest on TS sources) or when a second pool has also failed. A pool
+that died mid-decision — which rejects every outstanding solve at once, so
+`chooseCardSampled`'s K layouts all land here together — is retried on the replacement
+`getSharedDdPool()` mints, instead of becoming K sequential event-loop-blocking solves.
 Play starts when a human is placed into
 or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
 sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and

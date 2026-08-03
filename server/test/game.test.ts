@@ -109,6 +109,17 @@ describe('automatic laydown claims', () => {
     expect(b.claimed).toBe(true);
     expect(views[views.length - 1].claimed).toBe(true);
 
+    // the claim boundary is persisted (claimed_at_ply — see db.ts's migration
+    // comment): a valid plays[] index strictly inside the hand, and it
+    // survives a fresh read of the row
+    expect(b.row.claimed_at_ply).not.toBeNull();
+    expect(b.row.claimed_at_ply!).toBeGreaterThan(0);
+    expect(b.row.claimed_at_ply!).toBeLessThan(52);
+    const persisted = db
+      .prepare(`SELECT claimed_at_ply FROM boards WHERE id = ?`)
+      .get(b.row.id) as { claimed_at_ply: number | null };
+    expect(persisted.claimed_at_ply).toBe(b.row.claimed_at_ply);
+
     // dummyHand must still be sent once the board is 'done', not just while
     // 'playing' — the client's claim fast-forward animation reconstructs
     // dummy's hand shrinking trick-by-trick from this field, and a claim can
@@ -147,6 +158,8 @@ describe('automatic laydown claims', () => {
     expect(b.row.state).toBe('done');
     expect(b.contract).not.toBeNull();
     expect(b.claimed).toBeUndefined();
+    // no claim ⇒ the persisted boundary stays NULL
+    expect(b.row.claimed_at_ply).toBeNull();
   });
 });
 

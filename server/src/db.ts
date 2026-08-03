@@ -175,6 +175,23 @@ if (!tournamentColumns.has('ai_field')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN ai_field INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `claimed_at_ply` — the plays[] index of the first card the
+// server played as part of resolving a laydown claim (advanceRobots'
+// claim gate in game.ts), NULL when the board finished without claiming.
+// GameBoard.claimed has always been transient (per-request, never saved), so
+// before this column a finished board could not say whether — or where — its
+// tail was claim-played. Analyze needs that boundary at rest: cards past it
+// were played BY THE SERVER for both sides (true-DD, see invariant 1's claim
+// note), so grading them against the human is a false statement. Backfilled
+// NULL: pre-migration boards re-derive the boundary by replaying the claim
+// gate's solve walk (server/src/analyze.ts), and cache the answer.
+const boardColumns = new Set(
+  (db.prepare(`PRAGMA table_info(boards)`).all() as { name: string }[]).map((c) => c.name),
+);
+if (!boardColumns.has('claimed_at_ply')) {
+  db.exec(`ALTER TABLE boards ADD COLUMN claimed_at_ply INTEGER`);
+}
+
 export interface UserRow {
   id: number;
   google_id: string;
@@ -249,5 +266,7 @@ export interface BoardRow {
   contract: string | null;
   tricks_declarer: number | null;
   score_ns: number | null;
+  /** plays[] index of the first server-played card of a resolved claim; NULL = no claim (or pre-migration board — re-derived by analyze.ts) */
+  claimed_at_ply: number | null;
   updated_at: number;
 }
