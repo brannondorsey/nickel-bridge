@@ -181,7 +181,21 @@ function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number
   const series = stmtEloSeries.all(userId) as { tournament_id: number; before: number; after: number }[];
 
   // The crossing that took them over the provisional quota and onto the ladder.
-  const ladder = series[provisionalMin - 1];
+  // This is a claim about WALL-CLOCK order, so it cannot use `series` as-is:
+  // that array is ordered by tournament_id, which is the rating-replay order
+  // (correct for `best` below), not the order the player actually finished
+  // things in. Tournaments never close (see tournaments.ts), so a player can
+  // resume and finish a long-abandoned, low-id tournament today; the moment it
+  // rates, its row lands EARLY in tournament_id order but its `finishedAt` is
+  // today. Indexing `series` directly would then hand a veteran player who
+  // crossed the quota months ago a brand-new 'entered-rankings' event, because
+  // some *other*, older tournament now occupies the quota-th slot. Sorting by
+  // when each rated tournament actually finished (for this player) makes the
+  // quota-th entry stable under that kind of backfill.
+  const byFinish = [...series].sort(
+    (a, b) => (finishedAt.get(a.tournament_id) ?? 0) - (finishedAt.get(b.tournament_id) ?? 0),
+  );
+  const ladder = byFinish[provisionalMin - 1];
   const ladderAt = ladder ? finishedAt.get(ladder.tournament_id) : undefined;
   if (ladderAt !== undefined && ladderAt >= sinceUnix) {
     out.push({ kind: 'milestone', userId, at: ladderAt, milestone: 'entered-rankings' });

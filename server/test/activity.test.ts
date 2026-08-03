@@ -165,6 +165,56 @@ describe('GET /api/activity', () => {
     expect(ladderFor(4)).toHaveLength(0);
   });
 
+  it('does not re-fire entered-rankings when a long-abandoned tournament backfills into the rating series', async () => {
+    // Reproduces a reported false positive: a veteran player (already on the
+    // ladder for a long time) resumes and finishes a tournament they'd left
+    // unfinished ages ago (tournaments never close). Its elo_history row only
+    // appears today, but its tournament_id is lower than the tournament that
+    // genuinely took this player over the quota — so indexing elo_history's
+    // tournament_id-ordered series directly picks the wrong "quota-th" crossing
+    // and re-announces 'entered-rankings' for someone long past it.
+    const veteran = new TestClient(app, 'ActivityVeteran');
+    const rater = new TestClient(app, 'ActivityVeteranRater');
+    await veteran.login();
+    await rater.login();
+
+    const tid = await crossOnce(veteran);
+    // A second human rates it — this is the crossing that actually put the
+    // veteran on the ladder.
+    for (let no = 1; no <= 4; no++) await playBoard(rater, tid, no);
+
+    const veteranId = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityVeteran'`).get() as { id: number }).id;
+
+    // Push that genuine milestone well outside the window.
+    db.prepare(`UPDATE boards SET updated_at = updated_at - ? WHERE tournament_id = ?`).run(30 * 86400, tid);
+
+    // Simulate the resumed-old-tournament backfill: a lower tournament_id
+    // (so it sorts earlier in elo_history's replay order) whose boards and
+    // rating row only land today.
+    const oldTid = tid - 1_000_000;
+    db.prepare(`INSERT INTO tournaments (id, name, seed, created_at) VALUES (?, 'Old Tournament', 'seed', ?)`).run(
+      oldTid,
+      Math.floor(Date.now() / 1000) - 400 * 86400,
+    );
+    for (let no = 1; no <= 4; no++) {
+      db.prepare(
+        `INSERT INTO boards (tournament_id, user_id, board_no, state, contract, tricks_declarer, score_ns, updated_at)
+         VALUES (?, ?, ?, 'done', '{}', 0, 0, unixepoch())`,
+      ).run(oldTid, veteranId, no);
+    }
+    db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, 1200, 1210)`).run(
+      veteranId,
+      oldTid,
+    );
+
+    const { recentActivity } = await import('../src/activity.js');
+    const since = Math.floor(Date.now() / 1000) - 8 * 86400;
+    const milestones = recentActivity(since, 1).events.filter(
+      (e) => e.kind === 'milestone' && e.userId === veteranId && e.milestone === 'entered-rankings',
+    );
+    expect(milestones).toHaveLength(0);
+  });
+
   it('never mentions a player who has not picked a handle', async () => {
     // /auth/dev creates the account; skipping /api/handle leaves it nameless.
     const res = await app.inject({ method: 'POST', url: '/auth/dev', payload: { name: 'Nameless' } });
