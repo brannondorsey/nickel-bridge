@@ -121,6 +121,56 @@
         }
       })();
     </script>
+    <!--
+      The prerendered fallback is for agents that CAN'T run JavaScript, and this
+      marks the documents that can. server/src/app.ts answers GET / with
+      web/dist/home-static/index.html, whose #root already holds a plain-prose
+      copy of the landing page (web/scripts/prerender.mjs) — and React throws
+      that away the moment it mounts. For a signed-out visitor arriving from
+      search that swap is roughly the same words twice, so it reads as the page
+      finishing; for a signed-in player refreshing the lobby it is a flash of a
+      different screen entirely, the pitch they already accepted.
+
+      So: if this browser has ever held a signed-in session — splash.ts stamps
+      nb:lastVisit on every authenticated mount — the prerendered pages hide
+      their own fallback markup under this attribute (the .pr rule in
+      prerender.mjs). A player then gets the same blank-then-Loading every other
+      route in the app already gives them.
+
+      Note what that does and does not split on. It is per BROWSER, not per
+      arrival, and it covers ALL the prerendered pages — the glossary's ~126 as
+      well as this one — which is deliberate rather than a side effect of their
+      sharing one <style> block. The same flash is there (the static prose, then
+      the app's own term sheet), and the stamp is the only signal available
+      before paint. So the honest statement of the trade is not "search arrivals
+      keep the fast static paint": it is that a browser which has signed in
+      loses it everywhere, including on a glossary page reached from search, and
+      a browser which never has keeps it everywhere. That falls the right way
+      round, because the blank is already what that browser sees on every other
+      route in the app, while the static paint exists for the first-time arrival
+      — who carries no stamp and is untouched. Splitting it per page is one
+      STYLE block away if that ever stops being the right call.
+
+      Deliberately decided on the client. The server knows exactly who is signed
+      in, but varying GET / on the session cookie would put a per-visitor answer
+      behind an edge cache keyed without it (scripts/cloudflare.mjs) — a
+      heuristic that costs one plain paint when it guesses wrong beats a cached
+      page that is wrong for everyone. Nothing clears the stamp on sign-out for
+      the same reason: a false positive costs that paint and nothing else.
+
+      Plain, blocking JS with its own try/catch, like the two scripts above.
+    -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('nb:lastVisit')) {
+            document.documentElement.setAttribute('data-returning-player', '1');
+          }
+        } catch (e) {
+          /* ignore — worst case is the prerendered fallback flashing once */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

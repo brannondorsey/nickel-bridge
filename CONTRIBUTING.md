@@ -112,7 +112,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 "The glossary" below),
                 index.html (the SPA shell — holds the site-wide SEO block between its
                 seo:start/seo:end markers, which the prerender replaces per page, plus
-                the pre-paint night-mode and suit-palette scripts),
+                the pre-paint night-mode, suit-palette and returning-player scripts —
+                the last of which suppresses the prerendered fallback, see
+                "Discoverability" below),
                 scripts/prerender.mjs (a BUILD STEP, not an offline generator
                 like tools/'s — `build` runs it after `vite build` to prerender the
                 glossary into dist/glossary-static/ and the landing page into
@@ -1333,6 +1335,26 @@ it emits. See "keeping it that way" at the end of this section.
   `@fastify/static` registers a route for the prefix itself, not just `prefix + '*'`, so
   `app.get('/')` alongside the default is `FST_ERR_DUPLICATED_ROUTE` at boot — not a
   route-priority contest like `/glossary` wins against the wildcard.
+- **A returning player never sees the prerendered markup.** It is a fallback for agents
+  that can't run JavaScript, and React throws it away on mount — which on `/` means a
+  signed-in player refreshing the lobby watched the landing pitch paint and then be
+  replaced by the app. (For a search arrival the same swap is roughly the same words
+  twice, so it reads as the page finishing rather than as a flash.) So a third pre-paint
+  inline script in `web/index.html` sets `data-returning-player` when `nb:lastVisit` is
+  stamped — `splash.ts` writes it on every authenticated mount — and the prerendered
+  `<style>` hides its own `.pr` article under that attribute. Scoped to `.pr`, never
+  `#root`, which React empties and refills. The suppression is per BROWSER and covers
+  **every** prerendered page, the glossary's ~126 included: they flash the same way, and
+  the trade is that a browser which has signed in loses the static paint everywhere —
+  including on a term page reached from search — while one that never has keeps it
+  everywhere. That falls the right way round, since the blank is already what a signed-in
+  browser gets on every other route, and the static paint exists for the first-time
+  arrival, who carries no stamp. It is a client-side guess on purpose: the
+  server knows exactly who is signed in, but varying `GET /` on the session cookie would
+  put a per-visitor answer behind an edge cache keyed without it (see "The edge" above),
+  and a wrong guess costs only one plain paint — which is also why nothing clears the
+  stamp on sign-out. `web/src/prepaint.test.ts` is the drift guard: the two halves live
+  in different files and neither does anything alone.
 - **`/leaderboard`, `/players/` and `/tour` are public but `Disallow`ed.** None is
   prerendered, so a crawler would get the SPA shell — an empty `#root` wearing the HOME
   page's title, description and OG tags — i.e. thin near-duplicates competing with `/`.
