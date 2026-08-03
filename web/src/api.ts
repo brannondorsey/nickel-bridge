@@ -213,6 +213,9 @@ export interface AnalysisView {
   contract: Contract | null;
   claimedAtPly: number | null;
   singleField: boolean;
+  /** the field snapshot the verdicts were computed against (frozen at first compute) */
+  fieldScores: number[];
+  myIndex: number;
   actualPct: number | null;
   ddTricks: number[] | null;
   plies: AnalysisPly[];

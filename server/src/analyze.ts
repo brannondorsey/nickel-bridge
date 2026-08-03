@@ -21,7 +21,7 @@ import {
   playState,
 } from '@bridge/core';
 import { TournamentRow, db } from './db.js';
-import { GameBoard, bidder, boardFieldRows, humanControls } from './game.js';
+import { GameBoard, HUMAN_SEAT, bidder, boardFieldRows, humanControls } from './game.js';
 
 /**
  * Analyze — the post-board review's verdict pipeline ("walking a finished
@@ -79,7 +79,7 @@ export const MAX_MOMENTS = 5;
  * any constant above, a grade-band change, or a stage-3 scoring change — a
  * cached analysis computed against different robots is a stale accusation.
  */
-export const ANALYZE_VERSION = 1;
+export const ANALYZE_VERSION = 2; // 2: core carries the frozen field snapshot par is computed against
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
@@ -135,6 +135,20 @@ export interface AnalysisCore {
   claimedAtPly: number | null;
   /** the whole field is just this player — costs are null and moments empty */
   singleField: boolean;
+  /**
+   * The field this analysis was computed against, FROZEN at first compute:
+   * the board's NS scores in boardFieldRows order, and this player's index in
+   * them. Stage 4's later backfill substitutes into THIS snapshot rather than
+   * re-querying — the field can grow between a play-lens open and a later
+   * crossing-lens open, and a bid moment's mpGain measured against a
+   * different field size than the play moments' mpCost would be ranked
+   * against them as if comparable. One snapshot per analysis is also what
+   * keeps the cache deterministic (the caveat that a board "can be worth a
+   * different number next week" is stated copy, not something the backfill
+   * quietly does piecemeal).
+   */
+  fieldScores: number[];
+  myIndex: number;
   /** the player's real matchpoint pct on this board; null in a single field */
   actualPct: number | null;
   /** AnalysePlayPBN trace (declaring-side absolute totals, length min(cards+1, 49)); null on a pass-out */
@@ -205,7 +219,7 @@ const stmtPutPar = db.prepare(`UPDATE board_analyses SET par = ?, updated_at = u
 
 /** N-S is the human's side; the human's side declares when declarer is N or S. */
 function humanSideDeclares(contract: Contract): boolean {
-  return contract.declarer % 2 === 0;
+  return contract.declarer % 2 === HUMAN_SEAT % 2;
 }
 
 /**
@@ -251,6 +265,8 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
       contract: null,
       claimedAtPly: null,
       singleField,
+      fieldScores: scores,
+      myIndex,
       actualPct,
       ddTricks: null,
       plies: [],
@@ -332,18 +348,23 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
     contract,
     claimedAtPly,
     singleField,
+    fieldScores: scores,
+    myIndex,
     actualPct,
     ddTricks,
     plies,
   };
 }
 
-/** Stage 4 — par + counterfactual auctions (the crossing/auction lenses only). */
-async function computePar(t: TournamentRow, b: GameBoard, core: AnalysisCore): Promise<AnalysisPar> {
+/**
+ * Stage 4 — par + counterfactual auctions (the crossing/auction lenses only).
+ * Substitutes into core's FROZEN field snapshot, never a fresh query — see
+ * AnalysisCore.fieldScores for why (a backfill against a grown field would
+ * rank bid moments against play moments measured on different fields).
+ */
+async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): Promise<AnalysisPar> {
   const deal = b.deal;
-  const rows = boardFieldRows(t.id, b.row.board_no);
-  const myIndex = rows.findIndex((r) => r.user_id === b.row.user_id);
-  const scores = rows.map((r) => r.score_ns ?? 0);
+  const { fieldScores: scores, myIndex } = core;
 
   const table = await calcDdTable(deal, 'background');
   const par = await dealerParFor(table, deal.dealer, deal.vul, 'background');
@@ -351,7 +372,7 @@ async function computePar(t: TournamentRow, b: GameBoard, core: AnalysisCore): P
   const calls: CallAnalysis[] = [];
   let evalIdx = 0;
   for (let i = 0; i < b.calls.length && evalIdx < b.bidEvals.length; i++) {
-    if ((deal.dealer + i) % 4 !== 2) continue; // not the human's call
+    if ((deal.dealer + i) % 4 !== HUMAN_SEAT) continue; // not the human's call
     const ev = b.bidEvals[evalIdx++];
     let cf: CallAnalysis['cf'] = null;
     if (ev.bestCall !== b.calls[i]) {

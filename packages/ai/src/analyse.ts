@@ -1,7 +1,7 @@
 import { Card, Contract, Deal, Vulnerability, cardRank, cardSuit, dealToPbn } from '@bridge/core';
 import type { DdTableResults, DealPbn, PlayTracePbn, SolvedPlay } from '../vendor/bridge-dds/api.js';
 import { SolvePriority } from './dd-pool.js';
-import { analysePlayVia, ddTableVia, dealerParVia } from './play-ai.js';
+import { analysePlayVia, ddTableVia, ddsTrump, dealerParVia } from './play-ai.js';
 import type { DdTableDealPbn, ParResultsDealer } from '../vendor/bridge-dds/api.js';
 
 /**
@@ -12,11 +12,6 @@ import type { DdTableDealPbn, ParResultsDealer } from '../vendor/bridge-dds/api.
  * reversed trump order produces plausible-looking numbers — which is why each
  * is pinned by test/analyse.test.ts rather than trusted from the header.
  */
-
-/** our strain (0=♣..4=NT) → DDS trump (0=♠ 1=♥ 2=♦ 3=♣ 4=NT) — same map play-ai.ts uses */
-export function ddsTrump(strain: number): number {
-  return strain === 4 ? 4 : 3 - strain;
-}
 
 /**
  * Vulnerability → DDS encoding. TRAP: DDS order is 0=None 1=BOTH 2=NS 3=EW —

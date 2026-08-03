@@ -419,13 +419,14 @@ function ReplayLens({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // the caption follows what is ON SCREEN: the replay's own view, which lags
-  // the ply during a staged glide
+  // The caption follows what is ON SCREEN: the replay's own view, which lags
+  // the ply during a staged glide. Derived from the view's own play count
+  // rather than identity in `views` — the staged intermediate steps are
+  // fresh lockedView objects stagePlaySteps builds, so an indexOf fallback
+  // to `ply` would jump the caption (and its cost stamp) to the destination
+  // card before it visually lands.
   const shown = replay.view ?? views[ply];
-  const shownPly = Math.max(
-    0,
-    views.indexOf(shown) >= 0 ? views.indexOf(shown) : ply,
-  );
+  const shownPly = Math.min(totalPlies, (shown.completedTricks ?? 0) * 4 + (shown.currentTrick?.length ?? 0));
   // the trick in progress (or about to start) at the shown position — the
   // ribbon's label and the current pip agree on this one number
   const trick = trickOfPly(shownPly >= totalPlies ? totalPlies - 1 : shownPly, totalPlies);

@@ -39,6 +39,8 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
     contract: donePlayed.contract!,
     claimedAtPly: 44,
     singleField: false,
+    fieldScores: [650, 620, 170, -100, -200],
+    myIndex: 1,
     actualPct: 58,
     ddTricks,
     plies: [

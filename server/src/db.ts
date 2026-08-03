@@ -68,8 +68,13 @@ CREATE TABLE IF NOT EXISTS elo_history (
 -- lens that needs it is opened, so a play-lens read never pays for
 -- CalcDDTablePBN. A version mismatch (ANALYZE_VERSION) forces a recompute —
 -- a cached analysis computed against different robots is a stale accusation.
+-- ON DELETE CASCADE is load-bearing: boards are deleted by demo mode's
+-- per-exhibit wipe-unfinished-then-replay (demo.ts) and full reset
+-- (demo-seed.ts), and with foreign_keys ON a cache row without the cascade
+-- turns either into FOREIGN KEY constraint failed — a cache must never be
+-- able to block its parent's delete.
 CREATE TABLE IF NOT EXISTS board_analyses (
-  board_id INTEGER PRIMARY KEY REFERENCES boards(id),
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
   version INTEGER NOT NULL,
   core TEXT NOT NULL,
   par TEXT,
@@ -208,6 +213,23 @@ const boardColumns = new Set(
 );
 if (!boardColumns.has('claimed_at_ply')) {
   db.exec(`ALTER TABLE boards ADD COLUMN claimed_at_ply INTEGER`);
+}
+
+// Migration: board_analyses briefly existed without ON DELETE CASCADE (see
+// the DDL comment above — a cache row blocked board deletes). SQLite can't
+// alter a foreign key in place, and the table is a pure recomputable cache,
+// so a non-cascading copy is simply dropped and recreated empty.
+const baFks = db.prepare(`PRAGMA foreign_key_list(board_analyses)`).all() as { on_delete: string }[];
+if (baFks.length > 0 && baFks[0].on_delete !== 'CASCADE') {
+  db.exec(`DROP TABLE board_analyses;
+CREATE TABLE board_analyses (
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  core TEXT NOT NULL,
+  par TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);`);
 }
 
 export interface UserRow {

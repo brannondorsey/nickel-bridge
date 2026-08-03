@@ -638,7 +638,7 @@ export default function Board() {
                 <Button
                   onClick={() =>
                     board.boardNo < board.totalBoards
-                      ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`)
+                      ? navigate(`/t/${tournamentId}/b/${board.boardNo + 1}`)
                       : navigate(`/t/${tournamentId}`)
                   }
                 >
@@ -649,7 +649,7 @@ export default function Board() {
                 {/* the Tournament ledger's old promise, finally kept — the
                     review lives at its own route; the Result carries only
                     this door (no analysis data outside the Analyze screen) */}
-                <Button variant="secondary" to={`/t/${tournamentId}/b/${boardNo}/analyze`}>
+                <Button variant="secondary" to={`/t/${tournamentId}/b/${board.boardNo}/analyze`}>
                   ANALYZE PLAY →
                 </Button>
                 <Button variant="secondary" to="/">

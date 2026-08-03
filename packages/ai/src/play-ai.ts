@@ -34,8 +34,8 @@ async function getDds(): Promise<Dds> {
   return ddsInstance;
 }
 
-/** our strain (0=♣..4=NT) → DDS trump (0=♠ 1=♥ 2=♦ 3=♣ 4=NT) */
-function ddsTrump(strain: number): number {
+/** our strain (0=♣..4=NT) → DDS trump (0=♠ 1=♥ 2=♦ 3=♣ 4=NT) — the ONE copy (analyse.ts imports it) */
+export function ddsTrump(strain: number): number {
   return strain === 4 ? 4 : 3 - strain;
 }
 

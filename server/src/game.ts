@@ -39,7 +39,7 @@ import {
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
 import { boardDifficulty, recomputeElo } from './tournaments.js';
 
-const HUMAN_SEAT: Seat = 2; // South
+export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
 
 // Exported for the benchmark AI personas (ai-players.ts), which bid their own

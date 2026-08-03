@@ -6,11 +6,10 @@ import {
   buildPlayTrace,
   calcDdTable,
   ddTableTricks,
-  ddsTrump,
   ddsVul,
   dealerParFor,
 } from '../src/analyse.js';
-import { chooseCard, solveFutureTricks } from '../src/play-ai.js';
+import { chooseCard, ddsTrump, solveFutureTricks } from '../src/play-ai.js';
 
 /**
  * Pins for the Analyze DDS helpers. Every encoding here is silent when wrong

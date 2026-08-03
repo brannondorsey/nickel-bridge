@@ -204,6 +204,38 @@ describe('cache behaviour', () => {
       (db.prepare(`SELECT version FROM board_analyses WHERE board_id = ?`).get(b.row.id) as any).version,
     ).toBe(analyze.ANALYZE_VERSION);
   }, 240_000);
+
+  it('a cached analysis never blocks its board being deleted (demo wipe/replay paths)', async () => {
+    // demo.ts's per-exhibit wipe and demo-seed's full reset both DELETE FROM
+    // boards with foreign_keys ON — without ON DELETE CASCADE on
+    // board_analyses, analyzing an exhibit board once made re-running that
+    // exhibit throw FOREIGN KEY constraint failed (the review finding this
+    // test pins).
+    const t = makeTournament('analyze-cascade');
+    const b = await driveBoard(t, userId, 1, firstLegalCard);
+    await analyze.getBoardAnalysis(t, b, false);
+    expect(db.prepare(`SELECT 1 FROM board_analyses WHERE board_id = ?`).get(b.row.id)).toBeTruthy();
+    expect(() => db.prepare(`DELETE FROM boards WHERE id = ?`).run(b.row.id)).not.toThrow();
+    expect(db.prepare(`SELECT 1 FROM board_analyses WHERE board_id = ?`).get(b.row.id)).toBeUndefined();
+  }, 240_000);
+
+  it('par backfill substitutes into the frozen field snapshot, not a re-queried one', async () => {
+    const t = makeTournament('analyze-freeze');
+    const b = await driveBoard(t, userId, 1, firstLegalCard);
+    if (!b.contract) throw new Error('seed produced a pass-out; pick another');
+    const solo = await analyze.getBoardAnalysis(t, b, false); // caches core against a field of one
+    expect(solo.singleField).toBe(true);
+    // the field grows AFTER core is cached...
+    await driveBoard(t, rivalId, 1, firstLegalCard);
+    // ...and the later par backfill must keep measuring against the frozen
+    // snapshot (costs stay refused), not silently mix field sizes
+    const withPar = await analyze.getBoardAnalysis(t, b, true);
+    expect(withPar.singleField).toBe(true);
+    expect(withPar.fieldScores).toEqual(solo.fieldScores);
+    for (const c of withPar.par!.calls) {
+      if (c.cf) expect(c.cf.mpGain).toBeNull();
+    }
+  }, 240_000);
 });
 
 describe('the endpoint', () => {
