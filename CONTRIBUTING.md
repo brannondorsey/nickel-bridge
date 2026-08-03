@@ -67,6 +67,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
+                analyze.ts (the Analyze review's verdict pipeline — two engines,
+                four stages, the board_analyses cache; see "Analyze" below),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
@@ -852,6 +854,28 @@ And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s `force_htt
 an infinite redirect loop. Note also that once proxied, `Fly-Client-IP` becomes Cloudflare's
 edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
 
+**Analyze (the post-board review) is two engines, because double dummy alone would lie to a
+beginner.** `server/src/analyze.ts` + `GET /api/tournaments/:id/boards/:no/analysis` (+`?par=1`)
+serve verdicts for a FINISHED board — the client only draws them (the Compare precedent). Per
+human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for the whole play)
+converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
+(`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
+insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault is shown and explicitly
+EXCUSED, never charged. Stage order is load-bearing: the DD trace is the cheap filter, the
+sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
+counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
+Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
+`version` = `ANALYZE_VERSION` and the par payload nullable; every solve dispatches
+`priority: 'background'` — a live card-play solve beats a report loading, and
+`STARVATION_PROMOTE_MS` bounds the wait. The grading boundary is `boards.claimed_at_ply`
+(re-derived by replaying the claim gate for pre-migration NULLs): cards past it were played by
+the server for both sides and are never graded. Only the human's own cards are graded
+(`humanControls`, both flip orientations — robot partner North never), forced cards are
+skipped, and a one-player field refuses costs (`singleField`) rather than inventing them.
+**MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
+board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
+
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
 haven't played, in two tiers: a **grace window** force-joins young (< 48h), under-filled
@@ -1428,7 +1452,10 @@ the sitemap and `robots.txt` follow on their own.
    `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
    non-perfect tournaments: it breaks comparability for in-flight ones, so calibrate
    (`tools/calibrate_k.mjs`, `tools/calibrate_stats.mjs`, `tools/calibrate_stack.mjs`) first,
-   or accept the break knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   or accept the break knowingly. Any such deliberate robot change — and any change to
+   `ANALYZE_K`/`MOMENT_FLOOR`/`gradeFromDeficit` or stage-3 scoring in `server/src/analyze.ts`
+   — must also bump `ANALYZE_VERSION` there: a cached analysis computed against different
+   robots is a stale accusation, and the version is what forces the recompute. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

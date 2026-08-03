@@ -210,9 +210,11 @@ function boardDone(row: BoardRow): boolean {
  * Does the human play this hand? The human plays their whole side: South
  * always, and North whenever N-S is the declaring side (South declaring →
  * South + dummy North; North declaring → the board flips and the human runs
- * partner's hand). Defending, the human plays only South.
+ * partner's hand). Defending, the human plays only South. Exported for
+ * analyze.ts, which must grade exactly the cards this says the human chose —
+ * not "South's cards" — in both flip orientations.
  */
-function humanControls(hand: Seat, contract: Contract): boolean {
+export function humanControls(hand: Seat, contract: Contract): boolean {
   if (hand === HUMAN_SEAT) return true;
   return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
 }
@@ -576,6 +578,18 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
 
 function tricksOf(r: BoardRow): number | undefined {
   return r.tricks_declarer ?? undefined;
+}
+
+/**
+ * The finished-board rows a board is matchpointed against — the SAME query
+ * boardResult() uses (everyone who finished the board, humans and house, in
+ * updated_at order), exported for analyze.ts's counterfactual arithmetic so
+ * the analysis can never disagree with the field table about who is in the
+ * field. Analyze SUBSTITUTES its hypothetical score into this array by row
+ * index — never appends — per tournaments.ts's order-preservation argument.
+ */
+export function boardFieldRows(tournamentId: number, boardNo: number): { user_id: number; score_ns: number | null }[] {
+  return stmtBoardResults.all(tournamentId, boardNo) as (BoardRow & { user_handle: string })[];
 }
 
 function bidAccuracy(evals: { score: number }[]): number | null {

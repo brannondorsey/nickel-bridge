@@ -12,6 +12,7 @@ import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } f
 import { PUBLIC_ORIGIN } from './config.js';
 import { db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
+import { getBoardAnalysis } from './analyze.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
 import { robotsTxt } from './seo.js';
@@ -157,6 +158,28 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     await ensureAdvanced(b);
     return reply.send(boardView(t, b, user.elo));
+  });
+
+  // Analyze — verdicts for a FINISHED board's review screen, computed on
+  // first open and cached (board_analyses). `?par=1` adds stage 4 (par + the
+  // counterfactual auctions) — the crossing/auction lenses request it, the
+  // play lens deliberately doesn't, so its open never pays for
+  // CalcDDTablePBN. Only offered on a board already 'done', whose hidden
+  // hands boardView has therefore already revealed to this player; boards
+  // are per-user rows, so there is no cross-player surface, and /api/* is in
+  // the edge bypass set.
+  app.get('/api/tournaments/:id/boards/:no/analysis', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    const { id, no } = req.params as { id: string; no: string };
+    const wantPar = (req.query as { par?: string }).par === '1';
+    const t = getTournament(Number(id));
+    const boardNo = Number(no);
+    if (!t || boardNo < 1 || boardNo > 4) return reply.code(404).send({ error: 'not found' });
+    const b = loadBoard(t, user.id, boardNo, false);
+    if (!b || b.row.state !== 'done') return reply.code(404).send({ error: 'not analyzable' });
+    if (t.ai_field) noteTournamentActivity(t.id);
+    return reply.send(await getBoardAnalysis(t, b, wantPar));
   });
 
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {

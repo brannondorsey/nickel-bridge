@@ -13,8 +13,11 @@ import type {
 } from '../vendor/bridge-dds/api.js';
 import type { WorkerRequest } from './dd-worker.js';
 
-/** A worker request without its queue-assigned id — what callers hand to enqueue(). */
-type PoolRequest = Omit<WorkerRequest, 'id'>;
+/** A worker request without its queue-assigned id — what callers hand to
+ *  enqueue(). Omit must distribute over the union or it collapses to the
+ *  common keys and every kind-specific payload field is rejected. */
+type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
+type PoolRequest = DistributiveOmit<WorkerRequest, 'id'>;
 
 /**
  * A pool of worker threads, each holding its own DDS WASM instance, for

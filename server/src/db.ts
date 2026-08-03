@@ -59,6 +59,24 @@ CREATE TABLE IF NOT EXISTS elo_history (
   after INTEGER NOT NULL
 );
 
+-- Analyze's per-board verdict cache (server/src/analyze.ts). Computed on the
+-- FIRST open of a board's analysis — never on completion — and served cached
+-- thereafter: the pipeline is seeded and DDS is deterministic, so a recompute
+-- is byte-identical (the cache and the screen are the same claim made twice).
+-- "core" holds stages 1-3 (DD trace, per-ply verdicts, moments); "par" holds
+-- stage 4 (DD table, par, counterfactual auctions) and stays NULL until a
+-- lens that needs it is opened, so a play-lens read never pays for
+-- CalcDDTablePBN. A version mismatch (ANALYZE_VERSION) forces a recompute —
+-- a cached analysis computed against different robots is a stale accusation.
+CREATE TABLE IF NOT EXISTS board_analyses (
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id),
+  version INTEGER NOT NULL,
+  core TEXT NOT NULL,
+  par TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE INDEX IF NOT EXISTS idx_boards_tournament ON boards(tournament_id, board_no);
 CREATE INDEX IF NOT EXISTS idx_boards_user ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
