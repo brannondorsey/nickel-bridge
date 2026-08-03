@@ -897,14 +897,19 @@ alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
 never a red −penalty. The play lens is a full
 replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
 from the tour, which is now a second consumer): forward steps stage one card at a time
-through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD, the
-trick pips and the PREV/NEXT MOMENT pair `cut()` with no animation, and the audit ribbon
+through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD and the
+trick pips `cut()` with no animation, and the audit ribbon
 (the tollkeeper ribbon's shape, unvoiced) narrates the view the replay is actually showing
 — the tour's lagging-caption move, with its caption slot height RESERVED (the bid-box dock
-rule: a shorter caption must not scoot the board). A moment jump lands ON the decision
-(`?ply=`, the card still in hand) with the engine's pick wearing the live
-pre-confirmation `.selected` treatment in the fan (an underlined rank in the suit-line
-rails); NEXT CARD then shows what actually happened. Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
+rule: a shorter caption must not scoot the board). A moment jump (`?ply=`, the ledger, the
+PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immediately
+stages the played card's glide, so the card that was played (in the trick) and the
+engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
+rank in the suit-line rails) are on screen together — the pager anchors on the moment
+being read, not the replay position, which sits one card past it. The open-hand rails
+wear the dummy rail's kerning (thin-space rank separation + `.dummy-rail-ranks`'s
+letter-spacing), and a centred PLAYED rail under them accumulates every card off the
+hands, its two wrapped lines reserved up front (the dock rule again). Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
 trick-by-trick list instead, a legitimate reading rather than a fallback. Costly-but-
 unfindable moments carry an EXCUSED `InkStamp` (a stamp rules FOR you where a grade rates
 you); charged moments keep `StarGrade` (✗ at 0). Only THE PLAY skips `?par=1`. The demo

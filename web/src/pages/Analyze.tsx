@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AnalysisMoment,
@@ -143,9 +143,10 @@ export default function Analyze() {
     next.delete('trick');
     setParams(next, { replace: true });
   };
-  // Jump into the replay AT the human decision itself (the position with the
-  // card still in hand), not the top of its trick — the reader tapped a
-  // moment, so the moment is what should be on the table.
+  // Jump into the replay AT the human decision itself, not the top of its
+  // trick — the reader tapped a moment, so the moment is what should be on
+  // the table. The replay lands it as ONE step: the played card glides into
+  // the trick while the engine's pick stays highlighted in the hand.
   const openPlayAt = (ply: number) => {
     const next = new URLSearchParams(params);
     next.set('lens', 'play');
@@ -414,11 +415,38 @@ function ReplayLens({
   const replay = useReplay({ fastForward: true });
   const totalPlies = views.length - 1;
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));
+  // The graded decision the replay is currently sitting ON (a collapsed
+  // moment landing leaves `ply` one past the decision — the played card is
+  // already in the trick — so the pager needs its own anchor to know which
+  // moment "here" is). Cleared by any manual step or pip jump.
+  const [curMoment, setCurMoment] = useState<number | null>(null);
+
+  // A moment lands as ONE step: cut to the decision, then immediately stage
+  // the played card's glide into the trick — so the card that was played
+  // (animated in) and the engine's pick (highlighted where it still sits in
+  // the hand) are on screen at the same time, with no NEXT press between
+  // "what should have happened" and "what did". A non-graded target is a
+  // plain cut, same as the pips.
+  const landAt = (target: number) => {
+    const p = Math.max(0, Math.min(target, totalPlies));
+    const graded = p < totalPlies && analysis.plies.some((v) => v.ply === p);
+    if (!graded) {
+      setCurMoment(null);
+      setPly(p);
+      replay.cut(views[p]);
+      return;
+    }
+    setCurMoment(p);
+    setPly(p + 1);
+    replay.cut(views[p]);
+    replay.applyTransition(views[p], views[p + 1], 1);
+  };
+
   const startedRef = useRef(false);
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    replay.cut(views[ply]);
+    landAt(ply);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -437,30 +465,29 @@ function ReplayLens({
   const next = () => {
     if (ply >= totalPlies) return;
     const p = ply + 1;
+    setCurMoment(null);
     setPly(p);
     replay.applyTransition(views[ply], views[p], 1);
   };
   const back = () => {
     if (ply <= 0) return;
     const p = ply - 1;
+    setCurMoment(null);
     setPly(p);
     replay.cut(views[p]);
   };
   const jumpTo = (t: number) => {
     const p = Math.min(firstPlyOfTrick(t), totalPlies);
+    setCurMoment(null);
     setPly(p);
     replay.cut(views[p]);
   };
-  // the graded human decisions either side of the current position — a jump
-  // lands ON the decision (card still in hand, the engine's pick highlighted)
-  const nextMomentPly = analysis.plies.find((v) => v.ply > ply)?.ply ?? null;
-  const prevMomentPly = [...analysis.plies].reverse().find((v) => v.ply < ply)?.ply ?? null;
-  const jumpToMoment = (target: number | null) => {
-    if (target === null) return;
-    const p = Math.min(target, totalPlies);
-    setPly(p);
-    replay.cut(views[p]);
-  };
+  // the graded human decisions either side of the moment being read (the
+  // collapsed landing leaves ply one PAST the decision, so the pager anchors
+  // on curMoment — otherwise PREV would forever re-land the moment on screen)
+  const anchor = curMoment ?? ply;
+  const nextMomentPly = analysis.plies.find((v) => v.ply > anchor)?.ply ?? null;
+  const prevMomentPly = [...analysis.plies].reverse().find((v) => v.ply < anchor)?.ply ?? null;
 
   const caption = captionFor(analysis, board, shownPly);
   const view = shown;
@@ -469,8 +496,8 @@ function ReplayLens({
   // The engine's card, highlighted where it still sits — the same pre-
   // confirmation `.selected` treatment a live tap uses, so "the card that
   // should have been played" reads in the vocabulary the player already
-  // knows. Only meaningful while the decision is pending (the card is in a
-  // hand); once played, the caption carries the name instead.
+  // knows. It holds through the played card's landing (the collapsed moment
+  // shows both at once) and clears when the replay steps on.
   const highlight = caption.highlight;
   const fanHighlight = highlight !== null && view.hand.includes(highlight) ? highlight : null;
 
@@ -505,6 +532,14 @@ function ReplayLens({
           <SuitLine cards={remainingAt(board, shownPly, 1)} highlight={highlight} />
         </div>
       </div>
+      <div className="analyze-rail played num">
+        <span className="analyze-rail-label">PLAYED</span>
+        {shownPly > 0 ? (
+          <SuitLine cards={playedAt(board, shownPly)} />
+        ) : (
+          <span className="analyze-suitline analyze-suitline-empty">—</span>
+        )}
+      </div>
       <TrickArea board={view} />
       <div className="board-fan">
         <HandFan cards={displaySort(view.hand)} selected={fanHighlight} />
@@ -538,10 +573,10 @@ function ReplayLens({
           </Button>
         </div>
         <div className="replay-dock-row replay-dock-moment">
-          <Button variant="secondary" onClick={() => jumpToMoment(prevMomentPly)} disabled={prevMomentPly === null}>
+          <Button variant="secondary" onClick={() => prevMomentPly !== null && landAt(prevMomentPly)} disabled={prevMomentPly === null}>
             ‹ PREV MOMENT
           </Button>
-          <Button variant="secondary" onClick={() => jumpToMoment(nextMomentPly)} disabled={nextMomentPly === null}>
+          <Button variant="secondary" onClick={() => nextMomentPly !== null && landAt(nextMomentPly)} disabled={nextMomentPly === null}>
             NEXT MOMENT ›
           </Button>
         </div>
@@ -556,6 +591,19 @@ function remainingAt(board: BoardView, ply: number, seat: number): number[] {
   return displaySort((board.allHands?.[seat] ?? []).filter((c) => !played.has(c)));
 }
 
+/** every card off the hands after `ply` plays — the PLAYED rail's accumulator,
+ *  the exact complement of the four remainingAt lines */
+function playedAt(board: BoardView, ply: number): number[] {
+  const flat = board.playHistory?.flat() ?? [];
+  return displaySort(flat.slice(0, ply).map((t) => t.card));
+}
+
+/** A hand as one horizontal line of suit groups, wearing the dummy rail's
+ *  kerning (thin-space rank separation + its letter-spacing) so the open
+ *  hands here read like the exposed hand does on the live board. Each suit
+ *  group refuses to break internally; whether the LINE may wrap between
+ *  groups is the container's decision (the side rails never do, the PLAYED
+ *  rail must — 52 cards fit no single line). */
 function SuitLine({ cards, highlight = null }: { cards: number[]; highlight?: number | null }) {
   const bySuit: number[][] = [[], [], [], []];
   for (const c of cards) bySuit[cardSuit(c)].push(c);
@@ -563,17 +611,14 @@ function SuitLine({ cards, highlight = null }: { cards: number[]; highlight?: nu
     <span className="analyze-suitline">
       {bySuit.map((suit, s) =>
         suit.length ? (
-          <span key={s}>
+          <span key={s} className="analyze-suitgroup">
             <span className={suitClass(s)}>{SUIT_SYMBOLS[s]}</span>
-            {suit.map((c) =>
-              c === highlight ? (
-                <b key={c} className="analyze-hl">
-                  {RANK_CHARS[cardRank(c)]}
-                </b>
-              ) : (
-                RANK_CHARS[cardRank(c)]
-              ),
-            )}{' '}
+            {suit.map((c) => (
+              <Fragment key={c}>
+                {'\u2009'}
+                {c === highlight ? <b className="analyze-hl">{RANK_CHARS[cardRank(c)]}</b> : RANK_CHARS[cardRank(c)]}
+              </Fragment>
+            ))}
           </span>
         ) : null,
       )}
@@ -663,7 +708,9 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
       text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy).${better}`,
       gain: verdict.mpCost,
       excused: false,
-      highlight: null,
+      // the engine's pick stays marked in the hand while the played card sits
+      // in the trick — a collapsed moment landing shows both at once
+      highlight: verdict.sampled?.bestCard ?? null,
     };
   }
   const markNote = mark && mark !== '=' ? ` (${mark} double dummy${played.seat % 2 === 1 ? ' — uncharged' : ''})` : '';

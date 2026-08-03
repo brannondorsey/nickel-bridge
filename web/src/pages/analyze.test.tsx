@@ -1,8 +1,8 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AnalysisView } from '../api';
+import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, type AnalysisView } from '../api';
 import { allHands, donePlayed, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Analyze from './Analyze';
@@ -211,34 +211,56 @@ describe('the play lens', () => {
     expect(await screen.findByText(/TRICK BY TRICK/)).toBeInTheDocument();
   });
 
-  it('a moment jump lands ON the decision, highlights the engine card, and NEXT MOMENT hops onward', async () => {
+  it('a moment jump collapses to one step — the played card lands in the trick with the engine card highlighted — and the pager hops between moments', async () => {
     const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
     (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    const playedCard = flat[chargedPly].card;
+    // a .pcard's textContent is its rank glyph followed by its suit symbol
+    const cardText = (c: number) => `${RANK_CHARS[cardRank(c)]}${SUIT_SYMBOLS[cardSuit(c)]}`;
     try {
       apiMock.board.mockResolvedValue(donePlayed);
       apiMock.analysis.mockResolvedValue(makeAnalysis());
       renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${chargedPly}`);
       await screen.findByText(/THE AUDIT — TRICK/);
 
-      // the decision is pending: the ribbon reads the turn, the gain wears
-      // the + sign, and the engine's card carries the live pre-confirmation
-      // .selected treatment in the fan
-      const ribbon = document.querySelector('.audit-ribbon')!;
-      expect(ribbon.textContent).toMatch(/The turn is here/);
-      expect(ribbon.textContent).toMatch(/\+25 MP/);
+      // the landing is ONE step: the played card glides into the trick while
+      // the engine's pick keeps the live pre-confirmation .selected treatment
+      // in the fan — both on screen at once, no NEXT press between them
+      await waitFor(
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/),
+        { timeout: 4000 },
+      );
+      const trickCards = () => [...document.querySelectorAll('.trick .pcard')].map((el) => el.textContent);
+      expect(trickCards()).toContain(cardText(playedCard));
       expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/\+25 MP/);
 
-      // at the first moment there is nothing earlier to hop back to
+      // at the first moment there is nothing earlier to hop back to — even
+      // though the replay position sits one card PAST the decision
       expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeDisabled();
 
-      // NEXT MOMENT cuts to the following graded decision (the excused one)
+      // BACK A CARD steps to the pending decision itself: the ribbon reads
+      // the turn and the highlight stays on the engine's card
+      await userEvent.click(screen.getByRole('button', { name: /BACK A CARD/ }));
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
+      expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
+
+      // NEXT MOMENT lands the following graded decision (the excused one)
+      // the same collapsed way
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
-      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/);
+      await waitFor(
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
+        { timeout: 4000 },
+      );
       expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
 
-      // and PREV MOMENT hops back to the charged decision
+      // and PREV MOMENT hops back to the charged moment, collapsed again
       await userEvent.click(screen.getByRole('button', { name: /PREV MOMENT/ }));
-      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
+      await waitFor(
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/),
+        { timeout: 4000 },
+      );
+      expect(trickCards()).toContain(cardText(playedCard));
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }

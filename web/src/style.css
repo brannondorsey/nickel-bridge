@@ -4874,7 +4874,9 @@ a.stat-tile:hover {
   padding-bottom: 16px;
 }
 .analyze-lens {
-  padding: 0 12px 14px;
+  /* the top padding is the breathing room under the header's rule, before
+     the two lens buttons — the header's own padding sits inside its border */
+  padding: 12px 12px 14px;
 }
 .analyze-lens .pref-switch button {
   font-size: 9.5px;
@@ -5037,6 +5039,10 @@ a.stat-tile:hover {
   padding: 2px 0 4px;
   flex-direction: column;
   gap: 2px;
+  /* equal halves: a full 13-card hand is wider than half a phone, so it must
+     wrap inside its own column rather than shove its twin off the screen */
+  flex: 1 1 0;
+  min-width: 0;
 }
 .analyze-rails .analyze-rail.right {
   text-align: right;
@@ -5049,10 +5055,45 @@ a.stat-tile:hover {
   color: var(--muted);
   min-width: 52px;
 }
+/* A hand as suit groups on a line, wearing the dummy rail's kerning
+   (.dummy-rail-ranks' letter-spacing; the ranks are thin-space separated in
+   the markup — a full space × two 13-card hands side by side outgrows a
+   phone). A suit group never breaks internally; the flex gap separates
+   groups and, where the line is allowed to wrap, provides the break points. */
 .analyze-suitline {
-  white-space: nowrap;
+  display: inline-flex;
+  column-gap: 6px;
   font-family: var(--font-label);
   font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.analyze-suitgroup {
+  white-space: nowrap;
+}
+/* The side rails and the PLAYED rail wrap between suit groups — a full hand
+   (or most of the deck) doesn't fit their line — with the two lines they
+   will need reserved from the start (the bid-box dock rule: the board below
+   must not scoot when a wrap appears or collapses mid-replay). North stays
+   a single unwrapped line: 13 cards at full width always fit. */
+.analyze-rails .analyze-suitline,
+.analyze-rail.played .analyze-suitline {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: calc(2 * 1.42em);
+}
+.analyze-rails .analyze-rail.right .analyze-suitline {
+  justify-content: flex-end;
+}
+/* ---- the PLAYED accumulator, mirroring North's centered rail on the other
+   side of the open hands */
+.analyze-rail.played {
+  align-items: center;
+  text-align: center;
+}
+.analyze-rail.played .analyze-suitline {
+  justify-content: center;
+  align-self: stretch;
+  color: var(--muted);
 }
 
 /* ---- the replay dock ---- */
