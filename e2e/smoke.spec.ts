@@ -214,7 +214,7 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   // shows its own refusal instead of a replay)
   await page.click('text=ANALYZE PLAY');
   await expect(page.locator('.analyze-moments')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.analyze-lens .pref-switch button')).toHaveCount(3);
+  await expect(page.locator('.analyze-lens .pref-switch button')).toHaveCount(2);
   await page.click('.analyze-lens .pref-switch button:has-text("THE PLAY")');
   await expect(page.locator('.analyze-tricks, .audit-ribbon, .analyze-finding').first()).toBeVisible();
 });

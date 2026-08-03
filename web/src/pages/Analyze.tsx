@@ -50,19 +50,32 @@ import { useReplay } from '../replay/useReplay';
  * nowhere else in the app.
  */
 
-type Lens = 'crossing' | 'auction' | 'play';
+type Lens = 'overview' | 'play';
 
 const LENS_OPTIONS: { value: Lens; label: string }[] = [
-  { value: 'crossing', label: 'THE CROSSING' },
-  { value: 'auction', label: 'THE AUCTION' },
+  { value: 'overview', label: 'THE OVERVIEW' },
   { value: 'play', label: 'THE PLAY' },
 ];
 
-/** −38 MP, tabular, aria-hidden (the row's accessible name carries the reading) */
-function MpCost({ cost, muted = false }: { cost: number; muted?: boolean }) {
+/** ?lens= values accepted from the URL — the original three-lens shape's
+ *  'crossing' and 'auction' both land on the overview, so shared links from
+ *  the first preview keep working */
+function lensFromParam(raw: string | null): Lens {
+  return raw === 'play' ? 'play' : 'overview';
+}
+
+/**
+ * +38 MP, tabular, aria-hidden (the row's accessible name carries the
+ * reading). The sign is a PLUS on purpose: a moment is matchpoints that were
+ * there for the taking — an opportunity, not a penalty — so the figure wears
+ * the positive ink (`--positive`, which the colourblind palette leaves
+ * alone; the + sign carries the direction on its own, colour only
+ * reinforces). Excused moments mute it: set aside, not on offer.
+ */
+function MpGain({ gain, muted = false }: { gain: number; muted?: boolean }) {
   return (
-    <span className={`num moment-cost${muted ? ' muted' : ''}`} aria-hidden="true">
-      −{Math.round(cost)} MP
+    <span className={`num moment-gain${muted ? ' muted' : ''}`} aria-hidden="true">
+      +{Math.round(gain)} MP
     </span>
   );
 }
@@ -86,8 +99,8 @@ export default function Analyze() {
   const tournamentId = Number(tid);
   const boardNo = Number(no);
   const [params, setParams] = useSearchParams();
-  const lens = (['crossing', 'auction', 'play'].includes(params.get('lens') ?? '') ? params.get('lens') : 'crossing') as Lens;
-  const wantPar = lens !== 'play';
+  const lens = lensFromParam(params.get('lens'));
+  const wantPar = lens === 'overview';
 
   const [board, setBoard] = useState<BoardView | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
@@ -127,10 +140,14 @@ export default function Analyze() {
     next.delete('trick');
     setParams(next, { replace: true });
   };
-  const openPlayAt = (trick: number) => {
+  // Jump into the replay AT the human decision itself (the position with the
+  // card still in hand), not the top of its trick — the reader tapped a
+  // moment, so the moment is what should be on the table.
+  const openPlayAt = (ply: number) => {
     const next = new URLSearchParams(params);
     next.set('lens', 'play');
-    next.set('trick', String(trick));
+    next.set('ply', String(ply));
+    next.delete('trick');
     setParams(next);
   };
 
@@ -166,11 +183,16 @@ export default function Analyze() {
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
 
-      {lens !== 'play' ? <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} onOpenAuction={() => setLens('auction')} /> : null}
-      {lens !== 'play' ? <AuctionLens board={board} analysis={analysis} /> : null}
+      {lens === 'overview' ? <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} /> : null}
+      {lens === 'overview' ? <AuctionLens board={board} analysis={analysis} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
-          <PlayLens board={board} analysis={analysis} initialTrick={Number(params.get('trick') ?? '1') || 1} />
+          <PlayLens
+            board={board}
+            analysis={analysis}
+            initialPly={params.get('ply') !== null ? Number(params.get('ply')) || 0 : null}
+            initialTrick={Number(params.get('trick') ?? '1') || 1}
+          />
         ) : (
           <div className="perf-panel analyze-panel">
             <p className="analyze-finding">A passed-out board has no play to walk. The auction lens still applies.</p>
@@ -196,11 +218,9 @@ export default function Analyze() {
 function WhereItTurned({
   analysis,
   onOpenPlay,
-  onOpenAuction,
 }: {
   analysis: AnalysisView;
-  onOpenPlay: (trick: number) => void;
-  onOpenAuction: () => void;
+  onOpenPlay: (ply: number) => void;
 }) {
   const { moments, setAside } = analysis;
   return (
@@ -216,12 +236,17 @@ function WhereItTurned({
               key={m.kind === 'play' ? `p${m.ply}` : `b${m.callIndex}`}
               moment={m}
               analysis={analysis}
-              onOpen={() => (m.kind === 'play' ? onOpenPlay(m.trick!) : onOpenAuction())}
+              onOpen={() =>
+                m.kind === 'play'
+                  ? onOpenPlay(m.ply!)
+                  : // bid moments live one panel down on this same lens
+                    document.querySelector('.analyze-bidding')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+              }
             />
           ))}
           {setAside > 0 ? (
             <p className="analyze-overflow">
-              {setAside === 1 ? 'One more moment' : `${setAside} more moments`} set aside — the {moments.length} above cost the most.
+              {setAside === 1 ? 'One more moment' : `${setAside} more moments`} set aside — the {moments.length} above were worth the most.
             </p>
           ) : null}
         </>
@@ -260,8 +285,8 @@ function MomentRow({
   const aside = momentAside(m, analysis);
   const name =
     m.kind === 'play'
-      ? `Trick ${m.trick}, ${m.excused ? 'excused' : `${m.grade} of 3 stars`}, cost ${Math.round(m.mpCost)} matchpoints. ${aside}`
-      : `Your bid, cost ${Math.round(m.mpCost)} matchpoints. ${aside}`;
+      ? `Trick ${m.trick}, ${m.excused ? `excused — ${Math.round(m.mpCost)} matchpoints set aside` : `${m.grade} of 3 stars, ${Math.round(m.mpCost)} more matchpoints were there`}. ${aside}`
+      : `Your bid — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`;
   return (
     <button type="button" className="moment-row" onClick={onOpen} aria-label={name}>
       <span className="moment-main" aria-hidden="true">
@@ -273,7 +298,7 @@ function MomentRow({
             <StarGrade stars={m.grade ?? 0} />
           )
         ) : null}
-        <MpCost cost={m.mpCost} muted={Boolean(m.excused)} />
+        <MpGain gain={m.mpCost} muted={Boolean(m.excused)} />
         <span className="moment-chev">›</span>
       </span>
       <span className="moment-aside" aria-hidden="true">
@@ -391,26 +416,43 @@ function ddMark(analysis: AnalysisView, j: number): string | null {
  * same machinery). Under reduced motion (or no WAAPI) the whole lens is a
  * static trick-by-trick list with the same annotations.
  */
-function PlayLens({ board, analysis, initialTrick }: { board: BoardView; analysis: AnalysisView; initialTrick: number }) {
+function PlayLens({
+  board,
+  analysis,
+  initialPly,
+  initialTrick,
+}: {
+  board: BoardView;
+  analysis: AnalysisView;
+  initialPly: number | null;
+  initialTrick: number;
+}) {
   const views = useMemo(() => buildReplayViews(board), [board]);
   if (!motionOK()) return <StaticPlayList board={board} analysis={analysis} />;
-  return <ReplayLens board={board} analysis={analysis} views={views} initialTrick={initialTrick} />;
+  return (
+    <ReplayLens
+      board={board}
+      analysis={analysis}
+      views={views}
+      initialPly={initialPly ?? firstPlyOfTrick(initialTrick)}
+    />
+  );
 }
 
 function ReplayLens({
   board,
   analysis,
   views,
-  initialTrick,
+  initialPly,
 }: {
   board: BoardView;
   analysis: AnalysisView;
   views: BoardView[];
-  initialTrick: number;
+  initialPly: number;
 }) {
   const replay = useReplay({ fastForward: true });
   const totalPlies = views.length - 1;
-  const [ply, setPly] = useState(() => Math.min(firstPlyOfTrick(initialTrick), totalPlies));
+  const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));
   const startedRef = useRef(false);
   useEffect(() => {
     if (startedRef.current) return;
@@ -448,11 +490,27 @@ function ReplayLens({
     setPly(p);
     replay.cut(views[p]);
   };
+  // the next graded human decision at or past the current position — a jump
+  // lands ON the decision (card still in hand, the engine's pick highlighted)
+  const nextMomentPly = analysis.plies.find((v) => v.ply > ply)?.ply ?? null;
+  const jumpToNextMoment = () => {
+    if (nextMomentPly === null) return;
+    const p = Math.min(nextMomentPly, totalPlies);
+    setPly(p);
+    replay.cut(views[p]);
+  };
 
   const caption = captionFor(analysis, board, shownPly);
   const view = shown;
   const dummy = board.dummy;
   const northOpen = dummy !== 0 ? remainingAt(board, shownPly, 0) : null;
+  // The engine's card, highlighted where it still sits — the same pre-
+  // confirmation `.selected` treatment a live tap uses, so "the card that
+  // should have been played" reads in the vocabulary the player already
+  // knows. Only meaningful while the decision is pending (the card is in a
+  // hand); once played, the caption carries the name instead.
+  const highlight = caption.highlight;
+  const fanHighlight = highlight !== null && view.hand.includes(highlight) ? highlight : null;
 
   return (
     <>
@@ -461,7 +519,7 @@ function ReplayLens({
           <span className="label-caps audit-ribbon-who">
             THE AUDIT — TRICK {trick} OF {Math.ceil(totalPlies / 4)}
           </span>
-          {caption.cost !== null ? <span className="audit-ribbon-cost num">−{Math.round(caption.cost)} MP</span> : null}
+          {caption.gain !== null ? <span className="audit-ribbon-gain num">+{Math.round(caption.gain)} MP</span> : null}
           {caption.excused ? <InkStamp rotate={-4} color="var(--accent)">EXCUSED</InkStamp> : null}
         </div>
         <p>
@@ -472,22 +530,22 @@ function ReplayLens({
       {northOpen ? (
         <div className="analyze-rail num">
           <span className="analyze-rail-label">NORTH{dummy === 0 ? ' · DUMMY' : ''}</span>
-          <SuitLine cards={northOpen} />
+          <SuitLine cards={northOpen} highlight={highlight} />
         </div>
       ) : null}
       <div className="analyze-rails num">
         <div className="analyze-rail side">
           <span className="analyze-rail-label">WEST</span>
-          <SuitLine cards={remainingAt(board, shownPly, 3)} />
+          <SuitLine cards={remainingAt(board, shownPly, 3)} highlight={highlight} />
         </div>
         <div className="analyze-rail side right">
           <span className="analyze-rail-label">EAST</span>
-          <SuitLine cards={remainingAt(board, shownPly, 1)} />
+          <SuitLine cards={remainingAt(board, shownPly, 1)} highlight={highlight} />
         </div>
       </div>
       <TrickArea board={view} />
       <div className="board-fan">
-        <HandFan cards={displaySort(view.hand)} />
+        <HandFan cards={displaySort(view.hand)} selected={fanHighlight} />
       </div>
 
       <div className="replay-dock">
@@ -517,6 +575,11 @@ function ReplayLens({
             NEXT CARD →
           </Button>
         </div>
+        <div className="replay-dock-row replay-dock-moment">
+          <Button variant="secondary" onClick={jumpToNextMoment} disabled={nextMomentPly === null}>
+            NEXT MOMENT ›
+          </Button>
+        </div>
       </div>
     </>
   );
@@ -528,7 +591,7 @@ function remainingAt(board: BoardView, ply: number, seat: number): number[] {
   return displaySort((board.allHands?.[seat] ?? []).filter((c) => !played.has(c)));
 }
 
-function SuitLine({ cards }: { cards: number[] }) {
+function SuitLine({ cards, highlight = null }: { cards: number[]; highlight?: number | null }) {
   const bySuit: number[][] = [[], [], [], []];
   for (const c of cards) bySuit[cardSuit(c)].push(c);
   return (
@@ -537,7 +600,15 @@ function SuitLine({ cards }: { cards: number[] }) {
         suit.length ? (
           <span key={s}>
             <span className={suitClass(s)}>{SUIT_SYMBOLS[s]}</span>
-            {suit.map((c) => RANK_CHARS[cardRank(c)]).join('')}{' '}
+            {suit.map((c) =>
+              c === highlight ? (
+                <b key={c} className="analyze-hl">
+                  {RANK_CHARS[cardRank(c)]}
+                </b>
+              ) : (
+                RANK_CHARS[cardRank(c)]
+              ),
+            )}{' '}
           </span>
         ) : null,
       )}
@@ -545,43 +616,93 @@ function SuitLine({ cards }: { cards: number[] }) {
   );
 }
 
-/** the ribbon's reading for the position after `ply` cards */
-function captionFor(
-  analysis: AnalysisView,
-  board: BoardView,
-  ply: number,
-): { text: string; cost: number | null; excused: boolean } {
+interface RibbonCaption {
+  text: string;
+  /** matchpoints that were there for the taking at this moment (opportunity framing) */
+  gain: number | null;
+  excused: boolean;
+  /** the engine's card, to highlight in whichever hand still holds it */
+  highlight: number | null;
+}
+
+/**
+ * The ribbon's reading for the position after `ply` cards. A PENDING graded
+ * decision (the next card to play is one the audit graded) takes precedence
+ * over describing the card just played — a moment jump lands exactly here,
+ * with the decision still on the table and the engine's pick highlighted in
+ * the hand; NEXT CARD then shows what actually happened.
+ */
+function captionFor(analysis: AnalysisView, board: BoardView, ply: number): RibbonCaption {
   const flat = board.playHistory?.flat() ?? [];
+  const seatNames = ['North', 'East', 'South', 'West'];
+
+  const pending = analysis.plies.find((p) => p.ply === ply);
+  if (pending && !(analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)) {
+    if (pending.sampled?.excused) {
+      return {
+        text: `The turn is here, and there is nothing to find: the engine plays the same ${cardLabel(pending.card)} from your seat — only double dummy sees better.`,
+        gain: pending.mpCost,
+        excused: true,
+        highlight: pending.card,
+      };
+    }
+    const better = pending.sampled
+      ? `the engine, from your seat, plays ${cardLabel(pending.sampled.bestCard)}${
+          pending.cfPct !== null && analysis.actualPct !== null
+            ? ` — worth ${Math.round(pending.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
+            : ''
+        }.`
+      : `a better card was here.`;
+    return {
+      text: `The turn is here: ${seatNames[flat[ply]?.seat ?? 2]} to play, and ${better}`,
+      gain: pending.mpCost,
+      excused: false,
+      highlight: pending.sampled?.bestCard ?? null,
+    };
+  }
+
   if (ply === 0) {
     const leader = flat[0] ? SEAT_SHORT[flat[0].seat] : '';
-    return { text: `The opening lead is ${leader}'s. Step through the play — the audit marks where it turned.`, cost: null, excused: false };
+    return {
+      text: `The opening lead is ${leader}'s. Step through the play — the audit marks the moments worth more.`,
+      gain: null,
+      excused: false,
+      highlight: null,
+    };
   }
   const j = ply - 1; // the card just shown
   const played = flat[j];
   const inTail = analysis.claimedAtPly !== null && j >= analysis.claimedAtPly;
   if (inTail) {
-    return { text: 'Settled from here — the rest was already yours. These cards were fast-played for both sides.', cost: null, excused: false };
+    return {
+      text: 'Settled from here — the rest was already yours. These cards were fast-played for both sides.',
+      gain: null,
+      excused: false,
+      highlight: null,
+    };
   }
   const verdict = analysis.plies.find((p) => p.ply === j);
   const mark = ddMark(analysis, j);
-  const seatName = ['North', 'East', 'South', 'West'][played.seat];
+  const seatName = seatNames[played.seat];
   if (verdict) {
     if (verdict.sampled?.excused) {
       return {
         text: `Nothing to fault here. Only double dummy finds better — the winning card was invisible from your seat.`,
-        cost: verdict.mpCost,
+        gain: verdict.mpCost,
         excused: true,
+        highlight: null,
       };
     }
     const better = verdict.sampled ? ` The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.` : '';
     return {
-      text: `${seatName} played ${cardLabel(played.card)} — the contract turned here (${mark ?? ''} double dummy).${better}`,
-      cost: verdict.mpCost,
+      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy).${better}`,
+      gain: verdict.mpCost,
       excused: false,
+      highlight: null,
     };
   }
   const markNote = mark && mark !== '=' ? ` (${mark} double dummy${played.seat % 2 === 1 ? ' — uncharged' : ''})` : '';
-  return { text: `${seatName} played ${cardLabel(played.card)}${markNote}.`, cost: null, excused: false };
+  return { text: `${seatName} played ${cardLabel(played.card)}${markNote}.`, gain: null, excused: false, highlight: null };
 }
 
 /**
@@ -628,7 +749,7 @@ function StaticPlayList({ board, analysis }: { board: BoardView; analysis: Analy
                 ) : verdict!.sampled ? (
                   <StarGrade stars={verdict!.sampled.grade} />
                 ) : null}
-                {verdict!.mpCost !== null ? <MpCost cost={verdict!.mpCost} muted={Boolean(verdict!.sampled?.excused)} /> : null}
+                {verdict!.mpCost !== null ? <MpGain gain={verdict!.mpCost} muted={Boolean(verdict!.sampled?.excused)} /> : null}
                 <span className="moment-aside">
                   <GlossaryProse
                     text={

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisView } from '../api';
-import { donePlayed, meFixture } from '../test/fixtures';
+import { allHands, donePlayed, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Analyze from './Analyze';
 
@@ -30,6 +30,10 @@ const flat = donePlayed.playHistory!.flat();
 const chargedPly = flat.findIndex((t) => t.seat === 2);
 const excusedPly = flat.findIndex((t, i) => t.seat === 2 && i > chargedPly + 4);
 const chargedTrick = Math.floor(chargedPly / 4) + 1;
+// the engine's pick must still be IN South's hand at the charged ply for the
+// pending-decision highlight to have anywhere to land
+const playedBefore = new Set(flat.slice(0, chargedPly).map((t) => t.card));
+const engineCard = allHands[2].filter((c) => !playedBefore.has(c) && c !== flat[chargedPly].card)[0];
 
 function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
   const ddTricks = Array.from({ length: 49 }, (_, i) => (i <= chargedPly ? 10 : 9));
@@ -54,7 +58,7 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
         cfScoreNS: 650,
         cfPct: 83,
         mpCost: 25,
-        sampled: { bestCard: flat[chargedPly + 4].card, deficit: 1, excused: false, grade: 1 },
+        sampled: { bestCard: engineCard, deficit: 1, excused: false, grade: 1 },
       },
       {
         ply: excusedPly,
@@ -119,15 +123,16 @@ describe('the moments ledger (THE CROSSING)', () => {
     await screen.findByText('WHERE IT TURNED');
     expect(apiMock.analysis).toHaveBeenCalledWith(12, 2, true);
 
-    const charged = screen.getByRole('button', { name: new RegExp(`Trick ${chargedTrick}, 1 of 3 stars, cost 25 matchpoints`) });
+    const charged = screen.getByRole('button', { name: new RegExp(`Trick ${chargedTrick}, 1 of 3 stars, 25 more matchpoints were there`) });
     expect(charged.querySelector('.stargrade')).not.toBeNull(); // aria-hidden visual — the button's name carries the reading
-    expect(within(charged).getByText('−25 MP')).toBeInTheDocument();
+    // opportunity framing: +N in the positive ink, never a −penalty
+    expect(within(charged).getByText('+25 MP')).toBeInTheDocument();
 
-    const excused = screen.getByRole('button', { name: /excused, cost 13 matchpoints/ });
+    const excused = screen.getByRole('button', { name: /excused — 13 matchpoints set aside/ });
     expect(within(excused).getByText('EXCUSED')).toBeInTheDocument();
     expect(within(excused).getByText(/invisible from your seat/)).toBeInTheDocument();
 
-    expect(screen.getByText(/One more moment set aside — the 2 above cost the most\./)).toBeInTheDocument();
+    expect(screen.getByText(/One more moment set aside — the 2 above were worth the most\./)).toBeInTheDocument();
   });
 
   it('an empty ledger is a finding, not an empty state', async () => {
@@ -144,7 +149,7 @@ describe('the moments ledger (THE CROSSING)', () => {
     );
     renderAnalyze();
     expect(await screen.findByText(/Only you have played this board\./)).toBeInTheDocument();
-    expect(screen.queryByText(/−\d+ MP/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/[−+]\d+ MP/)).not.toBeInTheDocument();
   });
 });
 
@@ -152,8 +157,10 @@ describe('the auction lens', () => {
   it('deepens YOUR BIDDING with the counterfactual line and keeps par with the field line', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
     apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    // legacy ?lens=auction (the first preview's three-lens shape) maps to the overview
     renderAnalyze('/t/12/b/2/analyze?lens=auction');
     await screen.findByText('YOUR BIDDING');
+    expect(screen.getAllByRole('button', { name: /THE (OVERVIEW|PLAY)/ })).toHaveLength(2);
     const cf = document.querySelector('.analyze-cf')!;
     expect(cf.textContent).toMatch(/would have reached 5♣ by S — \+600, and 83% instead of 58%/);
     expect(cf.textContent).toMatch(/re-run, not remembered/);
@@ -173,7 +180,7 @@ describe('the play lens', () => {
     expect(apiMock.analysis).toHaveBeenCalledWith(12, 2, false);
     // the charged trick expands in place with its verdict
     expect(screen.getByText('EXCUSED')).toBeInTheDocument();
-    expect(screen.getByText('−25 MP')).toBeInTheDocument();
+    expect(screen.getByText('+25 MP')).toBeInTheDocument();
     expect(screen.getByText(/Settled from here — the rest was already yours\./)).toBeInTheDocument();
   });
 
@@ -182,8 +189,34 @@ describe('the play lens', () => {
     apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
     renderAnalyze();
     await screen.findByText('WHERE IT TURNED');
-    await userEvent.click(screen.getByRole('button', { name: /cost 25 matchpoints/ }));
+    await userEvent.click(screen.getByRole('button', { name: /25 more matchpoints were there/ }));
     expect(await screen.findByText(/TRICK BY TRICK/)).toBeInTheDocument();
+  });
+
+  it('a moment jump lands ON the decision, highlights the engine card, and NEXT MOMENT hops onward', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${chargedPly}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+
+      // the decision is pending: the ribbon reads the turn, the gain wears
+      // the + sign, and the engine's card carries the live pre-confirmation
+      // .selected treatment in the fan
+      const ribbon = document.querySelector('.audit-ribbon')!;
+      expect(ribbon.textContent).toMatch(/The turn is here/);
+      expect(ribbon.textContent).toMatch(/\+25 MP/);
+      expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
+
+      // NEXT MOMENT cuts to the following graded decision (the excused one)
+      await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/);
+      expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
   });
 
   it('with motion on, NEXT CARD stages one card and BACK A CARD cuts', async () => {

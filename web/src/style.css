@@ -4914,14 +4914,18 @@ a.stat-tile:hover {
   letter-spacing: 0.06em;
   min-width: 64px;
 }
-.moment-cost {
+/* Opportunity ink: a moment is matchpoints that were there for the taking,
+   so the figure is +N in the positive (club-green) token — the sign carries
+   the direction, colour only reinforces (the colourblind palette leaves
+   --positive alone). Muted = excused, set aside rather than on offer. */
+.moment-gain {
   margin-left: auto;
   font-family: var(--font-label);
   font-weight: 800;
   font-size: 13px;
-  color: var(--negative);
+  color: var(--positive);
 }
-.moment-cost.muted {
+.moment-gain.muted {
   color: var(--muted);
 }
 .moment-chev {
@@ -5001,12 +5005,12 @@ a.stat-tile:hover {
   letter-spacing: 0.18em;
   font-size: 9px;
 }
-.audit-ribbon-cost {
+.audit-ribbon-gain {
   margin-left: auto;
   font-family: var(--font-label);
   font-weight: 800;
   font-size: 12px;
-  color: var(--negative);
+  color: var(--positive);
 }
 .audit-ribbon p {
   font-style: italic;
@@ -5092,6 +5096,18 @@ a.stat-tile:hover {
 }
 .replay-dock-row .ds-btn {
   flex: 1;
+}
+.replay-dock-moment {
+  margin-top: 8px;
+}
+
+/* the engine's card, marked in a suit-line rail — the fan uses the live
+   pre-confirmation .selected treatment for the same reading */
+.analyze-hl {
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--positive);
 }
 
 /* ---- the reduced-motion / static trick list ---- */
