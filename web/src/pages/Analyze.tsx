@@ -709,12 +709,8 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
         highlight: null,
       };
     }
-    // the trick loss in words, side-relative (ddLoss is tricks YOUR side gave
-    // up) — the raw declarer-perspective +1/−1 notation read backwards on
-    // defence, where "+1" meant a trick handed to declarer
-    const lost = verdict.ddLoss === 1 ? 'a trick went begging, double dummy' : `${verdict.ddLoss} tricks went begging, double dummy`;
     return {
-      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here: ${lost}. The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.`,
+      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy). The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.`,
       gain: verdict.mpCost,
       excused: false,
       // the engine's pick stays marked in the hand while the played card sits
