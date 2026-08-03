@@ -108,7 +108,16 @@ export function AuctionGrid({
                         </button>
                       ) : i === lastRow && j === pending ? (
                         <span className="auction-pending">?</span>
-                      ) : null}
+                      ) : (
+                        // A blank cell renders nothing, but a called one renders a
+                        // button with its own padding/min-height — table rows size
+                        // to their tallest cell, so a row sat shorter than its
+                        // buttons until the first call landed in it, then visibly
+                        // grew. This invisible placeholder matches that button's
+                        // box model so every reserved row is already at its real
+                        // height on the empty first frame (see reserveThrough).
+                        <span className="auction-blank" aria-hidden="true" />
+                      )}
                     </td>
                   ))}
                 </tr>

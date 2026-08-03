@@ -131,6 +131,23 @@ describe('AuctionGrid', () => {
     expect(firstRowCells[3].querySelector('button')).toBeInTheDocument();
   });
 
+  it('gives every blank cell a placeholder matching a call button\'s box model', () => {
+    // A row sizes to its tallest cell; a bare blank cell (no button, no
+    // padding/min-height) sat shorter than a called one until that row's
+    // first call landed, which visibly grew the row. .auction-blank carries
+    // the same box model, invisibly, so every reserved row is already at
+    // its real height before any call in it has arrived.
+    const { container } = render(
+      <AuctionGrid auction={boardBiddingOpening.auction.slice(0, 0)} dealer={boardBiddingOpening.dealer} myTurn={false} onInspect={() => {}} reserveThrough={boardBiddingOpening.auction.length} />,
+    );
+    const cells = container.querySelectorAll('tbody td');
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      expect(cell.querySelector('button, .auction-pending')).toBeNull();
+      expect(cell.querySelector('.auction-blank')).toBeInTheDocument();
+    }
+  });
+
   it('marks calls with meanings, fires onInspect, and shows the pending "?" on my turn', async () => {
     const onInspect = vi.fn();
     const { container } = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn onInspect={onInspect} />);

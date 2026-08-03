@@ -1570,6 +1570,14 @@ a.ds-btn-secondary:hover {
   padding: 2px 5px;
   min-height: 30px;
 }
+/* invisible, same box model as .auction td button — see AuctionGrid's
+   comment on the blank-cell placeholder for why this exists */
+.auction-blank {
+  display: inline-block;
+  visibility: hidden;
+  padding: 2px 5px;
+  min-height: 30px;
+}
 .auction td button.has-meaning {
   border-bottom: 2px dotted var(--ink);
 }
@@ -1597,9 +1605,14 @@ a.ds-btn-secondary:hover {
 }
 .auction-pending {
   display: inline-block;
+  box-sizing: border-box;
+  /* matches .auction td button's box model (padding + min-height), the
+     same reasoning as .auction-blank above: without it, the row this
+     marker sits in grows again the instant a real call replaces it. */
+  min-height: 30px;
+  padding: 2px 5px;
   outline: 1.5px solid var(--ink);
   outline-offset: 2px;
-  padding: 0 5px;
   font-weight: 800;
 }
 .auction-hint {
