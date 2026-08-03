@@ -493,13 +493,15 @@ it are decisions rather than defaults:
   just the contents, so re-adding a `script-src` is a deliberate act with a red test attached.
   If it does come back: put it behind `Content-Security-Policy-Report-Only` with somewhere for
   the reports to land, and enforce only what has been observed to be quiet.
-- **HSTS is conditional and deliberately not preloaded.** It is sent only when `COOKIES_SECURE`
-  says this deployment's origin is https (config.ts's single `BASE_URL` parse) — it is the one
-  header a browser *remembers*, and `http://localhost:3000` is an origin contributors share
-  across projects. `includeSubDomains` is safe because browsers scope it to the sending host
-  and nothing lives under either app's name; `preload` is absent because the preload list is
-  keyed on the registrable domain, and submitting would commit `brannon.online` and the ten
-  other hostnames on that shared zone to HTTPS-only with removal taking months.
+- **HSTS is conditional, has no `includeSubDomains`, and is deliberately not preloaded.** It is
+  sent only when `COOKIES_SECURE` says this deployment's origin is https (config.ts's single
+  `BASE_URL` parse) — it is the one header a browser *remembers*, and `http://localhost:3000` is
+  an origin contributors share across projects. `includeSubDomains` is left off even though
+  browsers scope it to the sending host (never to a sibling on the shared zone): nothing lives
+  under either app's own name today, so it would be a no-op rather than a real decision — add it
+  back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
+  preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
+  and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET

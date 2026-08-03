@@ -67,11 +67,16 @@
  * visitor's visits, and a short one silently reopens the window it exists to
  * close.
  *
- * `includeSubDomains` is safe here in a way it would not be at the apex:
- * browsers scope it to the host that sent it, and nothing lives under
- * `bridge.brannon.online` or `demo-bridge.brannon.online`. The zone's ten other
- * hostnames are siblings, not subdomains, and are untouched — the same
- * blast-radius reasoning scripts/cloudflare.mjs applies to zone-wide settings.
+ * No `includeSubDomains`. HSTS is scoped by browsers to the exact host that
+ * sent it — `bridge.brannon.online` or `demo-bridge.brannon.online` — never to
+ * sibling hostnames on the shared zone, so the directive was never a leak risk
+ * (the same blast-radius reasoning scripts/cloudflare.mjs applies to zone-wide
+ * settings). It's left off anyway because it would be a no-op wearing the
+ * shape of a decision: nothing lives under either app's own host today, so
+ * there's nothing for it to include. If a real subdomain of one of these hosts
+ * (`api.bridge.brannon.online`, say) is ever added, add it back deliberately
+ * then, once there's an actual subdomain whose HTTPS-only posture this is
+ * choosing.
  *
  * `preload` is deliberately absent. The preload list is keyed on the
  * registrable domain, so submitting would commit `brannon.online` and every
@@ -79,7 +84,7 @@
  * about — to HTTPS-only, with removal taking months. Adding the token without
  * submitting would just be a claim nobody reads.
  */
-const HSTS = 'max-age=31536000; includeSubDomains';
+const HSTS = 'max-age=31536000';
 
 /**
  * Capabilities this app never uses, switched off for the whole document.

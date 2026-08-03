@@ -59,9 +59,11 @@ describe('security headers on the wire', () => {
   it('omits HSTS on an http origin and sends a year of it on https', async () => {
     const { securityHeaders } = await import('../src/security.js');
     expect(securityHeaders({ hsts: false })['strict-transport-security']).toBeUndefined();
-    expect(securityHeaders({ hsts: true })['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
-    // Not preloaded: the preload list is keyed on the registrable domain, and
-    // brannon.online carries hosts this repo knows nothing about.
+    expect(securityHeaders({ hsts: true })['strict-transport-security']).toBe('max-age=31536000');
+    // No includeSubDomains: nothing lives under either app's own host, so it
+    // would be a no-op. Not preloaded either: the preload list is keyed on the
+    // registrable domain, and brannon.online carries hosts this repo knows
+    // nothing about.
     expect(securityHeaders({ hsts: true })['strict-transport-security']).not.toContain('preload');
   });
 });
