@@ -398,4 +398,37 @@ describe('error paths', () => {
     res = await alice.raw('GET', `/api/tournaments/424242/boards/1`);
     expect(res.statusCode).toBe(404);
   });
+
+  /**
+   * A board number that is IN range but isn't a board. The range check alone
+   * passed 2.5 straight through to loadBoard, which INSERTs before it deals —
+   * so each distinct fraction persisted its own row past the four-board cap
+   * (UNIQUE keys on the value, and SQLite stores the REAL as-is on a
+   * non-STRICT table) and then 500'd on the malformed deal it derived.
+   */
+  it('refuses a fractional board number instead of persisting a row for it', async () => {
+    const placement = await alice.post('/api/play');
+    const tid = placement.tournamentId;
+    const uid = (await alice.get('/api/me')).user.id;
+    const boardRows = () =>
+      (db.prepare(`SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ?`).get(tid, uid) as {
+        n: number;
+      }).n;
+    const before = boardRows();
+
+    for (const no of ['2.5', '1.0001', 'foo', '', '-0', '1e400']) {
+      const res = await alice.raw('GET', `/api/tournaments/${tid}/boards/${no}`);
+      expect(res.statusCode, `GET board ${no}`).toBe(404);
+      expect((await alice.raw('POST', `/api/tournaments/${tid}/boards/${no}/call`, { call: 0 })).statusCode).toBe(404);
+      expect((await alice.raw('POST', `/api/tournaments/${tid}/boards/${no}/play`, { card: 0 })).statusCode).toBe(404);
+    }
+    expect(boardRows()).toBe(before);
+
+    // And the storage class itself is refused on databases created from the
+    // current DDL, so a future caller that skips the boundary can't reintroduce
+    // the row either.
+    expect(() =>
+      db.prepare(`INSERT INTO boards (tournament_id, user_id, board_no) VALUES (?, ?, 2.5)`).run(tid, uid),
+    ).toThrow(/CHECK constraint/i);
+  });
 });

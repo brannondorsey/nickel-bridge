@@ -77,7 +77,12 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 seo.ts (SITE_ROUTES: the one table of which URLs are public and which
                 are indexed — robots.txt is derived from it, the sitemap is checked
                 against it, and web imports it too; dependency-free on purpose, see
-                "Discoverability" below)
+                "Discoverability" below),
+                security.ts (the response security headers — CSP, anti-framing,
+                nosniff, referrer + permissions policy, HSTS — with what each one
+                is for written beside it; see "Security headers" below),
+                handle.ts (handle validation + the uniqueness KEY, which folds
+                case AND cross-script lookalikes — see its doc comments)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), analytics.ts (the Google Analytics tag +
                 its SPA page-view hook — see "Analytics" below),
@@ -223,7 +228,13 @@ one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
 every newly opened PR and posts a non-blocking review comment — authenticated via the
 `CLAUDE_CODE_OAUTH_TOKEN` repo secret (a `claude setup-token` OAuth token billed against a
 Claude subscription, not per-token API pricing), so it's independent of the checks above and
-doesn't gate merges:
+doesn't gate merges. One convention in those workflows: **the four jobs that hold
+`FLY_API_TOKEN`** (the three deploys plus `pr-preview-teardown.yml`) **pin
+`superfly/flyctl-actions` to a commit SHA**, because a branch ref re-resolves on every run and
+that token can deploy arbitrary images, read the SQLite volume or destroy the app. Everything
+else stays on its major tag, and `.github/dependabot.yml` watches all of them weekly — a pin
+nobody updates is just an unpatched dependency, and Dependabot rewrites the SHA and its
+trailing comment on each upstream release:
 
 ```bash
 npm run build
@@ -595,6 +606,62 @@ falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single vol
 own volume — `fly.toml` is shared across all of them, with the app name always overridden
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
+
+**Security headers are set once, in the app, for every response.** `server/src/security.ts`
+holds the table — Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` — with a paragraph
+beside each saying what it is for, because a header nobody understands is a header the next
+person deletes. `app.ts` applies them in one `onSend` hook registered **before any route**, so
+the API, `/auth`, the prerendered pages, the SPA shell, the 404 handler and the error handler
+are all covered; a header set per-route is a header the next route forgets. Three things about
+it are decisions rather than defaults:
+
+- **App-level, not an edge rule.** Production, the demo app and every PR preview run the same
+  `buildApp()`, so this is true of all of them the moment it ships. A Cloudflare Response
+  Header Transform Rule would have covered only the two fronted hosts, only after `--apply`
+  ran, and only until someone replaced the ruleset — and a phase entrypoint deploy is a
+  zone-wide PUT (see "The edge" above). Cloudflare passes origin response headers through
+  untouched, so the fronted hosts serve exactly these. The one wrinkle is that a response
+  already in the edge cache carries the headers it was filled with: a deploy that changes
+  only headers changes no origin bytes, so `--purge`'s comparison correctly finds nothing to
+  drop and cached HTML keeps the old set until its TTL, the next content change, or
+  `edge-upkeep.yml`'s weekly `--purge --force`.
+- **The CSP deliberately carries no resource allowlist.** It shipped once with the full
+  thing — `default-src 'self'` plus per-type allowlists naming gtag.js, Google's avatar hosts
+  and GA's collectors, with the shell's two pre-paint inline scripts admitted by SHA-256 hash
+  — and that half was taken back out. An allowlist is a second, invisible copy of every
+  external thing the app loads, enforced in the one place a developer never looks: a
+  production browser. `npm run dev -w web` serves through Vite, which sends no such header,
+  and jsdom ignores one, so adding a font host or an embedded widget would pass every check
+  in this repo and fail silently for real visitors. What it bought was containment of an XSS
+  this app has no known sink for (React escapes by default; no `dangerouslySetInnerHTML`
+  anywhere in web/src). What remains is only the rules that forbid what the app never does —
+  `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `form-action 'self'` —
+  none of which can block a script, style, image, font or fetch, i.e. none of which can break
+  a page by being out of date. `server/test/security.test.ts` asserts that limit rather than
+  just the contents, so re-adding a `script-src` is a deliberate act with a red test attached.
+  If it does come back: put it behind `Content-Security-Policy-Report-Only` with somewhere for
+  the reports to land, and enforce only what has been observed to be quiet.
+- **HSTS is conditional, has no `includeSubDomains`, and is deliberately not preloaded.** It is
+  sent only when `COOKIES_SECURE` says this deployment's origin is https (config.ts's single
+  `BASE_URL` parse) — it is the one header a browser *remembers*, and `http://localhost:3000` is
+  an origin contributors share across projects. `includeSubDomains` is left off even though
+  browsers scope it to the sending host (never to a sibling on the shared zone): nothing lives
+  under either app's own name today, so it would be a no-op rather than a real decision — add it
+  back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
+  preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
+  and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
+
+Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
+screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
+route creates the row before it deals, so a fraction used to persist junk rows past the
+four-board cap (SQLite stores the REAL as-is — `INTEGER` is an affinity, not a constraint, on
+a non-STRICT table) and then 500 on the malformed deal it derived. The `boards` DDL now also
+refuses the storage class, though only on databases created from it. And `handle.ts`'s
+uniqueness key folds cross-script lookalikes (Cyrillic `а`, Greek `Ο`, fullwidth and
+mathematical letters) onto their Latin twin *for the key only*, so a handle nobody can
+visually distinguish from another player's collides on the unique index instead of joining
+them on the ladder. Its doc comment says what the curated map does not claim to catch.
 
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes

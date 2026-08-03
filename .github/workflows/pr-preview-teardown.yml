@@ -33,7 +33,7 @@ jobs:
       APP: nickel-bridge-pr-${{ github.event.pull_request.number }}
       BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
 
       - name: Cancel any CI run still able to re-create the preview
         run: |

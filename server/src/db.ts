@@ -39,7 +39,19 @@ CREATE TABLE IF NOT EXISTS boards (
   id INTEGER PRIMARY KEY,
   tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
   user_id INTEGER NOT NULL REFERENCES users(id),
-  board_no INTEGER NOT NULL,             -- 1..4
+  -- 1..4. The CHECK is on the storage CLASS, not the range, and both halves of
+  -- that are deliberate. INTEGER here is an affinity rather than a type: this
+  -- table is not STRICT, so SQLite stores 2.5 verbatim as a REAL — a value
+  -- distinct from every other under UNIQUE below, i.e. an unbounded supply of
+  -- extra "boards" per (tournament, user). typeof() is what actually refuses
+  -- that. The 1..4 range stays at the route (app.ts's boardNoParam), because
+  -- it is a rule about the game rather than about the row, and test suites
+  -- legitimately fabricate rows past the fourth board to stand in for days of
+  -- play. Note this only reaches databases created from this DDL: SQLite
+  -- cannot add a constraint to an existing table without rebuilding it, and a
+  -- rebuild of the production boards table is not worth it for a hole the
+  -- boundary check already closes.
+  board_no INTEGER NOT NULL CHECK (typeof(board_no) = 'integer'),
   state TEXT NOT NULL DEFAULT 'bidding', -- bidding | playing | done
   calls TEXT NOT NULL DEFAULT '[]',      -- JSON number[]
   plays TEXT NOT NULL DEFAULT '[]',      -- JSON number[]
