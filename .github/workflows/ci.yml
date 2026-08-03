@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -147,7 +147,7 @@ jobs:
             flyctl volumes create data --app "$APP" --region ewr --size 1 --yes
           fi
           flyctl secrets set DEV_AUTH=1 DEMO=1 BASE_URL="https://demo-bridge.brannon.online" --app "$APP"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.CLOUDFLARE_API_TOKEN != ''
         with:
           node-version: 24
@@ -194,7 +194,7 @@ jobs:
             echo "::error::DEV_AUTH/DEMO secret found on the production app — remove it before deploying"
             exit 1
           fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.CLOUDFLARE_API_TOKEN != ''
         with:
           node-version: 24
