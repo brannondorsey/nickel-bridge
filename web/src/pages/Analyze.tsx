@@ -182,7 +182,7 @@ export default function Analyze() {
 
   return (
     <div className="board-page analyze-page">
-      <ScreenHeader title={`BOARD ${boardNo} — CROSSING ${tournamentId}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
+      <ScreenHeader title={`CROSSING ${tournamentId} — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
       <div className="analyze-lens">
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
@@ -427,9 +427,16 @@ function ReplayLens({
   // the hand) are on screen at the same time, with no NEXT press between
   // "what should have happened" and "what did". A non-graded target is a
   // plain cut, same as the pips.
+  // Only JUDGED decisions are moments. Stage 3's sampled verdict exists for
+  // exactly the plies that cleared the matchpoint floor (or the trick gate in
+  // a single field); the sub-floor candidates — a double-dummy trick that
+  // moved no matchpoints worth naming — stay in `plies` for the annotations
+  // but are not stops on the moment pager and never collapse a landing.
+  const momentPlies = useMemo(() => analysis.plies.filter((v) => v.sampled !== null), [analysis]);
+
   const landAt = (target: number) => {
     const p = Math.max(0, Math.min(target, totalPlies));
-    const graded = p < totalPlies && analysis.plies.some((v) => v.ply === p);
+    const graded = p < totalPlies && momentPlies.some((v) => v.ply === p);
     if (!graded) {
       setCurMoment(null);
       setPly(p);
@@ -486,8 +493,8 @@ function ReplayLens({
   // collapsed landing leaves ply one PAST the decision, so the pager anchors
   // on curMoment — otherwise PREV would forever re-land the moment on screen)
   const anchor = curMoment ?? ply;
-  const nextMomentPly = analysis.plies.find((v) => v.ply > anchor)?.ply ?? null;
-  const prevMomentPly = [...analysis.plies].reverse().find((v) => v.ply < anchor)?.ply ?? null;
+  const nextMomentPly = momentPlies.find((v) => v.ply > anchor)?.ply ?? null;
+  const prevMomentPly = [...momentPlies].reverse().find((v) => v.ply < anchor)?.ply ?? null;
 
   const caption = captionFor(analysis, board, shownPly);
   const view = shown;
@@ -646,9 +653,11 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   const flat = board.playHistory?.flat() ?? [];
   const seatNames = ['North', 'East', 'South', 'West'];
 
-  const pending = analysis.plies.find((p) => p.ply === ply);
-  if (pending && !(analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)) {
-    if (pending.sampled?.excused) {
+  // a PENDING caption only fires for a JUDGED decision (stage 3 ran) — a
+  // sub-floor candidate has no engine pick to point at and nothing to charge
+  const pending = analysis.plies.find((p) => p.ply === ply && p.sampled !== null);
+  if (pending?.sampled && !(analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)) {
+    if (pending.sampled.excused) {
       return {
         text: `The turn is here, and there is nothing to find: the engine plays the same ${cardLabel(pending.card)} from your seat — only double dummy sees better.`,
         gain: pending.mpCost,
@@ -656,18 +665,15 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
         highlight: pending.card,
       };
     }
-    const better = pending.sampled
-      ? `the engine, from your seat, plays ${cardLabel(pending.sampled.bestCard)}${
-          pending.cfPct !== null && analysis.actualPct !== null
-            ? ` — worth ${Math.round(pending.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
-            : ''
-        }.`
-      : `a better card was here.`;
+    const pct =
+      pending.cfPct !== null && analysis.actualPct !== null
+        ? ` — worth ${Math.round(pending.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
+        : '';
     return {
-      text: `The turn is here: ${seatNames[flat[ply]?.seat ?? 2]} to play, and ${better}`,
+      text: `The turn is here: ${seatNames[flat[ply]?.seat ?? 2]} to play, and the engine, from your seat, plays ${cardLabel(pending.sampled.bestCard)}${pct}.`,
       gain: pending.mpCost,
       excused: false,
-      highlight: pending.sampled?.bestCard ?? null,
+      highlight: pending.sampled.bestCard,
     };
   }
 
@@ -694,8 +700,8 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   const verdict = analysis.plies.find((p) => p.ply === j);
   const mark = ddMark(analysis, j);
   const seatName = seatNames[played.seat];
-  if (verdict) {
-    if (verdict.sampled?.excused) {
+  if (verdict?.sampled) {
+    if (verdict.sampled.excused) {
       return {
         text: `Nothing to fault here. Only double dummy finds better — the winning card was invisible from your seat.`,
         gain: verdict.mpCost,
@@ -703,14 +709,32 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
         highlight: null,
       };
     }
-    const better = verdict.sampled ? ` The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.` : '';
+    // the trick loss in words, side-relative (ddLoss is tricks YOUR side gave
+    // up) — the raw declarer-perspective +1/−1 notation read backwards on
+    // defence, where "+1" meant a trick handed to declarer
+    const lost = verdict.ddLoss === 1 ? 'a trick went begging, double dummy' : `${verdict.ddLoss} tricks went begging, double dummy`;
     return {
-      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy).${better}`,
+      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here: ${lost}. The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.`,
       gain: verdict.mpCost,
       excused: false,
       // the engine's pick stays marked in the hand while the played card sits
       // in the trick — a collapsed moment landing shows both at once
-      highlight: verdict.sampled?.bestCard ?? null,
+      highlight: verdict.sampled.bestCard,
+    };
+  }
+  if (verdict) {
+    // a stage-1 candidate under the audit's floor: a double-dummy trick
+    // slipped, but the matchpoints barely noticed — nothing was judged, so
+    // nothing is charged and there is no engine pick to show
+    const moved =
+      verdict.mpCost !== null && Math.round(verdict.mpCost) > 0
+        ? `only ${Math.round(verdict.mpCost)} matchpoints moved — under the audit's floor, so it goes unjudged`
+        : `no matchpoints moved: the field scores this board the same either way`;
+    return {
+      text: `${seatName} played ${cardLabel(played.card)} — a double-dummy trick slipped here, but ${moved}.`,
+      gain: null,
+      excused: false,
+      highlight: null,
     };
   }
   const markNote = mark && mark !== '=' ? ` (${mark} double dummy${played.seat % 2 === 1 ? ' — uncharged' : ''})` : '';
@@ -731,9 +755,11 @@ function StaticPlayList({ board, analysis }: { board: BoardView; analysis: Analy
       {tricks.map((trick, ti) => {
         const basePly = ti * 4;
         const winner = trickWinner(trick, strain);
+        // judged decisions only — a sub-floor candidate keeps its dd mark in
+        // the margin column but expands no verdict row (nothing was judged)
         const rowVerdicts = trick
           .map((tc, i) => ({ tc, verdict: analysis.plies.find((p) => p.ply === basePly + i) }))
-          .filter((x) => x.verdict);
+          .filter((x) => x.verdict?.sampled);
         const marks = trick
           .map((_, i) => ddMark(analysis, basePly + i))
           .filter((m): m is string => m !== null && m !== '=');
@@ -765,11 +791,9 @@ function StaticPlayList({ board, analysis }: { board: BoardView; analysis: Analy
                 <span className="moment-aside">
                   <GlossaryProse
                     text={
-                      verdict!.sampled?.excused
+                      verdict!.sampled!.excused
                         ? 'Nothing to fault here. The winning card was invisible from your seat.'
-                        : verdict!.sampled
-                          ? `The engine, from your seat, plays ${cardLabel(verdict!.sampled.bestCard)}.`
-                          : `Double dummy keeps ${verdict!.cfTricksDeclarer} tricks in reach here.`
+                        : `The engine, from your seat, plays ${cardLabel(verdict!.sampled!.bestCard)}.`
                     }
                   />
                 </span>

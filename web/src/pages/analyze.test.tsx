@@ -266,6 +266,54 @@ describe('the play lens', () => {
     }
   });
 
+  it('a double-dummy slip under the floor is not a moment: unjudged ribbon, no charge, and the pager skips it', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      // a stage-1 candidate the floor filtered out: ddLoss recorded, mpCost
+      // ~0, and NO sampled verdict — exactly what the server emits for a
+      // trick that moved no matchpoints (stage 3 never ran)
+      const subPly = chargedPly + 2;
+      const analysis = makeAnalysis();
+      analysis.plies.splice(1, 0, {
+        ply: subPly,
+        trick: Math.floor(subPly / 4) + 1,
+        seat: flat[subPly].seat,
+        card: flat[subPly].card,
+        ddLoss: 1,
+        cfTricksDeclarer: 10,
+        cfScoreNS: 620,
+        cfPct: 58,
+        mpCost: 0,
+        sampled: null,
+      });
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(analysis);
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${subPly + 1}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+
+      // the ribbon reads the slip honestly — no "moment", no gain stamp, no
+      // engine card (nothing was judged, so there is nothing to point at)
+      const ribbon = document.querySelector('.audit-ribbon')!;
+      expect(ribbon.textContent).toMatch(/a double-dummy trick slipped here/);
+      expect(ribbon.textContent).toMatch(/the field scores this board the same either way/);
+      expect(ribbon.textContent).not.toMatch(/moment turned/);
+      expect(document.querySelector('.audit-ribbon-gain')).toBeNull();
+      expect(document.querySelector('.cardbtn.selected')).toBeNull();
+
+      // the pager hops between JUDGED moments only: both neighbours enabled,
+      // and NEXT lands the excused decision, skipping the slip
+      expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeEnabled();
+      await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
+      await waitFor(
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
+        { timeout: 4000 },
+      );
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
   it('with motion on, NEXT CARD stages one card and BACK A CARD cuts', async () => {
     const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
     (Element.prototype as unknown as { animate: unknown }).animate = animateStub;

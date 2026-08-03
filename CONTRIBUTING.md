@@ -906,7 +906,10 @@ PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immedi
 stages the played card's glide, so the card that was played (in the trick) and the
 engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
 rank in the suit-line rails) are on screen together — the pager anchors on the moment
-being read, not the replay position, which sits one card past it. The open-hand rails
+being read, not the replay position, which sits one card past it. Only JUDGED decisions
+(stage 3 ran — `sampled` non-null) are moments to the pager and the collapse; the
+sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick slipped,
+but the matchpoints barely noticed" annotation and are never charged or landed on. The open-hand rails
 wear the dummy rail's kerning (thin-space rank separation + `.dummy-rail-ranks`'s
 letter-spacing), and a centred PLAYED rail under them accumulates every card off the
 hands, its two wrapped lines reserved up front (the dock rule again). Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
