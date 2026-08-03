@@ -108,7 +108,7 @@ jobs:
         run: flyctl deploy --app "$APP" --config fly.toml --remote-only --ha=false
       - name: Comment preview URL on the PR
         if: steps.pr.outputs.state == 'OPEN'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: preview-url
           message: |
