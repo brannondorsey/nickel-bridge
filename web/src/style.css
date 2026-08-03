@@ -4871,7 +4871,7 @@ a.stat-tile:hover {
    nowhere else in the app. */
 
 .analyze-page .screenheader {
-  padding-bottom: 6px;
+  padding-bottom: 16px;
 }
 .analyze-lens {
   padding: 0 12px 14px;
@@ -4956,17 +4956,7 @@ a.stat-tile:hover {
   margin-top: 2px;
 }
 
-/* ---- the auction lens ---- */
-.analyze-bidding {
-  margin-bottom: 12px;
-}
-.analyze-cf {
-  font-style: italic;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.4;
-  margin: -2px 0 8px 48px;
-}
+/* ---- the par panel ---- */
 .analyze-par {
   margin-bottom: 12px;
 }
@@ -5017,15 +5007,25 @@ a.stat-tile:hover {
   font-size: 14px;
   line-height: 1.42;
   margin: 0;
+  /* Reserved, not sized-to-content: the caption changes on every step, and a
+     shorter line must not slide the whole board up and back down (the same
+     layout-shift rule the bid box's docked `waiting` treatment exists for —
+     see BiddingPhase's dock comment). Three lines fits every caption the
+     audit writes at the reference width. */
+  min-height: calc(3 * 1.42em);
 }
 
 /* ---- the open-hand rails around the replay ---- */
 .analyze-rail {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   padding: 2px 16px 4px;
   font-size: 12px;
+}
+.analyze-rail.north {
+  align-items: center;
+  text-align: center;
 }
 .analyze-rails {
   display: flex;

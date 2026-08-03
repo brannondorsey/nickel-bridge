@@ -25,7 +25,6 @@ import { StarGrade } from '../components/ds/StarGrade';
 import { CallText } from '../components/game/CallText';
 import { GlossaryProse } from '../components/game/GlossaryProse';
 import { HandFan } from '../components/game/HandFan';
-import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
 import { motionOK, trickWinner } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore } from '../format';
@@ -34,20 +33,24 @@ import { useReplay } from '../replay/useReplay';
 
 /**
  * Analyze — "The Second Crossing": walking a finished board back, without
- * lying about it. Three lenses over one board (a URL search param, not a
+ * lying about it. Two lenses over one board (a URL search param, not a
  * stored preference — a reading position, and it makes a moment shareable):
  *
- *   THE CROSSING (default) — the WHERE IT TURNED moments ledger + the
- *   deepened auction. THE AUCTION — the auction alone. THE PLAY — the full
- *   replay of the play over the real board UI, all hands open, under the
- *   audit ribbon; reduced motion renders it as a static trick-by-trick list
- *   instead (a legitimate reading, not a fallback).
+ *   THE OVERVIEW (default) — the WHERE IT TURNED moments ledger (play AND
+ *   bid moments — the ledger is the only bidding surface; the Result's own
+ *   YOUR BIDDING table already covers the call-by-call recap, so it is not
+ *   repeated here) plus THE CARDS WERE WORTH (par with the field as its
+ *   reality check). THE PLAY — the full replay of the play over the real
+ *   board UI, all hands open, under the audit ribbon; reduced motion renders
+ *   it as a static trick-by-trick list instead (a legitimate reading, not a
+ *   fallback).
  *
  * All verdicts arrive pre-computed from GET .../analysis (the Compare
  * precedent — this screen re-derives no statistics), and stage 4 (par + the
- * counterfactual auctions) is only requested by the lenses that show it, so
+ * counterfactual auctions) is only requested by the lens that shows it, so
  * a play-lens open never pays for the DD table. MP figures render HERE and
- * nowhere else in the app.
+ * nowhere else in the app — as +N opportunity in the positive ink, never a
+ * −penalty.
  */
 
 type Lens = 'overview' | 'play';
@@ -178,13 +181,13 @@ export default function Analyze() {
 
   return (
     <div className="board-page analyze-page">
-      <ScreenHeader title={`THE CROSSING — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
+      <ScreenHeader title={`BOARD ${boardNo} — CROSSING ${tournamentId}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
       <div className="analyze-lens">
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
 
       {lens === 'overview' ? <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} /> : null}
-      {lens === 'overview' ? <AuctionLens board={board} analysis={analysis} /> : null}
+      {lens === 'overview' ? <ParPanel board={board} analysis={analysis} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
           <PlayLens
@@ -236,12 +239,7 @@ function WhereItTurned({
               key={m.kind === 'play' ? `p${m.ply}` : `b${m.callIndex}`}
               moment={m}
               analysis={analysis}
-              onOpen={() =>
-                m.kind === 'play'
-                  ? onOpenPlay(m.ply!)
-                  : // bid moments live one panel down on this same lens
-                    document.querySelector('.analyze-bidding')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-              }
+              onOpen={m.kind === 'play' ? () => onOpenPlay(m.ply!) : null}
             />
           ))}
           {setAside > 0 ? (
@@ -260,7 +258,7 @@ function momentAside(m: AnalysisMoment, analysis: AnalysisView): string {
   if (m.kind === 'bid') {
     const call = analysis.par?.calls.find((c) => c.callIndex === m.callIndex);
     if (call?.cf) {
-      return `The robot's auction reaches ${call.cf.contractLabel} — ${signedScore(call.cf.scoreNS)}, and ${Math.round(call.cf.cfPct ?? 0)}% instead of ${Math.round(analysis.actualPct ?? 0)}%.`;
+      return `${callDisplay(call.bestCall)} reaches ${call.cf.contractLabel} — ${signedScore(call.cf.scoreNS)}, and ${Math.round(call.cf.cfPct ?? 0)}% instead of ${Math.round(analysis.actualPct ?? 0)}%. The robots' replies are re-run, not remembered.`;
     }
     return 'The robot bid differently here.';
   }
@@ -279,18 +277,18 @@ function MomentRow({
 }: {
   moment: AnalysisMoment;
   analysis: AnalysisView;
-  onOpen: () => void;
+  /** null = a finding with nowhere to go (bid moments — the auction has no replay) */
+  onOpen: (() => void) | null;
 }) {
-  const where = m.kind === 'play' ? `TRICK ${m.trick}` : null;
   const aside = momentAside(m, analysis);
   const name =
     m.kind === 'play'
       ? `Trick ${m.trick}, ${m.excused ? `excused — ${Math.round(m.mpCost)} matchpoints set aside` : `${m.grade} of 3 stars, ${Math.round(m.mpCost)} more matchpoints were there`}. ${aside}`
       : `Your bid — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`;
-  return (
-    <button type="button" className="moment-row" onClick={onOpen} aria-label={name}>
-      <span className="moment-main" aria-hidden="true">
-        <b className="moment-where num">{where ?? <>YOUR <CallText call={m.call!} /></>}</b>
+  const body = (
+    <>
+      <span className="moment-main" aria-hidden={onOpen ? 'true' : undefined}>
+        <b className="moment-where num">{m.kind === 'play' ? `Trick ${m.trick}` : <>Your <CallText call={m.call!} /></>}</b>
         {m.kind === 'play' ? (
           m.excused ? (
             <InkStamp rotate={-4}>EXCUSED</InkStamp>
@@ -299,102 +297,65 @@ function MomentRow({
           )
         ) : null}
         <MpGain gain={m.mpCost} muted={Boolean(m.excused)} />
-        <span className="moment-chev">›</span>
+        {onOpen ? <span className="moment-chev">›</span> : null}
       </span>
-      <span className="moment-aside" aria-hidden="true">
+      <span className="moment-aside" aria-hidden={onOpen ? 'true' : undefined}>
         <GlossaryProse text={aside} />
       </span>
+    </>
+  );
+  // a play moment opens the replay at its decision; a bid moment is a
+  // finding, not a door — its whole reading is already on the row
+  return onOpen ? (
+    <button type="button" className="moment-row" onClick={onOpen} aria-label={name}>
+      {body}
     </button>
+  ) : (
+    <div className="moment-row moment-row-static">{body}</div>
   );
 }
 
 /**
- * ② The auction lens — YOUR BIDDING deepened with counterfactual lines, and
- * par + the field in ONE panel: the field is the reality check on par, and
- * neither number is allowed to appear alone.
+ * ② THE CARDS WERE WORTH — par and the field in ONE panel: the field is the
+ * reality check on par, and neither number is allowed to appear alone. (The
+ * Result's own YOUR BIDDING table covers the call-by-call recap; the ledger's
+ * bid moments carry the counterfactual auctions, so neither is repeated here.)
  */
-function AuctionLens({ board, analysis }: { board: BoardView; analysis: AnalysisView }) {
+function ParPanel({ board, analysis }: { board: BoardView; analysis: AnalysisView }) {
   const par = analysis.par;
-  const callFor = (i: number) => par?.calls.find((c) => c.callIndex === i);
-  // human calls in call order — bidEvals are exactly the human's calls
-  let humanIdx = -1;
   const fieldCounts = new Map<string, number>();
   for (const f of board.result?.field ?? []) {
     const token = f.contract.split(' ')[0];
     fieldCounts.set(token, (fieldCounts.get(token) ?? 0) + 1);
   }
   return (
-    <>
-      {board.bidEvals.length ? (
-        <div className="result-bidding analyze-bidding">
-          <div className="label-caps result-bidding-head">YOUR BIDDING</div>
-          {board.bidEvals.map((e, i) => {
-            humanIdx = board.auction.findIndex((a, j) => j > humanIdx && a.isHuman);
-            const ca = callFor(humanIdx);
-            return (
-              <div key={i}>
-                <div className="result-bid-row">
-                  <b className="result-bid-call">
-                    <CallText call={e.call} />
-                  </b>
-                  <StarGrade stars={GRADE_STARS[e.grade]} />
-                  <span>
-                    {GRADE_TEXT[e.grade]}
-                    {e.bestCall !== e.call ? (
-                      <>
-                        {' '}
-                        — robot bid <CallText call={e.bestCall} />
-                      </>
-                    ) : (
-                      <> — the robot's choice too</>
-                    )}
-                  </span>
-                </div>
-                {ca?.cf ? (
-                  <div className="analyze-cf">
-                    <GlossaryProse
-                      text={`${callDisplay(ca.bestCall)} would have reached ${ca.cf.contractLabel} — ${signedScore(ca.cf.scoreNS)}${
-                        ca.cf.cfPct !== null && analysis.actualPct !== null
-                          ? `, and ${Math.round(ca.cf.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
-                          : ''
-                      }. The robots' replies are re-run, not remembered.`}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <PerforatedPanel heading="THE CARDS WERE WORTH" className="analyze-par">
-        {par ? (
-          <>
-            <p className="analyze-parline num">
-              <b>
-                <GlossaryProse text={par.parContracts.join(' · ')} /> — {signedScore(par.parScore)}.
-              </b>
+    <PerforatedPanel heading="THE CARDS WERE WORTH" className="analyze-par">
+      {par ? (
+        <>
+          <p className="analyze-parline num">
+            <b>
+              <GlossaryProse text={par.parContracts.join(' · ')} /> — {signedScore(par.parScore)}.
+            </b>
+          </p>
+          <p className="analyze-finding">Par is played with all four hands face up. Nobody bids that way.</p>
+          {fieldCounts.size ? (
+            <p className="analyze-fieldline num">
+              The field here:{' '}
+              {[...fieldCounts.entries()].map(([token, n], i) => (
+                <span key={token}>
+                  {i > 0 ? ' · ' : ''}
+                  <GlossaryProse text={token} />
+                  {n > 1 ? ` ×${n}` : ''}
+                </span>
+              ))}
+              .
             </p>
-            <p className="analyze-finding">Par is played with all four hands face up. Nobody bids that way.</p>
-            {fieldCounts.size ? (
-              <p className="analyze-fieldline num">
-                The field here:{' '}
-                {[...fieldCounts.entries()].map(([token, n], i) => (
-                  <span key={token}>
-                    {i > 0 ? ' · ' : ''}
-                    <GlossaryProse text={token} />
-                    {n > 1 ? ` ×${n}` : ''}
-                  </span>
-                ))}
-                .
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p className="analyze-finding">Weighing the cards…</p>
-        )}
-      </PerforatedPanel>
-    </>
+          ) : null}
+        </>
+      ) : (
+        <p className="analyze-finding">Weighing the cards…</p>
+      )}
+    </PerforatedPanel>
   );
 }
 
@@ -490,12 +451,13 @@ function ReplayLens({
     setPly(p);
     replay.cut(views[p]);
   };
-  // the next graded human decision at or past the current position — a jump
+  // the graded human decisions either side of the current position — a jump
   // lands ON the decision (card still in hand, the engine's pick highlighted)
   const nextMomentPly = analysis.plies.find((v) => v.ply > ply)?.ply ?? null;
-  const jumpToNextMoment = () => {
-    if (nextMomentPly === null) return;
-    const p = Math.min(nextMomentPly, totalPlies);
+  const prevMomentPly = [...analysis.plies].reverse().find((v) => v.ply < ply)?.ply ?? null;
+  const jumpToMoment = (target: number | null) => {
+    if (target === null) return;
+    const p = Math.min(target, totalPlies);
     setPly(p);
     replay.cut(views[p]);
   };
@@ -528,7 +490,7 @@ function ReplayLens({
       </div>
 
       {northOpen ? (
-        <div className="analyze-rail num">
+        <div className="analyze-rail north num">
           <span className="analyze-rail-label">NORTH{dummy === 0 ? ' · DUMMY' : ''}</span>
           <SuitLine cards={northOpen} highlight={highlight} />
         </div>
@@ -576,7 +538,10 @@ function ReplayLens({
           </Button>
         </div>
         <div className="replay-dock-row replay-dock-moment">
-          <Button variant="secondary" onClick={jumpToNextMoment} disabled={nextMomentPly === null}>
+          <Button variant="secondary" onClick={() => jumpToMoment(prevMomentPly)} disabled={prevMomentPly === null}>
+            ‹ PREV MOMENT
+          </Button>
+          <Button variant="secondary" onClick={() => jumpToMoment(nextMomentPly)} disabled={nextMomentPly === null}>
             NEXT MOMENT ›
           </Button>
         </div>

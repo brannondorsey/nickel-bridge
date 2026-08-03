@@ -153,17 +153,35 @@ describe('the moments ledger (THE CROSSING)', () => {
   });
 });
 
-describe('the auction lens', () => {
-  it('deepens YOUR BIDDING with the counterfactual line and keeps par with the field line', async () => {
+describe('the overview: bid moments and par', () => {
+  it('carries the counterfactual on the bid moment (a finding, not a link) and keeps par with the field line', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
-    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    const bidMoment = {
+      kind: 'bid' as const,
+      callIndex: parPayload.calls[0].callIndex,
+      call: parPayload.calls[0].call,
+      mpCost: 25,
+    };
+    apiMock.analysis.mockResolvedValue(
+      makeAnalysis({ par: parPayload, moments: [...makeAnalysis().moments, bidMoment], setAside: 0 }),
+    );
     // legacy ?lens=auction (the first preview's three-lens shape) maps to the overview
     renderAnalyze('/t/12/b/2/analyze?lens=auction');
-    await screen.findByText('YOUR BIDDING');
+    await screen.findByText('WHERE IT TURNED');
     expect(screen.getAllByRole('button', { name: /THE (OVERVIEW|PLAY)/ })).toHaveLength(2);
-    const cf = document.querySelector('.analyze-cf')!;
-    expect(cf.textContent).toMatch(/would have reached 5♣ by S — \+600, and 83% instead of 58%/);
-    expect(cf.textContent).toMatch(/re-run, not remembered/);
+
+    // the YOUR BIDDING recap lives on the Result, not here
+    expect(screen.queryByText('YOUR BIDDING')).not.toBeInTheDocument();
+
+    // the bid moment is a static finding: no button role, no chevron, and its
+    // aside carries the counterfactual with the re-run caveat
+    const bidRow = document.querySelector('.moment-row-static')!;
+    expect(bidRow).not.toBeNull();
+    expect(bidRow.tagName).toBe('DIV');
+    expect(bidRow.querySelector('.moment-chev')).toBeNull();
+    expect(bidRow.textContent).toMatch(/reaches 5♣ by S — \+600, and 83% instead of 58%/);
+    expect(bidRow.textContent).toMatch(/re-run, not remembered/);
+
     expect(screen.getByText('THE CARDS WERE WORTH')).toBeInTheDocument();
     expect(screen.getByText(/Par is played with all four hands face up\. Nobody bids that way\./)).toBeInTheDocument();
     expect(screen.getByText(/The field here:/)).toBeInTheDocument();
@@ -210,10 +228,17 @@ describe('the play lens', () => {
       expect(ribbon.textContent).toMatch(/\+25 MP/);
       expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
 
+      // at the first moment there is nothing earlier to hop back to
+      expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeDisabled();
+
       // NEXT MOMENT cuts to the following graded decision (the excused one)
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
       expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/);
       expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
+
+      // and PREV MOMENT hops back to the charged decision
+      await userEvent.click(screen.getByRole('button', { name: /PREV MOMENT/ }));
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }

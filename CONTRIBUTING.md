@@ -887,20 +887,24 @@ skipped, and a one-player field refuses costs (`singleField`) rather than invent
 board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
 On the web side (`pages/Analyze.tsx`): TWO lenses on a `?lens=` search param (a reading
 position, not a stored preference) via the ds `PrefSwitch` — THE OVERVIEW (the WHERE IT
-TURNED moments ledger + deepened auction + par, default) and THE PLAY; the original
+TURNED moments ledger + THE CARDS WERE WORTH, default) and THE PLAY; the original
 three-lens shape's `crossing`/`auction` param values map to the overview so early shared
-links keep working. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
+links keep working. The ledger is the overview's ONLY bidding surface: bid moments carry
+their counterfactual auction in the aside and are static findings (no link — the auction
+has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result
+alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
 `--positive` ink (matchpoints that were there for the taking), muted for EXCUSED moments —
 never a red −penalty. The play lens is a full
 replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
 from the tour, which is now a second consumer): forward steps stage one card at a time
 through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD, the
-trick pips and NEXT MOMENT `cut()` with no animation, and the audit ribbon (the tollkeeper
-ribbon's shape, unvoiced) narrates the view the replay is actually showing — the tour's
-lagging-caption move. A moment jump lands ON the decision (`?ply=`, the card still in
-hand) with the engine's pick wearing the live pre-confirmation `.selected` treatment in
-the fan (an underlined rank in the suit-line rails); NEXT CARD then shows what actually
-happened. Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
+trick pips and the PREV/NEXT MOMENT pair `cut()` with no animation, and the audit ribbon
+(the tollkeeper ribbon's shape, unvoiced) narrates the view the replay is actually showing
+— the tour's lagging-caption move, with its caption slot height RESERVED (the bid-box dock
+rule: a shorter caption must not scoot the board). A moment jump lands ON the decision
+(`?ply=`, the card still in hand) with the engine's pick wearing the live
+pre-confirmation `.selected` treatment in the fan (an underlined rank in the suit-line
+rails); NEXT CARD then shows what actually happened. Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
 trick-by-trick list instead, a legitimate reading rather than a fallback. Costly-but-
 unfindable moments carry an EXCUSED `InkStamp` (a stamp rules FOR you where a grade rates
 you); charged moments keep `StarGrade` (✗ at 0). Only THE PLAY skips `?par=1`. The demo
