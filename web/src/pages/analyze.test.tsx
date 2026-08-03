@@ -85,7 +85,8 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
 
 const parPayload = {
   parScore: 620,
-  parContracts: ['NS 4♠'],
+  // a DealerPar contract string exactly as DDS emits them ("3D*-EW-1" shaped)
+  parContracts: ['4S-NS'],
   calls: [
     {
       callIndex: donePlayed.auction.findIndex((a) => a.isHuman),
@@ -150,6 +151,8 @@ describe('the moments ledger (THE CROSSING)', () => {
     renderAnalyze();
     expect(await screen.findByText(/Only you have played this board\./)).toBeInTheDocument();
     expect(screen.queryByText(/[−+]\d+ MP/)).not.toBeInTheDocument();
+    // the receipts refuse the percentage the same way
+    expect(screen.getByText(/the only table so far/)).toBeInTheDocument();
   });
 });
 
@@ -183,8 +186,26 @@ describe('the overview: bid moments and par', () => {
     expect(bidRow.textContent).toMatch(/re-run, not remembered/);
 
     expect(screen.getByText('THE CARDS WERE WORTH')).toBeInTheDocument();
-    expect(screen.getByText(/Par is played with all four hands face up\. Nobody bids that way\./)).toBeInTheDocument();
-    expect(screen.getByText(/The field here:/)).toBeInTheDocument();
+    // the receipt and the rail: the panel LEADS the overview, par arrives as
+    // a sealed receipt in the app's own contract vocabulary (parsed from the
+    // DDS "4S-NS" string), your table beside it, and the field on the rail
+    const worth = document.querySelector('.analyze-par')!;
+    const ledger = document.querySelector('.analyze-moments')!;
+    expect(worth.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const parStub = document.querySelector('.worth-stub.sealed')!;
+    expect(parStub.textContent).toContain('THE CARDS ALLOWED');
+    expect(parStub.textContent).toContain('4♠ by N–S =');
+    expect(parStub.textContent).toContain('+620');
+    const youStub = document.querySelectorAll('.worth-stub')[1]!;
+    expect(youStub.textContent).toContain('YOUR TABLE');
+    expect(youStub.textContent).toContain('58%');
+    // the rail: one dot per distinct score (fixture field has five), the
+    // dashed gate labelled PAR, and the viewer's dot flagged YOU
+    expect(document.querySelectorAll('.worth-dot')).toHaveLength(5);
+    expect(document.querySelector('.worth-gatelab')!.textContent).toBe('PAR');
+    const youLab = [...document.querySelectorAll('.worth-dotlab')].find((el) => el.textContent!.includes('YOU'))!;
+    expect(youLab.textContent).toContain('+620');
+    expect(screen.getByText(/par is the yardstick for this board/)).toBeInTheDocument();
   });
 });
 

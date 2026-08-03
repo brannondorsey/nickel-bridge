@@ -1,0 +1,317 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyze — The Cards Were Worth · Concept Board · Nickel Bridge</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Besley:wght@400..900&family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=Josefin+Sans:wght@600&family=Poiret+One&display=swap');
+:root{
+  --paper:#FCFBF8; --panel:#FFFFFF; --surface:#F1EFE9; --ink:#141414;
+  --line:#D8D5CE; --hairline:#E4E1D8; --sealed:#B9B4A9; --muted:#6E6A62;
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  --verdigris:#6F8F68; --accent:#C22F21; --positive:#00775A;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper); color:var(--ink); font-family:'Crimson Pro',serif; font-weight:500; font-size:16px; line-height:1.5}
+.wrap{max-width:1340px; margin:0 auto; padding:26px 28px 80px}
+.brand{display:flex; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid var(--ink)}
+.wordmark{font-family:'Poiret One',cursive; font-size:19px; letter-spacing:.14em; text-transform:uppercase}
+.label{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.crumb{margin-left:auto; text-align:right}
+h1{font-family:'Crimson Pro',serif; font-weight:600; font-size:42px; line-height:1.12; margin:26px 0 14px; max-width:820px; text-wrap:balance}
+.lede{max-width:78ch; font-size:18px; margin-bottom:10px}
+.aside,i,em{font-style:italic; color:var(--muted)}
+.lede.aside{font-size:15.5px}
+.num{font-family:'Besley',serif; font-variant-numeric:tabular-nums}
+.rule{border:0; border-top:1px solid var(--line); margin:34px 0}
+.ss{color:var(--suit-s)} .sh{color:var(--suit-h)} .sd{color:var(--suit-d)} .sc{color:var(--suit-c)}
+
+/* current-state exhibit */
+.nowbox{display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; margin:22px 0 8px}
+.nowshot{flex:0 0 392px; border:1px solid var(--ink); background:var(--panel); box-shadow:3px 3px 0 rgba(20,20,20,.12)}
+.nowlist{flex:1 1 380px; max-width:60ch; font-size:16.5px}
+.nowlist li{margin:0 0 12px 18px}
+.nowlist b .num{font-size:14px}
+
+/* concept sections */
+.concept{margin-top:56px}
+.concept-kicker{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; border-top:2px solid var(--ink); padding-top:14px}
+.concept-kicker h2{font-family:'Crimson Pro',serif; font-weight:600; font-size:29px}
+.concept-note{max-width:82ch; margin:10px 0 20px; font-size:16.5px}
+.frames{display:flex; gap:26px; overflow-x:auto; padding:6px 2px 18px; align-items:flex-start}
+.framecol{flex:0 0 392px; width:392px}
+.phone{width:392px; background:var(--paper); border:1px solid var(--ink); box-shadow:3px 3px 0 rgba(20,20,20,.12); padding:14px 12px 18px}
+.cap{padding:12px 4px 0}
+.cap .label{display:block; margin-bottom:4px}
+.cap p{font-size:14px; color:var(--muted); line-height:1.45; font-style:italic}
+
+/* shared in-mock pieces */
+.perf{background:var(--panel); border:1px solid var(--ink); position:relative; padding:14px 14px 12px}
+.perf::before{content:''; position:absolute; left:0; top:0; bottom:0; width:0; border-left:1.5px dashed var(--ink)}
+.perf .head{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.16em; text-transform:uppercase; margin-bottom:10px}
+.mockaside{font-style:italic; color:var(--muted); font-size:14.5px; line-height:1.45}
+.bignum{font-family:'Besley',serif; font-weight:800; font-size:34px; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+.rowlab{font-family:'Besley',serif; font-weight:700; font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.fieldtable{width:100%; border-collapse:collapse; font-family:'Besley',serif; font-size:12.5px; font-variant-numeric:tabular-nums}
+.fieldtable td{padding:6px 0; border-top:1px solid var(--hairline)}
+.fieldtable tr:first-child td{border-top:0}
+.fieldtable .r{text-align:right}
+.fieldtable .pct{color:var(--muted); font-weight:700; width:44px}
+.youtag{display:inline-block; font-family:'Besley',serif; font-weight:700; font-size:8.5px; letter-spacing:.14em; border:1px solid var(--ink); padding:1px 5px; margin-left:7px; vertical-align:1px}
+.yourow td{background:var(--surface)}
+.subrule{border:0; border-top:1px solid var(--line); margin:12px 0}
+.stamp{display:inline-block; font-family:'Josefin Sans',sans-serif; font-weight:600; font-size:11px; letter-spacing:.22em; text-transform:uppercase; border:1.5px solid currentColor; border-radius:50%/50%; padding:6px 14px; transform:rotate(-4deg); -webkit-mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.72)); mask-image:radial-gradient(circle at 30% 40%, #000 55%, rgba(0,0,0,.72))}
+
+/* B: the gate line */
+.rail{position:relative; height:120px; margin:18px 2px 4px}
+.rail .axis{position:absolute; left:0; right:0; top:58px; border-top:1px solid var(--ink)}
+.rail .gate{position:absolute; top:18px; bottom:18px; border-left:1.5px dashed var(--accent)}
+.rail .gatelab{position:absolute; top:0; transform:translateX(-50%); font-family:'Besley',serif; font-weight:700; font-size:9px; letter-spacing:.14em; color:var(--accent); white-space:nowrap}
+.rail .dot{position:absolute; top:53.5px; width:9px; height:9px; border-radius:50%; border:1.5px solid var(--ink); background:var(--panel); transform:translateX(-50%)}
+.rail .dot.you{background:var(--ink)}
+.rail .dotlab{position:absolute; top:72px; transform:translateX(-50%); font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.04em; text-align:center; line-height:1.5; white-space:nowrap}
+.rail .dotlab small{display:block; font-size:8.5px; letter-spacing:.12em; color:var(--muted)}
+.rail .dotlab.up{top:auto; bottom:66px}
+
+/* C: two receipts */
+.stubs{display:flex; gap:12px}
+.stub{flex:1 1 0; border:1px solid var(--ink); background:var(--panel); padding:12px 12px 10px; position:relative}
+.stub.par{border-style:dashed; border-color:var(--sealed); background:var(--paper)}
+.stub .rowlab{display:block; margin-bottom:8px}
+.stub .contract{font-family:'Besley',serif; font-weight:800; font-size:16px; margin-bottom:2px}
+.stub .score{font-family:'Besley',serif; font-weight:800; font-size:26px; font-variant-numeric:tabular-nums; margin:4px 0 2px}
+.stub .mockaside{font-size:13px}
+.stub .stamp{position:absolute; right:8px; top:8px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.chip{font-family:'Besley',serif; font-weight:700; font-size:11px; font-variant-numeric:tabular-nums; border:1px solid var(--line); border-radius:3px; padding:4px 8px; background:var(--panel)}
+.chip.you{border-color:var(--ink); background:var(--surface)}
+
+/* closing matrix */
+.matrix{border-collapse:collapse; font-size:14.5px; margin-top:14px; max-width:1100px}
+.matrix th,.matrix td{border:1px solid var(--line); padding:8px 12px; text-align:left; vertical-align:top}
+.matrix th{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); background:var(--surface)}
+@media (max-width:900px){ h1{font-size:32px} }
+</style>
+<div class="wrap">
+
+  <div class="brand">
+    <svg width="30" height="23" viewBox="0 0 30 23" fill="none" aria-hidden="true">
+      <path d="M1 18 H29" stroke="#6F8F68" stroke-width="1.6"/>
+      <path d="M3 18 C3 8, 27 8, 27 18" stroke="#6F8F68" stroke-width="1.6" fill="none"/>
+      <path d="M8 18 V13 M15 18 V10.5 M22 18 V13" stroke="#6F8F68" stroke-width="1.2"/>
+      <path d="M1 21.5 H29" stroke="#141414" stroke-width="1"/>
+    </svg>
+    <span class="wordmark">Nickel Bridge</span>
+    <span class="label crumb">Analyze · The Cards Were Worth · Proposals</span>
+  </div>
+
+  <h1>What were the cards worth?</h1>
+  <p class="lede">The overview's second panel answers the question every post-mortem starts with — <i>was this board winnable?</i> — and right now it answers in shorthand. Three readings live in one undifferentiated block: <b>par</b> (what perfect bidding and play would have settled on), <b>your table</b> (what actually happened, which today only appears up in the header), and <b>the field</b> (what the other tables did). The proposals below untangle those three, each a different distance from the current implementation.</p>
+
+  <div class="nowbox">
+    <div class="nowshot">
+      <div style="padding:14px 12px 16px">
+        <div class="perf">
+          <div class="head">THE CARDS WERE WORTH</div>
+          <p class="num" style="font-weight:800; font-size:15px; margin-bottom:8px">3D*-EW-1 — +100.</p>
+          <p class="mockaside" style="margin-bottom:8px">Par is played with all four hands face up. Nobody bids that way.</p>
+          <p class="num" style="font-size:13px">The field here: 2<span class="sh">♥</span> · 1NT ×2 · 3NT.</p>
+        </div>
+      </div>
+    </div>
+    <div class="nowlist">
+      <span class="label" style="display:block; margin-bottom:8px">What today's panel makes the reader decode</span>
+      <ul>
+        <li><b><span class="num">3D*-EW-1</span> is solver notation, not English.</b> Contract, doubling, declaring side and result are fused into one token nobody has met elsewhere in the app — every other surface says "3♦ doubled by East–West, one down."</li>
+        <li><b>The score's sign is unexplained.</b> <span class="num">+100</span> is worth <i>to your side</i>, but nothing says so — and on a board you went minus, an unexplained plus reads as a contradiction.</li>
+        <li><b>The field row names contracts without results.</b> "1NT ×2" hides exactly the thing matchpoints care about: two tables in the same contract usually <i>scored differently</i>. And nothing marks which table was yours.</li>
+        <li><b>No delineation.</b> Par, caveat and field sit in one run of similar type, so the three different claims blur into one.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="lede aside">All three proposals below draw the same specimen board — yours from the preview: <b class="num">3NT by W +2 · −460 · 0%</b> in a field of four, with par <b class="num">3NT by West made exactly, −400</b> to your side. Frames at 390 reference width, design-system pieces only, copy proposed final.</p>
+
+  <!-- ═══════════ A ═══════════ -->
+  <div class="concept">
+    <div class="concept-kicker"><span class="label">Proposal A</span><h2>The Assessor's Lines</h2></div>
+    <p class="concept-note">Keep the single panel, but give each of the three claims its own <b>labelled ledger line with its own explainer</b> — the settings-gate pattern (label · value · italic aside), applied three times. Par becomes plain words plus one big number whose direction is stated; your table joins the panel so the comparison doesn't depend on the header; the field becomes a per-table column with results, percentages, and a YOU row.</p>
+    <div class="frames">
+      <div class="framecol">
+        <div class="phone">
+          <div class="perf">
+            <div class="head">THE CARDS WERE WORTH</div>
+            <div style="display:flex; align-items:baseline; gap:10px">
+              <span class="bignum">−400</span>
+              <span class="mockaside">to your side, with every hand face up</span>
+            </div>
+            <p class="num" style="font-weight:700; font-size:13px; margin-top:4px">3NT by West, made exactly — par for these cards.</p>
+            <p class="mockaside" style="margin-top:6px">Nobody bids with the cards face up. Par is the yardstick for this board, not a target anyone missed.</p>
+            <hr class="subrule">
+            <span class="rowlab">Your table</span>
+            <p class="num" style="font-weight:800; font-size:14px; margin:4px 0 2px">3NT by W +2 · −460 · 0%</p>
+            <p class="mockaside">Two overtricks past par — sixty points, and the bottom of this field.</p>
+            <hr class="subrule">
+            <span class="rowlab">The field — four tables</span>
+            <table class="fieldtable" style="margin-top:6px">
+              <tr><td>2NT by W +2</td><td class="r">−180</td><td class="r pct">100%</td></tr>
+              <tr><td>3NT by W =</td><td class="r">−400</td><td class="r pct">67%</td></tr>
+              <tr><td>3NT by W +1</td><td class="r">−430</td><td class="r pct">33%</td></tr>
+              <tr class="yourow"><td>3NT by W +2<span class="youtag">YOU</span></td><td class="r">−460</td><td class="r pct">0%</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="cap">
+          <span class="label">Why this works</span>
+          <p>Nothing needs decoding: every number carries its direction and its sentence. The field table finally shows <i>results</i>, which is what separates four tables in the same contract. Cheapest to build — it is the current panel re-set, plus field rows the server already sends for the Result's field view.</p>
+          <span class="label" style="margin-top:8px">The trade</span>
+          <p>Tallest of the three, and it stays prose-first — the par-vs-you-vs-field <i>distances</i> are stated, not seen.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ B ═══════════ -->
+  <div class="concept">
+    <div class="concept-kicker"><span class="label">Proposal B</span><h2>The Gate Line</h2></div>
+    <p class="concept-note">Put every table's score <b>on one rail</b>, with par as the dashed gate — the Compare screen's gate motif, reused where it means the same thing. One glance answers how far each table sat from what the cards allowed, and where you sit among them. The prose shrinks to one caveat line.</p>
+    <div class="frames">
+      <div class="framecol">
+        <div class="phone">
+          <div class="perf">
+            <div class="head">THE CARDS WERE WORTH</div>
+            <div style="display:flex; align-items:baseline; gap:10px">
+              <span class="bignum">−400</span>
+              <span class="mockaside">to your side — the gate on the line below</span>
+            </div>
+            <div class="rail">
+              <div class="axis"></div>
+              <div class="gate" style="left:56%"></div>
+              <div class="gatelab" style="left:56%">PAR −400</div>
+              <div class="dot" style="left:12%"></div>
+              <div class="dotlab" style="left:12%">−180<small>2NT+2</small></div>
+              <div class="dot" style="left:56%"></div>
+              <div class="dotlab up" style="left:56%">−400<small>3NT=</small></div>
+              <div class="dot" style="left:73%"></div>
+              <div class="dotlab" style="left:73%">−430<small>3NT+1</small></div>
+              <div class="dot you" style="left:90%"></div>
+              <div class="dotlab up" style="left:90%"><b>YOU −460</b><small>3NT+2</small></div>
+            </div>
+            <p class="mockaside" style="margin-top:10px">Left of the gate beat the cards; right of it paid extra. Par is played with all four hands face up — a yardstick, not a target.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <span class="label">Why this works</span>
+          <p>The three claims become one picture: par is a place, the field is a scatter, you are the filled dot. Distances do the explaining — "sixty points past par" is visible before it is read. Reuses the gate's meaning from Compare, so the vocabulary is already taught.</p>
+          <span class="label" style="margin-top:8px">The trade</span>
+          <p>A real score axis has real problems: a −1100 sacrifice next to a +140 partial squeezes everything else into a corner, so the axis needs compression rules, collision handling for stacked labels, and its own reduced-motion-style fallback list. The most new machinery of the three.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ C ═══════════ -->
+  <div class="concept">
+    <div class="concept-kicker"><span class="label">Proposal C</span><h2>The Two Receipts</h2></div>
+    <p class="concept-note">Par and your table as <b>paired receipts</b> — the toll office's own move. The par stub is printed on the dashed "sealed" border (a receipt for a crossing nobody made); yours is a real one. The field folds to a strip of result chips underneath, yours marked.</p>
+    <div class="frames">
+      <div class="framecol">
+        <div class="phone">
+          <div class="perf">
+            <div class="head">THE CARDS WERE WORTH</div>
+            <div class="stubs">
+              <div class="stub par">
+                <span class="stamp" style="color:var(--sealed)">PAR</span>
+                <span class="rowlab">The cards allowed</span>
+                <div class="contract num">3NT by W =</div>
+                <div class="score num">−400</div>
+                <p class="mockaside">to your side, all hands face up</p>
+              </div>
+              <div class="stub">
+                <span class="rowlab">Your table</span>
+                <div class="contract num">3NT by W +2</div>
+                <div class="score num">−460</div>
+                <p class="mockaside">0% of the field's matchpoints</p>
+              </div>
+            </div>
+            <div class="chips">
+              <span class="chip">2NT+2 · −180</span>
+              <span class="chip">3NT= · −400</span>
+              <span class="chip">3NT+1 · −430</span>
+              <span class="chip you">3NT+2 · −460 · YOU</span>
+            </div>
+            <p class="mockaside" style="margin-top:10px">Nobody bids with the cards face up — the sealed receipt is the yardstick, not a crossing anyone made.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <span class="label">Why this works</span>
+          <p>The most brand-native reading: par as the receipt the toll office <i>would have</i> printed, beside the one it did. The two-up layout makes the par-vs-you comparison the composition itself, and the chip strip keeps the field compact.</p>
+          <span class="label" style="margin-top:8px">The trade</span>
+          <p>Two stubs sharing 390px leaves each about 170px, so long contract names and the explainers run tight; the chip strip repeats the field-token problem at small size (results present now, but dense). New styles for the stub pair and chips.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ D ═══════════ -->
+  <div class="concept">
+    <div class="concept-kicker"><span class="label">Proposal D</span><h2>The Receipt and the Rail</h2></div>
+    <p class="concept-note">C and B keep each other's weaknesses out. C's weakest element is its chip strip — the field compressed back into tokens; B's weakest is carrying <i>everything</i> on the rail, so every dot needs a full label and the panel needs a number up top. So: <b>C's paired receipts answer "what were the cards worth, and what did I pay"</b> in plain words with real numbers, and <b>B's rail replaces the chip strip</b> to answer only the one thing a picture answers best — where the field landed around the gate. Because the receipts already carry par and your score, the rail's labelling drops to score-plus-contract ticks and a bare PAR flag: no big number, no caption doing arithmetic.</p>
+    <div class="frames">
+      <div class="framecol">
+        <div class="phone">
+          <div class="perf">
+            <div class="head">THE CARDS WERE WORTH</div>
+            <div class="stubs">
+              <div class="stub par">
+                <span class="stamp" style="color:var(--sealed)">PAR</span>
+                <span class="rowlab">The cards allowed</span>
+                <div class="contract num">3NT by W =</div>
+                <div class="score num">−400</div>
+                <p class="mockaside">to your side, all hands face up</p>
+              </div>
+              <div class="stub">
+                <span class="rowlab">Your table</span>
+                <div class="contract num">3NT by W +2</div>
+                <div class="score num">−460</div>
+                <p class="mockaside">0% of the field's matchpoints</p>
+              </div>
+            </div>
+            <span class="rowlab" style="display:block; margin-top:12px">The field — four tables</span>
+            <div class="rail" style="height:110px">
+              <div class="axis" style="top:52px"></div>
+              <div class="gate" style="left:56%; top:14px; bottom:14px"></div>
+              <div class="gatelab" style="left:56%; top:-2px">PAR</div>
+              <div class="dot" style="left:12%; top:47.5px"></div>
+              <div class="dotlab" style="left:12%; top:64px">−180<small>2NT+2</small></div>
+              <div class="dot" style="left:56%; top:47.5px"></div>
+              <div class="dotlab up" style="left:56%; bottom:62px">−400<small>3NT=</small></div>
+              <div class="dot" style="left:73%; top:47.5px"></div>
+              <div class="dotlab" style="left:73%; top:64px">−430<small>3NT+1</small></div>
+              <div class="dot you" style="left:90%; top:47.5px"></div>
+              <div class="dotlab up" style="left:90%; bottom:62px"><b>YOU</b><small>−460</small></div>
+            </div>
+            <p class="mockaside" style="margin-top:8px">Nobody bids with the cards face up — the sealed receipt is the yardstick, not a crossing anyone made.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <span class="label">Why this works</span>
+          <p>Each device does the one job it is best at: the receipts state the two numbers that need words, the rail shows the one relationship words state badly. Nothing appears twice, so combining them doesn't compound — D is C minus chips plus a lighter B, and lands about as tall as A.</p>
+          <span class="label" style="margin-top:8px">The trade</span>
+          <p>The rail keeps B's real obligations at reduced stakes: axis compression for a wild score (a −1100 sacrifice), alternating labels for near-ties, and a degenerate-board fallback — which here is simply C (receipts + chips), so the fallback is a design you already like rather than a new state.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+  <h2 style="font-family:'Crimson Pro',serif; font-weight:600; font-size:29px">Weighing them</h2>
+  <table class="matrix">
+    <tr><th></th><th>A · Assessor's Lines</th><th>B · Gate Line</th><th>C · Two Receipts</th><th>D · Receipt and Rail</th></tr>
+    <tr><td class="label" style="letter-spacing:.1em">Clarity of the three claims</td><td>Each labelled and explained; distances stated in prose</td><td>Distances visible at a glance; least prose</td><td>Par-vs-you strong; field compressed to chips</td><td>Par-vs-you in words, field distances in the picture — each claim on its best device</td></tr>
+    <tr><td class="label" style="letter-spacing:.1em">Vertical cost at 390</td><td>Tallest (~3 blocks)</td><td>Middle</td><td>Middle</td><td>Middle — chips traded for the rail, no net growth over C</td></tr>
+    <tr><td class="label" style="letter-spacing:.1em">New machinery</td><td>None — existing ledger patterns</td><td>Score axis: compression, label collisions, fallback</td><td>Stub pair + chip styles</td><td>Stub pair + the axis (lighter labels, same compression rules)</td></tr>
+    <tr><td class="label" style="letter-spacing:.1em">Degenerate boards (passed out, single field, wild scores)</td><td>Rows simply absent — degrades cleanly</td><td>Axis needs special-casing</td><td>Stub pair fine; chips fine</td><td>Falls back to C exactly — receipts + chips when the rail can't draw honestly</td></tr>
+  </table>
+  <p class="lede" style="margin-top:16px"><b>Recommendation: D.</b> It is genuinely the best of B and C rather than their sum, because the two halves stop overlapping: the receipts carry every number that needs a sentence, so the rail sheds the labelling that made B heavy, and the rail replaces the chip strip that was C's weakest row. Its honest cost is B's axis rules at reduced stakes — and its degenerate fallback is exactly C, so the safety net is a design already liked rather than a new state to design. If the axis rules feel like too much for this round, C ships as drawn and D remains a pure addition later (the rail slots where the chips sit).</p>
+
+</div>

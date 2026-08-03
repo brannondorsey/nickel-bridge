@@ -4962,18 +4962,139 @@ a.stat-tile:hover {
 .analyze-par {
   margin-bottom: 12px;
 }
-.analyze-parline {
-  font-size: 15px;
-}
 .analyze-par .analyze-finding {
-  margin-top: 4px;
+  margin-top: 10px;
 }
-.analyze-fieldline {
-  font-size: 13.5px;
+
+/* ---- THE CARDS WERE WORTH: the receipt and the rail ---- */
+/* par and your table as paired receipts; the par stub wears the sealed
+   (dashed) treatment — a receipt for a crossing nobody made */
+.worth-stubs {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.worth-stub {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 10px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.worth-stub.sealed {
+  border: var(--border-sealed);
+  background: var(--paper);
+}
+.worth-stamp {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  font-size: 10px;
+}
+.worth-stub-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+/* the PAR stamp docks top-right; the label wraps short of it */
+.worth-stub.sealed .worth-stub-label {
+  padding-right: 40px;
+}
+.worth-contract {
+  font-weight: 800;
+  font-size: 14px;
+}
+.worth-score {
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.1;
+}
+.worth-aside {
   font-style: italic;
-  border-top: 1px solid var(--line-quiet);
-  padding-top: 8px;
-  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.worth-rail-label {
+  display: block;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 14px;
+}
+/* the rail: fixed-height bands (gate flag / upper labels / axis / lower
+   labels) so nothing collides — geometry (0..1 lefts) from analyzeRail.ts */
+.worth-rail {
+  position: relative;
+  height: 104px;
+  margin-top: 2px;
+  font-family: var(--font-label);
+}
+.worth-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52px;
+  border-top: 1px solid var(--ink);
+}
+.worth-gate {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  border-left: 1.5px dashed var(--accent);
+}
+.worth-gatelab {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.worth-dot {
+  position: absolute;
+  top: 47.5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--panel);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+.worth-dot.you {
+  background: var(--ink);
+}
+.worth-dotlab {
+  position: absolute;
+  top: 64px;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.worth-dotlab.up {
+  top: auto;
+  bottom: 58px;
+}
+.worth-dotlab small {
+  display: block;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
 }
 
 /* ---- the audit ribbon (the tour ribbon's shape, unvoiced) ---- */

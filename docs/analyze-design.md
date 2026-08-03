@@ -45,3 +45,17 @@ argument for the composite). The replay driver was extracted from the first-cros
 (`web/src/replay/useReplay.ts`), which had already proven the shape; `Board.tsx`'s `Result`
 gained an actions slot, dissolving the tour's class-for-class `TourResult` copy on the way.
 The demo gallery's `analyze-play` exhibit (`server/src/scenarios.ts`) is the click-test path.
+
+## The Cards Were Worth (round-four redesign)
+
+Click-testing found the overview's par panel unreadable — DDS's raw `3D*-EW-1` notation, an
+unexplained score sign, field contracts without results, no YOU anchor. A second concept
+board, [analyze-cards-worth.html](analyze-cards-worth.html), explored four treatments: a
+plain-words ledger (A), the field on a score rail with par as a dashed gate (B), par and
+your table as paired receipts (C), and their composite (D, "The Receipt and the Rail") —
+C's receipts over B's rail, each shedding the half the other does better. The owner chose
+**D**, hoisted above the moments ledger so "was this board winnable" frames the verdicts.
+The rail's geometry (`web/src/pages/analyzeRail.ts`) is linear with a minimum-gap
+relaxation rather than the considered symlog axis: measured on a game-cluster field
+({−1100, 620, 650}), symlog *halved* the readable 620–650 gap, compressing exactly the
+differences the rail exists to show, while helping only fields that cluster near zero.

@@ -30,6 +30,7 @@ import { TrickArea } from '../components/game/TrickArea';
 import { signedScore } from '../format';
 import { buildReplayViews, firstPlyOfTrick, trickOfPly } from '../replay/replayViews';
 import { useReplay } from '../replay/useReplay';
+import { railLayout } from './analyzeRail';
 
 /**
  * Analyze — "The Second Crossing": walking a finished board back, without
@@ -187,8 +188,8 @@ export default function Analyze() {
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
 
+      {lens === 'overview' ? <CardsWorthPanel board={board} analysis={analysis} /> : null}
       {lens === 'overview' ? <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} /> : null}
-      {lens === 'overview' ? <ParPanel board={board} analysis={analysis} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
           <PlayLens
@@ -214,7 +215,7 @@ export default function Analyze() {
 }
 
 /**
- * ① WHERE IT TURNED — the moments ledger. A list of links, not a slider: the
+ * ② WHERE IT TURNED — the moments ledger. A list of links, not a slider: the
  * moments are discrete and few. Each row's accessible name carries the whole
  * reading; the visual cost figure is aria-hidden so nothing announces twice.
  * Cost direction is carried by sign and position, never by colour alone.
@@ -317,46 +318,111 @@ function MomentRow({
 }
 
 /**
- * ② THE CARDS WERE WORTH — par and the field in ONE panel: the field is the
- * reality check on par, and neither number is allowed to appear alone. (The
- * Result's own YOUR BIDDING table covers the call-by-call recap; the ledger's
- * bid moments carry the counterfactual auctions, so neither is repeated here.)
+ * "3D*-EW-1" (a DealerPar contract string, straight from DDS) → the app's own
+ * contract-label vocabulary ("3♦X by E–W −1"). Par names a SIDE rather than a
+ * seat, so the label says N–S/E–W where contractLabel would say a chair; an
+ * unrecognised string passes through untouched rather than being guessed at.
  */
-function ParPanel({ board, analysis }: { board: BoardView; analysis: AnalysisView }) {
+function parContractLabel(raw: string): string {
+  const m = /^(\d)([SHDCN])(\*{0,2})-(NS|EW)([+-]\d+)?$/.exec(raw.trim());
+  if (!m) return raw;
+  const strain = ({ S: '♠', H: '♥', D: '♦', C: '♣', N: 'NT' } as Record<string, string>)[m[2]];
+  const dbl = m[3] === '*' ? 'X' : m[3] === '**' ? 'XX' : '';
+  const side = m[4] === 'NS' ? 'N–S' : 'E–W';
+  const n = m[5] ? Number(m[5]) : 0;
+  const result = n === 0 ? '=' : n > 0 ? `+${n}` : `−${-n}`;
+  return `${m[1]}${strain}${dbl} by ${side} ${result}`;
+}
+
+/**
+ * ① THE CARDS WERE WORTH — "The Receipt and the Rail" (proposal D from the
+ * concept board, owner-chosen): par and your table as PAIRED RECEIPTS — the
+ * two numbers that need sentences — over the field as dots on ONE RAIL with
+ * par as the dashed gate, the one relationship words state badly. It leads
+ * the overview: "was this board winnable, and how did I do against the
+ * field" is the framing for the moments ledger below it. The par stub wears
+ * the sealed treatment (a receipt for a crossing nobody made); the rail's
+ * geometry lives in analyzeRail.ts. (The Result's own YOUR BIDDING table
+ * covers the call-by-call recap; the ledger's bid moments carry the
+ * counterfactual auctions, so neither is repeated here.)
+ */
+function CardsWorthPanel({ board, analysis }: { board: BoardView; analysis: AnalysisView }) {
   const par = analysis.par;
-  const fieldCounts = new Map<string, number>();
-  for (const f of board.result?.field ?? []) {
-    const token = f.contract.split(' ')[0];
-    fieldCounts.set(token, (fieldCounts.get(token) ?? 0) + 1);
-  }
+  const r = board.result;
+  const field = r?.field ?? [];
   return (
     <PerforatedPanel heading="THE CARDS WERE WORTH" className="analyze-par">
-      {par ? (
+      {par && r ? (
         <>
-          <p className="analyze-parline num">
-            <b>
-              <GlossaryProse text={par.parContracts.join(' · ')} /> — {signedScore(par.parScore)}.
-            </b>
+          <div className="worth-stubs">
+            <div className="worth-stub sealed">
+              <InkStamp rotate={-6} color="var(--muted)" className="worth-stamp">
+                PAR
+              </InkStamp>
+              <span className="worth-stub-label">THE CARDS ALLOWED</span>
+              <b className="worth-contract num">
+                <GlossaryProse text={par.parContracts.map(parContractLabel).join(' · ')} />
+              </b>
+              <b className="worth-score num">{signedScore(par.parScore)}</b>
+              <span className="worth-aside">to your side, all hands face up</span>
+            </div>
+            <div className="worth-stub">
+              <span className="worth-stub-label">YOUR TABLE</span>
+              <b className="worth-contract num">
+                <GlossaryProse text={r.contractLabel} />
+              </b>
+              <b className="worth-score num">{signedScore(r.scoreNS)}</b>
+              <span className="worth-aside">
+                {analysis.actualPct !== null
+                  ? `${Math.round(analysis.actualPct)}% of the field's matchpoints`
+                  : 'the only table so far'}
+              </span>
+            </div>
+          </div>
+          {field.length > 1 ? <WorthRail field={field} parScore={par.parScore} /> : null}
+          <p className="analyze-finding">
+            <GlossaryProse text="Nobody bids with the cards face up — par is the yardstick for this board, not a target anyone missed." />
           </p>
-          <p className="analyze-finding">Par is played with all four hands face up. Nobody bids that way.</p>
-          {fieldCounts.size ? (
-            <p className="analyze-fieldline num">
-              The field here:{' '}
-              {[...fieldCounts.entries()].map(([token, n], i) => (
-                <span key={token}>
-                  {i > 0 ? ' · ' : ''}
-                  <GlossaryProse text={token} />
-                  {n > 1 ? ` ×${n}` : ''}
-                </span>
-              ))}
-              .
-            </p>
-          ) : null}
         </>
       ) : (
         <p className="analyze-finding">Weighing the cards…</p>
       )}
     </PerforatedPanel>
+  );
+}
+
+/** the field on one rail, par as the dashed gate — geometry from analyzeRail.ts */
+function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']>['field']; parScore: number }) {
+  const layout = railLayout(
+    field.map((f) => ({ score: f.scoreNS, contract: f.contract, you: f.isMe })),
+    parScore,
+  );
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  return (
+    <>
+      <span className="worth-rail-label">
+        THE FIELD — {field.length} {field.length === 1 ? 'TABLE' : 'TABLES'}
+      </span>
+      <div className="worth-rail num">
+        <div className="worth-axis" aria-hidden="true" />
+        <div className="worth-gate" style={{ left: pct(layout.gate) }} aria-hidden="true" />
+        <span className="worth-gatelab" style={{ left: pct(layout.gate) }}>
+          PAR
+        </span>
+        {layout.dots.map((d) => (
+          <Fragment key={d.score}>
+            <span className={`worth-dot${d.you ? ' you' : ''}`} style={{ left: pct(d.x) }} aria-hidden="true" />
+            <span className={`worth-dotlab${d.up ? ' up' : ''}`} style={{ left: pct(d.x) }}>
+              {d.you ? <b>YOU </b> : null}
+              {signedScore(d.score)}
+              <small>
+                {d.contracts.length > 1 ? `${d.count} tables` : `${d.contracts[0]}${d.count > 1 ? ` ×${d.count}` : ''}`}
+              </small>
+            </span>
+          </Fragment>
+        ))}
+      </div>
+    </>
   );
 }
 

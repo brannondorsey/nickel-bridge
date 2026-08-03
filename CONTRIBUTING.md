@@ -192,7 +192,9 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            analyze-design.md — the Analyze design record, with its concept-exploration
                 board analyze-concepts.html (three directions; the owner chose B,
-                "The Second Crossing");
+                "The Second Crossing") and the round-four par-panel board
+                analyze-cards-worth.html (four treatments; the owner chose D,
+                "The Receipt and the Rail");
                 compare.md — why most Compare rows refuse to name a winner: the
                 three error models, the Agresti-Coull requirement, and the
                 production measurement behind FULL_TILT;
@@ -886,10 +888,19 @@ skipped, and a one-player field refuses costs (`singleField`) rather than invent
 **MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
 board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
 On the web side (`pages/Analyze.tsx`): TWO lenses on a `?lens=` search param (a reading
-position, not a stored preference) via the ds `PrefSwitch` — THE OVERVIEW (the WHERE IT
-TURNED moments ledger + THE CARDS WERE WORTH, default) and THE PLAY; the original
-three-lens shape's `crossing`/`auction` param values map to the overview so early shared
-links keep working. The ledger is the overview's ONLY bidding surface: bid moments carry
+position, not a stored preference) via the ds `PrefSwitch` — THE OVERVIEW (default) and
+THE PLAY; the original three-lens shape's `crossing`/`auction` param values map to the
+overview so early shared links keep working. The overview LEADS with THE CARDS WERE
+WORTH — "The Receipt and the Rail", proposal D of the panel's four-concept redesign
+board (owner-chosen): par and your table as paired receipts (the par stub sealed/dashed,
+its DDS "3D*-EW-1" contract string parsed into the app's own vocabulary by
+`parContractLabel`), over the field as dots on one rail with par as the dashed gate.
+The rail's geometry is the pure, unit-tested `pages/analyzeRail.ts` (the activityFeed.ts
+precedent): positions are LINEAR in the score with an order-preserving minimum-gap
+relaxation — measured against a symlog axis, which flattens exactly the ±420–660 game
+clusters bridge fields produce — with ties merged into counted dots, label bands
+alternated, and the gate left at par's un-relaxed position. The WHERE IT TURNED moments
+ledger follows. The ledger is the overview's ONLY bidding surface: bid moments carry
 their counterfactual auction in the aside and are static findings (no link — the auction
 has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result
 alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
