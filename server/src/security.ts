@@ -21,15 +21,11 @@
  * WHAT EACH ONE IS FOR, since a header nobody understands is a header the next
  * person deletes:
  *
- * - **Content-Security-Policy** — an allowlist of where the page may load code,
- *   styles, images, fonts and network connections from, enforced by the
- *   browser. Its job is to make an injected `<script>` inert: an XSS that
- *   cannot fetch its payload or run inline is a defacement rather than a
- *   session theft. This app has no known injection sink (React escapes by
- *   default and there is no `dangerouslySetInnerHTML` anywhere in web/src), so
- *   this is insurance against the sink nobody has written yet — which is the
- *   only time it can be added cheaply, because the policy below is written
- *   against what the app loads *today*.
+ * - **Content-Security-Policy** — a set of rules a browser enforces about what
+ *   this page may do. Deliberately NARROW here: it carries only the rules that
+ *   forbid things the app never does, and NO allowlist of where scripts, styles,
+ *   images, fonts or connections may come from. See `contentSecurityPolicy`
+ *   below for why the allowlist half was taken back out.
  * - **frame-ancestors / X-Frame-Options** — who may put this app in an iframe.
  *   The answer is nobody. The session cookie is `SameSite=Lax`, which rides
  *   same-origin subrequests inside a framed page, so a framed board is a live,
@@ -65,30 +61,6 @@
  *   first. See `securityHeaders`'s `hsts` argument for why it is conditional
  *   and `PRELOAD` below for why it is not preloaded.
  */
-import { createHash } from 'node:crypto';
-
-/** gtag.js's origin — the one third-party script the app loads (analytics.ts). */
-const GTAG = 'https://www.googletagmanager.com';
-
-/**
- * Where GA4 sends its hits. `*.google-analytics.com` and
- * `*.analytics.google.com` cover the regional collectors gtag picks at runtime
- * (`region1.google-analytics.com` and friends), which is not a list this file
- * can enumerate.
- */
-const GA_COLLECT = [
-  'https://www.google-analytics.com',
-  'https://*.google-analytics.com',
-  'https://*.analytics.google.com',
-];
-
-/**
- * Google account avatars — `users.picture`, straight from the OAuth profile and
- * rendered by Player.tsx and Compare.tsx. Wildcarded because Google serves them
- * from a rotating set of `lh*.googleusercontent.com` hosts.
- */
-const AVATARS = 'https://*.googleusercontent.com';
-
 /**
  * A year, the value HSTS is only meaningful at: the max-age is a *countdown
  * restarted on every response*, so it has to outlast the gap between one
@@ -131,100 +103,50 @@ const PERMISSIONS = [
   .join(', ');
 
 /**
- * The script types a browser will actually execute. A `<script>` carrying
- * anything else — `application/ld+json`, which both the SPA shell and every
- * prerendered page use for structured data — is a data block the browser never
- * runs, and CSP therefore never checks it. Hashing those would be noise in the
- * header and, worse, would imply they are code.
+ * The Content-Security-Policy — the RULES half only, with no allowlist.
+ *
+ * This shipped once with the full thing: `default-src 'self'` plus per-type
+ * allowlists for scripts, styles, images, fonts and connections, naming
+ * gtag.js, Google's avatar hosts and GA's collectors, with the shell's two
+ * pre-paint inline scripts admitted by SHA-256 hash. It was correct, and it was
+ * taken back out on purpose. Read this before adding it back.
+ *
+ * WHY. An allowlist is a second, invisible copy of every external thing the app
+ * loads, and it is enforced in exactly one place a developer never looks: a
+ * production browser. `npm run dev -w web` serves through Vite, which sends no
+ * such header, and jsdom ignores it — so adding a font host, an embedded
+ * widget or a third-party script would work everywhere it was tested and fail
+ * silently for real visitors. The prize for carrying that is containment of an
+ * XSS this app has no known sink for: React escapes by default and there is no
+ * `dangerouslySetInnerHTML` anywhere in web/src. A control whose expected cost
+ * is a silent production breakage and whose expected benefit is insurance
+ * against a bug nobody has written is not obviously worth having, and this one
+ * was judged not to be.
+ *
+ * WHAT IS LEFT is everything that forbids what the app never does anyway, so
+ * there is no list to keep in step with the code:
+ *   frame-ancestors 'none'   nobody may frame this app — the clickjacking
+ *                            answer, and the modern spelling of the
+ *                            X-Frame-Options header sent beside it.
+ *   base-uri 'none'          an injected <base> would silently repoint every
+ *                            relative URL on the page, including the module
+ *                            bundle's. Nothing here sets a <base>.
+ *   object-src 'none'        no <object>/<embed>. Legacy plugin content is a
+ *                            script-execution path with no use here.
+ *   form-action 'self'       a form may only post back to this origin. Sign-in
+ *                            is a link to /auth/google, and the one real form
+ *                            (dev login) posts via fetch.
+ * None of these can block a script, style, image, font or fetch, which is to
+ * say none of them can break a page by being out of date.
+ *
+ * IF IT EVER COMES BACK, the way to make it safe is to make it visible: put the
+ * allowlist behind `Content-Security-Policy-Report-Only` with somewhere for the
+ * reports to land first, and only enforce what has been observed to be quiet.
+ * Shipping it enforced on the strength of reading the code is how you get the
+ * failure described above.
  */
-const EXECUTABLE_TYPES = new Set(['module', 'text/javascript', 'application/javascript', 'text/ecmascript']);
-
-const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-
-/**
- * CSP hashes for the inline scripts in a page of HTML, in `'sha256-…'` form.
- *
- * web/index.html carries two inline scripts by necessity — the pre-paint theme
- * and suit-palette appliers, which must run before the module graph loads or a
- * night-mode visitor gets a light flash (see CLAUDE.md, "Night mode"). Under
- * `script-src 'self'` a browser refuses to run them, so the policy has to name
- * them somehow. A hash is the way to do that without `'unsafe-inline'`, which
- * would re-admit every injected inline script and leave a policy that mostly
- * decorates.
- *
- * Derived from the HTML this server is about to serve rather than hardcoded, so
- * an edit to those scripts cannot leave a stale constant behind: the prerendered
- * pages are copies of the built shell with only the SEO span and #root replaced
- * (web/scripts/prerender.mjs), so one read of the shell covers all ~127 pages.
- *
- * Failure is soft on purpose. If the shell can't be read, or its markup changes
- * shape enough that nothing matches, the app still runs — the module bundle is
- * `'self'` and unaffected — and the only symptom is a flash of the wrong theme
- * on first paint. security.test.ts pins the extraction against the real file so
- * that stays hypothetical.
- */
-export function inlineScriptHashes(html: string): string[] {
-  const hashes = new Set<string>();
-  for (const [, attrs, body] of html.matchAll(SCRIPT_TAG)) {
-    if (/\bsrc\s*=/i.test(attrs)) continue; // external: covered by script-src 'self'
-    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs)?.[1]?.toLowerCase();
-    if (type && !EXECUTABLE_TYPES.has(type)) continue;
-    hashes.add(`'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`);
-  }
-  return [...hashes];
-}
-
-/**
- * The Content-Security-Policy, assembled from what this app actually loads.
- *
- * Read it as a list of the only things a page here may do:
- *   default-src 'self'   everything not named below comes from this origin —
- *                        the fallback that makes an omitted directive safe
- *                        rather than open.
- *   script-src           this origin, the two pre-paint inline scripts by hash,
- *                        and gtag.js. No 'unsafe-inline', no 'unsafe-eval'.
- *   style-src            'unsafe-inline' is required and is the one real
- *                        concession: the prerendered pages embed a <style>
- *                        block of their own (prerender.mjs's STYLE). Style
- *                        injection is a defacement/exfil-by-selector risk, not
- *                        a code-execution one; hashing it would couple this
- *                        module to a build script's string literal for a much
- *                        smaller prize than script-src's.
- *   img-src              this origin, data: URIs (Vite inlines small assets),
- *                        Google avatars, and GA's collectors — the same list
- *                        connect-src gets, regional hosts included, because a
- *                        hit that falls back to an image beacon picks its host
- *                        the same way the beacon would. Narrowing this to the
- *                        bare collector would cost a silently dropped page
- *                        view, which is the kind of failure nobody notices.
- *   font-src 'self'      the faces are self-hosted via @fontsource. No CDN.
- *   connect-src          fetch/XHR/sendBeacon: this origin plus GA's
- *                        collectors.
- *   frame-ancestors      nobody may frame this app — see the header notes above.
- *   frame-src 'none'     and this app frames nobody. It embeds no third-party
- *                        widget, so an injected iframe has no legitimate twin.
- *   base-uri 'none'      an injected <base> would silently repoint every
- *                        relative URL on the page, including the module
- *                        bundle's, and 'self' does not stop that.
- *   form-action 'self'   a form here may only post back to this origin. Sign-in
- *                        is a link to /auth/google, not a cross-origin form.
- *   object-src 'none'    no <object>/<embed>. Legacy plugin content is a
- *                        script-execution path with no use here.
- */
-export function contentSecurityPolicy(scriptHashes: readonly string[] = []): string {
-  return [
-    `default-src 'self'`,
-    `script-src 'self' ${[...scriptHashes, GTAG].join(' ')}`,
-    `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: ${AVATARS} ${GA_COLLECT.join(' ')}`,
-    `font-src 'self'`,
-    `connect-src 'self' ${[GTAG, ...GA_COLLECT].join(' ')}`,
-    `frame-ancestors 'none'`,
-    `frame-src 'none'`,
-    `base-uri 'none'`,
-    `form-action 'self'`,
-    `object-src 'none'`,
-  ].join('; ');
+export function contentSecurityPolicy(): string {
+  return [`frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `form-action 'self'`].join('; ');
 }
 
 /**
@@ -241,12 +163,9 @@ export function contentSecurityPolicy(scriptHashes: readonly string[] = []): str
  * it guards is "every localhost project on this machine is now unreachable over
  * HTTP", which is worth two lines of care.
  */
-export function securityHeaders(opts: {
-  hsts: boolean;
-  scriptHashes?: readonly string[];
-}): Record<string, string> {
+export function securityHeaders(opts: { hsts: boolean }): Record<string, string> {
   return {
-    'content-security-policy': contentSecurityPolicy(opts.scriptHashes),
+    'content-security-policy': contentSecurityPolicy(),
     'x-frame-options': 'DENY',
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',

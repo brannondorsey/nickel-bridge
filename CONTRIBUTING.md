@@ -464,7 +464,7 @@ holds the table — Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-
 beside each saying what it is for, because a header nobody understands is a header the next
 person deletes. `app.ts` applies them in one `onSend` hook registered **before any route**, so
 the API, `/auth`, the prerendered pages, the SPA shell, the 404 handler and the error handler
-are all covered; a header set per-route is a header the next route forgets. Four things about
+are all covered; a header set per-route is a header the next route forgets. Three things about
 it are decisions rather than defaults:
 
 - **App-level, not an edge rule.** Production, the demo app and every PR preview run the same
@@ -477,21 +477,22 @@ it are decisions rather than defaults:
   only headers changes no origin bytes, so `--purge`'s comparison correctly finds nothing to
   drop and cached HTML keeps the old set until its TTL, the next content change, or
   `edge-upkeep.yml`'s weekly `--purge --force`.
-- **The CSP names `web/index.html`'s two pre-paint inline scripts by SHA-256 hash**, rather
-  than opening `script-src` with `'unsafe-inline'` — which would re-admit every injected
-  inline script and leave a policy that mostly decorates. Those hashes are **derived at boot
-  from the built shell** the server is about to serve, not hardcoded, so editing the theme or
-  suit-palette script can't leave a stale constant behind; the ~127 prerendered pages are
-  copies of that same shell (`web/scripts/prerender.mjs`), so one read covers all of them.
-  Failure is soft by design — an unreadable shell costs a theme flash on first paint, never a
-  broken app — and `server/test/security.test.ts` pins the extraction against the real file so
-  that stays hypothetical. `<script type="application/ld+json">` is a data block a browser
-  never executes and CSP never checks, which is why it isn't hashed.
-- **`style-src` keeps `'unsafe-inline'`, and it is the one concession.** The prerendered pages
-  embed a `<style>` block of their own (prerender.mjs's `STYLE`). Style injection is a
-  defacement risk, not a code-execution one, and hashing it would couple this module to a
-  build script's string literal for a much smaller prize than `script-src`'s. Note React's
-  `style={{…}}` needs nothing here: those are CSSOM writes, not inline style attributes.
+- **The CSP deliberately carries no resource allowlist.** It shipped once with the full
+  thing — `default-src 'self'` plus per-type allowlists naming gtag.js, Google's avatar hosts
+  and GA's collectors, with the shell's two pre-paint inline scripts admitted by SHA-256 hash
+  — and that half was taken back out. An allowlist is a second, invisible copy of every
+  external thing the app loads, enforced in the one place a developer never looks: a
+  production browser. `npm run dev -w web` serves through Vite, which sends no such header,
+  and jsdom ignores one, so adding a font host or an embedded widget would pass every check
+  in this repo and fail silently for real visitors. What it bought was containment of an XSS
+  this app has no known sink for (React escapes by default; no `dangerouslySetInnerHTML`
+  anywhere in web/src). What remains is only the rules that forbid what the app never does —
+  `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `form-action 'self'` —
+  none of which can block a script, style, image, font or fetch, i.e. none of which can break
+  a page by being out of date. `server/test/security.test.ts` asserts that limit rather than
+  just the contents, so re-adding a `script-src` is a deliberate act with a red test attached.
+  If it does come back: put it behind `Content-Security-Policy-Report-Only` with somewhere for
+  the reports to land, and enforce only what has been observed to be quiet.
 - **HSTS is conditional and deliberately not preloaded.** It is sent only when `COOKIES_SECURE`
   says this deployment's origin is https (config.ts's single `BASE_URL` parse) — it is the one
   header a browser *remembers*, and `http://localhost:3000` is an origin contributors share

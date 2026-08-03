@@ -14,7 +14,7 @@ import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
-import { inlineScriptHashes, securityHeaders } from './security.js';
+import { securityHeaders } from './security.js';
 import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
 import {
@@ -90,25 +90,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   const here = dirname(fileURLToPath(import.meta.url));
   const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');
 
-  // Browser-enforced hardening on every response — CSP, anti-framing, nosniff,
-  // referrer policy, permissions policy, and HSTS on https deployments. What
-  // each header is for, and why it is worth the bytes, is written down in
-  // security.ts rather than here.
+  // Browser-enforced hardening on every response — anti-framing, nosniff,
+  // referrer policy, permissions policy, HSTS on https deployments, and a
+  // deliberately narrow CSP that carries no resource allowlist. What each header
+  // is for, and why the CSP stops where it does, is written down in security.ts
+  // rather than here.
   //
   // Registered before any route so it covers all of them: the API, /auth, the
   // prerendered pages, the SPA shell, the 404 handler and the error handler
   // alike. A header set per-route is a header the next route forgets.
-  //
-  // The CSP names the shell's two pre-paint inline scripts by hash rather than
-  // opening the policy with 'unsafe-inline'. Reading them out of the built
-  // index.html — the same file the prerendered pages are copies of — is what
-  // keeps that from becoming a constant that drifts the next time either script
-  // is edited.
-  const shell = join(webDist, 'index.html');
-  const headers = securityHeaders({
-    hsts: COOKIES_SECURE,
-    scriptHashes: existsSync(shell) ? inlineScriptHashes(readFileSync(shell, 'utf8')) : [],
-  });
+  const headers = securityHeaders({ hsts: COOKIES_SECURE });
   app.addHook('onSend', (_req, reply, payload, done) => {
     for (const [name, value] of Object.entries(headers)) reply.header(name, value);
     done(null, payload);
