@@ -917,7 +917,11 @@ PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immedi
 stages the played card's glide, so the card that was played (in the trick) and the
 engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
 rank in the suit-line rails) are on screen together — the pager anchors on the moment
-being read, not the replay position, which sits one card past it. Only JUDGED decisions
+being read, not the replay position, which sits one card past it. A moment on a trick's
+LAST card lands on a synthetic held view (trick complete on the table, un-collected —
+`momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
+always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so
+South-declared and flipped boards show every hand exactly once. Only JUDGED decisions
 (stage 3 ran — `sampled` non-null) are moments to the pager and the collapse; the
 sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick slipped,
 but the matchpoints barely noticed" annotation and are never charged or landed on. The open-hand rails

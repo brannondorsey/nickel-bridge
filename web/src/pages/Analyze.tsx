@@ -8,6 +8,7 @@ import {
   RANK_CHARS,
   SEAT_SHORT,
   SUIT_SYMBOLS,
+  TrickCard,
   api,
   callDisplay,
   cardRank,
@@ -28,7 +29,7 @@ import { HandFan } from '../components/game/HandFan';
 import { motionOK, trickWinner } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore } from '../format';
-import { buildReplayViews, firstPlyOfTrick, trickOfPly } from '../replay/replayViews';
+import { buildReplayViews, firstPlyOfTrick } from '../replay/replayViews';
 import { useReplay } from '../replay/useReplay';
 import { railLayout } from './analyzeRail';
 
@@ -324,11 +325,13 @@ function MomentRow({
  * unrecognised string passes through untouched rather than being guessed at.
  */
 function parContractLabel(raw: string): string {
-  const m = /^(\d)([SHDCN])(\*{0,2})-(NS|EW)([+-]\d+)?$/.exec(raw.trim());
+  // the declarer group is a SIDE (NS/EW) or, when only one hand can make it,
+  // a single SEAT (N/E/S/W) — DDS emits both ("3D*-EW-1", "3N-W+2", "6N-N")
+  const m = /^(\d)([SHDCN])(\*{0,2})-(NS|EW|N|E|S|W)([+-]\d+)?$/.exec(raw.trim());
   if (!m) return raw;
   const strain = ({ S: '♠', H: '♥', D: '♦', C: '♣', N: 'NT' } as Record<string, string>)[m[2]];
   const dbl = m[3] === '*' ? 'X' : m[3] === '**' ? 'XX' : '';
-  const side = m[4] === 'NS' ? 'N–S' : 'E–W';
+  const side = ({ NS: 'N–S', EW: 'E–W' } as Record<string, string>)[m[4]] ?? m[4];
   const n = m[5] ? Number(m[5]) : 0;
   const result = n === 0 ? '=' : n > 0 ? `+${n}` : `−${-n}`;
   return `${m[1]}${strain}${dbl} by ${side} ${result}`;
@@ -480,6 +483,7 @@ function ReplayLens({
 }) {
   const replay = useReplay({ fastForward: true });
   const totalPlies = views.length - 1;
+  const flat = useMemo(() => board.playHistory?.flat() ?? [], [board]);
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));
   // The graded decision the replay is currently sitting ON (a collapsed
   // moment landing leaves `ply` one past the decision — the played card is
@@ -512,7 +516,7 @@ function ReplayLens({
     setCurMoment(p);
     setPly(p + 1);
     replay.cut(views[p]);
-    replay.applyTransition(views[p], views[p + 1], 1);
+    replay.applyTransition(views[p], momentLandingView(views, flat, p), 1);
   };
 
   const startedRef = useRef(false);
@@ -531,9 +535,11 @@ function ReplayLens({
   // card before it visually lands.
   const shown = replay.view ?? views[ply];
   const shownPly = Math.min(totalPlies, (shown.completedTricks ?? 0) * 4 + (shown.currentTrick?.length ?? 0));
-  // the trick in progress (or about to start) at the shown position — the
-  // ribbon's label and the current pip agree on this one number
-  const trick = trickOfPly(shownPly >= totalPlies ? totalPlies - 1 : shownPly, totalPlies);
+  // The trick ON THE TABLE at the shown position — from the view's own trick
+  // fields rather than shownPly arithmetic, because a held moment landing
+  // keeps a completed trick up (completedTricks not yet advanced) and the
+  // ribbon must name the trick being looked at, not the one after it.
+  const trick = Math.min(Math.ceil(totalPlies / 4), (shown.completedTricks ?? 0) + 1);
 
   const next = () => {
     if (ply >= totalPlies) return;
@@ -565,7 +571,16 @@ function ReplayLens({
   const caption = captionFor(analysis, board, shownPly);
   const view = shown;
   const dummy = board.dummy;
-  const northOpen = dummy !== 0 ? remainingAt(board, shownPly, 0) : null;
+  // The fan shows the hand the human PLAYED (playingSeat — North on a
+  // flipped board), so the centre rail shows the seat opposite it. Audit
+  // finding: this used to be hardcoded to North with a `dummy !== 0` guard,
+  // which dropped dummy North entirely on South-declared boards and, on
+  // flipped boards, drew North twice (rail + fan) while dummy South appeared
+  // nowhere. Every hand renders exactly once: across rail, W/E rails, fan.
+  const playingSeat = board.playingSeat ?? (board.flipped ? 0 : 2);
+  const across = (playingSeat + 2) % 4;
+  const acrossName = ['NORTH', 'EAST', 'SOUTH', 'WEST'][across];
+  const acrossOpen = remainingAt(board, shownPly, across);
   // The engine's card, highlighted where it still sits — the same pre-
   // confirmation `.selected` treatment a live tap uses, so "the card that
   // should have been played" reads in the vocabulary the player already
@@ -589,12 +604,13 @@ function ReplayLens({
         </p>
       </div>
 
-      {northOpen ? (
-        <div className="analyze-rail north num">
-          <span className="analyze-rail-label">NORTH{dummy === 0 ? ' · DUMMY' : ''}</span>
-          <SuitLine cards={northOpen} highlight={highlight} />
-        </div>
-      ) : null}
+      <div className="analyze-rail north num">
+        <span className="analyze-rail-label">
+          {acrossName}
+          {dummy === across ? ' · DUMMY' : ''}
+        </span>
+        <SuitLine cards={acrossOpen} highlight={highlight} />
+      </div>
       <div className="analyze-rails num">
         <div className="analyze-rail side">
           <span className="analyze-rail-label">WEST</span>
@@ -656,6 +672,31 @@ function ReplayLens({
       </div>
     </>
   );
+}
+
+/**
+ * The view a collapsed moment landing stages to. When the moment's card
+ * COMPLETES a trick, the ordinary next view has already collected it — all
+ * four cards would sweep off the table the instant the played card landed,
+ * taking the moment with them (audit finding, reported from the preview). So
+ * the landing HOLDS the finished trick on the table: hands and counts from
+ * the post-play view, trick fields from before the collect. shownPly
+ * arithmetic is unaffected (completedTricks·4 + a full trick's 4 = the same
+ * ply), and stepping on simply cuts past the collect — the take-up animation
+ * is skipped, not deferred.
+ */
+function momentLandingView(views: BoardView[], flat: TrickCard[], p: number): BoardView {
+  const next = views[p + 1];
+  if ((p + 1) % 4 !== 0) return next;
+  const prev = views[p];
+  return {
+    ...next,
+    currentTrick: [...(prev.currentTrick ?? []), flat[p]],
+    completedTricks: prev.completedTricks,
+    declarerTricks: prev.declarerTricks,
+    defenderTricks: prev.defenderTricks,
+    lastTrick: prev.lastTrick,
+  };
 }
 
 function remainingAt(board: BoardView, ply: number, seat: number): number[] {

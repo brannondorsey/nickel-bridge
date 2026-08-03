@@ -85,8 +85,9 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
 
 const parPayload = {
   parScore: 620,
-  // a DealerPar contract string exactly as DDS emits them ("3D*-EW-1" shaped)
-  parContracts: ['4S-NS'],
+  // DealerPar contract strings exactly as DDS emits them: a SIDE form and a
+  // single-SEAT form (both occur — "3D*-EW-1", "3N-W+2", "6N-N")
+  parContracts: ['4S-NS', '3N-W+2'],
   calls: [
     {
       callIndex: donePlayed.auction.findIndex((a) => a.isHuman),
@@ -195,6 +196,7 @@ describe('the overview: bid moments and par', () => {
     const parStub = document.querySelector('.worth-stub.sealed')!;
     expect(parStub.textContent).toContain('THE CARDS ALLOWED');
     expect(parStub.textContent).toContain('4♠ by N–S =');
+    expect(parStub.textContent).toContain('3NT by W +2');
     expect(parStub.textContent).toContain('+620');
     const youStub = document.querySelectorAll('.worth-stub')[1]!;
     expect(youStub.textContent).toContain('YOUR TABLE');
@@ -330,6 +332,84 @@ describe('the play lens', () => {
         () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
         { timeout: 4000 },
       );
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it('the centre rail is the seat across the fan: dummy North on a South-declared board', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      // donePlayed is 4♠ by S — dummy NORTH — the case that used to drop the
+      // dummy's thirteen cards from the replay entirely
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      renderAnalyze('/t/12/b/2/analyze?lens=play');
+      await screen.findByText(/THE AUDIT — TRICK/);
+      expect(document.querySelector('.analyze-rail.north .analyze-rail-label')!.textContent).toBe('NORTH · DUMMY');
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it('a flipped board fans North and rails dummy South — no hand twice, no hand missing', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue({
+        ...donePlayed,
+        flipped: true,
+        playingSeat: 0,
+        dummy: 2,
+        contract: { ...donePlayed.contract!, declarer: 0 },
+      });
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      renderAnalyze('/t/12/b/2/analyze?lens=play');
+      await screen.findByText(/THE AUDIT — TRICK/);
+      expect(document.querySelector('.analyze-rail.north .analyze-rail-label')!.textContent).toBe('SOUTH · DUMMY');
+      // the fan holds the hand the human PLAYED — North's
+      expect(document.querySelector(`.board-fan [data-card="${allHands[0][0]}"]`)).not.toBeNull();
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it("a moment on a trick's last card lands with the trick HELD on the table, not swept away", async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      // ply 3 completes trick 1 — inject a judged verdict exactly there
+      const seat3 = flat[3].seat;
+      const engine3 = allHands[seat3].filter((c) => !flat.slice(0, 3).some((t) => t.card === c) && c !== flat[3].card)[0];
+      const analysis = makeAnalysis();
+      analysis.plies = [
+        {
+          ply: 3,
+          trick: 1,
+          seat: seat3,
+          card: flat[3].card,
+          ddLoss: 1,
+          cfTricksDeclarer: 11,
+          cfScoreNS: 650,
+          cfPct: 83,
+          mpCost: 25,
+          sampled: { bestCard: engine3, deficit: 1, excused: false, grade: 1 },
+        },
+      ];
+      analysis.moments = [{ kind: 'play', ply: 3, trick: 1, card: flat[3].card, excused: false, grade: 1, mpCost: 25 }];
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(analysis);
+      renderAnalyze('/t/12/b/2/analyze?lens=play&ply=3');
+      await screen.findByText(/THE AUDIT — TRICK/);
+      await waitFor(
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/),
+        { timeout: 4000 },
+      );
+      // all four cards stay on the table — the collect is skipped, so the
+      // moment can actually be looked at — and the ribbon names THIS trick
+      expect(document.querySelectorAll('.trick .pcard')).toHaveLength(4);
+      expect(document.querySelector('.audit-ribbon-who')!.textContent).toMatch(/TRICK 1 OF/);
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }
