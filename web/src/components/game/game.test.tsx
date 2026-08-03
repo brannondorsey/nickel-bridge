@@ -8,6 +8,7 @@ import {
   bidEvalsFixture,
   biddingAuction,
   boardBidding,
+  boardBiddingOpening,
   boardPlaying,
   boardPlayingFlipped,
   meaning2H,
@@ -151,6 +152,34 @@ describe('AuctionGrid', () => {
 
     const settled = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn={false} onInspect={() => {}} />);
     expect(settled.container.querySelectorAll('.auction-latest')).toHaveLength(0);
+  });
+
+  it('reserveThrough holds the row count steady while stageOpeningBids reveals the tray', () => {
+    // West dealt: Pass, 1♥, Pass already on the tray before South's first turn
+    const full = boardBiddingOpening.auction;
+    const dealer = boardBiddingOpening.dealer;
+    const rowCount = (n: number) => {
+      const { container, unmount } = render(
+        <AuctionGrid auction={full.slice(0, n)} dealer={dealer} myTurn={false} onInspect={() => {}} reserveThrough={full.length} />,
+      );
+      const count = container.querySelectorAll('tbody tr').length;
+      unmount();
+      return count;
+    };
+    const settled = rowCount(full.length);
+    expect(rowCount(0)).toBe(settled); // the empty first frame is already this tall
+    expect(rowCount(1)).toBe(settled);
+    expect(rowCount(2)).toBe(settled);
+  });
+
+  it('without reserveThrough (ordinary play), the tray grows row by row as calls land', () => {
+    const full = boardBiddingOpening.auction;
+    const dealer = boardBiddingOpening.dealer;
+    const { container: empty } = render(<AuctionGrid auction={[]} dealer={dealer} myTurn={false} onInspect={() => {}} />);
+    const { container: settled } = render(
+      <AuctionGrid auction={full} dealer={dealer} myTurn={false} onInspect={() => {}} />,
+    );
+    expect(empty.querySelectorAll('tbody tr').length).toBeLessThan(settled.querySelectorAll('tbody tr').length);
   });
 });
 

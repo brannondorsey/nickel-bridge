@@ -316,6 +316,19 @@ docked but every control in it is disabled, so `e2e/smoke.spec.ts`, `scripts/ui-
 and `scripts/readme-shots.mjs` all wait on an **enabled** call button rather than on
 `.bidbox`.
 
+That empty leading tray is deliberately not zero-height, either: `AuctionGrid`'s row packing
+(N/E/S/W, front-padded to the dealer's column) is driven by `reserveThrough`
+(`Board.tsx`'s `auctionReserve`, set from `fresh.auction.length` right alongside the
+`stageOpeningBids` call), not by `auction.length` alone — so the empty first frame already
+renders however many rows the FULL pre-existing tray will need, blank, and each call fills a
+cell rather than adding a row. Left at `auction.length` (the default, correct for ordinary
+play, where the auction genuinely growing turn by turn is the point), the table would gain a
+row partway through the reveal — e.g. West opening the auction lands a call in the tray's
+already-reserved first row, but North's reply would otherwise wrap into a brand-new one — and
+because the decision cluster below hugs the dock's top edge (`margin-top: auto`), that row
+appearing mid-reveal slides the hand and feedback down the screen and back before the player
+has even acted, the same layout-shift `waiting` exists to prevent for the bid box itself.
+
 **The human's own card does not wait for that round trip.** `submitCard` used to await
 `POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
 against production hardware, and worse on a woken machine — was dead time with the tapped card
