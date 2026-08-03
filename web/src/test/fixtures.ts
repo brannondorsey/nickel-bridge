@@ -16,8 +16,10 @@ import type {
   Me,
   PlayerStats,
   TournamentInfo,
+  TrickCard,
 } from '../api';
-import { makeBid } from '../api';
+import { cardSuit, makeBid } from '../api';
+import { trickWinner } from '../components/game/playAnim';
 
 // ---- users ----
 
@@ -751,4 +753,37 @@ export const compareThin: CompareView = {
   measures: [],
   context: [],
   tally: { you: 0, them: 0, level: 0, aside: 0 },
+};
+
+
+// ---- a fully played-out done board, for the Analyze/replay tests ----
+
+/** simple legal play-out: follow suit when possible, else the first card */
+export function genPlayHistory(hands: number[][], declarer: number, strain: number): TrickCard[][] {
+  const remaining = hands.map((h) => [...h]);
+  let leader = (declarer + 1) % 4;
+  const tricks: TrickCard[][] = [];
+  for (let t = 0; t < 13; t++) {
+    const trick: TrickCard[] = [];
+    for (let i = 0; i < 4; i++) {
+      const seat = (leader + i) % 4;
+      const hand = remaining[seat];
+      const led = trick.length ? cardSuit(trick[0].card) : null;
+      let idx = led !== null ? hand.findIndex((c) => cardSuit(c) === led) : 0;
+      if (idx < 0) idx = 0;
+      trick.push({ seat, card: hand.splice(idx, 1)[0] });
+    }
+    tricks.push(trick);
+    leader = trickWinner(trick, strain);
+  }
+  return tricks;
+}
+
+/** boardDone with a consistent 13-trick playHistory (4♠ by South over allHands) */
+export const donePlayed: BoardView = {
+  ...boardDone,
+  contract: { level: 4, strain: 3, declarer: 2, doubled: false, redoubled: false },
+  playingSeat: 2,
+  flipped: false,
+  playHistory: genPlayHistory(allHands, 2, 3),
 };

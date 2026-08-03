@@ -4,37 +4,22 @@ import { useMe } from '../App';
 import { AuctionEntry, BidEval, BoardView, SEAT_SHORT, api } from '../api';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
-import { FlipDigits } from '../components/ds/FlipDigits';
 import { InkStamp } from '../components/ds/InkStamp';
 import { Loading } from '../components/ds/Loading';
-import { PctBar } from '../components/ds/PctBar';
-import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Postmark } from '../components/ds/Postmark';
 import { SignInActions } from '../components/ds/SignInActions';
-import { StarGrade } from '../components/ds/StarGrade';
 import { TicketStub } from '../components/ds/TicketStub';
 import { CallInspector } from '../components/game/CallInspector';
-import { CallText } from '../components/game/CallText';
 import { ContractLabel } from '../components/game/ContractLabel';
-import { DealDiagram } from '../components/game/DealDiagram';
 import { GlossaryProse } from '../components/game/GlossaryProse';
-import { GRADE_STARS, GRADE_TEXT } from '../components/game/GradeToast';
-import {
-  CLAIM_ANNOUNCE_HOLD_MS,
-  CLAIM_LEAD_SETTLE_MS,
-  ClaimAnnouncement,
-  StagedStep,
-  motionOK,
-  planClaim,
-  stageBidSteps,
-  stagePlaySteps,
-} from '../components/game/playAnim';
+import { motionOK } from '../components/game/playAnim';
+import { useReplay } from '../replay/useReplay';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
-import { postmarkDate, signedScore, vulLabel } from '../format';
+import { postmarkDate, vulLabel } from '../format';
 import { TourBoard, loadTourBoard } from '../onboarding/board0';
 import { COPY, TOUR_LINKS, guidanceFor } from '../onboarding/script';
 import { stampTourDone } from '../onboarding/tourDone';
-import { BiddingPhase, PlayPhase } from './Board';
+import { BiddingPhase, PlayPhase, Result } from './Board';
 
 /**
  * The first crossing — new-user onboarding. Three teaching goals, hardest
@@ -58,8 +43,6 @@ import { BiddingPhase, PlayPhase } from './Board';
  * null; it is also routed at /tour for revisits (and for demo-mode testers,
  * for whom the automatic gate is suppressed like the splash).
  */
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Every line of the tour's own voice — the tollkeeper's narration — under
@@ -324,7 +307,11 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
   const fastForward = useMe().me?.user?.fastForward !== false;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
-  const [view, setView] = useState<BoardView | null>(null);
+  // The replay driver — view + staged transitions + the claim beats — is the
+  // shared useReplay hook, extracted from this very component so the Analyze
+  // play lens could reuse it. Everything script-specific (guidance, the
+  // lagging caption index, off-script handling) stays here.
+  const { view, transition, cut, claimInfo, claimAnnounceOpen, skipClaimAnnouncement } = useReplay({ fastForward });
   const [idx, setIdx] = useState(0);
   const [selectedCall, setSelectedCall] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
@@ -339,136 +326,13 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setView(d.steps[0].view);
+        cut(d.steps[0].view);
       })
       .catch(() => setError(true));
     return () => {
       alive = false;
     };
   }, []);
-
-  // Staged-transition timers, mirroring Board.tsx's scheduleSteps (with a
-  // speed factor for the self-playing tail).
-  const timersRef = useRef<number[]>([]);
-  const clearTimers = useCallback(() => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-  }, []);
-
-  // Claim state, mirroring Board.tsx's runClaim: the captured tail can BE a
-  // genuine server-side claim (this deal's contract is 100% decided early —
-  // see gen_tour_board.mjs's doc comment on why the capture must preserve
-  // that). stagePlaySteps only ever stages a single trick boundary, so a
-  // multi-trick claim jump needs the same announcement + sped-up
-  // fast-forward the live board uses, or it falls back to an unanimated cut
-  // straight to the ledger. claimGenRef invalidates an in-flight sequence
-  // the same way it does in Board.tsx (a fresher commit, or unmount).
-  const [claimInfo, setClaimInfo] = useState<ClaimAnnouncement | null>(null);
-  const [claimAnnounceOpen, setClaimAnnounceOpen] = useState(false);
-  const claimGenRef = useRef(0);
-  const claimSkipRef = useRef<(() => void) | null>(null);
-  const skipClaimAnnouncement = useCallback(() => claimSkipRef.current?.(), []);
-
-  useEffect(
-    () => () => {
-      clearTimers();
-      claimGenRef.current++;
-      claimSkipRef.current = null;
-    },
-    [clearTimers],
-  );
-
-  // Schedules already-computed steps on timers; returns the total duration
-  // so runClaim (below) can await it, same split Board.tsx's scheduleSteps
-  // enables for its own runClaim.
-  const scheduleSteps = useCallback(
-    (steps: StagedStep[], speed = 1) => {
-      clearTimers();
-      let at = 0;
-      for (const step of steps) {
-        at += Math.max(step.delayBefore * speed, step.delayBefore > 0 ? 60 : 0);
-        const id = window.setTimeout(() => setView(step.view), at);
-        timersRef.current.push(id);
-      }
-      return at;
-    },
-    [clearTimers],
-  );
-
-  const applyTransition = useCallback(
-    (prev: BoardView, next: BoardView, speed: number) => {
-      const steps = motionOK() ? (prev.state === 'bidding' ? stageBidSteps(prev, next) : stagePlaySteps(prev, next)) : [];
-      if (!steps.length) {
-        // reduced motion, or a transition with nothing to stage: land after a
-        // beat, as if the robots took a moment to reply
-        clearTimers();
-        const id = window.setTimeout(() => setView(next), motionOK() ? 500 : 0);
-        timersRef.current.push(id);
-        return;
-      }
-      scheduleSteps(steps, speed);
-    },
-    [clearTimers, scheduleSteps],
-  );
-
-  // Bracket a claim the same three ways Board.tsx does, off the same shared
-  // plan: the tricks that aren't part of the guaranteed run replay at
-  // ordinary table pace first (announcing over a trick the player just won
-  // reads as the board contradicting itself), THEN an unmissable, dismissible
-  // announcement (tap/click/Escape via ClaimOverlay, rendered by the shared
-  // PlayPhase below), THEN the sped-up fast-forward, before handing off to
-  // the real (done) `next` view. planClaim owns the arithmetic so the two
-  // copies of this glue can't drift about which cards belong to which beat.
-  const runClaim = useCallback(
-    async (prev: BoardView, next: BoardView) => {
-      const motion = motionOK();
-      // Honours the settings gate's fast-forward the same way the live board
-      // does — and defaults to on for the signed-out visitor walking the
-      // practice deal, who has no account to have set it.
-      const plan = planClaim(prev, next, { fast: fastForward, motion });
-      if (!plan) {
-        applyTransition(prev, next, 0.35); // data didn't line up — fall back to a plain cut
-        return;
-      }
-      const gen = ++claimGenRef.current;
-
-      if (plan.lead.length) {
-        const settled = plan.lead[plan.lead.length - 1].view;
-        if (motion) {
-          await sleep(scheduleSteps(plan.lead));
-        } else {
-          clearTimers();
-          setView(settled);
-        }
-        if (claimGenRef.current !== gen) return;
-        await sleep(CLAIM_LEAD_SETTLE_MS); // let the tally stamp land
-        if (claimGenRef.current !== gen) return;
-      }
-
-      setClaimInfo(plan.info);
-      setClaimAnnounceOpen(true);
-      await new Promise<void>((resolve) => {
-        const timer = window.setTimeout(finish, CLAIM_ANNOUNCE_HOLD_MS);
-        function finish() {
-          window.clearTimeout(timer);
-          claimSkipRef.current = null;
-          resolve();
-        }
-        claimSkipRef.current = finish;
-      });
-      if (claimGenRef.current !== gen) return;
-      setClaimAnnounceOpen(false);
-
-      if (plan.tail.length) {
-        await sleep(scheduleSteps(plan.tail));
-        if (claimGenRef.current !== gen) return;
-      }
-      setClaimInfo(null);
-      clearTimers();
-      setView(next);
-    },
-    [applyTransition, scheduleSteps, clearTimers, fastForward],
-  );
 
   const idxRef = useRef(idx);
   idxRef.current = idx;
@@ -487,13 +351,9 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
       setOffScript(null);
       setInspect(null);
       setIdx(i + 1);
-      if (next.claimed && step.view.state === 'playing') {
-        runClaim(step.view, next);
-      } else {
-        applyTransition(step.view, next, auto ? 0.35 : 1);
-      }
+      transition(step.view, next, auto ? 0.35 : 1);
     },
-    [data, applyTransition, runClaim],
+    [data, transition],
   );
 
   // Self-playing decisions: the scripted tail (guidance `auto`), plus any
@@ -602,7 +462,12 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
         resultView === 'receipt' ? (
           <ScoreReceipt board={data.final} onContinue={() => setResultView('field')} onLeave={onLeave} />
         ) : (
-          <TourResult board={data.final} onReceipt={() => setResultView('receipt')} onDone={onDone} />
+          <Result
+            board={data.final}
+            onReceipt={() => setResultView('receipt')}
+            fieldHeading="THE FIELD — BOARD №0"
+            actions={<Button onClick={onDone}>ONE LAST THING →</Button>}
+          />
         )
       ) : view.state === 'playing' ? (
         <PlayPhase
@@ -661,93 +526,6 @@ function TourHead({ view }: { view: BoardView }) {
           {vulLabel(view.vul).toUpperCase()}
         </Chip>
       )}
-    </div>
-  );
-}
-
-/**
- * The ledger reveal — Board.tsx's Result composition with tour actions.
- * (Board's own Result navigates to the next board/tournament, which №0
- * doesn't have, so the markup is mirrored class-for-class here instead of
- * reusing the component with the wrong buttons.)
- */
-function TourResult({ board, onReceipt, onDone }: { board: BoardView; onReceipt: () => void; onDone: () => void }) {
-  const r = board.result!;
-  const others = Math.max(0, r.field.length - 1);
-  return (
-    <div className="result">
-      <div className="result-hero">
-        <div className="result-contract">
-          <ContractLabel label={r.contractLabel} />
-        </div>
-        <div className="result-score num">
-          {signedScore(r.scoreNS)} for N–S · {vulLabel(board.vul)}
-        </div>
-        <div className={`pct-big${r.pct < 40 ? ' low' : ''}`}>
-          <FlipDigits value={r.pct} suffix="%" size={54} />
-        </div>
-        <div className="label-caps result-sub num">
-          MATCHPOINTS · VS {others} OTHER {others === 1 ? 'PLAYER' : 'PLAYERS'}
-          {r.bidAccuracy != null ? ` · BIDDING ${r.bidAccuracy}%` : ''}
-        </div>
-        <button type="button" className="label-caps receipt-link" onClick={onReceipt}>
-          VIEW THE TOLL RECEIPT
-        </button>
-      </div>
-
-      <PerforatedPanel heading="THE FIELD — BOARD №0" className="result-field">
-        <table className="fieldtable num">
-          <tbody>
-            {r.field.map((f) => (
-              <tr key={f.userId} className={f.isMe ? 'me' : f.kind === 'ai' ? 'house' : ''}>
-                <td className="fieldtable-name">
-                  {f.isMe ? 'You' : f.handle}
-                  {f.kind === 'ai' ? <span className="house-tag">HOUSE</span> : null}
-                </td>
-                <td className="fieldtable-contract">
-                  <ContractLabel label={f.contract} /> · {signedScore(f.scoreNS)}
-                </td>
-                <td className="fieldtable-pct">
-                  <PctBar pct={f.pct} width={56} /> <b className="fieldtable-pctnum">{f.pct}</b>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </PerforatedPanel>
-
-      {board.allHands ? (
-        <DealDiagram hands={board.allHands} dealer={board.dealer} vul={board.vul} playedSeat={2} dummy={board.dummy} />
-      ) : null}
-
-      {board.bidEvals.length ? (
-        <div className="result-bidding">
-          <div className="label-caps result-bidding-head">YOUR BIDDING</div>
-          {board.bidEvals.map((e, i) => (
-            <div className="result-bid-row" key={i}>
-              <b className="result-bid-call">
-                <CallText call={e.call} />
-              </b>
-              <StarGrade stars={GRADE_STARS[e.grade]} />
-              <span>
-                {GRADE_TEXT[e.grade]}
-                {e.bestCall !== e.call ? (
-                  <>
-                    {' '}
-                    — robot bid <CallText call={e.bestCall} />
-                  </>
-                ) : (
-                  <> — the robot's choice too</>
-                )}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="board-actions">
-        <Button onClick={onDone}>ONE LAST THING →</Button>
-      </div>
     </div>
   );
 }

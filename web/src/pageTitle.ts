@@ -107,6 +107,8 @@ export function pageTitle(pathname: string, search: string): string {
   // above: /t/17/nonsense renders not-found, so it must not read "Crossing 17".
   const board = pathname.match(/^\/t\/(\d+)\/b\/(\d+)$/);
   if (board) return titled(`Board ${board[2]} · Crossing ${board[1]}`);
+  const analyze = pathname.match(/^\/t\/(\d+)\/b\/(\d+)\/analyze$/);
+  if (analyze) return titled(`Analyze board ${analyze[2]} · Crossing ${analyze[1]}`);
   const crossing = pathname.match(/^\/t\/(\d+)(?:\/review)?$/);
   if (crossing) return titled(`Crossing ${crossing[1]}`);
 

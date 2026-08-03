@@ -153,7 +153,7 @@ export default function Tournament() {
               </span>
             </Link>
           ))}
-          <div className="tourney-boards-hint">Tap a board to look back over the play.</div>
+          <div className="tourney-boards-hint">Tap a board to analyze the play.</div>
         </PerforatedPanel>
         {field}
         <div className="tourney-actions">

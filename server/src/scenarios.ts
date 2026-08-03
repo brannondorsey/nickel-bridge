@@ -272,6 +272,30 @@ export const SCENARIOS: Scenario[] = [
     fieldBots: 3,
     completesTournament: true,
   },
+  {
+    id: 'analyze-play',
+    label: 'The audit of a crossing',
+    description:
+      'One card left, and the position is already settled — play it and the claim fast-forwards the rest onto the receipt. Then take ANALYZE PLAY on the result: this line leaked real matchpoints, and WHERE IT TURNED says which cards were findable from your seat, which are excused, and what the play lens replays. (Mined so the audit has something to say — several moments clear the floor here.)',
+    category: 'results',
+    seed: 'analyze-demo-b',
+    boardNo: 1,
+    actions: [
+      call(0),
+      call(0),
+      call(0),
+      card(15),
+      card(6),
+      card(8),
+      card(39),
+      card(26),
+      card(19),
+      card(21),
+      card(23),
+    ],
+    expect: 'playing',
+    fieldBots: 3,
+  },
 
   // ---- the field ----
   {

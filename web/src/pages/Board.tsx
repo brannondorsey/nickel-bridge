@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMe } from '../App';
 import {
@@ -633,10 +633,29 @@ export default function Board() {
           <Result
             board={board}
             onReceipt={() => setShowReceipt(true)}
-            onNext={() =>
-              boardNo < board.totalBoards
-                ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`)
-                : navigate(`/t/${tournamentId}`)
+            actions={
+              <>
+                <Button
+                  onClick={() =>
+                    board.boardNo < board.totalBoards
+                      ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`)
+                      : navigate(`/t/${tournamentId}`)
+                  }
+                >
+                  {board.boardNo < board.totalBoards
+                    ? `NEXT BOARD — ${board.boardNo + 1} OF ${board.totalBoards} →`
+                    : 'TOURNAMENT SUMMARY →'}
+                </Button>
+                {/* the Tournament ledger's old promise, finally kept — the
+                    review lives at its own route; the Result carries only
+                    this door (no analysis data outside the Analyze screen) */}
+                <Button variant="secondary" to={`/t/${tournamentId}/b/${boardNo}/analyze`}>
+                  ANALYZE PLAY →
+                </Button>
+                <Button variant="secondary" to="/">
+                  Back to lobby
+                </Button>
+              </>
             }
           />
         )
@@ -949,7 +968,28 @@ export function PlayPhase({
   );
 }
 
-function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => void; onReceipt: () => void }) {
+/**
+ * The completed-board Result — hero score, the field, the deal, YOUR BIDDING.
+ * Exported for the first-crossing tour, which used to mirror it class-for-
+ * class as TourResult because the actions differed (board №0 has no next
+ * board); the `actions` slot is what dissolved that copy. `fieldHeading`
+ * exists for the same reason (№0 wants its own board label).
+ *
+ * Deliberately NO analysis data here: MP costs and verdicts render only
+ * inside the Analyze screen — the Result carries the door (ANALYZE PLAY →,
+ * threaded through `actions` by Board below) and nothing else.
+ */
+export function Result({
+  board,
+  onReceipt,
+  actions,
+  fieldHeading,
+}: {
+  board: BoardView;
+  onReceipt: () => void;
+  actions: ReactNode;
+  fieldHeading?: string;
+}) {
   const r = board.result!;
   const low = r.pct < 40;
   // House (benchmark AI) rows are full field members — the hero pct is
@@ -976,7 +1016,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
         </button>
       </div>
 
-      <PerforatedPanel heading={`THE FIELD — BOARD ${board.boardNo}`} className="result-field">
+      <PerforatedPanel heading={fieldHeading ?? `THE FIELD — BOARD ${board.boardNo}`} className="result-field">
         <table className="fieldtable num">
           <tbody>
             {r.field.map((f) => (
@@ -1038,16 +1078,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
         </div>
       ) : null}
 
-      <div className="board-actions">
-        <Button onClick={onNext}>
-          {board.boardNo < board.totalBoards
-            ? `NEXT BOARD — ${board.boardNo + 1} OF ${board.totalBoards} →`
-            : 'TOURNAMENT SUMMARY →'}
-        </Button>
-        <Button variant="secondary" to="/">
-          Back to lobby
-        </Button>
-      </div>
+      <div className="board-actions">{actions}</div>
     </div>
   );
 }

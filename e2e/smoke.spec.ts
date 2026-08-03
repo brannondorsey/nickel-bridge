@@ -207,6 +207,16 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   await expect(page.locator('.receipt-total').first()).toContainText(/Toll (collected|refused)|Passed out/);
   await page.click('text=SEE THE FIELD');
   await expect(page.locator('.fieldtable')).toBeVisible();
+
+  // Analyze: the Result's secondary door opens the review — the ledger (a
+  // one-player field is a legitimate refusing state here) and the lens
+  // switch land, and THE PLAY lens answers without par (a pass-out board
+  // shows its own refusal instead of a replay)
+  await page.click('text=ANALYZE PLAY');
+  await expect(page.locator('.analyze-moments')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.analyze-lens .pref-switch button')).toHaveCount(3);
+  await page.click('.analyze-lens .pref-switch button:has-text("THE PLAY")');
+  await expect(page.locator('.analyze-tricks, .audit-ribbon, .analyze-finding').first()).toBeVisible();
 });
 
 /** Glossary wiring: bottom tab → ledger, search, term sheet with attribution. */

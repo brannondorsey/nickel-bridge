@@ -4,6 +4,7 @@ import { SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { PrefSwitch } from '../components/ds/PrefSwitch';
 import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -40,35 +41,6 @@ const SUIT_PALETTE_OPTIONS: { pref: SuitPalette; label: string }[] = [
   { pref: 'standard', label: 'STANDARD' },
   { pref: 'colorblind', label: 'COLORBLIND' },
 ];
-
-/** The shared lever: n segments, the chosen one on the ink plate. */
-function PrefSwitch<T>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="pref-switch" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.label}
-          type="button"
-          className={o.value === value ? 'active' : ''}
-          aria-pressed={o.value === value}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 const OFF_ON = [
   { value: false, label: 'OFF' },

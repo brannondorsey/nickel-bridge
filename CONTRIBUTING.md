@@ -96,7 +96,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
                 device-local axis, orthogonal to theme.ts — see "Night mode" below),
-                pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
+                pages/ (Board.tsx is the gameplay UI, exporting BiddingPhase/PlayPhase/
+                Result for the tour and Analyze; Analyze.tsx is the post-board review —
+                see "Analyze" below; Settings.tsx is the settings gate,
                 where night mode, suit colors, claim fast-forward, ladder listing and
                 sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
@@ -135,8 +137,13 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 pages/Compare.tsx (the Compare screen — draws the server's
                 verdicts, re-derives no statistics),
+                replay/ (useReplay.ts — the shared replay driver extracted from the
+                tour: staged transitions, the claim beats, cut() for jumps; and
+                replayViews.ts — synthetic per-ply BoardViews for the Analyze play lens),
                 components/ds/ (design-system pieces, incl. BeamBar — the
-                diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
+                diverging centre-line bar with its dashed gates, PrefSwitch — the
+                arity-agnostic segmented lever (lifted out of Settings.tsx when the
+                Analyze lens switch needed it), and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
                 that resolves which sign-in doors a deployment has) + components/game/
                 (auction, bid box,
@@ -183,7 +190,10 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 checked-in social share card web/public/og-image.png — offline, no
                 running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
-docs            compare.md — why most Compare rows refuse to name a winner: the
+docs            analyze-design.md — the Analyze design record, with its concept-exploration
+                board analyze-concepts.html (three directions; the owner chose B,
+                "The Second Crossing");
+                compare.md — why most Compare rows refuse to name a winner: the
                 three error models, the Agresti-Coull requirement, and the
                 production measurement behind FULL_TILT;
                 design-brief.md — requirements spec for the visual redesign;
@@ -875,6 +885,21 @@ the server for both sides and are never graded. Only the human's own cards are g
 skipped, and a one-player field refuses costs (`singleField`) rather than inventing them.
 **MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
 board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
+On the web side (`pages/Analyze.tsx`): three lenses on a `?lens=` search param (a reading
+position, not a stored preference) via the ds `PrefSwitch` at arity three — THE CROSSING
+(moments ledger + deepened auction, default), THE AUCTION, THE PLAY. The play lens is a full
+replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
+from the tour, which is now a second consumer): forward steps stage one card at a time
+through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD and the
+trick pips `cut()` with no animation, and the audit ribbon (the tollkeeper ribbon's shape,
+unvoiced) narrates the view the replay is actually showing — the tour's lagging-caption
+move. Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
+trick-by-trick list instead, a legitimate reading rather than a fallback. Costly-but-
+unfindable moments carry an EXCUSED `InkStamp` (a stamp rules FOR you where a grade rates
+you); charged moments keep `StarGrade` (✗ at 0). Only THE PLAY skips `?par=1`. The demo
+gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
+path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
+dissolved the tour's class-for-class `TourResult` copy).
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
@@ -1188,7 +1213,8 @@ deficiency and no time-of-day concept for it.
 
 **The settings gate** (`web/src/pages/Settings.tsx`, the sixth tab) is one perforated panel
 of identical rows — tracked-caps label, the italic aside that says what the setting does,
-then a full-width `.pref-switch` segmented lever. Four segments for appearance, two for a
+then a full-width `.pref-switch` segmented lever (`ds/PrefSwitch.tsx` — Analyze's lens
+switch uses it at three). Four segments for appearance, two for a
 switch: the SAME component at different arities, deliberately, which is why the design
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.

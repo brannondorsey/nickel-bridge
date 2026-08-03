@@ -155,6 +155,72 @@ export interface BoardView {
   claimed?: boolean;
 }
 
+/**
+ * The Analyze review's verdicts, mirrored from server/src/analyze.ts —
+ * pre-computed server-side and only DRAWN here (the Compare precedent: a
+ * client that re-derived verdicts would eventually disagree with a cached
+ * one). MP figures from these types render only inside the Analyze screen.
+ */
+export interface AnalysisPly {
+  ply: number;
+  trick: number;
+  seat: number;
+  card: number;
+  /** tricks the human's side lost at this card per the DD trace (> 0 always) */
+  ddLoss: number;
+  cfTricksDeclarer: number;
+  cfScoreNS: number;
+  cfPct: number | null;
+  mpCost: number | null;
+  sampled: { bestCard: number; deficit: number; excused: boolean; grade: 0 | 1 | 2 | 3 } | null;
+}
+
+export interface AnalysisMoment {
+  kind: 'play' | 'bid';
+  ply?: number;
+  trick?: number;
+  card?: number;
+  excused?: boolean;
+  grade?: 0 | 1 | 2 | 3;
+  callIndex?: number;
+  call?: number;
+  mpCost: number;
+}
+
+export interface AnalysisCall {
+  callIndex: number;
+  call: number;
+  bestCall: number;
+  cf: {
+    calls: number[];
+    contractLabel: string;
+    ddTricks: number | null;
+    scoreNS: number;
+    cfPct: number | null;
+    mpGain: number | null;
+  } | null;
+}
+
+export interface AnalysisPar {
+  parScore: number;
+  parContracts: string[];
+  calls: AnalysisCall[];
+}
+
+export interface AnalysisView {
+  version: number;
+  boardNo: number;
+  contract: Contract | null;
+  claimedAtPly: number | null;
+  singleField: boolean;
+  actualPct: number | null;
+  ddTricks: number[] | null;
+  plies: AnalysisPly[];
+  moments: AnalysisMoment[];
+  setAside: number;
+  par: AnalysisPar | null;
+}
+
 interface Standing {
   userId: number;
   handle: string;
@@ -461,6 +527,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ card }),
     }),
+  /** Analyze verdicts for a finished board; par=true adds stage 4 (the crossing/auction lenses) */
+  analysis: (tid: number, no: number, par: boolean) =>
+    request<AnalysisView>(`/api/tournaments/${tid}/boards/${no}/analysis${par ? '?par=1' : ''}`),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery
