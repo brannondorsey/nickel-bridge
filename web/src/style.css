@@ -1534,10 +1534,16 @@ a.ds-btn-secondary:hover {
 }
 .auction table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: center;
 }
 .auction th {
+  /* explicit rather than leaning on table-layout: fixed's "no width
+     specified → divide equally" fallback — this is the actual column
+     width, not a hint, so N/E/S/W stay equal from the empty tray's first
+     frame regardless of how a given engine resolves the implicit case */
+  width: 25%;
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 10.5px;
@@ -1561,6 +1567,14 @@ a.ds-btn-secondary:hover {
   font-weight: 600;
 }
 .auction td button {
+  padding: 2px 5px;
+  min-height: 30px;
+}
+/* invisible, same box model as .auction td button — see AuctionGrid's
+   comment on the blank-cell placeholder for why this exists */
+.auction-blank {
+  display: inline-block;
+  visibility: hidden;
   padding: 2px 5px;
   min-height: 30px;
 }
@@ -1591,9 +1605,14 @@ a.ds-btn-secondary:hover {
 }
 .auction-pending {
   display: inline-block;
+  box-sizing: border-box;
+  /* matches .auction td button's box model (padding + min-height), the
+     same reasoning as .auction-blank above: without it, the row this
+     marker sits in grows again the instant a real call replaces it. */
+  min-height: 30px;
+  padding: 2px 5px;
   outline: 1.5px solid var(--ink);
   outline-offset: 2px;
-  padding: 0 5px;
   font-weight: 800;
 }
 .auction-hint {

@@ -15,6 +15,7 @@ export function AuctionGrid({
   myTurn,
   live = false,
   onInspect,
+  reserveThrough,
 }: {
   auction: AuctionEntry[];
   dealer: number;
@@ -27,6 +28,23 @@ export function AuctionGrid({
    */
   live?: boolean;
   onInspect: (entry: AuctionEntry) => void;
+  /**
+   * stageOpeningBids replays the calls that were already on the tray before
+   * a non-dealer opened the board, one at a time from an empty auction — see
+   * Board.tsx. Left alone, the table itself would grow a new row partway
+   * through that replay (as soon as the padded first row fills up), which
+   * shifts everything below it — the decision cluster hugs the dock's top
+   * edge (margin-top: auto), so a row appearing mid-reveal slides the hand
+   * and feedback down the screen and back before the player has even acted.
+   * `reserveThrough` is the auction length the reveal is BUILDING TOWARD
+   * (known upfront — see stageOpeningBids), so the row count is computed
+   * from that target rather than from `auction.length` alone: the table is
+   * already at its settled height on the empty first frame, and calls fill
+   * blank cells within it as they arrive instead of adding rows. Omitted (or
+   * lower than `auction.length`) for ordinary play, where the auction
+   * genuinely growing turn by turn is the whole point.
+   */
+  reserveThrough?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -34,10 +52,11 @@ export function AuctionGrid({
     if (el) el.scrollTop = el.scrollHeight;
   }, [auction.length]);
 
+  const total = Math.max(auction.length, reserveThrough ?? 0);
   const rows: (AuctionEntry | null)[][] = [];
   let row: (AuctionEntry | null)[] = new Array(dealer).fill(null);
-  for (const entry of auction) {
-    row.push(entry);
+  for (let i = 0; i < total; i++) {
+    row.push(auction[i] ?? null);
     if (row.length === 4) {
       rows.push(row);
       row = [];
@@ -89,7 +108,16 @@ export function AuctionGrid({
                         </button>
                       ) : i === lastRow && j === pending ? (
                         <span className="auction-pending">?</span>
-                      ) : null}
+                      ) : (
+                        // A blank cell renders nothing, but a called one renders a
+                        // button with its own padding/min-height — table rows size
+                        // to their tallest cell, so a row sat shorter than its
+                        // buttons until the first call landed in it, then visibly
+                        // grew. This invisible placeholder matches that button's
+                        // box model so every reserved row is already at its real
+                        // height on the empty first frame (see reserveThrough).
+                        <span className="auction-blank" aria-hidden="true" />
+                      )}
                     </td>
                   ))}
                 </tr>

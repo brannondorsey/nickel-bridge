@@ -107,6 +107,13 @@ export default function Board() {
   const bidFeedback = me?.user?.bidFeedback !== false;
 
   const [board, setBoard] = useState<BoardView | null>(null);
+  // The auction length stageOpeningBids' reveal is building toward — see
+  // AuctionGrid's reserveThrough. Set alongside the reveal it paces (load,
+  // below) so the tray is already at its settled row count on the empty
+  // first frame instead of growing a row partway through the replay; 0
+  // outside that reveal is a no-op (AuctionGrid takes the max against the
+  // real auction length, which only grows from there).
+  const [auctionReserve, setAuctionReserve] = useState(0);
   const [error, setError] = useState<string | null>(null);
   // A REJECTED CARD PLAY means this screen is BEHIND THE SERVER, and that is
   // the only thing it means. Every rejection submitPlay can raise — 'not in
@@ -421,6 +428,7 @@ export default function Board() {
     setShowReceipt(false);
     setClaimInfo(null);
     setClaimAnnounceOpen(false);
+    setAuctionReserve(0);
     claimSkipRef.current = null;
     sawLiveRef.current = false;
     // Everything past the await belongs to the board this load was started
@@ -446,6 +454,10 @@ export default function Board() {
           setBoard(fresh);
           return;
         }
+        // fresh.auction.length is the tray this reveal is building toward —
+        // known upfront, so the tray can already be at that height before
+        // the first call lands. See AuctionGrid's reserveThrough.
+        setAuctionReserve(fresh.auction.length);
         scheduleSteps(steps[0].view, steps);
       })
       .catch((e) => {
@@ -652,6 +664,7 @@ export default function Board() {
           busy={busy}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
+          auctionReserve={auctionReserve}
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
@@ -716,6 +729,7 @@ export function BiddingPhase({
   inspect,
   onInspect,
   hint = null,
+  auctionReserve = 0,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -727,6 +741,8 @@ export function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
   /** tour only: pulse this call in the bid box */
   hint?: number | null;
+  /** see AuctionGrid's reserveThrough — the tour's captured board never needs it (no pre-existing calls precede its human-dealt opening) */
+  auctionReserve?: number;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -751,7 +767,14 @@ export function BiddingPhase({
   return (
     <div className="bid-phase">
       <div className="bid-scroll">
-        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} live onInspect={onInspect} />
+        <AuctionGrid
+          auction={board.auction}
+          dealer={board.dealer}
+          myTurn={Boolean(board.myTurn)}
+          live
+          onInspect={onInspect}
+          reserveThrough={auctionReserve}
+        />
         <div className="bid-decision">
           {feedback}
           <div className="board-fan">

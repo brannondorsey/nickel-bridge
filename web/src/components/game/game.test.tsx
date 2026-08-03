@@ -8,6 +8,7 @@ import {
   bidEvalsFixture,
   biddingAuction,
   boardBidding,
+  boardBiddingOpening,
   boardPlaying,
   boardPlayingFlipped,
   meaning2H,
@@ -130,6 +131,23 @@ describe('AuctionGrid', () => {
     expect(firstRowCells[3].querySelector('button')).toBeInTheDocument();
   });
 
+  it('gives every blank cell a placeholder matching a call button\'s box model', () => {
+    // A row sizes to its tallest cell; a bare blank cell (no button, no
+    // padding/min-height) sat shorter than a called one until that row's
+    // first call landed, which visibly grew the row. .auction-blank carries
+    // the same box model, invisibly, so every reserved row is already at
+    // its real height before any call in it has arrived.
+    const { container } = render(
+      <AuctionGrid auction={boardBiddingOpening.auction.slice(0, 0)} dealer={boardBiddingOpening.dealer} myTurn={false} onInspect={() => {}} reserveThrough={boardBiddingOpening.auction.length} />,
+    );
+    const cells = container.querySelectorAll('tbody td');
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      expect(cell.querySelector('button, .auction-pending')).toBeNull();
+      expect(cell.querySelector('.auction-blank')).toBeInTheDocument();
+    }
+  });
+
   it('marks calls with meanings, fires onInspect, and shows the pending "?" on my turn', async () => {
     const onInspect = vi.fn();
     const { container } = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn onInspect={onInspect} />);
@@ -151,6 +169,34 @@ describe('AuctionGrid', () => {
 
     const settled = render(<AuctionGrid auction={biddingAuction} dealer={0} myTurn={false} onInspect={() => {}} />);
     expect(settled.container.querySelectorAll('.auction-latest')).toHaveLength(0);
+  });
+
+  it('reserveThrough holds the row count steady while stageOpeningBids reveals the tray', () => {
+    // West dealt: Pass, 1♥, Pass already on the tray before South's first turn
+    const full = boardBiddingOpening.auction;
+    const dealer = boardBiddingOpening.dealer;
+    const rowCount = (n: number) => {
+      const { container, unmount } = render(
+        <AuctionGrid auction={full.slice(0, n)} dealer={dealer} myTurn={false} onInspect={() => {}} reserveThrough={full.length} />,
+      );
+      const count = container.querySelectorAll('tbody tr').length;
+      unmount();
+      return count;
+    };
+    const settled = rowCount(full.length);
+    expect(rowCount(0)).toBe(settled); // the empty first frame is already this tall
+    expect(rowCount(1)).toBe(settled);
+    expect(rowCount(2)).toBe(settled);
+  });
+
+  it('without reserveThrough (ordinary play), the tray grows row by row as calls land', () => {
+    const full = boardBiddingOpening.auction;
+    const dealer = boardBiddingOpening.dealer;
+    const { container: empty } = render(<AuctionGrid auction={[]} dealer={dealer} myTurn={false} onInspect={() => {}} />);
+    const { container: settled } = render(
+      <AuctionGrid auction={full} dealer={dealer} myTurn={false} onInspect={() => {}} />,
+    );
+    expect(empty.querySelectorAll('tbody tr').length).toBeLessThan(settled.querySelectorAll('tbody tr').length);
   });
 });
 
