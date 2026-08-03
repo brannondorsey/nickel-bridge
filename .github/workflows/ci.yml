@@ -9,7 +9,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -27,7 +27,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -46,7 +46,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t nickel-bridge:ci .
 
   # Deploys a throwaway Fly.io app per open PR (nickel-bridge-pr-<number>) so a change can be
@@ -69,7 +69,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP: nickel-bridge-pr-${{ github.event.pull_request.number }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pinned to a commit, not `@master`, in all four jobs that hold FLY_API_TOKEN (the
       # three deploys here plus pr-preview-teardown.yml). A branch ref re-resolves on every
       # run, so whatever sits on that branch at the moment a deploy starts executes with a
@@ -136,7 +136,7 @@ jobs:
       APP: nickel-bridge-demo
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       - name: Ensure demo app + volume exist
         run: |
@@ -179,7 +179,7 @@ jobs:
       # `if:` does not see env declared on that same step.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       # Enforce CLAUDE.md invariant 5: DEV_AUTH (unauthenticated login) and
       # DEMO (auto-login + data reset) must never reach production. Fails the
