@@ -135,8 +135,21 @@
       nb:lastVisit on every authenticated mount — the prerendered pages hide
       their own fallback markup under this attribute (the .pr rule in
       prerender.mjs). A player then gets the same blank-then-Loading every other
-      route in the app already gives them, and a search arrival keeps the fast
-      static paint.
+      route in the app already gives them.
+
+      Note what that does and does not split on. It is per BROWSER, not per
+      arrival, and it covers ALL the prerendered pages — the glossary's ~126 as
+      well as this one — which is deliberate rather than a side effect of their
+      sharing one <style> block. The same flash is there (the static prose, then
+      the app's own term sheet), and the stamp is the only signal available
+      before paint. So the honest statement of the trade is not "search arrivals
+      keep the fast static paint": it is that a browser which has signed in
+      loses it everywhere, including on a glossary page reached from search, and
+      a browser which never has keeps it everywhere. That falls the right way
+      round, because the blank is already what that browser sees on every other
+      route in the app, while the static paint exists for the first-time arrival
+      — who carries no stamp and is untouched. Splitting it per page is one
+      STYLE block away if that ever stops being the right call.
 
       Deliberately decided on the client. The server knows exactly who is signed
       in, but varying GET / on the session cookie would put a per-visitor answer

@@ -209,8 +209,17 @@ const STYLE = `<style>
          refreshing the lobby watches the landing-page pitch paint and then
          vanish. The attribute is set pre-paint from nb:lastVisit by the third
          inline script in web/index.html; see there for why this is a
-         client-side guess rather than the server's exact answer. Scoped to .pr
-         rather than #root, since React empties #root and refills it. */
+         client-side guess rather than the server's exact answer, and for the
+         trade it makes. Scoped to .pr rather than #root, since React empties
+         #root and refills it.
+
+         This block is shared by all three templates below — the landing page,
+         the ledger index and every term page — so the suppression covers the
+         glossary too, ON PURPOSE and not merely because the constant is shared:
+         those pages flash the same way, and a stamped browser is exactly the
+         one that isn't the static paint's audience. web/src/prepaint.test.ts
+         pins that scope, so narrowing it has to be a decision rather than an
+         edit to one template. */
       :root[data-returning-player] .pr { display: none; }
     </style>`;
 

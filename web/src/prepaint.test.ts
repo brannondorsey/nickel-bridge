@@ -41,6 +41,16 @@ describe('pre-paint scripts', () => {
     // React refilled it. Both halves are pinned — a rule naming a class the
     // markup stopped using would pass a check on either one alone.
     expect(prerenderSrc).toContain(`:root[${attr}] .pr { display: none; }`);
-    expect(prerenderSrc.match(/<article class="pr">/g)?.length).toBe(3);
+  });
+
+  it('suppresses it on the glossary pages too, which is a decision and not a shared constant', () => {
+    // The rule lives in the one STYLE block all three templates embed, so it
+    // covers the landing page, the ledger index AND every term page. That is
+    // the intended scope (see the trade written out in index.html), but it is
+    // the kind of scope that reads as an accident of sharing a constant — so
+    // pin it here: giving one template its own markup class, or its own style
+    // block, has to be a deliberate change rather than a quiet narrowing.
+    expect(prerenderSrc.match(/<article class="pr">/g)).toHaveLength(3);
+    expect(prerenderSrc.match(/const STYLE = `<style>/g)).toHaveLength(1);
   });
 });

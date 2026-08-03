@@ -1343,7 +1343,13 @@ it emits. See "keeping it that way" at the end of this section.
   inline script in `web/index.html` sets `data-returning-player` when `nb:lastVisit` is
   stamped — `splash.ts` writes it on every authenticated mount — and the prerendered
   `<style>` hides its own `.pr` article under that attribute. Scoped to `.pr`, never
-  `#root`, which React empties and refills. It is a client-side guess on purpose: the
+  `#root`, which React empties and refills. The suppression is per BROWSER and covers
+  **every** prerendered page, the glossary's ~126 included: they flash the same way, and
+  the trade is that a browser which has signed in loses the static paint everywhere —
+  including on a term page reached from search — while one that never has keeps it
+  everywhere. That falls the right way round, since the blank is already what a signed-in
+  browser gets on every other route, and the static paint exists for the first-time
+  arrival, who carries no stamp. It is a client-side guess on purpose: the
   server knows exactly who is signed in, but varying `GET /` on the session cookie would
   put a per-visitor answer behind an edge cache keyed without it (see "The edge" above),
   and a wrong guess costs only one plain paint — which is also why nothing clears the
