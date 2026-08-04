@@ -4927,16 +4927,13 @@ a.stat-tile:hover {
 /* Opportunity ink: a moment is matchpoints that were there for the taking,
    so the figure is +N in the positive (club-green) token — the sign carries
    the direction, colour only reinforces (the colourblind palette leaves
-   --positive alone). Muted = excused, set aside rather than on offer. */
+   --positive alone). */
 .moment-gain {
   margin-left: auto;
   font-family: var(--font-label);
   font-weight: 800;
   font-size: 13px;
   color: var(--positive);
-}
-.moment-gain.muted {
-  color: var(--muted);
 }
 .moment-chev {
   font-family: var(--font-label);

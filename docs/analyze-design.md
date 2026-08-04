@@ -59,3 +59,23 @@ The rail's geometry (`web/src/pages/analyzeRail.ts`) is linear with a minimum-ga
 relaxation rather than the considered symlog axis: measured on a game-cluster field
 ({−1100, 620, 650}), symlog *halved* the readable 620–650 gap, compressing exactly the
 differences the rail exists to show, while helping only fields that cluster near zero.
+
+## Dropping the EXCUSED moment (reversal)
+
+**Status: reverted (2026-08-04).** The concept board's EXCUSED ink-stamp treatment (line 32
+above) shipped, then was pulled after first real use surfaced the flaw: a player who played
+the sampled engine's own top card — nothing findable from their seat was better — still saw a
+stamped, MP-labelled row telling them a trace they can't consult found something anyway. The
+"EXCUSED" language reads as absolution for a fault, but the whole point of the sampled-vs-DD
+split is that no fault occurred; dressing that up as a forgiven accusation is a worse reading
+than no reading at all. The fix isn't better copy on the stamp — it's not showing a moment
+there to begin with. A well-played board (nothing findable from the seat was missed) should
+come back with an EMPTY ledger, full stop, the same as a board with a truly flat DD trace.
+
+`server/src/analyze.ts`'s stage-3 loop now drops a `deficit <= 0` candidate from the response
+entirely rather than attaching an excused verdict to it (`ANALYZE_VERSION` bumped so every
+cached analysis recomputes under the new rule). Every UI surface downstream — the moments
+ledger, the audit ribbon's pending/settled captions, the reduced-motion trick list, the
+PREV/NEXT MOMENT pager — simplifies accordingly: `sampled` non-null now always means a
+genuine, chargeable fault, so there is no excused branch left to render anywhere. See
+CONTRIBUTING.md's "Analyze" section for the current shape.

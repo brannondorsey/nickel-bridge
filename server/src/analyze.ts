@@ -34,8 +34,11 @@ import { GameBoard, HUMAN_SEAT, bidder, boardFieldRows, humanControls } from './
  *          keeps the screen quiet on a board the whole field butchered.
  *   FAULT  (stage 3): scoreCardsSampled — the same sampled-DD machinery the
  *          robots play with — says whether the better card was FINDABLE from
- *          the player's own seat. High cost with no fault is shown and
- *          explicitly excused, never charged.
+ *          the player's own seat. High cost with no fault is DROPPED, not
+ *          shown: a card nobody could reasonably find from that seat isn't a
+ *          moment just because an omniscient trace prefers something else —
+ *          a well-played board should come back moment-free, not decorated
+ *          with a stack of "not your fault" stamps.
  *
  * Stage order is load-bearing: DD is the cheap filter, sampled DD the
  * expensive verdict (k full solves of DIFFERENT deals per candidate — no
@@ -79,23 +82,24 @@ export const MAX_MOMENTS = 5;
  * any constant above, a grade-band change, or a stage-3 scoring change — a
  * cached analysis computed against different robots is a stale accusation.
  */
-export const ANALYZE_VERSION = 2; // 2: core carries the frozen field snapshot par is computed against
+export const ANALYZE_VERSION = 3; // 3: stage 3 drops excused candidates instead of flagging them (never a moment)
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
 /**
  * Findability grade from the sampled verdict's average trick deficit —
  * (bestTotal − playedTotal) / k, i.e. how many tricks the played card gave up
- * per sampled layout, judged from the player's own seat. 0 deficit means the
- * engine's own pick (excused, grade 3); the bands below are judgement values
- * (ship on judgement, calibrate on data — see MOMENT_FLOOR). Changing them is
- * an ANALYZE_VERSION bump.
+ * per sampled layout, judged from the player's own seat. Only ever called on
+ * a POSITIVE deficit: computeCore's stage-3 loop drops anything at or below
+ * zero before grading it — that means the sampled engine's own pick IS the
+ * card played (or worse), so there is nothing to grade and nothing to show.
+ * The bands below are judgement values (ship on judgement, calibrate on
+ * data — see MOMENT_FLOOR). Changing them is an ANALYZE_VERSION bump.
  */
-export function gradeFromDeficit(deficit: number): { excused: boolean; grade: CardGrade } {
-  if (deficit <= 0) return { excused: true, grade: 3 };
-  if (deficit < 0.5) return { excused: false, grade: 2 };
-  if (deficit < 1.5) return { excused: false, grade: 1 };
-  return { excused: false, grade: 0 };
+export function gradeFromDeficit(deficit: number): CardGrade {
+  if (deficit < 0.5) return 2;
+  if (deficit < 1.5) return 1;
+  return 0;
 }
 
 /** One graded human card decision (an error by the DD trace, stage 1). */
@@ -116,13 +120,18 @@ export interface PlyAnalysis {
   cfPct: number | null;
   /** cfPct − actualPct, the moment-ranking axis; null in a single field */
   mpCost: number | null;
-  /** stage-3 findability — only for candidates that cleared the floor */
+  /**
+   * stage-3 findability — only for candidates that cleared the floor AND
+   * turned out to be a genuine fault. A candidate the sampled engine would
+   * also have played (deficit <= 0) never reaches here: computeCore drops it
+   * before this field is populated, so its ply carries no PlyAnalysis at all
+   * (see the doc comment on that stage).
+   */
   sampled: {
     /** the card the sampled engine plays from the player's seat */
     bestCard: Card;
     /** average tricks the played card gave up across the k sampled layouts */
     deficit: number;
-    excused: boolean;
     grade: CardGrade;
   } | null;
 }
@@ -189,7 +198,6 @@ export interface Moment {
   ply?: number;
   trick?: number;
   card?: Card;
-  excused?: boolean;
   grade?: CardGrade;
   /** bid moments */
   callIndex?: number;
@@ -364,7 +372,13 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   // Stage 3 — the findability verdict, ONLY for candidates that cleared the
   // floor (stage 2 is the filter: k solves of different deals per candidate
   // pay near-cold price each). In a single field there is no matchpoint axis,
-  // so the gate substitutes the DD trick loss itself.
+  // so the gate substitutes the DD trick loss itself. A candidate the sampled
+  // engine would ALSO have played (deficit <= 0) is dropped from the result
+  // entirely rather than flagged — that trick only ever existed for a trace
+  // that can see all 52 cards, nobody at the table had a real shot at it, and
+  // a well-played board should come back with nothing to show for it rather
+  // than a row arguing the player's own innocence.
+  const excusedPlies = new Set<number>();
   for (const p of plies) {
     const clears = p.mpCost === null ? p.ddLoss >= 1 : p.mpCost >= MOMENT_FLOOR;
     if (!clears) continue;
@@ -382,9 +396,13 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
     let bestCard = legal[0];
     for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
     const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(p.card) ?? 0)) / ANALYZE_K;
-    const { excused, grade } = gradeFromDeficit(deficit);
-    p.sampled = { bestCard, deficit, excused, grade };
+    if (deficit <= 0) {
+      excusedPlies.add(p.ply);
+      continue;
+    }
+    p.sampled = { bestCard, deficit, grade: gradeFromDeficit(deficit) };
   }
+  const judgedPlies = excusedPlies.size ? plies.filter((p) => !excusedPlies.has(p.ply)) : plies;
 
   return {
     boardNo: b.row.board_no,
@@ -395,7 +413,7 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
     myIndex,
     actualPct,
     ddTricks,
-    plies,
+    plies: judgedPlies,
   };
 }
 
@@ -452,9 +470,11 @@ async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): 
 /**
  * Serve-time moment assembly — a pure function of the cached pieces, so bid
  * moments appear once the par stage exists without invalidating core.
- * Charged and excused moments both list (an excused cost is SHOWN and argued
- * for the player — that's what makes the screen trustworthy); ranking is by
- * cost, capped at MAX_MOMENTS with the overflow counted.
+ * core.plies never carries an excused candidate (computeCore drops those
+ * before this runs), so every row assembled here is a genuine, chargeable
+ * fault — a board played to the limit of what was findable from the seat
+ * comes back with an empty ledger, not a list of forgiven costs. Ranking is
+ * by cost, capped at MAX_MOMENTS with the overflow counted.
  */
 export function assembleMoments(core: AnalysisCore, par: AnalysisPar | null): { moments: Moment[]; setAside: number } {
   const all: Moment[] = [];
@@ -465,7 +485,6 @@ export function assembleMoments(core: AnalysisCore, par: AnalysisPar | null): { 
       ply: p.ply,
       trick: p.trick,
       card: p.card,
-      excused: p.sampled.excused,
       grade: p.sampled.grade,
       mpCost: p.mpCost,
     });

@@ -1,7 +1,32 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { legalCards, playState } from '@bridge/core';
 import { pickFromSolve, solveFutureTricks } from '@bridge/ai';
 import { TestClient, freshDbEnv, makeApp } from './helpers.js';
+
+// Stage 3's exclusion of an excused candidate (the sampled engine, from the
+// player's own seat, would ALSO have played the card — see analyze.ts's
+// stage-3 doc comment) is otherwise hard to hit deterministically: it
+// depends on ANALYZE_K=8 real sampled-DD solves agreeing with the actual
+// play, which no known seed reliably produces. Gated on a seed prefix
+// unique to that one test below, so every other test still exercises the
+// genuine scoreCardsSampled implementation untouched.
+vi.mock('@bridge/ai', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@bridge/ai')>();
+  return {
+    ...actual,
+    scoreCardsSampled: vi.fn(async (deal, contract, plays, opts) => {
+      if (opts.seed?.startsWith('analyze-excuse:')) {
+        // scoreCardsSampled isn't told which card gets played at this
+        // decision (analyze.ts learns that separately) — so every legal
+        // card is scored equally, which guarantees whatever card was
+        // actually played ties for best, i.e. deficit 0, excused
+        const legal = legalCards(deal, playState(deal, contract, plays));
+        return { legal, totals: new Map(legal.map((c: number) => [c, 1])), rng: () => 0 };
+      }
+      return actual.scoreCardsSampled(deal, contract, plays, opts);
+    }),
+  };
+});
 
 freshDbEnv('analyze');
 
@@ -70,6 +95,16 @@ async function driveBoard(
   if (view.state !== 'done') throw new Error('board did not finish');
   return b;
 }
+
+describe('gradeFromDeficit', () => {
+  it('bands a positive deficit — deficit <= 0 is the excused case, filtered before this ever runs', () => {
+    expect(analyze.gradeFromDeficit(2)).toBe(0);
+    expect(analyze.gradeFromDeficit(1.5)).toBe(0);
+    expect(analyze.gradeFromDeficit(1)).toBe(1);
+    expect(analyze.gradeFromDeficit(0.5)).toBe(1);
+    expect(analyze.gradeFromDeficit(0.4)).toBe(2);
+  });
+});
 
 describe('the verdict matrix', () => {
   it('flat trace (DD-optimal human) ⇒ zero plies, zero moments — the canary', async () => {
@@ -150,6 +185,20 @@ describe('the verdict matrix', () => {
     }
     // stage 3 still ran, gated on the DD trick loss instead of a cost
     expect(view.plies.some((p: any) => p.sampled !== null)).toBe(true);
+  }, 240_000);
+
+  it('excused: a DD-costly ply the sampled engine would also have played is dropped entirely, not flagged', async () => {
+    // scoreCardsSampled is mocked (top of file, gated on this exact seed) to
+    // always report the played card as its own top pick — the "only double
+    // dummy sees better" case. Every candidate that reaches stage 3 must
+    // therefore vanish from the response: no ply, no moment, nothing to
+    // argue the player's innocence over.
+    const t = makeTournament('analyze-excuse');
+    const b = await driveBoard(t, userId, 1, firstLegalCard);
+    if (!b.contract) throw new Error('seed produced a pass-out; pick another');
+    const view = await analyze.getBoardAnalysis(t, b, false);
+    expect(view.plies).toEqual([]);
+    expect(view.moments).toEqual([]);
   }, 240_000);
 
   it('defending: only South is ever graded — robot partner North never', async () => {

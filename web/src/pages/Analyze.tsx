@@ -76,11 +76,11 @@ function lensFromParam(raw: string | null): Lens {
  * there for the taking — an opportunity, not a penalty — so the figure wears
  * the positive ink (`--positive`, which the colourblind palette leaves
  * alone; the + sign carries the direction on its own, colour only
- * reinforces). Excused moments mute it: set aside, not on offer.
+ * reinforces).
  */
-function MpGain({ gain, muted = false }: { gain: number; muted?: boolean }) {
+function MpGain({ gain }: { gain: number }) {
   return (
-    <span className={`num moment-gain${muted ? ' muted' : ''}`} aria-hidden="true">
+    <span className="num moment-gain" aria-hidden="true">
       +{Math.round(gain)} MP
     </span>
   );
@@ -287,7 +287,6 @@ function momentAside(m: AnalysisMoment, analysis: AnalysisView): string {
     return 'The robot bid differently here.';
   }
   const ply = analysis.plies.find((p) => p.ply === m.ply);
-  if (m.excused) return 'Nothing to fault here. The winning card was invisible from your seat.';
   if (ply?.sampled) {
     return `The engine, from your seat, plays ${cardLabel(ply.sampled.bestCard)} — worth ${Math.round(ply.cfPct ?? 0)}% instead of ${Math.round(analysis.actualPct ?? 0)}%.`;
   }
@@ -307,20 +306,14 @@ function MomentRow({
   const aside = momentAside(m, analysis);
   const name =
     m.kind === 'play'
-      ? `Trick ${m.trick}, ${m.excused ? `excused — ${Math.round(m.mpCost)} matchpoints set aside` : `${m.grade} of 3 stars, ${Math.round(m.mpCost)} more matchpoints were there`}. ${aside}`
+      ? `Trick ${m.trick}, ${m.grade} of 3 stars, ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`
       : `Your bid — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`;
   const body = (
     <>
       <span className="moment-main" aria-hidden={onOpen ? 'true' : undefined}>
         <b className="moment-where num">{m.kind === 'play' ? `Trick ${m.trick}` : <>Your <CallText call={m.call!} /></>}</b>
-        {m.kind === 'play' ? (
-          m.excused ? (
-            <InkStamp rotate={-4}>EXCUSED</InkStamp>
-          ) : (
-            <StarGrade stars={m.grade ?? 0} />
-          )
-        ) : null}
-        <MpGain gain={m.mpCost} muted={Boolean(m.excused)} />
+        {m.kind === 'play' ? <StarGrade stars={m.grade ?? 0} /> : null}
+        <MpGain gain={m.mpCost} />
         {onOpen ? <span className="moment-chev">›</span> : null}
       </span>
       <span className="moment-aside" aria-hidden={onOpen ? 'true' : undefined}>
@@ -550,16 +543,6 @@ function ReplayLens({
       return;
     }
     setCurMoment(p);
-    // An EXCUSED moment's engine pick IS the played card, so the pending
-    // position already shows the whole collapse in one card — hold it there,
-    // marked in the hand under the "nothing to find" reading, rather than
-    // gliding it into the trick where the marker would vanish (which read as
-    // the pager jumping past the highlight).
-    if (moment.sampled?.excused) {
-      setPly(p);
-      replay.cut(views[p]);
-      return;
-    }
     setPly(p + 1);
     replay.cut(views[p]);
     replay.applyTransition(views[p], momentLandingView(views, flat, p), 1);
@@ -647,7 +630,6 @@ function ReplayLens({
             THE AUDIT — TRICK {trick} OF {Math.ceil(totalPlies / 4)}
           </span>
           {caption.gain !== null ? <span className="audit-ribbon-gain num">+{Math.round(caption.gain)} MP</span> : null}
-          {caption.excused ? <InkStamp rotate={-4} color="var(--accent)">EXCUSED</InkStamp> : null}
         </div>
         <p>
           <GlossaryProse text={caption.text} />
@@ -798,7 +780,6 @@ interface RibbonCaption {
   text: string;
   /** matchpoints that were there for the taking at this moment (opportunity framing) */
   gain: number | null;
-  excused: boolean;
   /** the engine's card, to highlight in whichever hand still holds it */
   highlight: number | null;
 }
@@ -808,7 +789,10 @@ interface RibbonCaption {
  * decision (the next card to play is one the audit graded) takes precedence
  * over describing the card just played — a moment jump lands exactly here,
  * with the decision still on the table and the engine's pick highlighted in
- * the hand; NEXT CARD then shows what actually happened.
+ * the hand; NEXT CARD then shows what actually happened. `analysis.plies`
+ * never carries an excused candidate — the server drops those before this
+ * ever sees them (see server/src/analyze.ts) — so every `sampled` verdict
+ * reached below is a genuine, chargeable fault.
  */
 function captionFor(analysis: AnalysisView, board: BoardView, ply: number): RibbonCaption {
   const flat = board.playHistory?.flat() ?? [];
@@ -818,14 +802,6 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   // sub-floor candidate has no engine pick to point at and nothing to charge
   const pending = analysis.plies.find((p) => p.ply === ply && p.sampled !== null);
   if (pending?.sampled && !(analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)) {
-    if (pending.sampled.excused) {
-      return {
-        text: `The turn is here, and there is nothing to find: the engine plays the same ${cardLabel(pending.card)} from your seat — only double dummy sees better.`,
-        gain: pending.mpCost,
-        excused: true,
-        highlight: pending.card,
-      };
-    }
     const pct =
       pending.cfPct !== null && analysis.actualPct !== null
         ? ` — worth ${Math.round(pending.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
@@ -833,7 +809,6 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
     return {
       text: `The turn is here: ${seatNames[flat[ply]?.seat ?? 2]} to play, and the engine, from your seat, plays ${cardLabel(pending.sampled.bestCard)}${pct}.`,
       gain: pending.mpCost,
-      excused: false,
       highlight: pending.sampled.bestCard,
     };
   }
@@ -845,7 +820,6 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
       return {
         text: 'Settled before the first card — the engine could already claim every remaining trick, so the whole play was fast-played for both sides. Nothing here was yours to decide.',
         gain: null,
-        excused: false,
         highlight: null,
       };
     }
@@ -853,7 +827,6 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
     return {
       text: `The opening lead is ${leader}'s. Step through the play — the audit marks the moments worth more.`,
       gain: null,
-      excused: false,
       highlight: null,
     };
   }
@@ -864,7 +837,6 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
     return {
       text: 'Settled from here — the rest was already yours. These cards were fast-played for both sides.',
       gain: null,
-      excused: false,
       highlight: null,
     };
   }
@@ -872,18 +844,9 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   const mark = ddMark(analysis, j);
   const seatName = seatNames[played.seat];
   if (verdict?.sampled) {
-    if (verdict.sampled.excused) {
-      return {
-        text: `Nothing to fault here. Only double dummy finds better — the winning card was invisible from your seat.`,
-        gain: verdict.mpCost,
-        excused: true,
-        highlight: null,
-      };
-    }
     return {
       text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy). The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.`,
       gain: verdict.mpCost,
-      excused: false,
       // the engine's pick stays marked in the hand while the played card sits
       // in the trick — a collapsed moment landing shows both at once
       highlight: verdict.sampled.bestCard,
@@ -906,12 +869,17 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
     return {
       text: `${seatName} played ${cardLabel(played.card)} — a double-dummy trick slipped here, but ${moved}.`,
       gain: null,
-      excused: false,
       highlight: null,
     };
   }
-  const markNote = mark && mark !== '=' ? ` (${mark} double dummy${played.seat % 2 === 1 ? ' — uncharged' : ''})` : '';
-  return { text: `${seatName} played ${cardLabel(played.card)}${markNote}.`, gain: null, excused: false, highlight: null };
+  // Reaching here means there is no analysis entry for this card at all — a
+  // robot's play, a forced card, or (per the stage-3 doc comment above) a
+  // human decision that DID cost a double-dummy trick but was excused for
+  // it. Whatever raw DD swing shows is therefore always uncharged, not just
+  // on defence — an unlabelled "(−1 double dummy)" on the human's own
+  // declaring seat would read as an unexplained accusation.
+  const markNote = mark && mark !== '=' ? ` (${mark} double dummy — uncharged)` : '';
+  return { text: `${seatName} played ${cardLabel(played.card)}${markNote}.`, gain: null, highlight: null };
 }
 
 /**
@@ -955,20 +923,10 @@ function StaticPlayList({ board, analysis }: { board: BoardView; analysis: Analy
             </div>
             {rowVerdicts.map(({ verdict }) => (
               <div key={verdict!.ply} className="analyze-trick-verdict">
-                {verdict!.sampled?.excused ? (
-                  <InkStamp rotate={-4} color="var(--accent)">EXCUSED</InkStamp>
-                ) : verdict!.sampled ? (
-                  <StarGrade stars={verdict!.sampled.grade} />
-                ) : null}
-                {verdict!.mpCost !== null ? <MpGain gain={verdict!.mpCost} muted={Boolean(verdict!.sampled?.excused)} /> : null}
+                <StarGrade stars={verdict!.sampled!.grade} />
+                {verdict!.mpCost !== null ? <MpGain gain={verdict!.mpCost} /> : null}
                 <span className="moment-aside">
-                  <GlossaryProse
-                    text={
-                      verdict!.sampled!.excused
-                        ? 'Nothing to fault here. The winning card was invisible from your seat.'
-                        : `The engine, from your seat, plays ${cardLabel(verdict!.sampled!.bestCard)}.`
-                    }
-                  />
+                  <GlossaryProse text={`The engine, from your seat, plays ${cardLabel(verdict!.sampled!.bestCard)}.`} />
                 </span>
               </div>
             ))}

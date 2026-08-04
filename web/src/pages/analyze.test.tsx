@@ -28,13 +28,18 @@ vi.mock('../api', async (importOriginal) => ({
 
 const flat = donePlayed.playHistory!.flat();
 const chargedPly = flat.findIndex((t) => t.seat === 2);
-const excusedPly = flat.findIndex((t, i) => t.seat === 2 && i > chargedPly + 4);
 const chargedTrick = Math.floor(chargedPly / 4) + 1;
 // the engine's pick must still be IN South's hand at the charged ply for the
 // pending-decision highlight to have anywhere to land
 const playedBefore = new Set(flat.slice(0, chargedPly).map((t) => t.card));
 const engineCard = allHands[2].filter((c) => !playedBefore.has(c) && c !== flat[chargedPly].card)[0];
 
+/**
+ * Fixtures here only ever shape a CHARGED verdict — the server never emits
+ * an excused one (server/src/analyze.ts's stage-3 loop drops those before
+ * the response is built), so a fixture that manufactured one would be
+ * testing a shape the client can no longer receive.
+ */
 function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
   const ddTricks = Array.from({ length: 49 }, (_, i) => (i <= chargedPly ? 10 : 9));
   return {
@@ -58,26 +63,11 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
         cfScoreNS: 650,
         cfPct: 83,
         mpCost: 25,
-        sampled: { bestCard: engineCard, deficit: 1, excused: false, grade: 1 },
-      },
-      {
-        ply: excusedPly,
-        trick: Math.floor(excusedPly / 4) + 1,
-        seat: 2,
-        card: flat[excusedPly].card,
-        ddLoss: 1,
-        cfTricksDeclarer: 11,
-        cfScoreNS: 650,
-        cfPct: 71,
-        mpCost: 13,
-        sampled: { bestCard: flat[excusedPly].card, deficit: 0, excused: true, grade: 3 },
+        sampled: { bestCard: engineCard, deficit: 1, grade: 1 },
       },
     ],
-    moments: [
-      { kind: 'play', ply: chargedPly, trick: chargedTrick, card: flat[chargedPly].card, excused: false, grade: 1, mpCost: 25 },
-      { kind: 'play', ply: excusedPly, trick: Math.floor(excusedPly / 4) + 1, card: flat[excusedPly].card, excused: true, grade: 3, mpCost: 13 },
-    ],
-    setAside: 1,
+    moments: [{ kind: 'play', ply: chargedPly, trick: chargedTrick, card: flat[chargedPly].card, grade: 1, mpCost: 25 }],
+    setAside: 0,
     par: null,
     momentFloor: 10,
     ...over,
@@ -135,9 +125,9 @@ describe('the beta gate', () => {
 });
 
 describe('the moments ledger (THE CROSSING)', () => {
-  it('requests par for the crossing lens and renders charged + excused rows with the overflow counted', async () => {
+  it('requests par for the crossing lens and renders the charged row, with the overflow counted', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
-    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload, setAside: 1 }));
     renderAnalyze();
     await screen.findByText('WHERE IT TURNED');
     expect(apiMock.analysis).toHaveBeenCalledWith(12, 2, true);
@@ -146,12 +136,11 @@ describe('the moments ledger (THE CROSSING)', () => {
     expect(charged.querySelector('.stargrade')).not.toBeNull(); // aria-hidden visual — the button's name carries the reading
     // opportunity framing: +N in the positive ink, never a −penalty
     expect(within(charged).getByText('+25 MP')).toBeInTheDocument();
+    // an excused verdict never reaches the client at all — the server drops
+    // it before the response is built, so there is nothing "EXCUSED" to render
+    expect(screen.queryByText('EXCUSED')).not.toBeInTheDocument();
 
-    const excused = screen.getByRole('button', { name: /excused — 13 matchpoints set aside/ });
-    expect(within(excused).getByText('EXCUSED')).toBeInTheDocument();
-    expect(within(excused).getByText(/invisible from your seat/)).toBeInTheDocument();
-
-    expect(screen.getByText(/One more moment set aside — the 2 above were worth the most\./)).toBeInTheDocument();
+    expect(screen.getByText(/One more moment set aside — the 1 above were worth the most\./)).toBeInTheDocument();
   });
 
   it('an empty ledger is a finding, not an empty state', async () => {
@@ -251,9 +240,10 @@ describe('the play lens', () => {
     await screen.findByText(/TRICK BY TRICK/);
     // the play lens never requests par
     expect(apiMock.analysis).toHaveBeenCalledWith(12, 2, false);
-    // the charged trick expands in place with its verdict
-    expect(screen.getByText('EXCUSED')).toBeInTheDocument();
+    // the charged trick expands in place with its verdict; no excused row —
+    // the server never sends one
     expect(screen.getByText('+25 MP')).toBeInTheDocument();
+    expect(screen.queryByText('EXCUSED')).not.toBeInTheDocument();
     expect(screen.getByText(/Settled from here — the rest was already yours\./)).toBeInTheDocument();
   });
 
@@ -272,9 +262,30 @@ describe('the play lens', () => {
     const playedCard = flat[chargedPly].card;
     // a .pcard's textContent is its rank glyph followed by its suit symbol
     const cardText = (c: number) => `${RANK_CHARS[cardRank(c)]}${SUIT_SYMBOLS[cardSuit(c)]}`;
+    // a second, later charged moment so the pager has somewhere to hop to —
+    // the server never emits an excused one for it to land on instead
+    const secondPly = flat.findIndex((t, i) => t.seat === 2 && i > chargedPly + 4);
+    const secondTrick = Math.floor(secondPly / 4) + 1;
+    const secondEngineCard = allHands[2].filter(
+      (c) => !flat.slice(0, secondPly).some((t) => t.card === c) && c !== flat[secondPly].card,
+    )[0];
     try {
       apiMock.board.mockResolvedValue(donePlayed);
-      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      const analysis = makeAnalysis();
+      analysis.plies.push({
+        ply: secondPly,
+        trick: secondTrick,
+        seat: 2,
+        card: flat[secondPly].card,
+        ddLoss: 1,
+        cfTricksDeclarer: 11,
+        cfScoreNS: 650,
+        cfPct: 71,
+        mpCost: 13,
+        sampled: { bestCard: secondEngineCard, deficit: 1, grade: 0 },
+      });
+      analysis.moments.push({ kind: 'play', ply: secondPly, trick: secondTrick, card: flat[secondPly].card, grade: 0, mpCost: 13 });
+      apiMock.analysis.mockResolvedValue(analysis);
       renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${chargedPly}`);
       await screen.findByText(/THE AUDIT — TRICK/);
 
@@ -300,19 +311,16 @@ describe('the play lens', () => {
       expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
       expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
 
-      // NEXT MOMENT lands the following graded decision — the excused one,
-      // which HOLDS at the pending position: the engine's pick IS the played
-      // card, so it stays marked in the hand under the nothing-to-find
-      // reading instead of gliding into the trick and losing the marker
+      // NEXT MOMENT lands the second graded decision, collapsed the same way
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
       await waitFor(
-        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/),
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/),
         { timeout: 4000 },
       );
-      expect(document.querySelector(`.cardbtn.selected[data-card="${flat[excusedPly].card}"]`)).not.toBeNull();
+      expect(trickCards()).toContain(cardText(flat[secondPly].card));
       expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
 
-      // and PREV MOMENT hops back to the charged moment, collapsed again
+      // and PREV MOMENT hops back to the first charged moment, collapsed again
       await userEvent.click(screen.getByRole('button', { name: /PREV MOMENT/ }));
       await waitFor(
         () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/),
@@ -359,14 +367,10 @@ describe('the play lens', () => {
       expect(document.querySelector('.audit-ribbon-gain')).toBeNull();
       expect(document.querySelector('.cardbtn.selected')).toBeNull();
 
-      // the pager hops between JUDGED moments only: both neighbours enabled,
-      // and NEXT lands the excused decision (held pending), skipping the slip
+      // the pager skips the unjudged slip entirely: the earlier charged
+      // moment is reachable, but there is no later one to hop to
       expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeEnabled();
-      await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
-      await waitFor(
-        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/),
-        { timeout: 4000 },
-      );
+      expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }
@@ -494,10 +498,10 @@ describe('the play lens', () => {
           cfScoreNS: 650,
           cfPct: 83,
           mpCost: 25,
-          sampled: { bestCard: engine3, deficit: 1, excused: false, grade: 1 },
+          sampled: { bestCard: engine3, deficit: 1, grade: 1 },
         },
       ];
-      analysis.moments = [{ kind: 'play', ply: 3, trick: 1, card: flat[3].card, excused: false, grade: 1, mpCost: 25 }];
+      analysis.moments = [{ kind: 'play', ply: 3, trick: 1, card: flat[3].card, grade: 1, mpCost: 25 }];
       apiMock.board.mockResolvedValue(donePlayed);
       apiMock.analysis.mockResolvedValue(analysis);
       renderAnalyze('/t/12/b/2/analyze?lens=play&ply=3');

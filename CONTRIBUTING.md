@@ -873,8 +873,12 @@ human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for th
 converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
 (`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
 insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
-seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault is shown and explicitly
-EXCUSED, never charged. Stage order is load-bearing: the DD trace is the cheap filter, the
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
+would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
+just because an omniscient trace prefers something else, and a well-played board comes back
+with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
+when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
 sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
 counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
 Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
@@ -911,8 +915,7 @@ ledger follows. The ledger is the overview's ONLY bidding surface: bid moments c
 their counterfactual auction in the aside and are static findings (no link — the auction
 has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result
 alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
-`--positive` ink (matchpoints that were there for the taking), muted for EXCUSED moments —
-never a red −penalty. The play lens is a full
+`--positive` ink (matchpoints that were there for the taking), never a red −penalty. The play lens is a full
 replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
 from the tour, which is now a second consumer): forward steps stage one card at a time
 through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD and the
@@ -924,24 +927,23 @@ PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immedi
 stages the played card's glide, so the card that was played (in the trick) and the
 engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
 rank in the suit-line rails) are on screen together — the pager anchors on the moment
-being read, not the replay position, which sits one card past it. An EXCUSED moment
-holds at the PENDING position instead of gliding — its engine pick IS the played card, so
-the `.selected` marker stays on it in the hand under the nothing-to-find reading (gliding
-it into the trick dropped the marker, which read as the pager jumping past the
-highlight). A moment on a trick's
+being read, not the replay position, which sits one card past it. A moment on a trick's
 LAST card lands on a synthetic held view (trick complete on the table, un-collected —
 `momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
 always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so
-South-declared and flipped boards show every hand exactly once. Only JUDGED decisions
-(stage 3 ran — `sampled` non-null) are moments to the pager and the collapse; the
-sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick slipped,
-but the matchpoints barely noticed" annotation and are never charged or landed on. The open-hand rails
+South-declared and flipped boards show every hand exactly once. Only JUDGED-AND-CHARGED
+decisions (`sampled` non-null — which, since the server drops the excused case before this
+ever arrives, now always means genuinely chargeable) are moments to the pager and the
+collapse; the sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick
+slipped, but the matchpoints barely noticed" annotation and are never charged or landed on.
+The open-hand rails
 wear the dummy rail's kerning (thin-space rank separation + `.dummy-rail-ranks`'s
 letter-spacing), and a centred PLAYED rail under them accumulates every card off the
 hands, its two wrapped lines reserved up front (the dock rule again). Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
-trick-by-trick list instead, a legitimate reading rather than a fallback. Costly-but-
-unfindable moments carry an EXCUSED `InkStamp` (a stamp rules FOR you where a grade rates
-you); charged moments keep `StarGrade` (✗ at 0). Only THE PLAY skips `?par=1`. The demo
+trick-by-trick list instead, a legitimate reading rather than a fallback. Every moment shown
+is charged and keeps `StarGrade` (✗ at 0) — a costly-but-unfindable candidate never reaches
+either lens; the server drops it before the response leaves `computeCore`, so there is
+nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
 gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
 path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
 dissolved the tour's class-for-class `TourResult` copy).

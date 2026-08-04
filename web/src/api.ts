@@ -179,7 +179,10 @@ export interface AnalysisPly {
   cfScoreNS: number;
   cfPct: number | null;
   mpCost: number | null;
-  sampled: { bestCard: number; deficit: number; excused: boolean; grade: 0 | 1 | 2 | 3 } | null;
+  /** only present for a genuine, chargeable fault — an excused candidate (the
+   *  sampled engine would also have played the card) never reaches the
+   *  client at all; see server/src/analyze.ts's stage-3 doc comment */
+  sampled: { bestCard: number; deficit: number; grade: 0 | 1 | 2 | 3 } | null;
 }
 
 export interface AnalysisMoment {
@@ -187,7 +190,6 @@ export interface AnalysisMoment {
   ply?: number;
   trick?: number;
   card?: number;
-  excused?: boolean;
   grade?: 0 | 1 | 2 | 3;
   callIndex?: number;
   call?: number;

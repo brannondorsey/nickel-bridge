@@ -276,7 +276,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'analyze-play',
     label: 'The audit of a crossing',
     description:
-      'One card left, and the position is already settled — play it and the claim fast-forwards the rest onto the receipt. Then take ANALYZE PLAY on the result: this line leaked real matchpoints, and WHERE IT TURNED says which cards were findable from your seat, which are excused, and what the play lens replays. (Mined so the audit has something to say — several moments clear the floor here.)',
+      'One card left, and the position is already settled — play it and the claim fast-forwards the rest onto the receipt. Then take ANALYZE PLAY on the result: this line leaked real matchpoints, and WHERE IT TURNED shows exactly which cards were findable from your seat and missed — a card only double dummy would have found makes no appearance at all. (Mined so the audit has something to say — several moments clear the floor here.)',
     category: 'results',
     seed: 'analyze-demo-b',
     boardNo: 1,
