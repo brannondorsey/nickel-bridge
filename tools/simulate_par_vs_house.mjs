@@ -49,6 +49,7 @@ const opt = (name, fallback) => {
 };
 const SEED = opt('seed', 'par-sim-1');
 const BOARDS = Number(opt('boards', '500'));
+const CONCURRENCY = Number(opt('concurrency', '6'));
 const BOARD_DIFFICULTY = opt('board-difficulty', 'intermediate');
 if (!ai.DIFFICULTIES.includes(BOARD_DIFFICULTY)) {
   throw new Error(`--board-difficulty must be one of ${ai.DIFFICULTIES.join(', ')}`);
@@ -155,23 +156,39 @@ console.error(
   `simulating ${BOARDS} boards (seed=${SEED}, board-difficulty=${BOARD_DIFFICULTY}), house tiers: ${TIERS.join(', ')}...`,
 );
 
-let parBelowAny = 0;
-let parBelowRegular = 0;
-const rows = [];
-
-for (let no = 1; no <= BOARDS; no++) {
+async function processBoard(no) {
   const deal = core.dealBoard(SEED, no);
-  const par = dealerPar(deal);
+  const par = dealerPar(deal); // synchronous main-thread DDS call — cheap (0.1ms DealerPar + one 20-problem table)
   const scores = {};
   for (const tier of TIERS) scores[tier] = await playAsHouse(deal, no, tier);
+  return { no, par, ...scores };
+}
 
-  const anyBeatsPar = TIERS.some((t) => scores[t] > par);
-  const regularBeatsPar = scores.intermediate > par;
+// Bounded-concurrency queue: each board's play decisions await the shared DD
+// worker pool, so running several boards at once overlaps their WASM-solve
+// waits instead of leaving the pool's workers idle between a board's
+// sequential decisions.
+const rows = new Array(BOARDS);
+let nextBoard = 1;
+let completed = 0;
+async function worker() {
+  for (;;) {
+    const no = nextBoard++;
+    if (no > BOARDS) return;
+    rows[no - 1] = await processBoard(no);
+    completed++;
+    if (completed % 25 === 0) console.error(`  ${completed}/${BOARDS}`);
+  }
+}
+await Promise.all(Array.from({ length: Math.min(CONCURRENCY, BOARDS) }, worker));
+
+let parBelowAny = 0;
+let parBelowRegular = 0;
+for (const r of rows) {
+  const anyBeatsPar = TIERS.some((t) => r[t] > r.par);
+  const regularBeatsPar = r.intermediate > r.par;
   if (anyBeatsPar) parBelowAny++;
   if (regularBeatsPar) parBelowRegular++;
-
-  rows.push({ no, par, ...scores });
-  if (no % 50 === 0) console.error(`  ${no}/${BOARDS}`);
 }
 
 console.log(`\nboards simulated: ${BOARDS}  (seed=${SEED}, board-difficulty=${BOARD_DIFFICULTY})`);
@@ -189,9 +206,21 @@ for (const tier of TIERS) {
   console.log(`  ${TIER_HANDLE[tier].padEnd(12)} (${tier.padEnd(12)}) beats par: ${n}/${BOARDS} (${((100 * n) / BOARDS).toFixed(1)}%)`);
 }
 
+if (process.env.PAR_SIM_SAMPLE) {
+  console.log(`\nfirst 15 boards (par, ${TIERS.join(', ')}), NS-signed:`);
+  for (const r of rows.slice(0, 15)) {
+    console.log(`  #${r.no}: par=${r.par}  ${TIERS.map((t) => `${t}=${r[t]}`).join('  ')}`);
+  }
+}
+
 const outPath = process.env.PAR_SIM_OUT;
 if (outPath) {
   const fs = await import('node:fs');
   fs.writeFileSync(outPath, JSON.stringify(rows, null, 2));
   console.error(`\nwrote per-board rows to ${outPath}`);
 }
+
+// The vendored DDS wasm module (loaded directly here, outside the server's
+// dd-pool worker wrapping) can leave the event loop open after the last
+// await resolves — exit explicitly rather than let a one-shot CLI tool hang.
+process.exit(0);
