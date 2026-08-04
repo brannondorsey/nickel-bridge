@@ -509,4 +509,42 @@ describe('player stats', () => {
     // reading it there would print a peak the drawn line visibly rises above.
     expect(stats.totals.peakElo).toBe(1280);
   });
+
+  // THIS MONTH reads off the same series, so it inherits the ordering above:
+  // its baseline is "the rating after the last crossing finished before the
+  // 1st", which is a wall-clock claim. Walking elo_history's id order instead,
+  // the final pre-month row is merely the highest-id one — a crossing finished
+  // mid-month can sit past it and be skipped, and the month's movement vanishes.
+  it('measures the month from the last crossing finished before it, not the highest-id one', async () => {
+    const back = new TestClient(app, 'BackfillMonth');
+    await back.login();
+    const uid = await userId(back);
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const lowTid = mkTournament('month-old'); // lower id, but finished THIS month
+    const highTid = mkTournament('month-new'); // higher id, finished LAST month
+
+    const now = new Date();
+    const monthStart = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, updated_at) VALUES (?, ?, ?, 'done', 100, ?)`,
+    );
+    for (let no = 1; no <= 4; no++) insertBoard.run(highTid, uid, no, monthStart - 5 * 86400);
+    for (let no = 1; no <= 4; no++) insertBoard.run(lowTid, uid, no, monthStart + 3600);
+
+    // Chain in id order: 1200 → 1250 (old, +50) → 1230 (new, −20).
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, lowTid, 1200, 1250);
+    insertElo.run(uid, highTid, 1250, 1230);
+    db.prepare(`UPDATE users SET elo = 1230 WHERE id = ?`).run(uid);
+
+    const stats = await back.get(`/api/users/${uid}/stats`);
+    // Play order: −20 last month leaves them on 1180, then +50 this month for
+    // the resumed crossing. Read in id order the baseline lands on 1230 — the
+    // rating they hold right now — and the month reports a flat 0.
+    expect(stats.eloSeries.map((e: any) => e.elo)).toEqual([1180, 1230]);
+    expect(stats.totals.monthlyEloDelta).toBe(50);
+  });
 });
