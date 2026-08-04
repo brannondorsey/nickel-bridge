@@ -215,6 +215,113 @@ describe('GET /api/activity', () => {
     expect(milestones).toHaveLength(0);
   });
 
+  it('announces a peak rating on the crossing the player finished last, not the highest-id one', async () => {
+    // Same backfill shape as the test above, aimed at 'peak-rating'. The
+    // ratings in elo_history are a running total over the REPLAY's id order, so
+    // a resumed old crossing carries a figure computed as if the newer ones had
+    // not happened; read that way, the sequence below has no new best in it at
+    // all and the milestone silently never fires. Walked in play order and
+    // rebuilt from each crossing's delta (as stats.ts's eloProgression does, so
+    // the two surfaces can't print different peaks), the player's last crossing
+    // is a genuine personal best.
+    const climber = new TestClient(app, 'ActivityClimber');
+    await climber.login();
+    const uid = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityClimber'`).get() as { id: number }).id;
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const lowTid = mkTournament('climber-old'); // minted first, so the LOWER id...
+    const highTid = mkTournament('climber-new');
+
+    const now = Math.floor(Date.now() / 1000);
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, contract, tricks_declarer, score_ns, updated_at)
+       VALUES (?, ?, ?, 'done', '{}', 0, 0, ?)`,
+    );
+    // ...but finished LAST: the newer tournament three days ago, the resumed old one today.
+    for (let no = 1; no <= 4; no++) insertBoard.run(highTid, uid, no, now - 3 * 86400);
+    for (let no = 1; no <= 4; no++) insertBoard.run(lowTid, uid, no, now - 60);
+
+    // Chain in id order: 1200 → 1250 (old, +50) → 1230 (new, −20). Nothing in
+    // that sequence ever exceeds 1250 after the first crossing.
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, lowTid, 1200, 1250);
+    insertElo.run(uid, highTid, 1250, 1230);
+
+    const { recentActivity } = await import('../src/activity.js');
+    const peaks = recentActivity(now - 8 * 86400, 1).events.filter(
+      (e) => e.kind === 'milestone' && e.userId === uid && e.milestone === 'peak-rating',
+    );
+    // Play order: −20 three days ago (1180), then +50 today (1230) — a best,
+    // announced on the day it happened and worth the rating the player holds.
+    expect(peaks).toHaveLength(1);
+    expect(peaks[0].value).toBe(1230);
+    expect(peaks[0].at).toBe(now - 60);
+  });
+
+  it('never announces a best rating lower than one it already announced earlier in the feed', async () => {
+    // Reproduces a reported production symptom: the same player shown "a new
+    // best rating — 1279" at 4:12p and then "a new best rating — 1266" at
+    // 9:24p, a personal best three hours later and thirteen points lower.
+    //
+    // Nothing about the ratings was wrong — the walk was. The running best was
+    // taken over elo_history's tournament-id order while each event was stamped
+    // with the crossing's finish time, so the two disagreed the moment a player
+    // resumed an old, low-id tournament: the values climb in replay order and
+    // then get scattered across the wall clock the feed sorts by.
+    const gs = new TestClient(app, 'ActivityPeakOrder');
+    await gs.login();
+    const uid = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityPeakOrder'`).get() as { id: number }).id;
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const t1 = mkTournament('peak-1');
+    const t2 = mkTournament('peak-2'); // middle id, but finished LAST
+    const t3 = mkTournament('peak-3'); // highest id, finished before t2
+
+    const now = Math.floor(Date.now() / 1000);
+    const at1 = now - 2 * 86400;
+    const at3 = now - 5 * 3600; // "4:12p"
+    const at2 = now - 2 * 3600; // "9:24p" — later in the day, lower id
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, contract, tricks_declarer, score_ns, updated_at)
+       VALUES (?, ?, ?, 'done', '{}', 0, 0, ?)`,
+    );
+    for (const [tid, at] of [
+      [t1, at1],
+      [t2, at2],
+      [t3, at3],
+    ] as const) {
+      for (let no = 1; no <= 4; no++) insertBoard.run(tid, uid, no, at);
+    }
+
+    // Chain in id order climbs the whole way: 1200 → 1250 → 1266 → 1279.
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, t1, 1200, 1250);
+    insertElo.run(uid, t2, 1250, 1266);
+    insertElo.run(uid, t3, 1266, 1279);
+
+    const { recentActivity } = await import('../src/activity.js');
+    const peaks = recentActivity(now - 8 * 86400, 99).events
+      .filter((e) => e.kind === 'milestone' && e.userId === uid && e.milestone === 'peak-rating')
+      .sort((a, b) => a.at - b.at);
+
+    // The property that was violated, stated as a property: read down the feed
+    // in the order a reader reads it, every announced best beats the last.
+    for (let i = 1; i < peaks.length; i++) {
+      expect(peaks[i].value as number).toBeGreaterThan(peaks[i - 1].value as number);
+    }
+    // Concretely: +13 in the afternoon (1263), +16 in the evening (1279), and
+    // the last one is the rating they actually hold. Read in id order these
+    // were announced as 1266 then 1279 — at 9:24p and 4:12p respectively.
+    expect(peaks.map((e) => [e.at, e.value])).toEqual([
+      [at3, 1263],
+      [at2, 1279],
+    ]);
+  });
+
   it('never mentions a player who has not picked a handle', async () => {
     // /auth/dev creates the account; skipping /api/handle leaves it nameless.
     const res = await app.inject({ method: 'POST', url: '/auth/dev', payload: { name: 'Nameless' } });

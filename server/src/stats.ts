@@ -33,10 +33,15 @@ export function profileKind(userId: number): 'human' | 'ai' | null {
   return row?.kind ?? null;
 }
 // elo_history is wiped and replayed in tournament-id order on every recompute,
-// so its rows carry no timestamp — tournament_id IS the rating timeline.
-// finished_at (the user's last completed board of the tournament) is only a label.
+// so its rows carry no timestamp of their own: before/after are positions in
+// that replay chain, and finished_at (this user's last completed board of the
+// tournament) is the only wall clock their rating history has. Both are read
+// because eloProgression() needs the chain for each crossing's delta and the
+// clock to lay those deltas out in play order — see its doc comment. The ORDER
+// BY is the chain's, and must stay so: the deltas are only well-defined read in
+// that sequence, and eloProgression() re-sorts a copy for display.
 const stmtEloSeries = db.prepare(
-  `SELECT h.tournament_id, h.after, t.name AS tournament_name,
+  `SELECT h.tournament_id, h.before, h.after, t.name AS tournament_name,
           (SELECT MAX(b.updated_at) FROM boards b
             WHERE b.tournament_id = h.tournament_id AND b.user_id = h.user_id AND b.state = 'done') AS finished_at
    FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id
@@ -92,6 +97,19 @@ export interface Rival {
   boards: number;
 }
 
+/**
+ * One tournament's worth of one chart series.
+ *
+ * Every series below (`eloSeries`, `pctSeries`, `accuracySeries`) is ordered by
+ * `finishedAt` ascending — when THIS player last completed a board of that
+ * tournament — never by tournament id. Tournaments never close (see
+ * tournaments.ts), so ids are the order the app minted the deals, not the order
+ * anyone played them: a player can be placed into a months-old tournament today,
+ * or resume one they abandoned in the spring. Ordered by id, that crossing draws
+ * to the LEFT of tournaments finished weeks later, and the charts' x axis stops
+ * being time — a rise between two adjacent points would no longer mean the
+ * player improved, only that the deals happened to be numbered that way.
+ */
 export interface StatPoint {
   tournamentId: number;
   tournamentName: string;
@@ -168,6 +186,7 @@ export interface PlayerStats {
     /** size of the declaring-rate comparison pool (players with at least one declaring board) */
     declaringPlayers: number;
   };
+  /** rating after each crossing, in play order — see eloProgression() */
   eloSeries: (StatPoint & { elo: number })[];
   pctSeries: (StatPoint & { pct: number; boards: number; fieldSize: number })[];
   accuracySeries: (StatPoint & { accuracy: number | null; calls: number })[];
@@ -528,6 +547,68 @@ function longestDayStreak(dates: string[]): number {
   return best;
 }
 
+interface EloRow {
+  tournament_id: number;
+  tournament_name: string;
+  before: number;
+  after: number;
+  finished_at: number | null;
+}
+
+/**
+ * The rating line, laid out in the order this player actually finished their
+ * crossings rather than in the order `recomputeElo` replays them.
+ *
+ * The two orders are not the same, and the gap is the whole reason this function
+ * exists. `recomputeElo` wipes and replays every tournament in tournament-id
+ * order, so `after` is a running total over THAT sequence — but tournaments
+ * never close, so a player can finish a months-old, low-id tournament today.
+ * Read straight off the table, that crossing lands at the far left of the chart,
+ * to the left of tournaments finished weeks before it. (activity.ts's
+ * 'entered-rankings' milestone splits the same two orders apart for the same
+ * reason, and says so at length.)
+ *
+ * Sorting the rows by `finished_at` alone would fix the axis and break the
+ * values. `after` means "the rating once every crossing with a lower id has been
+ * replayed", so the last row BY DATE carries a rating that omits every
+ * higher-id crossing — in exactly the backfill case above, that is not the
+ * player's rating today, and the endpoint dot would disagree with the rating
+ * printed directly above the chart.
+ *
+ * So the DELTAS travel and the totals are rebuilt: each crossing contributes
+ * `after - before` (what it was worth in today's replay) and they accumulate
+ * from ELO_INITIAL in play order. Both ends stay honest — the line starts at
+ * 1200, and because a sum doesn't care about order and this player's chain is
+ * unbroken (the first row's `before` is ELO_INITIAL and each later `before` is
+ * the previous `after`), it ends at exactly `users.elo`. The line is a
+ * reconstruction either way — which the chart already discloses, since any
+ * scored board can restate the whole thing — but this one reconstructs the
+ * player's own history instead of the replay's bookkeeping.
+ *
+ * For a player whose play order matches id order it returns the raw chain
+ * unchanged, which is most players: placement serves recent tournaments.
+ */
+function eloProgression(rows: EloRow[]): (StatPoint & { elo: number })[] {
+  let elo = ELO_INITIAL;
+  return (
+    [...rows]
+      // `finished_at` is null only if a rated tournament has no completed board
+      // for this player, which eloParticipants' all-four-boards rule makes
+      // unreachable; treating it as 0 sorts it oldest and leaves it in the id
+      // order it arrived in, which is the best available guess either way.
+      .sort((a, b) => (a.finished_at ?? 0) - (b.finished_at ?? 0) || a.tournament_id - b.tournament_id)
+      .map((r) => {
+        elo += r.after - r.before;
+        return {
+          tournamentId: r.tournament_id,
+          tournamentName: r.tournament_name,
+          finishedAt: r.finished_at,
+          elo,
+        };
+      })
+  );
+}
+
 /**
  * `getStandings` is injectable so a caller building TWO profiles in one request
  * (compare.ts) pays `fieldPercentiles`'s site-wide sweep once instead of twice —
@@ -545,18 +626,7 @@ export function playerStats(
     | undefined;
   if (!u) return null;
 
-  const eloRows = stmtEloSeries.all(userId) as {
-    tournament_id: number;
-    after: number;
-    tournament_name: string;
-    finished_at: number | null;
-  }[];
-  const eloSeries = eloRows.map((r) => ({
-    tournamentId: r.tournament_id,
-    tournamentName: r.tournament_name,
-    finishedAt: r.finished_at,
-    elo: r.after,
-  }));
+  const eloSeries = eloProgression(stmtEloSeries.all(userId) as EloRow[]);
 
   const boards = stmtDoneBoards.all(userId) as DoneBoardRow[];
 
@@ -654,8 +724,13 @@ export function playerStats(
     }
   }
 
-  // ordered by the user's play order — their learning timeline
-  const tournaments = [...byTournament.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt);
+  // Ordered by the user's play order — their learning timeline, and the x axis
+  // of pctSeries/accuracySeries below (see StatPoint's doc comment for why that
+  // is finishedAt and never tournament id). updated_at is second-resolution, so
+  // two crossings genuinely can share a finish second — a persona sweep or a
+  // claim fast-forward closes boards fast — and the id tie-break keeps the order
+  // deterministic rather than leaning on the sort being stable.
+  const tournaments = [...byTournament.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt || a[0] - b[0]);
 
   // `getStandings` (the parameter) is shared across pctSeries/rivalries/
   // fieldPercentiles below, so a tournament this player has played gets
@@ -770,6 +845,11 @@ export function playerStats(
       tournamentsCompleted,
       streakDays: longestDayStreak(dailyBoards.map((d) => d.date)),
       currentElo: u.elo,
+      // Read off the same series the RATING chart draws, deliberately, rather
+      // than off elo_history's raw `after` column: the two maxima can differ
+      // once a backfilled crossing reorders things (see eloProgression), and
+      // neither dominates the other — so taking the chain's would sometimes
+      // print a PEAK the line sitting under it visibly exceeds.
       peakElo: Math.max(ELO_INITIAL, ...eloSeries.map((e) => e.elo)),
       avgPct,
       bestPct: bestPct ? { pct: bestPct.pct, tournamentName: bestPct.tournamentName, tournamentId: bestPct.tournamentId } : null,
@@ -800,6 +880,11 @@ export function playerStats(
  * when their whole rated history is inside the month); unrated players get
  * null. Like everything Elo here, a full recompute can shift this
  * retroactively — that's the evergreen model, not a bug.
+ *
+ * "Last tournament finished before this month" is a wall-clock claim, so it
+ * relies on eloSeries being in play order: reading the raw id-ordered chain, the
+ * final pre-month row is merely the highest-id one, and a crossing finished
+ * mid-month can sit past it and be skipped.
  */
 function monthlyEloDelta(currentElo: number, eloSeries: (StatPoint & { elo: number })[]): number | null {
   if (!eloSeries.length) return null;

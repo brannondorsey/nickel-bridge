@@ -1093,6 +1093,30 @@ about it are load-bearing, and [docs/compare.md](docs/compare.md) has the full r
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
 everyone — so don't "optimize" it into an incremental update without redesigning the model.
 
+**Replay order is not play order, and every surface that draws a timeline has to convert.**
+Tournaments never close, so a player can be placed into a months-old tournament or resume one
+they abandoned in the spring; its id is low but they finished it today. Two consequences, and
+both have bitten:
+
+- **Order by `finishedAt`, never by tournament id.** `finishedAt` is this player's last
+  completed board of that tournament, and it is the ordering key for all three of `stats.ts`'s
+  chart series (see `StatPoint`'s doc comment) as well as `activity.ts`'s `byFinish`. Ordered by
+  id, a crossing finished today draws to the left of one finished weeks earlier and the charts'
+  x axis stops being time — a rise between two points would mean nothing but the numbering.
+- **Re-sorting rows is not enough for a RATING, because `after` is a running total over the id
+  order.** The last row by date carries a rating that omits every higher-id crossing, so the
+  line would end somewhere the player hasn't been since June. `eloProgression()` (`stats.ts`)
+  therefore moves the per-crossing *deltas* (`after - before`) and re-accumulates them from
+  `ELO_INITIAL` in play order: the line starts at 1200 and, since a sum ignores order, ends at
+  exactly `users.elo`. `totals.peakElo` is read off that same reconstruction rather than off
+  `elo_history` — the two maxima can differ and neither dominates, so taking the chain's would
+  sometimes print a PEAK the drawn line visibly rises above. `activity.ts`'s `peak-rating`
+  milestone makes the identical reconstruction so the two screens can't disagree about a peak.
+  It is a reconstruction either way, which the chart already discloses; this one reconstructs
+  the player's history rather than the replay's bookkeeping, and for a player whose play order
+  matches id order (most of them — placement serves recent tournaments) it returns the raw chain
+  unchanged.
+
 **The activity feed ("TRAFFIC")** answers the one question the ladder and the profiles don't:
 who else has been on the bridge lately. `GET /api/activity` (`server/src/activity.ts`) is a
 seven-day, signed-in-only read — gated where `/leaderboard` is public, because a bounded list
