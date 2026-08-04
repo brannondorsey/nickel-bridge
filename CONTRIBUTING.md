@@ -232,9 +232,8 @@ doesn't gate merges. One convention in those workflows: **the four jobs that hol
 `FLY_API_TOKEN`** (the three deploys plus `pr-preview-teardown.yml`) **pin
 `superfly/flyctl-actions` to a commit SHA**, because a branch ref re-resolves on every run and
 that token can deploy arbitrary images, read the SQLite volume or destroy the app. Everything
-else stays on its major tag, and `.github/dependabot.yml` watches all of them weekly — a pin
-nobody updates is just an unpatched dependency, and Dependabot rewrites the SHA and its
-trailing comment on each upstream release:
+else stays on its major tag; the pin has no automated watcher, so bumping it — and the other
+actions' major tags — on a new upstream release is a manual, occasional chore:
 
 ```bash
 npm run build
