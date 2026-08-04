@@ -2013,6 +2013,119 @@ a.ds-btn-secondary:hover {
   border-left: 1px solid var(--ink);
 }
 
+/* ---- MedalBar: Home's medal rail (server/src/medals.ts's MedalProgress) —
+   a bar, then the four suit marks close together with the incentive
+   sentence beside them on the same line. The bar's track is outlined and
+   its unfilled portion hatched, deliberately matching .trick-meter above
+   (the bar in the middle of the play screen) rather than PctBar's plain
+   flat --chart-track: a medal in progress is the same "how close are we"
+   reading as a trick count. Suit coloring goes only through the existing
+   --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c above), so night
+   mode and the colorblind palette need no extra work here. */
+.medal-bar {
+  margin: 16px 16px 0;
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 14px;
+}
+.medal-bar-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.medal-bar-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border: 1px solid var(--ink);
+  overflow: hidden;
+}
+.medal-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--ink);
+}
+.medal-bar-fill.tint-c {
+  background: var(--suit-c);
+}
+.medal-bar-fill.tint-d {
+  background: var(--suit-d);
+}
+.medal-bar-fill.tint-h {
+  background: var(--suit-h);
+}
+.medal-bar-fill.tint-s {
+  background: var(--suit-s);
+}
+/* the remainder — reuses trick-meter-fill's exact hatch, applied to what's
+   actually left to fill rather than to one side's active fill */
+.medal-bar-hatch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: repeating-linear-gradient(-45deg, var(--ink), var(--ink) 1px, transparent 1px, transparent 1.5px);
+}
+/* plain weight on purpose — Besley's tabular-nums bug (see .num above) once
+   made a bolded standalone "40%" read as if one digit carried more weight
+   than the rest; folding it back in as ordinary body-weight text next to
+   the bar avoids the whole class of problem rather than chasing it. */
+.medal-pct {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  flex: none;
+}
+.medal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.medal-glyphs {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+.medal-glyph {
+  font-family: var(--font-body);
+  font-size: 21px;
+  line-height: 1;
+}
+/* the "muted sibling" idiom StarGrade already uses for earned-vs-rest */
+.medal-glyph-locked {
+  color: var(--line);
+}
+.medal-text {
+  flex: 1;
+  min-width: 0;
+}
+.medal-cta {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.5;
+}
+.medal-cta b {
+  font-style: normal;
+  font-weight: 700;
+}
+.medal-subcap {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin: 4px 0 0;
+}
+/* ---- the profile trophy case: only what's earned, no frame, no caption —
+   MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is */
+.profile-medals {
+  margin-top: 6px;
+}
+
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
 .play-row {
   display: flex;

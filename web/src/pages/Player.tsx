@@ -7,6 +7,7 @@ import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
 import { FlipDigits } from '../components/ds/FlipDigits';
 import { Loading } from '../components/ds/Loading';
+import { MedalGlyphs } from '../components/ds/MedalGlyphs';
 import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
@@ -378,6 +379,11 @@ export default function Player() {
       <AppHeader context="STATS" />
 
       <div className="player-hero stats-hero">
+        {/* Unconditional (not nested in the !isMe avatar block below, which
+            your own profile doesn't render) — earned medals show the same
+            way whether you're looking at your own record or someone else's.
+            Renders nothing at all if nothing's been earned yet. */}
+        <MedalGlyphs earned={t.earnedMedals} mode="earnedOnly" className="profile-medals" />
         {!isMe ? (
           <div className="stats-who">
             {stats.user.picture ? (

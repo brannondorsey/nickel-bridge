@@ -30,8 +30,9 @@ packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/P
                 elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
                 biggest file in core), advisor.ts (checks a hand against a meaning's
                 machine-readable `req` constraints — saycConsistent feeds bid grading,
-                saycViolation feeds the robot bidding guardrail), types.ts,
-                barrel in index.ts
+                saycViolation feeds the robot bidding guardrail), medals.ts (the loyalty
+                rail's tier math — computeMedalProgress, pure function of two counts the
+                server supplies — see "Medal progress" below), types.ts, barrel in index.ts
 packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 38 logits),
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall = model argmax constrained to SAYC-admissible
@@ -66,6 +67,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 function of two PlayerStats, see "Compare and the gate" below),
                 activity.ts (the TRAFFIC feed's flat, ungrouped events — see
                 "The activity feed" below),
+                medals.ts (composes stats.ts's two cheap counts into core's
+                computeMedalProgress for /api/me — see "Medal progress" below),
                 ai-players.ts (benchmark AI personas — the "house" rows ranked in
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
@@ -134,7 +137,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 components/ds/ (design-system pieces, incl. BeamBar — the
                 diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
-                that resolves which sign-in doors a deployment has) + components/game/
+                that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
+                the Home rail and the shared suit-glyph row, see "Medal progress" below)
+                + components/game/
                 (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
@@ -1169,6 +1174,84 @@ is the only way to keep a four-board crossing clearly visible while a five-tourn
 still reads taller than a three-tournament one — a linear scale either flattens ordinary
 evenings or pegs the ceiling by the third crossing. A mark is one *run*, not one crossing, so
 five tournaments in a single evening is a single tall mark.
+
+**Medal progress (the loyalty rail):** a Home-screen widget that rewards continuous play
+with a suit medal at the 4th, 25th, 100th and 500th completed tournament — ♣, ♦, ♥, ♠, in
+that order. The tier math itself (`packages/core/src/medals.ts`'s `computeMedalProgress`)
+is pure and dependency-free like the rest of core; it takes two counts and the
+boards-per-tournament constant as plain arguments rather than reading anything, so neither
+core nor its tests know about SQL, `/api/me`, or `BOARDS_PER_TOURNAMENT`'s home in
+`db.ts`.
+
+Two counts feed it, kept deliberately separate — this is the same trap the activity
+feed's milestones and the leaderboard's `rated_tournaments` already navigate, so medals
+reuse the same discipline rather than inventing a third meaning for "how many
+tournaments":
+
+- **`tournamentsCompleted`** (`server/src/stats.ts`'s `completedTournamentCount`, modeled
+  on `activity.ts`'s `stmtAllCrossings` — group by tournament, keep only groups where
+  every board is `done`) is the **authoritative** count. It alone decides which medals are
+  colored in and exactly how many tournaments remain, and it is deliberately **not**
+  `playerStats().totals.tournamentsCompleted` (that one only falls out of a full
+  `standings()` sweep — too expensive for something `/api/me` computes on every load) and
+  **not** `rated_tournaments` (gated on ≥2 human finishers posting to `elo_history` — a
+  stricter, different set that exists only for ladder eligibility).
+- **`totalBoardsCompleted`** (the existing `completedBoardCount()`, already public via
+  `/api/me`'s `user.boards`) only ever smooths the **bar**: a player mid-way through their
+  4th tournament sees it climb board by board, even though the club medal itself doesn't
+  color in until that 4th tournament actually finishes. Because the two counts can drift
+  apart (many tournaments left half-finished at once inflate boards without completing
+  any of them), `computeMedalProgress`'s `pct` is capped at 99 while the tier isn't
+  actually earned — the one defensive rule in the whole function, there because a full bar
+  next to a still-grey medal would read as a bug.
+
+`tournamentsRemaining` is likewise **exact**, off `tournamentsCompleted` alone
+(`threshold − tournamentsCompleted`) — never derived from boards, so the widget's own
+copy ("Complete 2 more tournaments to join the rankings") can't drift from what the medal
+itself is actually waiting on. That first medal's copy is deliberately not generic: 4
+completed tournaments is also this app's leaderboard threshold
+(`PROVISIONAL_MIN_TOURNAMENTS`), so "join the rankings" is literally true rather than
+flavor text, and `MedalBar.tsx`'s copy says so.
+
+**Human-only**, the same gate Elo and placement already use: `server/src/medals.ts`'s
+`medalProgressFor` returns `null` for `kind !== 'human'`, and `stats.ts`'s `playerStats()`
+zeroes `totals.earnedMedals` the same way for a house profile — the benchmark AI personas
+can churn through hundreds of tournaments and never show a medal.
+
+**No new persisted column.** Like `tournamentsCompleted`/`completedBoardCount`
+themselves, a medal tier is derived fresh on every read rather than diaried — the
+evergreen, recompute-on-read discipline the rest of this codebase already follows for
+Elo and placement. There is no "you just earned a medal" toast or celebration moment in
+this first pass; a medal simply appears colored the next time the rail or the profile
+loads, the same way a new `elo_history` row silently updates the RATING chart.
+
+**Two call sites, two shapes.** `/api/me`'s `medals` field
+(`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,
+the current target, the bar's `pct`, `tournamentsRemaining` — because Home's `MedalBar`
+needs all of it. `playerStats()`'s `totals.earnedMedals` is just the earned list, computed
+inline from the `tournamentsCompleted`/`boardsCompleted` that function already has in
+hand for whichever profile is being viewed (self or someone else's) — no second query —
+because the profile (`Player.tsx`'s `MedalGlyphs earned={...} mode="earnedOnly"`) is
+deliberately a trophy case: only what's been won, no bar, no bounding box, no caption.
+`MedalGlyphs`' other mode, `mode="all"`, is what `MedalBar` uses for Home's rail — all
+four suits always render, close together, colored once earned via the app's existing
+`.suit-s/.suit-h/.suit-d/.suit-c` classes, unearned ones muted via `.medal-glyph-locked`
+(`var(--line)`) — the exact "earned in real color, rest muted" idiom `StarGrade.tsx`
+already established, reused rather than reinvented. Suit coloring goes only through the
+existing `--suit-*` tokens, so night mode and the colorblind palette need no extra work.
+
+**The bar's outline and hatch deliberately match `TrickArea.tsx`'s trick-meter** — the bar
+in the middle of the card-play screen — rather than `PctBar`'s plain flat `--chart-track`
+track: `.medal-bar-track` takes the same `1px solid var(--ink)` structural border, and the
+unfilled remainder reuses the trick-meter's exact hatch,
+`repeating-linear-gradient(-45deg, var(--ink), var(--ink) 1px, transparent 1px, transparent 1.5px)`
+— applied to what's actually left to fill rather than to one side's actively-filling hand,
+which is the closest honest match to "a medal in progress reads the same way a trick
+count does." The percentage itself is rendered in plain body weight next to the bar,
+never as a bolded standalone figure — `.num`'s doc comment explains why: Besley's
+tabular-figure feature is broken in every published build (a font bug, not a design
+choice), and bolding a raw number invites exactly the "why does one digit look heavier"
+problem that comment warns about.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

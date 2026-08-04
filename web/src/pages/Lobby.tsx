@@ -5,6 +5,7 @@ import { TournamentInfo, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { Loading } from '../components/ds/Loading';
+import { MedalBar } from '../components/ds/MedalBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { TicketStub } from '../components/ds/TicketStub';
 import { BoardTicketRow } from '../components/game/BoardTicketRow';
@@ -65,6 +66,8 @@ export default function Lobby() {
             </div>
             <div className="home-sub">The bridge is open.</div>
           </div>
+
+          {me?.user?.medals ? <MedalBar progress={me.user.medals} /> : null}
 
           <div className="home-current">
             <div className="home-current-row">

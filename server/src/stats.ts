@@ -4,14 +4,16 @@ import {
   Contract,
   ConventionFamily,
   ELO_INITIAL,
+  MedalSuit,
   Seat,
   Strain,
   bidCategory,
   boardConditions,
+  computeMedalProgress,
   conventionFamily,
   explainBid,
 } from '@bridge/core';
-import { db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { StandingDetail, standings } from './tournaments.js';
 
 const stmtUser = db.prepare(
@@ -128,6 +130,14 @@ export interface PlayerStats {
     boardsCompleted: number;
     tournamentsPlayed: number;
     tournamentsCompleted: number;
+    /**
+     * Loyalty medals actually earned (see packages/core/src/medals.ts) —
+     * always empty for `kind === 'ai'` house personas, the same human-only
+     * gate Elo and placement already apply. No `target`/`pct` here: this
+     * page is a trophy case (Player.tsx shows only what's been won, no bar,
+     * no caption), unlike the Home rail's `medals` field on `/api/me`.
+     */
+    earnedMedals: MedalSuit[];
     /** longest run of consecutive UTC calendar days with >=1 completed board, from `dailyBoards` */
     streakDays: number;
     currentElo: number;
@@ -416,6 +426,32 @@ export function playerIdentity(
  */
 export function completedBoardCount(userId: number): number {
   return (stmtCompletedBoards.get(userId) as { n: number }).n;
+}
+
+/**
+ * Tournaments where ALL of this user's boards are done, as one cheap COUNT —
+ * modeled on activity.ts's `stmtAllCrossings` (group by tournament, keep only
+ * groups whose count hits the full board total), not on `playerStats()`'s
+ * `totals.tournamentsCompleted`, which only falls out as a byproduct of a
+ * full `standings()` sweep over every tournament the player has touched.
+ * medals.ts's `medalProgressFor` needs this on every `/api/me` load, so it
+ * has to stay this cheap. Deliberately NOT the same thing as
+ * `rated_tournaments` (app.ts's leaderboard query) — that one is gated on
+ * ≥2 human finishers actually posting to `elo_history`, a stricter and
+ * different set used only for ladder eligibility.
+ */
+const stmtCompletedTournaments = db.prepare(
+  `SELECT COUNT(*) AS n FROM (
+     SELECT b.tournament_id FROM boards b
+     JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+     WHERE b.user_id = ? AND b.state = 'done'
+     GROUP BY b.tournament_id
+     HAVING COUNT(*) = ?
+   )`,
+);
+
+export function completedTournamentCount(userId: number, boardsPerTournament: number): number {
+  return (stmtCompletedTournaments.get(userId, boardsPerTournament) as { n: number }).n;
 }
 
 /** Every persona row, as a pure read — `ensureAiPlayers()` writes and must not be used here. */
@@ -837,12 +873,20 @@ export function playerStats(
     .map(([date, count]) => ({ date, count }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Reuses `tournamentsCompleted`/`boards.length` already computed above —
+  // no extra query. AI personas never earn medals (same human-only gate as
+  // Elo/placement), regardless of how many tournaments they've churned
+  // through.
+  const earnedMedals: MedalSuit[] =
+    u.kind === 'human' ? computeMedalProgress(tournamentsCompleted, boards.length, BOARDS_PER_TOURNAMENT).earned : [];
+
   return {
     user: { id: u.id, handle: u.handle, picture: u.picture, elo: u.elo, createdAt: u.created_at, kind: u.kind },
     totals: {
       boardsCompleted: boards.length,
       tournamentsPlayed: byTournament.size,
       tournamentsCompleted,
+      earnedMedals,
       streakDays: longestDayStreak(dailyBoards.map((d) => d.date)),
       currentElo: u.elo,
       // Read off the same series the RATING chart draws, deliberately, rather

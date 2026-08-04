@@ -1,5 +1,20 @@
 /** Thin typed client for the server API. */
 
+/** ♣/♦/♥/♠, matching packages/core/src/medals.ts's tier order (4/25/100/500 tournaments). */
+export type MedalSuit = 'c' | 'd' | 'h' | 's';
+
+/**
+ * The Home rail's medal progress (server/src/medals.ts), fully computed
+ * server-side — the client only renders it. `target`/`pct`/`tournamentsRemaining`
+ * are null/0 once every medal is earned (`target === null`).
+ */
+export interface MedalProgress {
+  earned: MedalSuit[];
+  target: MedalSuit | null;
+  pct: number;
+  tournamentsRemaining: number;
+}
+
 export interface Me {
   user: {
     id: number;
@@ -20,6 +35,8 @@ export interface Me {
      * profile the client has their board count but not its own.
      */
     boards: number;
+    /** null only for a signed-out/non-human session; never applies to a real user's own /api/me */
+    medals: MedalProgress | null;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -233,6 +250,8 @@ export interface PlayerStats {
     boardsCompleted: number;
     tournamentsPlayed: number;
     tournamentsCompleted: number;
+    /** loyalty medals actually earned (packages/core/src/medals.ts) — always [] for house/AI profiles */
+    earnedMedals: MedalSuit[];
     /** longest run of consecutive UTC calendar days with >=1 completed board (server/src/stats.ts) */
     streakDays: number;
     currentElo: number;
