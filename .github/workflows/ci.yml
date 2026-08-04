@@ -76,8 +76,8 @@ jobs:
       # token that can deploy arbitrary images, read the SQLite volume, or destroy the app —
       # and unlike a release tag, a branch moves with every upstream commit rather than a
       # deliberate publish. The other actions here stay on their major tags: they are
-      # GitHub's own or non-privileged, and .github/dependabot.yml now watches all of them,
-      # including this pin (it rewrites the SHA and the comment on each upstream release).
+      # GitHub's own or non-privileged. This pin has to be bumped by hand on each upstream
+      # release — update the SHA and the trailing comment together.
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master as of 2026-08-02
       # The `github.event.action != 'closed'` guard above was evaluated before test/e2e/
       # docker ran, which is minutes ago — the PR may well have merged since. Creating the
