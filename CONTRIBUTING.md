@@ -1240,18 +1240,23 @@ four suits always render, close together, colored once earned via the app's exis
 already established, reused rather than reinvented. Suit coloring goes only through the
 existing `--suit-*` tokens, so night mode and the colorblind palette need no extra work.
 
-**The bar's outline and hatch deliberately match `TrickArea.tsx`'s trick-meter** — the bar
-in the middle of the card-play screen — rather than `PctBar`'s plain flat `--chart-track`
-track: `.medal-bar-track` takes the same `1px solid var(--ink)` structural border, and the
-unfilled remainder reuses the trick-meter's exact hatch,
-`repeating-linear-gradient(-45deg, var(--ink), var(--ink) 1px, transparent 1px, transparent 1.5px)`
-— applied to what's actually left to fill rather than to one side's actively-filling hand,
-which is the closest honest match to "a medal in progress reads the same way a trick
-count does." The percentage itself is rendered in plain body weight next to the bar,
-never as a bolded standalone figure — `.num`'s doc comment explains why: Besley's
-tabular-figure feature is broken in every published build (a font bug, not a design
-choice), and bolding a raw number invites exactly the "why does one digit look heavier"
-problem that comment warns about.
+**The bar's outline is a deliberate borrow from `TrickArea.tsx`'s trick-meter** — the bar
+in the middle of the card-play screen — rather than `PctBar`'s borderless track:
+`.medal-bar-track` takes the same `1px solid var(--ink)` structural border. The unfilled
+remainder is a flat `--chart-track` fill rather than the trick-meter's diagonal hatch,
+though — `PctBar`'s plainer "nothing here yet" convention, not the trick-meter's. The
+percentage itself is rendered in plain body weight next to the bar, never as a bolded
+standalone figure — `.num`'s doc comment explains why: Besley's tabular-figure feature is
+broken in every published build (a font bug, not a design choice), and bolding a raw
+number invites exactly the "why does one digit look heavier" problem that comment warns
+about.
+
+**The widget itself is unboxed** — no panel background or border, just page-level
+padding (`.medal-bar`, styled like the unboxed `.home-gate` hint rather than
+`.home-current`'s boxed ticket card) — and it sits on Home between the "play" block
+(the OPEN NOW/KEEP GOING card, plus the sealed next-tournament hint when one's showing)
+and TOLLS PAID, reading as the bridge between what a player is doing now and what
+they've already finished.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

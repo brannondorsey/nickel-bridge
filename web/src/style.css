@@ -2015,18 +2015,16 @@ a.ds-btn-secondary:hover {
 
 /* ---- MedalBar: Home's medal rail (server/src/medals.ts's MedalProgress) —
    a bar, then the four suit marks close together with the incentive
-   sentence beside them on the same line. The bar's track is outlined and
-   its unfilled portion hatched, deliberately matching .trick-meter above
-   (the bar in the middle of the play screen) rather than PctBar's plain
-   flat --chart-track: a medal in progress is the same "how close are we"
-   reading as a trick count. Suit coloring goes only through the existing
-   --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c above), so night
-   mode and the colorblind palette need no extra work here. */
+   sentence beside them on the same line. Unboxed — no panel background or
+   border around the widget itself, just page-level spacing, same as
+   .home-gate below rather than .home-current's boxed ticket card. The bar's
+   track keeps trick-meter's 1px ink outline, but its unfilled portion is a
+   flat --chart-track fill (no hatch) — PctBar's plain "nothing here yet"
+   convention, not trick-meter's. Suit coloring goes only through the
+   existing --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c above), so
+   night mode and the colorblind palette need no extra work here. */
 .medal-bar {
-  margin: 16px 16px 0;
-  background: var(--panel);
-  border: 1.5px solid var(--ink);
-  padding: 14px;
+  padding: 18px 16px 0;
 }
 .medal-bar-line {
   display: flex;
@@ -2036,7 +2034,8 @@ a.ds-btn-secondary:hover {
 .medal-bar-track {
   position: relative;
   flex: 1;
-  height: 8px;
+  height: 10px;
+  background: var(--chart-track);
   border: 1px solid var(--ink);
   overflow: hidden;
 }
@@ -2058,15 +2057,6 @@ a.ds-btn-secondary:hover {
 }
 .medal-bar-fill.tint-s {
   background: var(--suit-s);
-}
-/* the remainder — reuses trick-meter-fill's exact hatch, applied to what's
-   actually left to fill rather than to one side's active fill */
-.medal-bar-hatch {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  background: repeating-linear-gradient(-45deg, var(--ink), var(--ink) 1px, transparent 1px, transparent 1.5px);
 }
 /* plain weight on purpose — Besley's tabular-nums bug (see .num above) once
    made a bolded standalone "40%" read as if one digit carried more weight

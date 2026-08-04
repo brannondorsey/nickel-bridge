@@ -67,8 +67,6 @@ export default function Lobby() {
             <div className="home-sub">The bridge is open.</div>
           </div>
 
-          {me?.user?.medals ? <MedalBar progress={me.user.medals} /> : null}
-
           <div className="home-current">
             <div className="home-current-row">
               <TicketStub label="OPEN NOW" value="4 boards" width={132} />
@@ -114,6 +112,8 @@ export default function Lobby() {
               />
             </div>
           ) : null}
+
+          {me?.user?.medals ? <MedalBar progress={me.user.medals} /> : null}
 
           <div className="home-tolls">
             <div className="label-caps">TOLLS PAID</div>

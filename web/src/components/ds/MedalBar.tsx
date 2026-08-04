@@ -43,10 +43,12 @@ function Sentence({ progress }: { progress: MedalProgress }) {
  * same line. Fed by one server-computed `MedalProgress` (server/src/medals.ts,
  * `/api/me`'s `medals` field) so this component only renders, never computes.
  *
- * The bar's track is outlined and its unfilled portion hatched, matching
- * `TrickArea.tsx`'s trick-meter — the bar in the middle of the card-play
- * screen — rather than the plain flat-track `PctBar` used elsewhere; see the
- * `.medal-bar-*` rules in style.css, placed beside `.trick-meter-*`.
+ * The bar's track is outlined, matching `TrickArea.tsx`'s trick-meter — the
+ * bar in the middle of the card-play screen — rather than the borderless
+ * `PctBar` used elsewhere; unlike the trick-meter, the unfilled portion is a
+ * flat `--chart-track` fill (no hatch), the same "nothing here yet"
+ * convention `PctBar` itself uses. See the `.medal-bar-*` rules in
+ * style.css, placed beside `.trick-meter-*`.
  */
 export function MedalBar({ progress }: { progress: MedalProgress }) {
   const { earned, target, pct } = progress;
@@ -56,7 +58,6 @@ export function MedalBar({ progress }: { progress: MedalProgress }) {
       <div className="medal-bar-line">
         <div className="medal-bar-track">
           <div className={`medal-bar-fill tint-${target ?? 's'}`} style={{ width: `${fillPct}%` }} />
-          {target ? <div className="medal-bar-hatch" style={{ width: `${100 - pct}%` }} /> : null}
         </div>
         <span className="medal-pct num">{fillPct}%</span>
       </div>
