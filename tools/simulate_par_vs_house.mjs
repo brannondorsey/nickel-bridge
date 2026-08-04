@@ -136,6 +136,31 @@ async function playHand(deal, contract, calls, houseTier, houseSeedBase, robotSe
   }
 }
 
+/**
+ * The zero-noise baseline: BOTH sides bid pure model-argmax (no BID_NOISE —
+ * identical to the 'perfect'/legacy tier's bidding, and to 'expert' tier's,
+ * since topN=1 is a verified no-op) and then play the resulting contract
+ * TRUE double-dummy (ai.chooseCard — the actual 'perfect' tier's card play,
+ * not chooseCardSampled at any K). This isolates how much of "beats par"
+ * survives with NO artificial robot imperfection anywhere: the auction is
+ * still blind to the other three hands (that's what bidding IS), so this
+ * measures the structural gap between a real, information-limited auction
+ * and the omniscient double-dummy equilibrium par is defined against — as
+ * opposed to any tier's deliberate noise/sampling.
+ */
+async function playPure(deal, boardNo) {
+  const seedBase = `${SEED}:pure`;
+  const calls = bidAuction(deal, (_seat, calls) => bidder.chooseCall(deal, calls));
+  const contract = core.finalContract(deal.dealer, calls);
+  if (!contract) return 0; // passed out
+  const plays = [];
+  for (;;) {
+    const ps = core.playState(deal, contract, plays);
+    if (ps.isOver) return core.boardScoreNS(contract, deal.vul, ps.declarerTricks);
+    plays.push(await ai.chooseCard(deal, contract, plays));
+  }
+}
+
 /** One house tier's board: South bids at its own tier, N/E/W bid at the board's tier. */
 async function playAsHouse(deal, boardNo, tier) {
   const houseSeedBase = `${SEED}:house:${tier}`;
@@ -159,7 +184,7 @@ console.error(
 async function processBoard(no) {
   const deal = core.dealBoard(SEED, no);
   const par = dealerPar(deal); // synchronous main-thread DDS call — cheap (0.1ms DealerPar + one 20-problem table)
-  const scores = {};
+  const scores = { pure: await playPure(deal, no) };
   for (const tier of TIERS) scores[tier] = await playAsHouse(deal, no, tier);
   return { no, par, ...scores };
 }
@@ -204,6 +229,15 @@ console.log(
 for (const tier of TIERS) {
   const n = rows.filter((r) => r[tier] > r.par).length;
   console.log(`  ${TIER_HANDLE[tier].padEnd(12)} (${tier.padEnd(12)}) beats par: ${n}/${BOARDS} (${((100 * n) / BOARDS).toFixed(1)}%)`);
+}
+
+// Zero-noise baseline: both sides pure argmax bidding + true double-dummy
+// play. Isolates the auction's inherent information gap from par — nothing
+// here is an "imperfect opponent," so a nonzero rate is NOT attributable to
+// robot noise/mistakes at all.
+{
+  const n = rows.filter((r) => r.pure > r.par).length;
+  console.log(`\nZero-noise baseline (pure argmax bid, true-DD play, BOTH sides) beats par: ${n}/${BOARDS} (${((100 * n) / BOARDS).toFixed(1)}%)`);
 }
 
 if (process.env.PAR_SIM_SAMPLE) {
