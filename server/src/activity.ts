@@ -1,3 +1,4 @@
+import { ELO_INITIAL } from '@bridge/core';
 import { db, BOARDS_PER_TOURNAMENT } from './db.js';
 import { standings } from './tournaments.js';
 
@@ -130,7 +131,9 @@ const stmtAllCrossings = db.prepare(
 );
 
 // tournament_id IS the rating timeline (see the header note), so this ordering
-// is the rating sequence — never order elo_history by id or by finished_at.
+// is the rating sequence and the only order in which before/after chain — never
+// order elo_history by id or by finished_at in SQL. Both milestones below re-sort
+// a COPY into play order, which is a different question; see `byFinish`.
 const stmtEloSeries = db.prepare(
   `SELECT tournament_id, before, after FROM elo_history WHERE user_id = ? ORDER BY tournament_id`,
 );
@@ -182,9 +185,11 @@ function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number
 
   // The crossing that took them over the provisional quota and onto the ladder.
   // This is a claim about WALL-CLOCK order, so it cannot use `series` as-is:
-  // that array is ordered by tournament_id, which is the rating-replay order
-  // (correct for `best` below), not the order the player actually finished
-  // things in. Tournaments never close (see tournaments.ts), so a player can
+  // that array is ordered by tournament_id, which is the rating-replay order,
+  // not the order the player actually finished things in. (`byFinish` serves
+  // the peak milestone below for the same reason, though that one also has to
+  // rebuild the ratings themselves — see there.)
+  // Tournaments never close (see tournaments.ts), so a player can
   // resume and finish a long-abandoned, low-id tournament today; the moment it
   // rates, its row lands EARLY in tournament_id order but its `finishedAt` is
   // today. Indexing `series` directly would then hand a veteran player who
@@ -192,8 +197,13 @@ function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number
   // some *other*, older tournament now occupies the quota-th slot. Sorting by
   // when each rated tournament actually finished (for this player) makes the
   // quota-th entry stable under that kind of backfill.
+  // Same key and same id tie-break as stats.ts's eloProgression(), so a peak the
+  // profile draws and a peak this feed announces can't be resolved differently
+  // when two crossings share a finish second.
   const byFinish = [...series].sort(
-    (a, b) => (finishedAt.get(a.tournament_id) ?? 0) - (finishedAt.get(b.tournament_id) ?? 0),
+    (a, b) =>
+      (finishedAt.get(a.tournament_id) ?? 0) - (finishedAt.get(b.tournament_id) ?? 0) ||
+      a.tournament_id - b.tournament_id,
   );
   const ladder = byFinish[provisionalMin - 1];
   const ladderAt = ladder ? finishedAt.get(ladder.tournament_id) : undefined;
@@ -203,16 +213,26 @@ function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number
 
   // A new personal best. The first rated crossing is skipped on purpose — it
   // is trivially a peak, and announcing it says nothing.
+  //
+  // Walked over `byFinish` too, and rebuilt from each crossing's delta rather
+  // than read off `after` — the same reconstruction stats.ts's eloProgression()
+  // makes, for the same reason and so the two surfaces can't print different
+  // numbers for the same peak. "A new best" is a claim about a moment in this
+  // player's life, and `after` is a running total over the replay's id order:
+  // a crossing backfilled today carries a rating computed as if the higher-id
+  // crossings the player finished weeks ago had not happened yet.
   let best = -Infinity;
-  for (let i = 0; i < series.length; i++) {
-    const row = series[i];
-    if (i > 0 && row.after > best) {
+  let elo = ELO_INITIAL;
+  for (let i = 0; i < byFinish.length; i++) {
+    const row = byFinish[i];
+    elo += row.after - row.before;
+    if (i > 0 && elo > best) {
       const at = finishedAt.get(row.tournament_id);
       if (at !== undefined && at >= sinceUnix) {
-        out.push({ kind: 'milestone', userId, at, milestone: 'peak-rating', value: row.after });
+        out.push({ kind: 'milestone', userId, at, milestone: 'peak-rating', value: elo });
       }
     }
-    best = Math.max(best, row.after);
+    best = Math.max(best, elo);
   }
   return out;
 }

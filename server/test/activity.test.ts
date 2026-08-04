@@ -215,6 +215,51 @@ describe('GET /api/activity', () => {
     expect(milestones).toHaveLength(0);
   });
 
+  it('announces a peak rating on the crossing the player finished last, not the highest-id one', async () => {
+    // Same backfill shape as the test above, aimed at 'peak-rating'. The
+    // ratings in elo_history are a running total over the REPLAY's id order, so
+    // a resumed old crossing carries a figure computed as if the newer ones had
+    // not happened; read that way, the sequence below has no new best in it at
+    // all and the milestone silently never fires. Walked in play order and
+    // rebuilt from each crossing's delta (as stats.ts's eloProgression does, so
+    // the two surfaces can't print different peaks), the player's last crossing
+    // is a genuine personal best.
+    const climber = new TestClient(app, 'ActivityClimber');
+    await climber.login();
+    const uid = (db.prepare(`SELECT id FROM users WHERE handle = 'ActivityClimber'`).get() as { id: number }).id;
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const lowTid = mkTournament('climber-old'); // minted first, so the LOWER id...
+    const highTid = mkTournament('climber-new');
+
+    const now = Math.floor(Date.now() / 1000);
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, contract, tricks_declarer, score_ns, updated_at)
+       VALUES (?, ?, ?, 'done', '{}', 0, 0, ?)`,
+    );
+    // ...but finished LAST: the newer tournament three days ago, the resumed old one today.
+    for (let no = 1; no <= 4; no++) insertBoard.run(highTid, uid, no, now - 3 * 86400);
+    for (let no = 1; no <= 4; no++) insertBoard.run(lowTid, uid, no, now - 60);
+
+    // Chain in id order: 1200 → 1250 (old, +50) → 1230 (new, −20). Nothing in
+    // that sequence ever exceeds 1250 after the first crossing.
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, lowTid, 1200, 1250);
+    insertElo.run(uid, highTid, 1250, 1230);
+
+    const { recentActivity } = await import('../src/activity.js');
+    const peaks = recentActivity(now - 8 * 86400, 1).events.filter(
+      (e) => e.kind === 'milestone' && e.userId === uid && e.milestone === 'peak-rating',
+    );
+    // Play order: −20 three days ago (1180), then +50 today (1230) — a best,
+    // announced on the day it happened and worth the rating the player holds.
+    expect(peaks).toHaveLength(1);
+    expect(peaks[0].value).toBe(1230);
+    expect(peaks[0].at).toBe(now - 60);
+  });
+
   it('never mentions a player who has not picked a handle', async () => {
     // /auth/dev creates the account; skipping /api/handle leaves it nameless.
     const res = await app.inject({ method: 'POST', url: '/auth/dev', payload: { name: 'Nameless' } });

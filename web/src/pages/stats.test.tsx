@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { shortDate } from '../format';
 import { meFixture, playerStatsEmpty, playerStatsFull } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Player from './Player';
@@ -44,6 +45,26 @@ describe('Stats', () => {
     expect(screen.getByText('PEAK 1502')).toBeInTheDocument();
     expect(screen.getByText('- - start 1200')).toBeInTheDocument();
     expect(screen.getByText('BID ACCURACY')).toBeInTheDocument();
+  });
+
+  // The x axis is time — stats.ts orders every series by when this player
+  // finished the crossing, never by tournament id — so its left end names the
+  // date the line starts on. The ordinal it used to print ("10 tournaments
+  // ago") described the old id ordering, and the count is already in the panel
+  // heading and the LOOKBACK switch.
+  it('captions each chart with the first point’s date rather than a tournament count', async () => {
+    apiMock.playerStats.mockResolvedValue(playerStatsFull);
+    renderStats();
+    await screen.findByText('MATCHPOINTS — LAST 10 TOURNAMENTS');
+    const starts = Array.from(document.querySelectorAll('.sparkline-captions')).map(
+      (el) => el.firstElementChild?.textContent ?? '',
+    );
+    expect(starts).toEqual([
+      shortDate(playerStatsFull.pctSeries[0].finishedAt!),
+      shortDate(playerStatsFull.eloSeries[0].finishedAt!),
+      shortDate(playerStatsFull.accuracySeries[0].finishedAt!),
+    ]);
+    expect(document.body.textContent).not.toContain('tournaments ago');
   });
 
   describe('lookback window', () => {

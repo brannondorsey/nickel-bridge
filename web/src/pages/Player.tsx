@@ -333,7 +333,22 @@ export default function Player() {
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.accuracy!,
   }));
-  const ago = (n: number) => (n > 1 ? `${n} tournaments ago` : '');
+  /**
+   * The left-hand axis caption: where the line starts, as a DATE.
+   *
+   * It used to read "39 tournaments ago" — an ordinal, which described the axis
+   * honestly back when the server handed these series over in tournament-id
+   * order. They arrive in play order now (stats.ts's StatPoint), so the axis is
+   * time and the caption should say so; the panel headings and the LOOKBACK
+   * switch already carry the count. Same "Apr 5" … "this week" shape DayGrid
+   * uses at the top of this page, so the two date axes read alike.
+   *
+   * Falls back to the old ordinal when the first point has no finish time —
+   * possible only for a rated crossing with no completed board, which
+   * eloParticipants makes unreachable, but a caption is not worth a crash.
+   */
+  const axisStart = (points: { caption?: string }[]) =>
+    points.length > 1 ? (points[0].caption ?? `${points.length} tournaments ago`) : '';
 
   const declaring = t.declarer.boards ? Math.round((t.declarer.made / t.declarer.boards) * 100) : null;
   const defending = t.defense.boards ? Math.round((t.defense.beat / t.defense.boards) * 100) : null;
@@ -480,7 +495,7 @@ export default function Player() {
               label="Matchpoints by tournament"
               refValue={50}
               refLabel="field average 50%"
-              leftCaption={ago(pctPoints.length)}
+              leftCaption={axisStart(pctPoints)}
               format={(v) => `${Math.round(v)}%`}
             />
           </ChartPanel>
@@ -492,7 +507,7 @@ export default function Player() {
                 label="Rating by tournament"
                 refValue={1200}
                 refLabel="start 1200"
-                leftCaption={ago(eloPoints.length)}
+                leftCaption={axisStart(eloPoints)}
               />
               {/* Elo is wiped and replayed from every crossing on each scored board
                   (server/src/tournaments.ts), so this line is today's reconstruction
@@ -516,7 +531,7 @@ export default function Player() {
               points={accPoints}
               label="Bid accuracy by tournament"
               trendWindow={trendWindow(accPoints.length)}
-              leftCaption={ago(accPoints.length)}
+              leftCaption={axisStart(accPoints)}
               rightCaption="latest · - - trend"
               format={(v) => `${Math.round(v)}%`}
             />
