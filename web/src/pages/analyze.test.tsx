@@ -338,6 +338,37 @@ describe('the play lens', () => {
     }
   });
 
+  it('a pass-out par prints Passed out on the sealed receipt, never the raw DDS token', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(
+      makeAnalysis({ par: { ...parPayload, parScore: 0, parContracts: ['pass'] } }),
+    );
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+    const parStub = document.querySelector('.worth-stub.sealed')!;
+    expect(parStub.textContent).toContain('Passed out');
+    expect(parStub.textContent).toContain('+0');
+    expect(parStub.textContent).not.toMatch(/^pass$/m);
+  });
+
+  it('a board claimed before the first card opens on the settled reading, not an invitation to hunt moments', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis({ claimedAtPly: 0, plies: [], moments: [], setAside: 0 }));
+      renderAnalyze('/t/12/b/2/analyze?lens=play');
+      await screen.findByText(/THE AUDIT — TRICK/);
+      const ribbon = document.querySelector('.audit-ribbon')!;
+      expect(ribbon.textContent).toMatch(/Settled before the first card/);
+      expect(ribbon.textContent).not.toMatch(/Step through the play/);
+      expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeDisabled();
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
   it("a drifted unjudged ply — refreshed cost over the floor — is captioned as the field shifting, not as sub-floor", async () => {
     const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
     (Element.prototype as unknown as { animate: unknown }).animate = animateStub;

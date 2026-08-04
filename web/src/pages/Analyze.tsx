@@ -325,6 +325,10 @@ function MomentRow({
  * unrecognised string passes through untouched rather than being guessed at.
  */
 function parContractLabel(raw: string): string {
+  // a pass-out par (a dead-flat deal where any contract by either side goes
+  // down) carries a non-contract token in this field — give it the app's own
+  // label rather than whatever DDS spells "nobody should bid" as
+  if (raw.trim() === '' || /^pass/i.test(raw.trim())) return 'Passed out';
   // the declarer group is a SIDE (NS/EW) or, when only one hand can make it,
   // a single SEAT (N/E/S/W) — DDS emits both ("3D*-EW-1", "3N-W+2", "6N-N")
   const m = /^(\d)([SHDCN])(\*{0,2})-(NS|EW|N|E|S|W)([+-]\d+)?$/.exec(raw.trim());
@@ -790,6 +794,16 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   }
 
   if (ply === 0) {
+    // a laydown claimed before the first decision has no moments to promise —
+    // the whole play is server-fast-played tail, and the intro says so
+    if (analysis.claimedAtPly === 0) {
+      return {
+        text: 'Settled before the first card — the engine could already claim every remaining trick, so the whole play was fast-played for both sides. Nothing here was yours to decide.',
+        gain: null,
+        excused: false,
+        highlight: null,
+      };
+    }
     const leader = flat[0] ? SEAT_SHORT[flat[0].seat] : '';
     return {
       text: `The opening lead is ${leader}'s. Step through the play — the audit marks the moments worth more.`,
