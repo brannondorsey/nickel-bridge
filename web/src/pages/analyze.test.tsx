@@ -195,7 +195,7 @@ describe('the overview: bid moments and par', () => {
     const ledger = document.querySelector('.analyze-moments')!;
     expect(worth.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const parStub = document.querySelector('.worth-stub.sealed')!;
-    expect(parStub.textContent).toContain('THE CARDS ALLOWED');
+    expect(parStub.textContent).toContain('OMNISCIENCE FOUND');
     expect(parStub.textContent).toContain('4♠ by N–S =');
     expect(parStub.textContent).toContain('3NT by W +2');
     expect(parStub.textContent).toContain('+620');
@@ -208,7 +208,22 @@ describe('the overview: bid moments and par', () => {
     expect(document.querySelector('.worth-gatelab')!.textContent).toBe('PAR');
     const youLab = [...document.querySelectorAll('.worth-dotlab')].find((el) => el.textContent!.includes('YOU'))!;
     expect(youLab.textContent).toContain('+620');
+    // donePlayed's table (+620) ties parPayload's par (620) — not a beat, so
+    // the finding stays the "nobody bids face up" framing, not the beat-par one
     expect(screen.getByText(/par is the yardstick for this board/)).toBeInTheDocument();
+  });
+
+  it('a table that outscores par gets the beat-par finding, not the missed-it one', async () => {
+    apiMock.board.mockResolvedValue(donePlayed); // your table: +620
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: { ...parPayload, parScore: 100 } }));
+    renderAnalyze();
+    await screen.findByText('THE CARDS WERE WORTH');
+    // "bidding" is a linked glossary term, splitting the sentence across
+    // elements — read the finding paragraph's full textContent, same as the
+    // bid-moment aside above does for the same reason
+    const finding = document.querySelector('.analyze-finding')!;
+    expect(finding.textContent).toMatch(/did better than perfect bidding allows for either side/);
+    expect(finding.textContent).not.toMatch(/not a target anyone missed/);
   });
 });
 

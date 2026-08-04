@@ -366,7 +366,7 @@ function CardsWorthPanel({ board, analysis }: { board: BoardView; analysis: Anal
               <InkStamp rotate={-6} color="var(--muted)" className="worth-stamp">
                 PAR
               </InkStamp>
-              <span className="worth-stub-label">THE CARDS ALLOWED</span>
+              <span className="worth-stub-label">OMNISCIENCE FOUND</span>
               <b className="worth-contract num">
                 <GlossaryProse text={par.parContracts.map(parContractLabel).join(' · ')} />
               </b>
@@ -388,7 +388,13 @@ function CardsWorthPanel({ board, analysis }: { board: BoardView; analysis: Anal
           </div>
           {field.length > 1 ? <WorthRail field={field} parScore={par.parScore} /> : null}
           <p className="analyze-finding">
-            <GlossaryProse text="Nobody bids with the cards face up — par is the yardstick for this board, not a target anyone missed." />
+            <GlossaryProse
+              text={
+                r.scoreNS > par.parScore
+                  ? "Your table did better than perfect bidding allows for either side — nobody bids with the cards face up, so beating par happens about as often as missing it."
+                  : 'Nobody bids with the cards face up — par is the yardstick for this board, not a target anyone missed.'
+              }
+            />
           </p>
         </>
       ) : (
