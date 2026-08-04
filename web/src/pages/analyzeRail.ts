@@ -47,6 +47,9 @@ export interface RailLayout {
   /** par's 0..1 position (the dashed gate) */
   gate: number;
   dots: RailDot[];
+  /** tables whose scores were sampled out of a crowded rail — counted, never
+   *  silently dropped (the ledger's setAside precedent) */
+  omittedTables: number;
 }
 
 /** clamp band so dots and their centred labels stay inside the frame */
@@ -55,6 +58,15 @@ const EDGE = 0.07;
  *  same-band neighbours (two apart) get at least double — enough for the
  *  contract line at the rail's label size */
 const MIN_GAP = 0.08;
+/**
+ * A crowded field is SAMPLED down to this many dots rather than squeezed:
+ * below the min-gap the labels collide, and shrinking the gap further turns
+ * the rail into the smear it exists to avoid. Selection keeps YOU, the min
+ * and the max (so the axis span never lies), then the most-populated scores
+ * — the field's modes — and counts what it leaves out. Eight dots at full
+ * MIN_GAP still fit the frame (7 × 0.08 < 0.86).
+ */
+export const MAX_RAIL_DOTS = 8;
 
 export function railLayout(field: RailDotInput[], parScore: number): RailLayout {
   // tables sharing a score merge into one dot — stacked dots are unreadable,
@@ -68,7 +80,25 @@ export function railLayout(field: RailDotInput[], parScore: number): RailLayout 
     byScore.set(f.score, m);
   }
 
-  const scores = [...byScore.keys()].sort((a, b) => a - b);
+  // sample a crowded rail down to the dot budget: YOU + the extremes are
+  // non-negotiable, the rest go by table count (the modes), and the omitted
+  // tables are counted for the caption
+  let entries = [...byScore.entries()].sort((a, b) => a[0] - b[0]);
+  let omittedTables = 0;
+  if (entries.length > MAX_RAIL_DOTS) {
+    const keep = new Set<number>([entries[0][0], entries[entries.length - 1][0]]);
+    const yours = entries.find(([, m]) => m.you);
+    if (yours) keep.add(yours[0]);
+    const byCount = [...entries].sort((a, b) => b[1].count - a[1].count || a[0] - b[0]);
+    for (const [score] of byCount) {
+      if (keep.size >= MAX_RAIL_DOTS) break;
+      keep.add(score);
+    }
+    omittedTables = entries.filter(([s]) => !keep.has(s)).reduce((n, [, m]) => n + m.count, 0);
+    entries = entries.filter(([s]) => keep.has(s));
+  }
+
+  const scores = entries.map(([s]) => s);
   const lo = Math.min(...scores, parScore);
   const span = Math.max(...scores, parScore) - lo;
   const usable = 1 - 2 * EDGE;
@@ -85,5 +115,5 @@ export function railLayout(field: RailDotInput[], parScore: number): RailLayout 
   for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + gap);
 
   const dots = scores.map((score, i) => ({ score, x: xs[i], ...byScore.get(score)!, up: i % 2 === 1 }));
-  return { gate: pos(parScore), dots };
+  return { gate: pos(parScore), dots, omittedTables };
 }

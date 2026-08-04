@@ -86,6 +86,47 @@ describe('the worth rail layout', () => {
     expect(l.dots.map((d) => d.up)).toEqual([false, true, false, true]);
   });
 
+  it('a crowded field is sampled to the dot budget: YOU and the extremes always, then the modes, remainder counted', () => {
+    // 13 distinct scores across 20 tables — far past the budget. The mode
+    // (620 × 6) must survive; so must YOU (−800, a singleton) and both
+    // extremes; and every omitted table is counted, never silently dropped.
+    const field = [
+      ...Array.from({ length: 6 }, () => ({ score: 620, contract: '4♠ by S', you: false })),
+      ...Array.from({ length: 3 }, () => ({ score: 650, contract: '4♠+1 by S', you: false })),
+      { score: -800, contract: '5♥X by S −3', you: true },
+      { score: 1440, contract: '6NT by S', you: false },
+      ...Array.from({ length: 9 }, (_, i) => ({ score: 100 + i * 10, contract: 'partials', you: false })),
+    ];
+    const l = railLayout(field, 620);
+    expect(l.dots.length).toBeLessThanOrEqual(8);
+    const scores = l.dots.map((d) => d.score);
+    expect(scores).toContain(-800); // YOU (also the min here)
+    expect(scores).toContain(1440); // the max
+    expect(scores).toContain(620); // the mode
+    expect(l.dots.find((d) => d.score === 620)!.count).toBe(6);
+    expect(l.dots.some((d) => d.you)).toBe(true);
+    // 20 tables, ≤8 dots shown — the rest are counted
+    const shown = l.dots.reduce((n, d) => n + d.count, 0);
+    expect(l.omittedTables).toBe(20 - shown);
+    expect(l.omittedTables).toBeGreaterThan(0);
+    // and the survivors still keep readable spacing
+    const xs = l.dots.map((d) => d.x);
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(0.08 - 1e-9);
+  });
+
+  it('a small field is never sampled', () => {
+    const l = railLayout(
+      [
+        { score: 620, contract: 'a', you: true },
+        { score: -100, contract: 'b', you: false },
+        { score: 650, contract: 'c', you: false },
+      ],
+      620,
+    );
+    expect(l.dots).toHaveLength(3);
+    expect(l.omittedTables).toBe(0);
+  });
+
   it('a degenerate field (every score equal to par) centres everything', () => {
     const l = railLayout(
       [

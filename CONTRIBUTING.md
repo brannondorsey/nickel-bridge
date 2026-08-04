@@ -880,7 +880,12 @@ counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `
 Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
 `version` = `ANALYZE_VERSION` and the par payload nullable; every solve dispatches
 `priority: 'background'` — a live card-play solve beats a report loading, and
-`STARVATION_PROMOTE_MS` bounds the wait. The grading boundary is `boards.claimed_at_ply`
+`STARVATION_PROMOTE_MS` bounds the wait. The cache stores ENGINE facts only: the
+matchpoint layer (`refreshMatchpointLayer` — actualPct, per-ply costs, bid mpGains) is
+recomputed against the LIVE field on every serve, so the whole response shares one field
+with the Result's own table and a refresh sees late finishers; the one as-of-compute
+residue is stage 3's floor selection, and a drifted unjudged ply is captioned honestly
+via the served `momentFloor`. The grading boundary is `boards.claimed_at_ply`
 (re-derived by replaying the claim gate for pre-migration NULLs): cards past it were played by
 the server for both sides and are never graded. Only the human's own cards are graded
 (`humanControls`, both flip orientations — robot partner North never), forced cards are
@@ -899,7 +904,9 @@ The rail's geometry is the pure, unit-tested `pages/analyzeRail.ts` (the activit
 precedent): positions are LINEAR in the score with an order-preserving minimum-gap
 relaxation — measured against a symlog axis, which flattens exactly the ±420–660 game
 clusters bridge fields produce — with ties merged into counted dots, label bands
-alternated, and the gate left at par's un-relaxed position. The WHERE IT TURNED moments
+alternated, and the gate left at par's un-relaxed position; a field past `MAX_RAIL_DOTS`
+is SAMPLED (YOU + both extremes always, then the modes) with the omitted tables counted
+under the rail, never silently dropped. The WHERE IT TURNED moments
 ledger follows. The ledger is the overview's ONLY bidding surface: bid moments carry
 their counterfactual auction in the aside and are static findings (no link — the auction
 has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result

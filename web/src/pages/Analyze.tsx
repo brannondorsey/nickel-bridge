@@ -425,6 +425,11 @@ function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']
           </Fragment>
         ))}
       </div>
+      {layout.omittedTables > 0 ? (
+        <p className="worth-rail-note">
+          {layout.omittedTables} more {layout.omittedTables === 1 ? 'table' : 'tables'} between the results shown.
+        </p>
+      ) : null}
     </>
   );
 }
@@ -826,13 +831,19 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
     };
   }
   if (verdict) {
-    // a stage-1 candidate under the audit's floor: a double-dummy trick
-    // slipped, but the matchpoints barely noticed — nothing was judged, so
-    // nothing is charged and there is no engine pick to show
+    // A stage-1 candidate the audit left unjudged: a double-dummy trick
+    // slipped, but the matchpoints barely noticed — nothing is charged and
+    // there is no engine pick to show. The mpCost here is measured against
+    // TODAY'S field (the serve-time refresh), while the floor selection ran
+    // against the field at first open — so a shifted field can push an
+    // unjudged cost over the floor, and that drift is captioned honestly.
+    const n = verdict.mpCost === null ? 0 : Math.round(verdict.mpCost);
     const moved =
-      verdict.mpCost !== null && Math.round(verdict.mpCost) > 0
-        ? `only ${Math.round(verdict.mpCost)} matchpoints moved — under the audit's floor, so it goes unjudged`
-        : `no matchpoints moved: the field scores this board the same either way`;
+      n <= 0
+        ? `no matchpoints moved: the field scores this board the same either way`
+        : n < analysis.momentFloor
+          ? `only ${n} matchpoints moved — under the audit's floor, so it goes unjudged`
+          : `${n} matchpoints now ride on it — the field has shifted since the audit ran, and this card sat under its floor then`;
     return {
       text: `${seatName} played ${cardLabel(played.card)} — a double-dummy trick slipped here, but ${moved}.`,
       gain: null,

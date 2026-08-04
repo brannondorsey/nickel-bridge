@@ -222,6 +222,10 @@ export interface AnalysisView {
   moments: AnalysisMoment[];
   setAside: number;
   par: AnalysisPar | null;
+  /** MOMENT_FLOOR — the mpCost figures are refreshed against the live field
+   *  per request while stage 3's floor selection ran at first open, so the
+   *  caption for a drifted unjudged ply needs the floor to compare against */
+  momentFloor: number;
 }
 
 interface Standing {

@@ -136,16 +136,13 @@ export interface AnalysisCore {
   /** the whole field is just this player — costs are null and moments empty */
   singleField: boolean;
   /**
-   * The field this analysis was computed against, FROZEN at first compute:
-   * the board's NS scores in boardFieldRows order, and this player's index in
-   * them. Stage 4's later backfill substitutes into THIS snapshot rather than
-   * re-querying — the field can grow between a play-lens open and a later
-   * crossing-lens open, and a bid moment's mpGain measured against a
-   * different field size than the play moments' mpCost would be ranked
-   * against them as if comparable. One snapshot per analysis is also what
-   * keeps the cache deterministic (the caveat that a board "can be worth a
-   * different number next week" is stated copy, not something the backfill
-   * quietly does piecemeal).
+   * The field as SERVED: the board's NS scores in boardFieldRows order and
+   * this player's index in them, refreshed against the live field on every
+   * request by refreshMatchpointLayer (the stored cache row keeps the
+   * compute-time values, which nothing reads back except as a record). See
+   * that function for why the matchpoint layer is serve-time rather than
+   * frozen — one field for the whole response, and a page refresh sees
+   * tables that finished since the audit first ran.
    */
   fieldScores: number[];
   myIndex: number;
@@ -208,6 +205,12 @@ export interface AnalysisView extends AnalysisCore {
   /** moments beyond MAX_MOMENTS, counted rather than silently dropped */
   setAside: number;
   par: AnalysisPar | null;
+  /**
+   * MOMENT_FLOOR, served so the client can caption an unjudged ply whose
+   * REFRESHED cost has drifted over the floor honestly (stage 3's selection
+   * is as-of-compute; the matchpoint layer is as-of-serve)
+   */
+  momentFloor: number;
 }
 
 const stmtGetAnalysis = db.prepare(`SELECT version, core, par FROM board_analyses WHERE board_id = ?`);
@@ -247,6 +250,46 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
   const next = [...scores];
   next[myIndex] = myScore;
   return matchpoints(next)[myIndex].pct;
+}
+
+/**
+ * The matchpoint layer, recomputed at SERVE time against the LIVE field.
+ * The cache stores engine facts — the DD trace, the sampled verdicts, the
+ * counterfactual SCORES — none of which depend on who else has played the
+ * board; everything measured in matchpoints is a cheap pure function of the
+ * field's score list, so it is served fresh instead. That keeps the whole
+ * response consistent with itself (play and bid moments measured on ONE
+ * field) and with the Result's live field table one tap away, and a page
+ * refresh picks up tables that finished since the audit first ran. (The
+ * first design froze the field into the cache: equally consistent, but
+ * permanently stale — the receipts' percentage and the rail would disagree
+ * with the Result forever once the field grew.)
+ *
+ * The one thing that stays as-of-compute is stage 3's floor SELECTION —
+ * which plies bought the expensive sampled verdict. A field shift can
+ * therefore leave an unjudged ply whose refreshed cost clears the floor;
+ * assembleMoments only promotes judged plies, and the client captions the
+ * drifted case honestly (momentFloor is served for that comparison).
+ * Mutates the parsed copies, never the cache row.
+ */
+function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCore, par: AnalysisPar | null): void {
+  const rows = boardFieldRows(t.id, b.row.board_no);
+  const myIndex = rows.findIndex((r) => r.user_id === b.row.user_id);
+  const scores = rows.map((r) => r.score_ns ?? 0);
+  const singleField = rows.length <= 1 || myIndex < 0;
+  core.fieldScores = scores;
+  core.myIndex = myIndex;
+  core.singleField = singleField;
+  core.actualPct = singleField ? null : matchpoints(scores)[myIndex].pct;
+  for (const p of core.plies) {
+    p.cfPct = singleField ? null : substitutePct(scores, myIndex, p.cfScoreNS);
+    p.mpCost = p.cfPct === null || core.actualPct === null ? null : p.cfPct - core.actualPct;
+  }
+  for (const c of par?.calls ?? []) {
+    if (!c.cf) continue;
+    c.cf.cfPct = singleField ? null : substitutePct(scores, myIndex, c.cf.scoreNS);
+    c.cf.mpGain = c.cf.cfPct === null || core.actualPct === null ? null : c.cf.cfPct - core.actualPct;
+  }
 }
 
 /** Stages 1–3. `b` must be a finished board belonging to the analysis's viewer. */
@@ -357,10 +400,11 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
 }
 
 /**
- * Stage 4 — par + counterfactual auctions (the crossing/auction lenses only).
- * Substitutes into core's FROZEN field snapshot, never a fresh query — see
- * AnalysisCore.fieldScores for why (a backfill against a grown field would
- * rank bid moments against play moments measured on different fields).
+ * Stage 4 — par + counterfactual auctions (the overview lens only). The
+ * matchpoint figures computed here are compute-time placeholders: what the
+ * cache keeps are the engine facts (the re-run auctions and their SCORES),
+ * and refreshMatchpointLayer re-measures them against the live field on
+ * every serve, so play and bid moments always share one field.
  */
 async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): Promise<AnalysisPar> {
   const deal = b.deal;
@@ -460,6 +504,9 @@ export async function getBoardAnalysis(t: TournamentRow, b: GameBoard, wantPar: 
     stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(core), par ? JSON.stringify(par) : null);
   }
 
+  // serve-time: measure everything against today's field, then assemble
+  // moments from those fresh figures
+  refreshMatchpointLayer(t, b, core, par);
   const { moments, setAside } = assembleMoments(core, par);
-  return { ...core, version: ANALYZE_VERSION, moments, setAside, par };
+  return { ...core, version: ANALYZE_VERSION, moments, setAside, par, momentFloor: MOMENT_FLOOR };
 }

@@ -5096,6 +5096,14 @@ a.stat-tile:hover {
   letter-spacing: 0.1em;
   color: var(--muted);
 }
+/* the sampling disclosure for a crowded rail — counted, never silent */
+.worth-rail-note {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 2px;
+}
 
 /* ---- the audit ribbon (the tour ribbon's shape, unvoiced) ---- */
 .audit-ribbon {

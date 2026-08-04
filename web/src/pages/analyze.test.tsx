@@ -79,6 +79,7 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
     ],
     setAside: 1,
     par: null,
+    momentFloor: 10,
     ...over,
   };
 }
@@ -332,6 +333,40 @@ describe('the play lens', () => {
         () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
         { timeout: 4000 },
       );
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it("a drifted unjudged ply — refreshed cost over the floor — is captioned as the field shifting, not as sub-floor", async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      // stage 3 skipped this ply at first open (field then made it worth ~0);
+      // the serve-time refresh now measures it at 15 MP — over the floor,
+      // but there is no verdict to show and nothing gets charged
+      const subPly = chargedPly + 2;
+      const analysis = makeAnalysis();
+      analysis.plies.splice(1, 0, {
+        ply: subPly,
+        trick: Math.floor(subPly / 4) + 1,
+        seat: flat[subPly].seat,
+        card: flat[subPly].card,
+        ddLoss: 1,
+        cfTricksDeclarer: 10,
+        cfScoreNS: 620,
+        cfPct: 73,
+        mpCost: 15,
+        sampled: null,
+      });
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(analysis);
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${subPly + 1}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+      const ribbon = document.querySelector('.audit-ribbon')!;
+      expect(ribbon.textContent).toMatch(/15 matchpoints now ride on it — the field has shifted/);
+      expect(ribbon.textContent).not.toMatch(/under the audit's floor/);
+      expect(document.querySelector('.audit-ribbon-gain')).toBeNull();
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }

@@ -219,22 +219,34 @@ describe('cache behaviour', () => {
     expect(db.prepare(`SELECT 1 FROM board_analyses WHERE board_id = ?`).get(b.row.id)).toBeUndefined();
   }, 240_000);
 
-  it('par backfill substitutes into the frozen field snapshot, not a re-queried one', async () => {
+  it('the matchpoint layer is served against the LIVE field, one field for play and par alike', async () => {
     const t = makeTournament('analyze-freeze');
     const b = await driveBoard(t, userId, 1, firstLegalCard);
     if (!b.contract) throw new Error('seed produced a pass-out; pick another');
     const solo = await analyze.getBoardAnalysis(t, b, false); // caches core against a field of one
     expect(solo.singleField).toBe(true);
+    expect(solo.momentFloor).toBe(analyze.MOMENT_FLOOR);
     // the field grows AFTER core is cached...
     await driveBoard(t, rivalId, 1, firstLegalCard);
-    // ...and the later par backfill must keep measuring against the frozen
-    // snapshot (costs stay refused), not silently mix field sizes
+    // ...and the next serve re-measures everything against today's field:
+    // the engine facts come from the cache, the matchpoint figures do not —
+    // so the refusal lifts, play costs and bid gains share the two-table
+    // field, and nothing mixes field sizes within one response
     const withPar = await analyze.getBoardAnalysis(t, b, true);
-    expect(withPar.singleField).toBe(true);
-    expect(withPar.fieldScores).toEqual(solo.fieldScores);
-    for (const c of withPar.par!.calls) {
-      if (c.cf) expect(c.cf.mpGain).toBeNull();
+    expect(withPar.singleField).toBe(false);
+    expect(withPar.fieldScores).toHaveLength(2);
+    expect(withPar.actualPct).not.toBeNull();
+    for (const p of withPar.plies) {
+      expect(p.mpCost).not.toBeNull();
+      expect(p.cfPct).not.toBeNull();
     }
+    for (const c of withPar.par!.calls) {
+      if (c.cf) expect(c.cf.mpGain).toBeCloseTo(c.cf.cfPct! - withPar.actualPct!, 6);
+    }
+    // the engine facts themselves are untouched by the refresh
+    expect(withPar.plies.map((p) => ({ ply: p.ply, card: p.card, ddLoss: p.ddLoss, sampled: p.sampled }))).toEqual(
+      solo.plies.map((p) => ({ ply: p.ply, card: p.card, ddLoss: p.ddLoss, sampled: p.sampled })),
+    );
   }, 240_000);
 });
 
