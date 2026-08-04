@@ -51,8 +51,9 @@ describe('Settings', () => {
     ['Fast forward settled tricks', 'fastForward'],
     ['Name on the ladder', 'ladderListed'],
     ['Bid feedback', 'bidFeedback'],
+    ['Beta features', 'betaFeatures'],
   ])('writes %s to the account and refreshes the session', async (group, key) => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, betaFeatures: true });
     const { refresh } = renderSettings();
     expect(segment(group, 'ON')).toHaveClass('active');
     await userEvent.click(segment(group, 'OFF')!);
@@ -64,6 +65,11 @@ describe('Settings', () => {
     renderSettings({ ...meFixture, user: { ...meFixture.user!, ladderListed: false, fastForward: false } });
     expect(segment('Name on the ladder', 'OFF')).toHaveClass('active');
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
+  });
+
+  it('reflects an account that has not opted into beta features', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    expect(segment('Beta features', 'OFF')).toHaveClass('active');
   });
 
   // The switch moves under the finger, so a rejected write has to move it

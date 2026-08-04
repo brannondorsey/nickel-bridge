@@ -32,6 +32,7 @@ const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch()
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
 const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
+const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -209,6 +210,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
             bidFeedback: user.bid_feedback !== 0,
+            betaFeatures: user.beta_features !== 0,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
@@ -266,6 +268,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
    *   the bid_feedback migration in db.ts.
+   * - betaFeatures — opt in to features still being tried out (currently:
+   *   Analyze). Off by default in production, on by default on preview/demo
+   *   deployments — see the beta_features migration in db.ts for why. This
+   *   is the one row in Settings that GRANTS access rather than describing a
+   *   preference, so it stays visible and settable the same way as the rest.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -275,6 +282,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
+      ['betaFeatures', (on) => stmtSetBetaFeatures.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
     for (const key of Object.keys(body)) {
@@ -289,6 +297,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ladderListed: row.ladder_listed !== 0,
       fastForward: row.fast_forward !== 0,
       bidFeedback: row.bid_feedback !== 0,
+      betaFeatures: row.beta_features !== 0,
     });
   });
 

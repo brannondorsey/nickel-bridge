@@ -1315,6 +1315,25 @@ newer settings has one thing worth knowing:
   unaffected: it carries its own scripted `lastEval` and never reads this preference, since
   the tour's pedagogical point is teaching the grading loop regardless of the visitor's (or
   signed-in tester's) own setting.
+- **Beta features** (`users.beta_features`) is the odd one out: every switch above describes
+  how an already-shipped feature behaves for this person, while this one GRANTS access to
+  features still being tried out — today, just Analyze (the post-board review screen,
+  `pages/Analyze.tsx`). Its default is environment-dependent rather than a fixed literal: the
+  `beta_features` migration in `db.ts` computes it once, from `DEV_AUTH`/`DEMO`, and bakes
+  that into the column's SQL `DEFAULT` — so it's simultaneously the backfill for existing
+  rows on whatever deployment runs the migration AND, because SQLite reuses an `ADD COLUMN`
+  default for every future `INSERT` that omits the column, the default for every signup after
+  it with no second code path. Off in production (nobody has asked for early access), on
+  wherever `DEV_AUTH` or `DEMO` is set — PR previews and the permanent demo app share that
+  exact shape (`ci.yml`'s `deploy-preview`/`deploy-demo`), so testers and click-testers see
+  new work without hunting for a switch, and a shipped-but-gated feature like Analyze's demo
+  exhibit (`analyze-play`, see "Demo mode" below) just works. A production account reaches a
+  beta feature only by deliberately flipping this switch — the intended path for a named
+  handful of early testers, not a general release. Both the door (`Board.tsx`'s ANALYZE PLAY
+  button, `Tournament.tsx`'s ledger hint, `Analyze.tsx`'s own route) and the data
+  (`GET .../analysis` in `app.ts`) check it independently: the client hiding the door is a
+  courtesy, the route's `403` is the actual gate, since a beta feature that only the UI
+  refuses is one curl command away from everyone.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,

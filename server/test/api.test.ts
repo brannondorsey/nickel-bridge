@@ -206,17 +206,30 @@ describe('handle (first-login username)', () => {
     const pete = new TestClient(app, 'Pete');
     await pete.login();
 
-    // defaults, and a partial patch leaves the untouched key alone
+    // defaults, and a partial patch leaves the untouched key alone. betaFeatures
+    // defaults true here because the test harness sets DEV_AUTH=1 (freshDbEnv) —
+    // see the beta_features migration in db.ts for why that env is the signal.
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([true, true, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.betaFeatures]).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
       bidFeedback: true,
+      betaFeatures: true,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([false, false, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.betaFeatures]).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
@@ -224,6 +237,7 @@ describe('handle (first-login username)', () => {
       ladderListed: false,
       fastForward: false,
       bidFeedback: true,
+      betaFeatures: true,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -234,8 +248,20 @@ describe('handle (first-login username)', () => {
       ladderListed: false,
       fastForward: false,
       bidFeedback: false,
+      betaFeatures: true,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
+
+    // betaFeatures patches the same way, and opting out is what the
+    // /analysis route's gate (see the endpoint suite in analyze.test.ts) is
+    // measured against
+    expect(await pete.post('/api/me/prefs', { betaFeatures: false })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: false,
+      betaFeatures: false,
+    });
+    expect((await pete.get('/api/me')).user.betaFeatures).toBe(false);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

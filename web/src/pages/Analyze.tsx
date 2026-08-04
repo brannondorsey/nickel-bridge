@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMe } from '../App';
 import {
   AnalysisMoment,
   AnalysisPly,
@@ -103,6 +104,13 @@ export default function Analyze() {
   const navigate = useNavigate();
   const tournamentId = Number(tid);
   const boardNo = Number(no);
+  // Analyze is still in beta (see the beta_features migration in db.ts).
+  // The server enforces this independently (GET .../analysis 403s an
+  // account without it) — this is a nicer landing than that error for
+  // someone who reaches the route directly (an old bookmark, a shared link)
+  // without the door Board.tsx shows them.
+  const { me } = useMe();
+  const betaFeatures = me?.user?.betaFeatures === true;
   const [params, setParams] = useSearchParams();
   const lens = lensFromParam(params.get('lens'));
   const wantPar = lens === 'overview';
@@ -127,6 +135,7 @@ export default function Analyze() {
   // doesn't carry it yet — the backfill updates the same cache row.
   const parLoadedRef = useRef(false);
   useEffect(() => {
+    if (!betaFeatures) return;
     if (analysis && (!wantPar || analysis.par || parLoadedRef.current)) return;
     let alive = true;
     if (wantPar) parLoadedRef.current = true;
@@ -137,7 +146,7 @@ export default function Analyze() {
     return () => {
       alive = false;
     };
-  }, [tournamentId, boardNo, wantPar, analysis]);
+  }, [tournamentId, boardNo, wantPar, analysis, betaFeatures]);
 
   const setLens = (l: Lens) => {
     const next = new URLSearchParams(params);
@@ -157,6 +166,18 @@ export default function Analyze() {
     setParams(next);
   };
 
+  if (!betaFeatures) {
+    return (
+      <div className="board-page analyze-page">
+        <div className="notice-error">Analyze is a beta feature, not yet turned on for this account.</div>
+        <div className="board-actions">
+          <Button variant="secondary" to={`/t/${tournamentId}/b/${boardNo}`}>
+            Back to the board
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="board-page analyze-page">

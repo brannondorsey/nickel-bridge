@@ -163,6 +163,27 @@ if (!userColumns.has('bid_feedback')) {
   db.exec(`ALTER TABLE users ADD COLUMN bid_feedback INTEGER NOT NULL DEFAULT 1`);
 }
 
+// Migration: `beta_features` — opt in to features still being tried out
+// before a general release (currently: Analyze, the post-board review
+// screen). Unlike every other pref above, its default is environment-
+// dependent rather than a fixed literal: DEFAULT is evaluated once, right
+// here, against THIS process's env, which both backfills existing rows
+// correctly for wherever this migration happens to run AND becomes SQLite's
+// column default for every future INSERT that doesn't name the column (the
+// same mechanism ladder_listed/fast_forward/bid_feedback lean on) — so a
+// fresh signup needs no second code path to inherit it. Off (0) in
+// production, where nobody has asked for early access yet; on (1) wherever
+// DEV_AUTH or DEMO is set — PR previews and the permanent demo app share
+// that exact shape (see deploy-preview/deploy-demo in ci.yml) — so testers
+// and click-testers see new work without hunting for a switch. A production
+// account reaches beta features only by deliberately flipping "Beta
+// features" in Settings (POST /api/me/prefs), which is how a feature like
+// Analyze reaches a handful of named testers ahead of everyone else.
+if (!userColumns.has('beta_features')) {
+  const betaDefault = process.env.DEV_AUTH === '1' || process.env.DEMO === '1' ? 1 : 0;
+  db.exec(`ALTER TABLE users ADD COLUMN beta_features INTEGER NOT NULL DEFAULT ${betaDefault}`);
+}
+
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
 // first-class column — not a name convention — because placement, the Elo
@@ -252,6 +273,8 @@ export interface UserRow {
   fast_forward: number;
   /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
   bid_feedback: number;
+  /** 1 = this account can reach features still in beta (e.g. Analyze); env-dependent default, see the migration comment in db.ts */
+  beta_features: number;
   elo: number;
   created_at: number;
 }

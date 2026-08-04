@@ -281,6 +281,14 @@ describe('the endpoint', () => {
     const withPar = await client.get(`/api/tournaments/${t.id}/boards/1/analysis?par=1`);
     expect(withPar.par).not.toBeNull();
 
+    // Analyze is still in beta (see the beta_features migration in db.ts) —
+    // an account that has opted back out is refused even though it is
+    // signed in and the board is genuinely analyzable, since the client's
+    // ANALYZE PLAY door is only a courtesy and this route is the real gate.
+    await client.post('/api/me/prefs', { betaFeatures: false });
+    const gated = await client.raw('GET', `/api/tournaments/${t.id}/boards/1/analysis`);
+    expect(gated.statusCode).toBe(403);
+
     await app.close();
   }, 240_000);
 });

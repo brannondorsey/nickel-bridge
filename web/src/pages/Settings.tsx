@@ -57,7 +57,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: boolean };
+type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: boolean; betaFeatures: boolean };
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -67,6 +67,7 @@ export default function Settings() {
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
     bidFeedback: me?.user?.bidFeedback !== false,
+    betaFeatures: me?.user?.betaFeatures === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -164,6 +165,18 @@ export default function Settings() {
               value={prefs.bidFeedback}
               options={OFF_ON}
               onChange={(bidFeedback) => change({ bidFeedback })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Beta features"
+            note="Try screens still being tried out before they reach everyone — currently: Analyze, the after-the-fact review of a finished board's play."
+          >
+            <PrefSwitch
+              label="Beta features"
+              value={prefs.betaFeatures}
+              options={OFF_ON}
+              onChange={(betaFeatures) => change({ betaFeatures })}
             />
           </SettingRow>
           {prefError ? <div className="notice-error settings-error">{prefError}</div> : null}

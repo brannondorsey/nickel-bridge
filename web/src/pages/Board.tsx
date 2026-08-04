@@ -105,6 +105,11 @@ export default function Board() {
   // unconditionally, so turning this off never affects scoring, stats, or
   // the post-board review table. See the bid_feedback migration in db.ts.
   const bidFeedback = me?.user?.bidFeedback !== false;
+  // "Beta features" (settings gate) — Analyze is still in beta; see the
+  // beta_features migration in db.ts. The server enforces this too (the
+  // /analysis route 403s an account without it), so hiding the door here is
+  // a courtesy, not the only guard.
+  const betaFeatures = me?.user?.betaFeatures === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   // The auction length stageOpeningBids' reveal is building toward — see
@@ -648,10 +653,13 @@ export default function Board() {
                 </Button>
                 {/* the Tournament ledger's old promise, finally kept — the
                     review lives at its own route; the Result carries only
-                    this door (no analysis data outside the Analyze screen) */}
-                <Button variant="secondary" to={`/t/${tournamentId}/b/${board.boardNo}/analyze`}>
-                  ANALYZE PLAY →
-                </Button>
+                    this door (no analysis data outside the Analyze screen).
+                    Still in beta — see the betaFeatures note above. */}
+                {betaFeatures ? (
+                  <Button variant="secondary" to={`/t/${tournamentId}/b/${board.boardNo}/analyze`}>
+                    ANALYZE PLAY →
+                  </Button>
+                ) : null}
                 <Button variant="secondary" to="/">
                   Back to lobby
                 </Button>
