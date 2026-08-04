@@ -613,6 +613,10 @@ function ReplayLens({
   // shows both at once) and clears when the replay steps on.
   const highlight = caption.highlight;
   const fanHighlight = highlight !== null && view.hand.includes(highlight) ? highlight : null;
+  // Same idea, for the across hand once it renders as a card fan too — the
+  // engine's pick marked with the fan's own `.selected` treatment rather
+  // than the text rails' `.analyze-hl` bold-underline.
+  const acrossHighlight = highlight !== null && acrossOpen.includes(highlight) ? highlight : null;
 
   return (
     <>
@@ -629,12 +633,13 @@ function ReplayLens({
         </p>
       </div>
 
-      <div className="analyze-rail north num">
-        <span className="analyze-rail-label">
-          {acrossName}
-          {dummy === across ? ' · DUMMY' : ''}
-        </span>
-        <SuitLine cards={acrossOpen} highlight={highlight} />
+      <div className="analyze-rail played num">
+        <span className="analyze-rail-label">PLAYED</span>
+        {shownPly > 0 ? (
+          <SuitLine cards={playedAt(board, shownPly)} />
+        ) : (
+          <span className="analyze-suitline analyze-suitline-empty">—</span>
+        )}
       </div>
       <div className="analyze-rails num">
         <div className="analyze-rail side">
@@ -646,13 +651,17 @@ function ReplayLens({
           <SuitLine cards={remainingAt(board, shownPly, 1)} highlight={highlight} />
         </div>
       </div>
-      <div className="analyze-rail played num">
-        <span className="analyze-rail-label">PLAYED</span>
-        {shownPly > 0 ? (
-          <SuitLine cards={playedAt(board, shownPly)} />
-        ) : (
-          <span className="analyze-suitline analyze-suitline-empty">—</span>
-        )}
+      {/* the across hand, as a real card fan directly above the trick box —
+          the same adjacency and the same HandFan/PlayingCard components live
+          play uses for a North/South dummy or defending partner */}
+      <div className="analyze-rail north">
+        <span className="analyze-rail-label">
+          {acrossName}
+          {dummy === across ? ' · DUMMY' : ''}
+        </span>
+        <div className="board-fan">
+          <HandFan cards={acrossOpen} selected={acrossHighlight} />
+        </div>
       </div>
       <TrickArea board={view} />
       <div className="board-fan">

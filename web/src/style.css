@@ -5207,8 +5207,8 @@ a.stat-tile:hover {
 /* The side rails and the PLAYED rail wrap between suit groups — a full hand
    (or most of the deck) doesn't fit their line — with the two lines they
    will need reserved from the start (the bid-box dock rule: the board below
-   must not scoot when a wrap appears or collapses mid-replay). North stays
-   a single unwrapped line: 13 cards at full width always fit. */
+   must not scoot when a wrap appears or collapses mid-replay). North isn't
+   targeted here at all: it renders as a card fan, not a suitline. */
 .analyze-rails .analyze-suitline,
 .analyze-rail.played .analyze-suitline {
   display: flex;
@@ -5218,8 +5218,8 @@ a.stat-tile:hover {
 .analyze-rails .analyze-rail.right .analyze-suitline {
   justify-content: flex-end;
 }
-/* ---- the PLAYED accumulator, mirroring North's centered rail on the other
-   side of the open hands */
+/* ---- the PLAYED accumulator, first under the ribbon (North's old slot —
+   North's card fan now sits just above the trick box instead) */
 .analyze-rail.played {
   align-items: center;
   text-align: center;
