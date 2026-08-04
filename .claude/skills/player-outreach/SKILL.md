@@ -83,9 +83,10 @@ conversation.
 **3. Pending drafts — `list_drafts`, also paginated.** An unsent draft is in-flight, not
 available. Without this, a second run on the same day cheerfully drafts the whole batch again.
 
-This is why **every subject line must contain the words "Nickel Bridge"** — rewrite subjects
-however you like otherwise, but that phrase is load-bearing for source 2. The ledger now covers
-you if it drifts, which is exactly why both exist.
+This is why **every outreach email's subject is fixed to exactly `Nickel Bridge`**, the same
+literal string across all three cohorts — that's what source 2 searches for, and a fixed subject
+can't drift the way a per-cohort one could. The ledger still covers you if it does, which is
+exactly why both exist.
 
 If any of these calls errors or returns nothing on what you believe is a later run, say so
 plainly rather than assuming — an empty result and a broken query look identical, and guessing
@@ -183,7 +184,7 @@ Starting points, not forms to fill. Rewrite freely so each one sounds like it wa
 person; the greeting uses their first name from `name`, falling back to their handle, or "Hi
 there" if both look like junk.
 
-**`friction`** — subject: `a question about Nickel Bridge`
+**`friction`** — subject: `Nickel Bridge`
 
 ```
 Hi {first},
@@ -209,7 +210,7 @@ P.S. This is a hobby project for me and I have no intent to monetize it. I'm jus
 to make it better for folks.
 ```
 
-**`retained`** — subject: `Nickel Bridge — what's making it stick?`
+**`retained`** — subject: `Nickel Bridge`
 
 ```
 Hi {first},
@@ -235,7 +236,7 @@ P.S. This is a hobby project for me and I have no intent to monetize it. I'm jus
 to make it better for folks.
 ```
 
-**`abandoned_first`** — subject: `Nickel Bridge — can I ask you something?`
+**`abandoned_first`** — subject: `Nickel Bridge`
 
 ```
 Hi {first},
