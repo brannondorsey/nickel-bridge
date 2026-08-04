@@ -269,13 +269,16 @@ describe('the play lens', () => {
       expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
       expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
 
-      // NEXT MOMENT lands the following graded decision (the excused one)
-      // the same collapsed way
+      // NEXT MOMENT lands the following graded decision — the excused one,
+      // which HOLDS at the pending position: the engine's pick IS the played
+      // card, so it stays marked in the hand under the nothing-to-find
+      // reading instead of gliding into the trick and losing the marker
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
       await waitFor(
-        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/),
         { timeout: 4000 },
       );
+      expect(document.querySelector(`.cardbtn.selected[data-card="${flat[excusedPly].card}"]`)).not.toBeNull();
       expect(screen.getByRole('button', { name: /NEXT MOMENT/ })).toBeDisabled();
 
       // and PREV MOMENT hops back to the charged moment, collapsed again
@@ -326,11 +329,11 @@ describe('the play lens', () => {
       expect(document.querySelector('.cardbtn.selected')).toBeNull();
 
       // the pager hops between JUDGED moments only: both neighbours enabled,
-      // and NEXT lands the excused decision, skipping the slip
+      // and NEXT lands the excused decision (held pending), skipping the slip
       expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeEnabled();
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
       await waitFor(
-        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/Nothing to fault here/),
+        () => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/nothing to find/),
         { timeout: 4000 },
       );
     } finally {

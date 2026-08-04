@@ -924,7 +924,11 @@ PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immedi
 stages the played card's glide, so the card that was played (in the trick) and the
 engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
 rank in the suit-line rails) are on screen together — the pager anchors on the moment
-being read, not the replay position, which sits one card past it. A moment on a trick's
+being read, not the replay position, which sits one card past it. An EXCUSED moment
+holds at the PENDING position instead of gliding — its engine pick IS the played card, so
+the `.selected` marker stays on it in the hand under the nothing-to-find reading (gliding
+it into the trick dropped the marker, which read as the pager jumping past the
+highlight). A moment on a trick's
 LAST card lands on a synthetic held view (trick complete on the table, un-collected —
 `momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
 always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so

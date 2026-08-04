@@ -4970,20 +4970,25 @@ a.stat-tile:hover {
 /* par and your table as paired receipts; the par stub wears the sealed
    (dashed) treatment — a receipt for a crossing nobody made */
 .worth-stubs {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  align-items: stretch;
 }
 .worth-stub {
-  flex: 1 1 0;
+  /* each stub spans the shared row grid (label / contract / score / aside),
+     so the two receipts' rows stay aligned even when one label wraps — "THE
+     CARDS ALLOWED" runs two lines beside "YOUR TABLE"'s one, and the
+     contract/score lines must not scoot apart */
   min-width: 0;
   position: relative;
   border: 1px solid var(--ink);
   background: var(--panel);
   padding: 10px 10px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+  align-content: start;
+  row-gap: 2px;
 }
 .worth-stub.sealed {
   border: var(--border-sealed);

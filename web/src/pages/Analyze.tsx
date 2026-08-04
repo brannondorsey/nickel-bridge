@@ -515,14 +515,24 @@ function ReplayLens({
 
   const landAt = (target: number) => {
     const p = Math.max(0, Math.min(target, totalPlies));
-    const graded = p < totalPlies && momentPlies.some((v) => v.ply === p);
-    if (!graded) {
+    const moment = p < totalPlies ? momentPlies.find((v) => v.ply === p) : undefined;
+    if (!moment) {
       setCurMoment(null);
       setPly(p);
       replay.cut(views[p]);
       return;
     }
     setCurMoment(p);
+    // An EXCUSED moment's engine pick IS the played card, so the pending
+    // position already shows the whole collapse in one card — hold it there,
+    // marked in the hand under the "nothing to find" reading, rather than
+    // gliding it into the trick where the marker would vanish (which read as
+    // the pager jumping past the highlight).
+    if (moment.sampled?.excused) {
+      setPly(p);
+      replay.cut(views[p]);
+      return;
+    }
     setPly(p + 1);
     replay.cut(views[p]);
     replay.applyTransition(views[p], momentLandingView(views, flat, p), 1);
