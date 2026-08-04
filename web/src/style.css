@@ -1414,6 +1414,14 @@ a.ds-btn-secondary:hover {
   font-family: var(--font-label);
   font-weight: 800;
   flex: none;
+  /* .rank/.suit are plain block divs with no width of their own, so they
+     span the full padded card body and their glyph's horizontal position
+     depends on text-align — pin it left (the corner-index design) so it
+     can never inherit a centered value from a container built for prose
+     (e.g. .analyze-rail.north), which would center each glyph inside the
+     card body instead of flush in the exposed top-left sliver a fanned
+     card relies on. */
+  text-align: left;
 }
 .pcard .rank {
   font-size: calc(var(--card-h) * 15 / 66);
@@ -5162,6 +5170,14 @@ a.stat-tile:hover {
 .analyze-rail.north {
   align-items: center;
   text-align: center;
+  /* no label above this rail any more (the fan is the only child) — pull
+     its own top padding and the fan's own top padding in, so the fan sits
+     close under the WEST/EAST rails instead of leaving the label's old
+     clearance as dead space */
+  padding-top: 0;
+}
+.analyze-rail.north .board-fan {
+  padding-top: 0;
 }
 .analyze-rails {
   display: flex;

@@ -447,7 +447,7 @@ describe('the play lens', () => {
       apiMock.analysis.mockResolvedValue(makeAnalysis());
       renderAnalyze('/t/12/b/2/analyze?lens=play');
       await screen.findByText(/THE AUDIT — TRICK/);
-      expect(document.querySelector('.analyze-rail.north .analyze-rail-label')!.textContent).toBe('NORTH · DUMMY');
+      expect(document.querySelector('.analyze-rail.north')!.getAttribute('aria-label')).toBe('NORTH · DUMMY');
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }
@@ -467,7 +467,7 @@ describe('the play lens', () => {
       apiMock.analysis.mockResolvedValue(makeAnalysis());
       renderAnalyze('/t/12/b/2/analyze?lens=play');
       await screen.findByText(/THE AUDIT — TRICK/);
-      expect(document.querySelector('.analyze-rail.north .analyze-rail-label')!.textContent).toBe('SOUTH · DUMMY');
+      expect(document.querySelector('.analyze-rail.north')!.getAttribute('aria-label')).toBe('SOUTH · DUMMY');
       // the fan holds the hand the human PLAYED — North's
       expect(document.querySelector(`.board-fan [data-card="${allHands[0][0]}"]`)).not.toBeNull();
     } finally {

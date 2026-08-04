@@ -674,12 +674,11 @@ function ReplayLens({
       </div>
       {/* the across hand, as a real card fan directly above the trick box —
           the same adjacency and the same HandFan/PlayingCard components live
-          play uses for a North/South dummy or defending partner */}
-      <div className="analyze-rail north">
-        <span className="analyze-rail-label">
-          {acrossName}
-          {dummy === across ? ' · DUMMY' : ''}
-        </span>
+          play uses for a North/South dummy or defending partner. No visible
+          label (screen space is tight with a full card fan up here already;
+          WEST/EAST/PLAYED above already establish which seat is which) — the
+          seat and role still reach assistive tech via aria-label. */}
+      <div className="analyze-rail north" aria-label={`${acrossName}${dummy === across ? ' · DUMMY' : ''}`}>
         <div className="board-fan">
           <HandFan cards={acrossOpen} selected={acrossHighlight} />
         </div>
