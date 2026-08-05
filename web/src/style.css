@@ -2107,10 +2107,10 @@ a.ds-btn-secondary:hover {
 }
 /* a real navigation (to /leaderboard), so a SOLID underline — unlike
    .gloss-link's dotted one, which means "opens a term sheet, doesn't leave
-   the page." font-style: normal keeps it out of the surrounding italic. */
+   the page." Stays italic, inherited from .medal-cta — only the underline
+   marks it as a link. */
 .medal-link {
   color: var(--ink);
-  font-style: normal;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2.5px;
