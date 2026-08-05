@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MedalProgress, MedalSuit } from '../../api';
+import { useGlossary } from '../../glossary/GlossaryContext';
 import { MedalGlyphs } from './MedalGlyphs';
 
 const TIER_GLYPH: Record<MedalSuit, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
@@ -11,9 +12,19 @@ const CLUB_MEDAL_THRESHOLD = 4;
 const tournamentWord = (n: number) => (n === 1 ? 'tournament' : 'tournaments');
 
 function Sentence({ progress, provisionalMin }: { progress: MedalProgress; provisionalMin: number }) {
+  const { openTerm } = useGlossary();
   const { target, tournamentsRemaining } = progress;
+  const medalLink = (
+    <button type="button" className="gloss-link" onClick={() => openTerm('medal')}>
+      medal
+    </button>
+  );
   if (!target) {
-    return <p className="medal-cta">Every medal earned — every crossing from here is for its own sake.</p>;
+    return (
+      <p className="medal-cta">
+        Every {medalLink} earned — every crossing from here is for its own sake.
+      </p>
+    );
   }
   // The club tier's copy names an app mechanic rather than itself: on a
   // deployment where the leaderboard's rated-tournament quota
@@ -38,7 +49,7 @@ function Sentence({ progress, provisionalMin }: { progress: MedalProgress; provi
       </>
     ) : (
       <>
-        earn the <span className={TIER_CLASS[target]}>{TIER_GLYPH[target]}</span> medal
+        earn the <span className={TIER_CLASS[target]}>{TIER_GLYPH[target]}</span> {medalLink}
       </>
     );
   return (
