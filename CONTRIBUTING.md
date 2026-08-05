@@ -1267,7 +1267,11 @@ in the middle of the card-play screen — rather than `PctBar`'s borderless trac
 `.medal-bar-track` takes the same `1px solid var(--ink)` structural border. The unfilled
 remainder is a flat `--chart-track` fill rather than the trick-meter's diagonal hatch,
 though — `PctBar`'s plainer "nothing here yet" convention, not the trick-meter's. The
-percentage itself is rendered in plain body weight next to the bar, never as a bolded
+fill's growing edge is capped with the same `1px solid var(--ink)` line trick-meter uses
+to keep its own hatched fill's leading edge crisp against the track
+(`.medal-bar-fill.capped`, gated on `fillPct > 0` — the same `tricks > 0` gate
+trick-meter's own cap uses — so a brand-new 0% bar shows no stray line at the left edge).
+The percentage itself is rendered in plain body weight next to the bar, never as a bolded
 standalone figure — `.num`'s doc comment explains why: Besley's tabular-figure feature is
 broken in every published build (a font bug, not a design choice), and bolding a raw
 number invites exactly the "why does one digit look heavier" problem that comment warns
@@ -1284,6 +1288,16 @@ its dashed "?" risked reading as an unfinished placeholder rather than a deliber
 and the "one crossing at a time" argument it was making is already made once, elsewhere
 (the landing page, the first-crossing tour) — the same reasoning that cut the old
 onboarding pamphlet for being redundant by the time anyone read it twice.
+
+**Held back until the first board is on the books.** `Lobby.tsx` gates the whole widget on
+`me.user.boards > 0` (`completedBoardCount`, the same count `/api/me` already sends for
+Compare's entry-point gate) alongside the existing `medals` null-check, rather than
+rendering a 0%-toward-club bar the instant an account exists. A brand-new player hasn't
+earned anything and hasn't even seen a deal yet, so a progress rail at that point has
+nothing to show and reads as clutter ahead of the first crossing rather than as an
+incentive during it — the same instinct that cut the old "TOURNEY ?" hint above. The gate
+is on boards, not tournaments, so the widget appears as soon as the player's first board
+finishes rather than waiting for their whole first tournament (four boards) to close.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

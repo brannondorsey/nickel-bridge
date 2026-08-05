@@ -2047,6 +2047,14 @@ a.ds-btn-secondary:hover {
   left: 0;
   background: var(--ink);
 }
+/* caps the fill's growing edge with a solid line, matching trick-meter's own
+   fill-capping convention (.trick-meter-fill.theirs.capped) — keeps the
+   filled/unfilled boundary crisp rather than relying on the color change
+   alone. Applied only above 0% width (see MedalBar.tsx), the same tricks > 0
+   gate trick-meter uses, so a fresh account's 0% bar shows no stray line. */
+.medal-bar-fill.capped {
+  border-right: 1px solid var(--ink);
+}
 .medal-bar-fill.tint-c {
   background: var(--suit-c);
 }

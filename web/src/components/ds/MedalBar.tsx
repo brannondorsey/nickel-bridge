@@ -58,8 +58,13 @@ function Sentence({ progress, provisionalMin }: { progress: MedalProgress; provi
  * bar in the middle of the card-play screen — rather than the borderless
  * `PctBar` used elsewhere; unlike the trick-meter, the unfilled portion is a
  * flat `--chart-track` fill (no hatch), the same "nothing here yet"
- * convention `PctBar` itself uses. See the `.medal-bar-*` rules in
- * style.css, placed beside `.trick-meter-*`.
+ * convention `PctBar` itself uses. The fill's growing edge is capped with a
+ * solid `1px` ink line too (`.medal-bar-fill.capped`), the same convention
+ * trick-meter uses to keep its own fill's leading edge crisp against the
+ * track rather than just fading into the color change — gated on `fillPct >
+ * 0` so a fresh 0% bar shows no stray line at the left edge, mirroring
+ * trick-meter's own `tricks > 0` gate on its `capped` class. See the
+ * `.medal-bar-*` rules in style.css, placed beside `.trick-meter-*`.
  */
 export function MedalBar({
   progress,
@@ -75,7 +80,10 @@ export function MedalBar({
     <div className="medal-bar">
       <div className="medal-bar-line">
         <div className="medal-bar-track">
-          <div className={`medal-bar-fill tint-${target ?? 's'}`} style={{ width: `${fillPct}%` }} />
+          <div
+            className={`medal-bar-fill tint-${target ?? 's'}${fillPct > 0 ? ' capped' : ''}`}
+            style={{ width: `${fillPct}%` }}
+          />
         </div>
         <span className="medal-pct num">{fillPct}%</span>
       </div>

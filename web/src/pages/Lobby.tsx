@@ -100,7 +100,13 @@ export default function Lobby() {
             )}
           </div>
 
-          {me?.user?.medals ? <MedalBar progress={me.user.medals} provisionalMin={me.provisionalMin} /> : null}
+          {/* Held back until the first board is actually on the books — a brand-new
+              account's 0%-toward-club bar has nothing to show yet, and greeting a
+              first-time visitor with a progress rail before they've played a card
+              reads as clutter rather than as an incentive. */}
+          {me?.user?.medals && me.user.boards > 0 ? (
+            <MedalBar progress={me.user.medals} provisionalMin={me.provisionalMin} />
+          ) : null}
 
           <div className="home-tolls">
             <div className="label-caps">TOLLS PAID</div>
