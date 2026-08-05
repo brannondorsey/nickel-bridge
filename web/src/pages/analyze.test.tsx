@@ -609,29 +609,33 @@ describe('the play lens: trick pips (the compass fill)', () => {
   it('a trick graded on both hands (N-S declaring) lights two wedges, not one', async () => {
     // when N-S declares, the human is graded on declarer's AND dummy's
     // plays, so a single trick can carry two independently-charged moments
-    // — the wedge treatment is per seat, not per pip, exactly for this case
+    // — the wedge treatment is per seat, not per pip, exactly for this case.
+    // South declares donePlayed's contract, so the dummy (North, seat 0) is
+    // the only OTHER seat humanControls ever grades — a defender's card
+    // (e.g. West's) is never charged, so the fixture must target the dummy
+    // specifically rather than "any other seat in the trick".
     apiMock.board.mockResolvedValue(donePlayed);
-    const westPly = flat.findIndex((c, i) => Math.floor(i / 4) + 1 === chargedTrick && c.seat !== 2);
-    const westSeat = flat[westPly].seat;
-    const westBestCard = allHands[westSeat].filter((c) => c !== flat[westPly].card)[0];
+    const dummySeat = donePlayed.dummy!;
+    const dummyPly = flat.findIndex((c, i) => Math.floor(i / 4) + 1 === chargedTrick && c.seat === dummySeat);
+    const dummyBestCard = allHands[dummySeat].filter((c) => c !== flat[dummyPly].card)[0];
     const base = makeAnalysis();
     const secondPly = {
-      ply: westPly,
+      ply: dummyPly,
       trick: chargedTrick,
-      seat: westSeat,
-      card: flat[westPly].card,
+      seat: dummySeat,
+      card: flat[dummyPly].card,
       ddLoss: 1,
       cfTricksDeclarer: 11,
       cfScoreNS: 650,
       cfPct: 83,
       mpCost: 25,
-      sampled: { bestCard: westBestCard, deficit: 1, grade: 1 as const },
+      sampled: { bestCard: dummyBestCard, deficit: 1, grade: 1 as const },
     };
     const secondMoment = {
       kind: 'play' as const,
-      ply: westPly,
+      ply: dummyPly,
       trick: chargedTrick,
-      card: flat[westPly].card,
+      card: flat[dummyPly].card,
       grade: 1 as const,
       mpCost: 25,
     };
@@ -642,7 +646,7 @@ describe('the play lens: trick pips (the compass fill)', () => {
     await screen.findByText(/THE AUDIT — TRICK/);
     const colors = wedgeColors(`Trick ${chargedTrick}`);
     expect(colors[2]).toBe('var(--positive)'); // South, the original charge
-    expect(colors[westSeat]).toBe('var(--positive)'); // the second graded seat
+    expect(colors[dummySeat]).toBe('var(--positive)'); // the second graded seat (dummy)
   });
 
   it('a not-yet-reached trick stays fully empty', async () => {
