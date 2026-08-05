@@ -628,6 +628,12 @@ function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave:
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           hint={guided && step?.kind === 'call' && selectedCall === null ? step.action : null}
+          // Tour's own onSelectCall (above) already lets a second tap on the
+          // selected call submit the scripted correct one, regardless of any
+          // account setting — a signed-out visitor has none. So the
+          // placeholder should keep teaching that gesture rather than the
+          // confirm-CTA copy the live board shows by default.
+          doubleTapBid
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}

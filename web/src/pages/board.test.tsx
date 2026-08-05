@@ -174,8 +174,10 @@ describe('Board — bidding', () => {
       </Routes>,
       { me: { ...meFixture, user: { ...meFixture.user!, doubleTapBid: true } }, route: '/t/12/b/2' },
     );
+    // the placeholder teaches the repeat-tap gesture, not the confirm CTA, now that it's live
+    expect(await screen.findByText(/tap again to make the call/i)).toBeInTheDocument();
     // first tap selects and previews it — no submit yet
-    await userEvent.click(await screen.findByRole('button', { name: '2♥' }));
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
     expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
     expect(apiMock.call).not.toHaveBeenCalled();
     // second tap on the same call commits, just like tap-again in card play

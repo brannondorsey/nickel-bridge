@@ -671,6 +671,7 @@ export default function Board() {
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           auctionReserve={auctionReserve}
+          doubleTapBid={doubleTapBid}
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
@@ -736,6 +737,7 @@ export function BiddingPhase({
   onInspect,
   hint = null,
   auctionReserve = 0,
+  doubleTapBid = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -749,6 +751,8 @@ export function BiddingPhase({
   hint?: number | null;
   /** see AuctionGrid's reserveThrough — the tour's captured board never needs it (no pre-existing calls precede its human-dealt opening) */
   auctionReserve?: number;
+  /** does a second tap on the selected call actually submit it here? Only used to pick the placeholder's copy — the caller still owns the real gating logic in onSelectCall. */
+  doubleTapBid?: boolean;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -764,7 +768,7 @@ export function BiddingPhase({
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
-      <MeaningPanel placeholder />
+      <MeaningPanel placeholder doubleTapBid={doubleTapBid} />
     )
   ) : lastEval ? (
     <GradeToast evaluation={lastEval} />

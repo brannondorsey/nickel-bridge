@@ -19,16 +19,21 @@ export function MeaningPanel({
   call,
   prefix,
   placeholder = false,
+  doubleTapBid = false,
 }: {
   meaning?: BidMeaning | null;
   call?: number;
   prefix?: string;
   placeholder?: boolean;
+  /** does a second tap on the selected call submit it (account setting, or Tour's own gesture)? Teaches whichever is actually live. */
+  doubleTapBid?: boolean;
 }) {
   if (placeholder) {
     return (
       <div className="meaning-panel meaning-panel-placeholder">
-        Tap a bid to see what it means, then tap BID to make the call.
+        {doubleTapBid
+          ? 'Tap a bid to see what it means, then tap again to make the call.'
+          : 'Tap a bid to see what it means, then tap BID to make the call.'}
       </div>
     );
   }
