@@ -681,6 +681,18 @@ export const TERMS: GlossaryTerm[] = [
     related: ['top', 'percentage-score'],
   },
   {
+    // App-specific, like toll-receipt: not a bridge term, but the loyalty
+    // rail on Home names it in its own copy ("earn the ♥ medal"), so it
+    // needs a definition reachable from there.
+    slug: 'medal',
+    term: 'Medal',
+    def: 'A series of achievements awarded for continuous play: one suit badge — ♣, ♦, ♥, ♠, in that order — earned at the 4th, 25th, 100th, and 500th completed tournament. The Major suit medals (♥, ♠) are reserved for outstanding contributions to the community — the highest counts of tournament participation.',
+    example: 'Complete 42 more tournaments to earn the ♥ medal.',
+    themes: ['scoring'],
+    aliases: ['medals', 'medal rail'],
+    related: ['major-suit', 'toll-receipt'],
+  },
+  {
     slug: 'minor-suit',
     term: 'Minor suit',
     def: 'Clubs and diamonds. They score 20 per trick, so game needs the 5 level — which is why pairs prefer major or NT games.',

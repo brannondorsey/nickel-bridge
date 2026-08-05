@@ -40,7 +40,7 @@ describe('glossary core data', () => {
   });
 
   it('covers the whole curated sheet (plus the First crossing easter egg)', () => {
-    expect(TERMS.length).toBe(125);
+    expect(TERMS.length).toBe(126);
     // the ledger's one non-bridge entry: the app tour, filed as a term
     const egg = TERMS.find((t) => t.slug === 'first-crossing');
     expect(egg?.action?.to).toBe('/tour');
