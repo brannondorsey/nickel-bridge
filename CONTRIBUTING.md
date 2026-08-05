@@ -1211,12 +1211,20 @@ tournaments":
 `tournamentsRemaining` is likewise **exact**, off `tournamentsCompleted` alone
 (`threshold − tournamentsCompleted`) — never derived from boards, so the widget's own
 copy ("Complete 2 more tournaments to join the rankings") can't drift from what the medal
-itself is actually waiting on. That first medal's copy is deliberately not generic: 4
-completed tournaments is also this app's leaderboard threshold
-(`PROVISIONAL_MIN_TOURNAMENTS`), so "join the rankings" is literally true rather than
-flavor text, and `MedalBar.tsx`'s copy says so. Every other tier just names its glyph
-("earn the ♦ medal") rather than spelling out "Diamond"/"Heart"/"Spade" — the colored
-mark beside the sentence already says which one.
+itself is actually waiting on. That first medal's copy is deliberately not generic: on a
+deployment where 4 completed tournaments is also the leaderboard threshold
+(`tournaments.ts`'s `provisionalMin()`, production default `PROVISIONAL_MIN_TOURNAMENTS`),
+"join the rankings" is literally true rather than flavor text, and `MedalBar.tsx`'s copy
+says so. But `DEMO=1` relaxes that quota to `DEMO_PROVISIONAL_MIN_TOURNAMENTS` (1) — the
+identical trap the activity feed's `entered-rankings` milestone was built to avoid — so by
+the club tier a demo player is typically already ranked, and the sentence would be making
+a false claim in exactly the environment used for click-testing it. `/api/me` therefore
+sends `provisionalMin` (alongside `compareMinBoards`, the same "send it rather than
+hardcode it" pattern) and `MedalBar.tsx` only uses the rankings phrasing when it equals
+the club tier's own 4-tournament threshold, falling back to the ordinary glyph phrasing
+otherwise. Every other tier just names its glyph ("earn the ♦ medal") rather than
+spelling out "Diamond"/"Heart"/"Spade" — the colored mark beside the sentence already
+says which one.
 
 **Human-only**, the same gate Elo and placement already use: `server/src/medals.ts`'s
 `medalProgressFor` returns `null` for `kind !== 'human'`, and `stats.ts`'s `playerStats()`
@@ -1228,7 +1236,16 @@ themselves, a medal tier is derived fresh on every read rather than diaried — 
 evergreen, recompute-on-read discipline the rest of this codebase already follows for
 Elo and placement. There is no "you just earned a medal" toast or celebration moment in
 this first pass; a medal simply appears colored the next time the rail or the profile
-loads, the same way a new `elo_history` row silently updates the RATING chart.
+loads, the same way a new `elo_history` row silently updates the RATING chart. "Next
+load" has to mean within the same session, not just after a hard reload: `Board.tsx`
+otherwise never touches `MeContext` (it reads `fastForward`/`bidFeedback` off it but never
+writes), so without an explicit trigger the Home rail would show a stale bar/medal for the
+rest of the visit — including at the exact moment a medal is earned, the one moment this
+widget most wants to be right. So the same effect that flips on the toll receipt
+(`Board.tsx`'s `showReceipt` effect, keyed on the board's `state` going live → `'done'`)
+also calls `refresh()` when the board that just finished was the tournament's **last**
+one (`board.boardNo === board.totalBoards`) — an ordinary mid-tournament board finishing
+doesn't touch account state and skips it.
 
 **Two call sites, two shapes.** `/api/me`'s `medals` field
 (`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,

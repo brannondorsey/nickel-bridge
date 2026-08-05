@@ -49,6 +49,14 @@ export interface Me {
    * server then refuses. server/src/compare.ts's compareMin() is the authority.
    */
   compareMinBoards?: number;
+  /**
+   * The leaderboard's rated-tournament quota (server/src/tournaments.ts's
+   * provisionalMin()). Sent because DEMO=1 relaxes it to 1 (from a
+   * production 4) — the Home medal rail's club-tier copy uses this to know
+   * whether "...to join the rankings" is still true rather than hardcoding
+   * the production number. See MedalBar.tsx's doc comment.
+   */
+  provisionalMin?: number;
 }
 
 export interface BidMeaning {

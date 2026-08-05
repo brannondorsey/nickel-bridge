@@ -1,7 +1,13 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { meFixture, tournamentComplete, tournamentCompleteWithHouse, tournamentInProgress } from '../test/fixtures';
+import {
+  meFixture,
+  meFreshCrosser,
+  tournamentComplete,
+  tournamentCompleteWithHouse,
+  tournamentInProgress,
+} from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Lobby from './Lobby';
 
@@ -85,5 +91,24 @@ describe('Home', () => {
     apiMock.tournaments.mockRejectedValue(new Error('offline'));
     renderWithMe(<Lobby />, { me: meFixture });
     expect(await screen.findByText('offline')).toBeInTheDocument();
+  });
+
+  // The club medal tier's copy names "the rankings" because 4 completed
+  // tournaments is also this deployment's leaderboard quota — but DEMO=1
+  // relaxes that quota to 1, so by the club tier a demo player has already
+  // joined. me.provisionalMin (server/src/tournaments.ts's provisionalMin())
+  // is how the widget knows which is true here; see MedalBar.tsx.
+  it('names "the rankings" for the club tier when this deployment\'s quota matches it', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+    renderWithMe(<Lobby />, { me: { ...meFreshCrosser, provisionalMin: 4 } });
+    expect(await screen.findByText(/join the/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'rankings' })).toHaveAttribute('href', '/leaderboard');
+  });
+
+  it('names the medal instead, for the club tier, when this deployment\'s quota does not match it (demo)', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [] });
+    renderWithMe(<Lobby />, { me: { ...meFreshCrosser, provisionalMin: 1 } });
+    expect(await screen.findByText(/earn the/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'rankings' })).not.toBeInTheDocument();
   });
 });

@@ -28,6 +28,11 @@ describe('medal progress', () => {
     expect(me.user.medals).toEqual({ earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 });
   });
 
+  it('carries provisionalMin (production quota 4), so the club-tier copy can confirm "join the rankings" is true here', async () => {
+    const me = await dana.get('/api/me');
+    expect(me.provisionalMin).toBe(4);
+  });
+
   it('earns the club medal on the 4th completed tournament, already 16% toward diamond (not reset to 0)', async () => {
     for (let i = 0; i < 4; i++) await completeOneTournament(dana);
     const me = await dana.get('/api/me');

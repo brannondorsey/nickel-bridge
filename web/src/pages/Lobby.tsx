@@ -100,7 +100,7 @@ export default function Lobby() {
             )}
           </div>
 
-          {me?.user?.medals ? <MedalBar progress={me.user.medals} /> : null}
+          {me?.user?.medals ? <MedalBar progress={me.user.medals} provisionalMin={me.provisionalMin} /> : null}
 
           <div className="home-tolls">
             <div className="label-caps">TOLLS PAID</div>

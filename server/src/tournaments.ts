@@ -298,6 +298,17 @@ export const PROVISIONAL_MIN_TOURNAMENTS = 4;
 export const DEMO_PROVISIONAL_MIN_TOURNAMENTS = 1;
 
 /**
+ * The quota in force for this deployment, and the ONE place `DEMO` is
+ * consulted for it — mirrors `compare.ts`'s `compareMin()`. Both the ladder
+ * and the activity feed's 'entered-rankings' milestone hang off this, plus
+ * `/api/me`'s `provisionalMin` field, which lets the Home medal rail's
+ * club-tier copy ("...to join the rankings") say so only when it's actually
+ * true on this deployment — see `MedalBar.tsx`'s doc comment.
+ */
+export const provisionalMin = () =>
+  process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
+
+/**
  * Human-only matchpoint averages — the Elo replay's input, DELIBERATELY not
  * the displayed standings(). House personas count in the displayed field but
  * are unrated, and they must not shape human ratings even indirectly:

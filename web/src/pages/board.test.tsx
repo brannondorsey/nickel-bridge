@@ -1229,4 +1229,39 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('Toll refused')).toBeInTheDocument();
     expect(screen.getAllByText('−100').length).toBe(2); // penalty line + total
   });
+
+  // A tournament (not just a board) completing can change account state Board
+  // never otherwise touches — most notably Home's medal rail, whose bar/copy
+  // is fed by MeContext and would otherwise go stale for the rest of the
+  // session (see App.tsx's refresh()). So the LAST board of a tournament
+  // completing live has to poke MeContext; an ordinary board completing (with
+  // more boards left in the tournament) should not.
+  it('refreshes account state when the LAST board of a tournament completes live', async () => {
+    const lastBoardPlaying = { ...boardPlaying, boardNo: 4 };
+    const lastBoardDone = { ...boardDone, boardNo: 4 };
+    apiMock.board.mockResolvedValue(lastBoardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: lastBoardDone });
+    const { refresh } = renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: meFixture, route: '/t/12/b/4' },
+    );
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 4')).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('does not refresh account state when a non-final board completes live', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: boardDone });
+    const { refresh } = renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
 });
