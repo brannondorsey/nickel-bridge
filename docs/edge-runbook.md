@@ -212,6 +212,128 @@ is written down here rather than re-queried later.
 Rolling windows on 2026-07-30T02:54Z, hours after demo went orange and before production was
 fronted: production 12.82 h of the last 24 h (53%, 83 episodes); demo 1.65 h (7%, 13 episodes).
 
+### Result, recorded 2026-08-02 (15s resolution, post-fronting)
+
+Production went orange 2026-07-30 ~20:30Z. Read on 2026-08-02 while both days were still at 15s:
+
+| Day (UTC) | `nickel-bridge` up | episodes | mean episode | `nickel-bridge-demo` up |
+| --- | --- | --- | --- | --- |
+| 2026-07-31 | 9.27 h | 61 | 9.1 min | 3.35 h |
+| 2026-08-01 | 14.58 h | 90 | 9.7 min | 1.31 h |
+
+**The fronting did not measurably reduce production's machine time.** Mean 11.93 h/day and 75.5
+episodes/day against a 13.05 h and 81 baseline — about 8% on hours and 7% on episodes, inside
+the day-to-day spread of the baseline itself (11.85–14.25 h). Two days per side cannot resolve
+a difference that small; treat it as "no effect detected", not as a measured 8% win.
+
+The same read is also a live demonstration of why this table exists. Re-reading 2026-07-28/29 on
+2026-08-02 returned them at 30s — 12.18 h/66 episodes and 14.68 h/72 — against the 11.85 h/77
+and 14.25 h/85 recorded at the time. Hours drifted up, episodes down ~14%, purely from age. The
+contemporaneous numbers are the real ones.
+
+Demo's spike was **transient and self-inflicted**: two full e2e tournaments, repeated 131-URL
+comparison sweeps, three forced 264-URL purges and extra deploys, all run against it while
+debugging the purge on 07-30 and 07-31. By 08-01 it was back to 1.31 h/11 episodes,
+indistinguishable from before it was fronted, so it was not evidence of fronting backfiring.
+
+The 07-30 peak is not in the table above because it is at a different resolution, and mixing the
+two is the mistake this whole section is about. From one `node scripts/fly-uptime.mjs
+nickel-bridge-demo 7` run on 08-02, comparing **only its 30s rows against each other**:
+
+| Day (UTC) | `nickel-bridge-demo` up | episodes | step |
+| --- | --- | --- | --- |
+| 2026-07-28 | 1.33 h | 11 | 30s |
+| 2026-07-29 | 1.28 h | 11 | 30s |
+| 2026-07-30 | 5.68 h | 36 | 30s |
+
+A 4× spike on the day the debugging happened, against its own neighbours at matching step. Note
+these 07-28/29 figures are the degraded 30s re-reads, not the 15s originals in the baseline table
+— usable here precisely because every row being compared is equally degraded.
+
+### Why it did not help, and what would
+
+The cache is working exactly as designed — the four URLs the July log study identified as the
+wakers are all HIT with long ages (`/` 15 h, `/robots.txt` and `/sitemap.xml` 36 h,
+`/og-image.png` 67 h). The problem is that they are no longer what crawlers fetch. Every single
+origin-reaching request observed on 2026-08-02 was a **glossary term page**, and a sampled 10 of
+them showed 6 MISS / 4 HIT.
+
+That is structural, not a misconfiguration. Prerendering created 127 URLs, an edge cache is
+per-PoP, and a crawler visits each term page *once*. So each (page, PoP) pair is a first visit
+that must reach the origin — up to ~1,650 unavoidable cold fills across ~13 PoPs per full crawl,
+with no repeat traffic to amortize them. The discoverability work and the edge work pull against
+each other: the long tail that makes the site findable is the part a per-PoP cache cannot help.
+
+**Tiered Cache (Smart Topology) is the lever that fits this shape**, and it is free on all plans.
+It collapses those ~13 independent PoP fills into one upper-tier fetch, which is precisely the
+one-shot-per-PoP pattern above — worth roughly an order of magnitude more here than any TTL or
+purge-frequency change. It is a ZONE-WIDE setting on a shared zone, so it stays a human decision
+(see the note in `scripts/cloudflare.mjs`). Purge frequency is the second lever: with ~3
+deploys/day plus the weekly `--force`, a term page cached at a PoP is usually dropped before a
+second crawler ever reaches it.
+
+### Tiered Cache enabled, 2026-08-05
+
+Done: Tiered Cache → Smart Topology, enabled zone-wide on `brannon.online` (Caching → Tiered
+Cache in the dashboard, or `PATCH /zones/:id/argo/tiered_caching`). Zone-wide is the only mode
+Cloudflare offers — there is no per-hostname or Cache Rule scoping — so this reaches the ten
+other proxied hostnames on the shared zone too. That is a deliberate exception to "nothing here
+writes a zone-wide setting" (see CONTRIBUTING.md "The edge"): Tiered Cache is a strictly
+cache-layer optimization with no plausible way to break another site's traffic, unlike the SSL
+mode decision that section is really guarding against, so it was judged safe to flip as a human
+decision outside `scripts/cloudflare.mjs`'s management — exactly as that script's docstring
+already said this lever would have to be enabled.
+
+**Why a region hint was needed.** Smart Topology normally picks the upper-tier Cloudflare data
+centre nearest an origin by latency probing, and Cloudflare's own docs warn that origins behind
+anycast or regional-unicast networking (their examples: AWS/GCP/Azure/Oracle) defeat that
+probing, because every probe looks equally close. Fly's network is the same shape — a global
+anycast address, SNI-routed internally to whichever machine is actually running — so without a
+hint, Smart Topology's automatic pick could be wrong or unstable even though this app runs a
+single machine in a single region (`fly.toml`'s `primary_region = 'ewr'`, Newark).
+
+A region hint fixes this and is scoped **per origin IP**, not zone-wide, via
+`PUT /zones/:id/origin/cloud_regions/:ip`:
+
+```bash
+ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=brannon.online" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'][0]['id'])")
+
+for IP in 66.241.125.167 "2a09:8280:1::14c:2c8e:0"; do   # nickel-bridge.fly.dev's A/AAAA
+  curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin/cloud_regions/$IP" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+    --data "{\"origin_ip\": \"$IP\", \"vendor\": \"aws\", \"region\": \"us-east-1\"}"
+done
+```
+
+`aws:us-east-1` was picked by checking the live catalogue
+(`GET /zones/:id/origin/cloud_regions/supported_regions`) for which named region's
+`upper_tier_colos` includes `EWR`. Confirmed **tied-optimal**, not merely a rough guess: both
+`aws:us-east-1` and `oci:us-ashburn-1` map to the identical `["IAD", "EWR"]` set — the closest
+any of the four supported vendors (none of which have a region literally in New Jersey) get to
+this app's actual origin metro. Re-verify with:
+
+```bash
+curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin/cloud_regions" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | python3 -m json.tool
+```
+
+**What this changes about verification above.** Steps 2 and 6 in the sweep both lean on
+`cf-cache-status` at the edge to prove the cache is doing its job. With tiering on, a lower-tier
+PoP's own `MISS` no longer proves the origin was reached — the upper tier may have already had
+it and answered without touching Fly. That's the mechanism working, not a false negative, but it
+means those two steps are now only a **rule-matching** check (did a cache rule match this path
+at all), not an **origin-wake** check. `scripts/fly-uptime.mjs` and the request log
+(`server/src/logging.ts`) remain the only signal for whether Fly actually got woken — which the
+"After" section below already treats as authoritative, so nothing there needed to change.
+
+**No automated drift check exists for this.** `--plan`/`--apply`/`--check` manage only the Cache
+Rules and Configuration Rules phases; the Tiered Cache toggle and the region hints sit in a
+different part of the API (`/argo/tiered_caching`, `/origin/cloud_regions`) that this script
+does not touch, so nothing here will notice if either gets flipped back off. If that becomes a
+recurring problem, `--audit` reporting both read-only (the same pattern it already uses for the
+zone's SSL default) would be the fix — not attempted here, since nothing has needed it yet.
+
 ### After
 
 Wait for at least three full UTC days behind the proxy, then, while those days are still at 15s

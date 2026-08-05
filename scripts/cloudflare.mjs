@@ -62,9 +62,22 @@
  *
  * WORTH KNOWING: Cloudflare's cache is per-PoP, so the edge TTL doubles as the revalidation
  * interval for every data centre that sees traffic. Tiered Cache (Smart Topology, free on all
- * plans) would collapse those into one upper-tier fetch and cut origin wakes further — but it
- * is a ZONE-WIDE setting, so it is deliberately left for a human to enable rather than
- * reached for from here. See the note on zone settings above.
+ * plans) collapses those into one upper-tier fetch and cuts origin wakes further — enabled
+ * zone-wide on brannon.online 2026-08-05, since it is a ZONE-WIDE setting this script
+ * deliberately never writes (see the note on zone settings above) and therefore can't manage
+ * the same way as the Cache/Configuration rulesets: it is invisible to --plan/--apply/--check,
+ * which touch only those two phases, so there is no drift check for it here. A cloud region
+ * hint (aws:us-east-1 — tied-optimal against oci:us-ashburn-1, both mapping to
+ * upper_tier_colos [IAD, EWR], which is the closest match to fly.toml's primary_region = 'ewr'
+ * any of the four supported vendors offers) is set per origin IP via
+ * `PUT /zones/:id/origin/cloud_regions/:ip`, because Fly's global anycast addressing defeats
+ * Smart Topology's latency-based origin-location probing the same way Cloudflare's own docs
+ * warn it does for anycast/regional-unicast origins on AWS/GCP/Azure/Oracle. See
+ * docs/edge-runbook.md for the full record, the exact IPs, and re-verification commands. One
+ * consequence worth knowing: with tiering on, a lower-tier PoP's own cf-cache-status: MISS no
+ * longer proves the origin was reached — the upper tier may have answered instead — so
+ * --audit's cache-status probe (below) and the runbook's manual checks can undercount the
+ * win; `fly-uptime.mjs` and the request log remain the only trustworthy signal for wakes.
  *
  * ENV
  *   CLOUDFLARE_API_TOKEN  zone scoped, on brannon.online only:
@@ -858,7 +871,11 @@ async function auditSite(site, fail) {
     const url = `https://${host}${path}`;
     // Anycast means consecutive requests can land on different edge servers, each with its
     // own cache — so a lone MISS proves nothing. Ask a few times and accept any cache hit;
-    // only a run of pure misses means the rule is not doing its job.
+    // only a run of pure misses means the rule is not doing its job. Since Tiered Cache went
+    // on (2026-08-05) this is weaker evidence than it used to be: a lower-tier PoP can answer
+    // a MISS from the upper tier without ever reaching origin, so a pure-MISS run here proves
+    // the rule isn't matching, not that Fly was woken. Treat this as a rule-matching check;
+    // fly-uptime.mjs and the request log are what settle whether the origin was actually hit.
     const seen = [];
     for (let i = 0; i < 4; i++) {
       const r = await fetch(url, { headers: { 'User-Agent': 'nickel-bridge-edge-audit' } });
