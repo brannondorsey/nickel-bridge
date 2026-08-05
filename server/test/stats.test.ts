@@ -305,8 +305,14 @@ describe('player stats', () => {
 
     expect(stats.totals.boardsCompleted).toBe(8);
     expect(stats.eloSeries).toHaveLength(2);
+    // Every series is ordered by when this player finished the crossing, never
+    // by tournament id — see stats.ts's StatPoint. Alice played these in id
+    // order, so both hold here; the backfill case is pinned separately below.
+    expect(stats.eloSeries[0].finishedAt).toBeLessThanOrEqual(stats.eloSeries[1].finishedAt);
     expect(stats.eloSeries[0].tournamentId).toBeLessThan(stats.eloSeries[1].tournamentId);
     expect(stats.pctSeries[0].finishedAt).toBeLessThanOrEqual(stats.pctSeries[1].finishedAt);
+    // the line ends where the rating hero above it reads
+    expect(stats.eloSeries.at(-1).elo).toBe(stats.totals.currentElo);
     expect(stats.totals.peakElo).toBe(Math.max(1200, ...stats.eloSeries.map((e: any) => e.elo)));
 
     // best crossing, derived from pctSeries with the same tie-break (earlier wins ties)
@@ -452,5 +458,93 @@ describe('player stats', () => {
       { userId: oppAId, handle: 'RivalOppA', kind: 'human', shared: 2, record: { ahead: 0, behind: 0, tied: 2 }, boards: 8 },
       { userId: oppBId, handle: 'RivalOppB', kind: 'human', shared: 1, record: { ahead: 0, behind: 1, tied: 0 }, boards: 4 },
     ]);
+  });
+
+  // Tournaments never close, so a player can finish a months-old, low-id
+  // tournament after a brand-new one — and elo_history is replayed in
+  // tournament-id order regardless. The charts plot a timeline, so they have to
+  // follow the player's clock, not the replay's bookkeeping. Fully synthetic
+  // rows (same pattern as the rivalries test above): real play can't produce a
+  // backfill on demand, and every value here needs to be exact.
+  it('plots the rating in play order, not tournament-id order, when an old crossing is finished last', async () => {
+    const late = new TestClient(app, 'BackfillLate');
+    await late.login();
+    const uid = await userId(late);
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    // `old` is minted first, so it takes the LOWER id...
+    const oldTid = mkTournament('backfill-old');
+    const newTid = mkTournament('backfill-new');
+    const at = (iso: string) => Math.floor(new Date(iso).getTime() / 1000);
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, updated_at) VALUES (?, ?, ?, 'done', 100, ?)`,
+    );
+    // ...but it is finished LAST: the new one in June, the abandoned old one in July.
+    for (let no = 1; no <= 4; no++) insertBoard.run(newTid, uid, no, at('2026-06-10T12:00:00Z'));
+    for (let no = 1; no <= 4; no++) insertBoard.run(oldTid, uid, no, at('2026-07-20T12:00:00Z'));
+
+    // The replay's chain, in tournament-id order: 1200 → 1160 (old) → 1240 (new).
+    // Note its high-water mark is 1240, the player's rating today.
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, oldTid, 1200, 1160);
+    insertElo.run(uid, newTid, 1160, 1240);
+    db.prepare(`UPDATE users SET elo = 1240 WHERE id = ?`).run(uid);
+
+    const stats = await late.get(`/api/users/${uid}/stats`);
+
+    // Play order — June's crossing first, even though its id is the higher one.
+    expect(stats.eloSeries.map((e: any) => e.tournamentId)).toEqual([newTid, oldTid]);
+    expect(stats.pctSeries.map((p: any) => p.tournamentId)).toEqual([newTid, oldTid]);
+    expect(stats.accuracySeries.map((p: any) => p.tournamentId)).toEqual([newTid, oldTid]);
+
+    // Deltas replayed in that order: +80 in June, then −40 in July. The line
+    // ends on the rating printed above the chart, which is the whole reason the
+    // rows aren't simply re-sorted with their `after` values intact — that would
+    // have ended on 1160, a rating this player has not held since June.
+    expect(stats.eloSeries.map((e: any) => e.elo)).toEqual([1280, 1240]);
+    expect(stats.eloSeries.at(-1).elo).toBe(stats.totals.currentElo);
+    // And PEAK comes off that same line: the chain's own maximum is 1240, so
+    // reading it there would print a peak the drawn line visibly rises above.
+    expect(stats.totals.peakElo).toBe(1280);
+  });
+
+  // THIS MONTH reads off the same series, so it inherits the ordering above:
+  // its baseline is "the rating after the last crossing finished before the
+  // 1st", which is a wall-clock claim. Walking elo_history's id order instead,
+  // the final pre-month row is merely the highest-id one — a crossing finished
+  // mid-month can sit past it and be skipped, and the month's movement vanishes.
+  it('measures the month from the last crossing finished before it, not the highest-id one', async () => {
+    const back = new TestClient(app, 'BackfillMonth');
+    await back.login();
+    const uid = await userId(back);
+
+    const mkTournament = (name: string) =>
+      (db.prepare(`INSERT INTO tournaments (name, seed) VALUES (?, 'seed') RETURNING id`).get(name) as { id: number })
+        .id;
+    const lowTid = mkTournament('month-old'); // lower id, but finished THIS month
+    const highTid = mkTournament('month-new'); // higher id, finished LAST month
+
+    const now = new Date();
+    const monthStart = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
+    const insertBoard = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, score_ns, updated_at) VALUES (?, ?, ?, 'done', 100, ?)`,
+    );
+    for (let no = 1; no <= 4; no++) insertBoard.run(highTid, uid, no, monthStart - 5 * 86400);
+    for (let no = 1; no <= 4; no++) insertBoard.run(lowTid, uid, no, monthStart + 3600);
+
+    // Chain in id order: 1200 → 1250 (old, +50) → 1230 (new, −20).
+    const insertElo = db.prepare(`INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`);
+    insertElo.run(uid, lowTid, 1200, 1250);
+    insertElo.run(uid, highTid, 1250, 1230);
+    db.prepare(`UPDATE users SET elo = 1230 WHERE id = ?`).run(uid);
+
+    const stats = await back.get(`/api/users/${uid}/stats`);
+    // Play order: −20 last month leaves them on 1180, then +50 this month for
+    // the resumed crossing. Read in id order the baseline lands on 1230 — the
+    // rating they hold right now — and the month reports a flat 0.
+    expect(stats.eloSeries.map((e: any) => e.elo)).toEqual([1180, 1230]);
+    expect(stats.totals.monthlyEloDelta).toBe(50);
   });
 });

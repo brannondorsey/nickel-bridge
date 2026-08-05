@@ -39,7 +39,19 @@ CREATE TABLE IF NOT EXISTS boards (
   id INTEGER PRIMARY KEY,
   tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
   user_id INTEGER NOT NULL REFERENCES users(id),
-  board_no INTEGER NOT NULL,             -- 1..4
+  -- 1..4. The CHECK is on the storage CLASS, not the range, and both halves of
+  -- that are deliberate. INTEGER here is an affinity rather than a type: this
+  -- table is not STRICT, so SQLite stores 2.5 verbatim as a REAL — a value
+  -- distinct from every other under UNIQUE below, i.e. an unbounded supply of
+  -- extra "boards" per (tournament, user). typeof() is what actually refuses
+  -- that. The 1..4 range stays at the route (app.ts's boardNoParam), because
+  -- it is a rule about the game rather than about the row, and test suites
+  -- legitimately fabricate rows past the fourth board to stand in for days of
+  -- play. Note this only reaches databases created from this DDL: SQLite
+  -- cannot add a constraint to an existing table without rebuilding it, and a
+  -- rebuild of the production boards table is not worth it for a hole the
+  -- boundary check already closes.
+  board_no INTEGER NOT NULL CHECK (typeof(board_no) = 'integer'),
   state TEXT NOT NULL DEFAULT 'bidding', -- bidding | playing | done
   calls TEXT NOT NULL DEFAULT '[]',      -- JSON number[]
   plays TEXT NOT NULL DEFAULT '[]',      -- JSON number[]
@@ -162,6 +174,20 @@ if (!userColumns.has('fast_forward')) {
 if (!userColumns.has('bid_feedback')) {
   db.exec(`ALTER TABLE users ADD COLUMN bid_feedback INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `double_tap_bid` — submit a bid on a second tap of the already-
+// selected call, without pressing the confirm CTA (0, the shipped default;
+// 1 opts back in). Unlike its three siblings above, this migration does NOT
+// preserve prior behaviour on purpose: player reports of accidentally
+// submitting a bid are exactly what turning this off by default fixes. The
+// confirm CTA ("BID X →") is unaffected either way — it has always been an
+// equal, independent path to the same submitCall, see BidBox.tsx — so this
+// only removes the shortcut, never the ability to bid. Account state, not
+// localStorage, for the same reason as fast_forward/bid_feedback: it
+// describes how this PERSON wants to interact with the bid box, not a
+// property of the device.
+if (!userColumns.has('double_tap_bid')) {
+  db.exec(`ALTER TABLE users ADD COLUMN double_tap_bid INTEGER NOT NULL DEFAULT 0`);
+}
 
 // Migration: `beta_features` — opt in to features still being tried out
 // before a general release (currently: Analyze, the post-board review
@@ -275,6 +301,8 @@ export interface UserRow {
   bid_feedback: number;
   /** 1 = this account can reach features still in beta (e.g. Analyze); env-dependent default, see the migration comment in db.ts */
   beta_features: number;
+  /** 1 = a second tap on the selected call submits it; 0 (default) = only the confirm CTA submits */
+  double_tap_bid: number;
   elo: number;
   created_at: number;
 }

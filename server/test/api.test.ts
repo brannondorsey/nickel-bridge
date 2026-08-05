@@ -206,30 +206,38 @@ describe('handle (first-login username)', () => {
     const pete = new TestClient(app, 'Pete');
     await pete.login();
 
-    // defaults, and a partial patch leaves the untouched key alone. betaFeatures
+    // defaults, and a partial patch leaves the untouched keys alone. betaFeatures
     // defaults true here because the test harness sets DEV_AUTH=1 (freshDbEnv) —
     // see the beta_features migration in db.ts for why that env is the signal.
+    // doubleTapBid is the one that defaults false, not true, since it is the
+    // one preference this endpoint deliberately ships as a behavior change
+    // rather than a preserved default (see the double_tap_bid migration in db.ts).
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.betaFeatures]).toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
+    expect([
+      me.user.ladderListed,
+      me.user.fastForward,
+      me.user.bidFeedback,
+      me.user.betaFeatures,
+      me.user.doubleTapBid,
+    ]).toEqual([true, true, true, true, false]);
+
+    // a partial patch leaves the untouched keys alone
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
       bidFeedback: true,
       betaFeatures: true,
+      doubleTapBid: false,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.betaFeatures]).toEqual([
-      false,
-      false,
-      true,
-      true,
-    ]);
+    expect([
+      me.user.ladderListed,
+      me.user.fastForward,
+      me.user.bidFeedback,
+      me.user.betaFeatures,
+      me.user.doubleTapBid,
+    ]).toEqual([false, false, true, true, false]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
@@ -238,6 +246,7 @@ describe('handle (first-login username)', () => {
       fastForward: false,
       bidFeedback: true,
       betaFeatures: true,
+      doubleTapBid: false,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -249,6 +258,7 @@ describe('handle (first-login username)', () => {
       fastForward: false,
       bidFeedback: false,
       betaFeatures: true,
+      doubleTapBid: false,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
@@ -260,8 +270,19 @@ describe('handle (first-login username)', () => {
       fastForward: false,
       bidFeedback: false,
       betaFeatures: false,
+      doubleTapBid: false,
     });
     expect((await pete.get('/api/me')).user.betaFeatures).toBe(false);
+
+    // doubleTapBid patches — and reads back — the same way, opting in from its false default
+    expect(await pete.post('/api/me/prefs', { doubleTapBid: true })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: false,
+      betaFeatures: false,
+      doubleTapBid: true,
+    });
+    expect((await pete.get('/api/me')).user.doubleTapBid).toBe(true);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,
@@ -423,5 +444,38 @@ describe('error paths', () => {
     // nonexistent tournament
     res = await alice.raw('GET', `/api/tournaments/424242/boards/1`);
     expect(res.statusCode).toBe(404);
+  });
+
+  /**
+   * A board number that is IN range but isn't a board. The range check alone
+   * passed 2.5 straight through to loadBoard, which INSERTs before it deals —
+   * so each distinct fraction persisted its own row past the four-board cap
+   * (UNIQUE keys on the value, and SQLite stores the REAL as-is on a
+   * non-STRICT table) and then 500'd on the malformed deal it derived.
+   */
+  it('refuses a fractional board number instead of persisting a row for it', async () => {
+    const placement = await alice.post('/api/play');
+    const tid = placement.tournamentId;
+    const uid = (await alice.get('/api/me')).user.id;
+    const boardRows = () =>
+      (db.prepare(`SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ?`).get(tid, uid) as {
+        n: number;
+      }).n;
+    const before = boardRows();
+
+    for (const no of ['2.5', '1.0001', 'foo', '', '-0', '1e400']) {
+      const res = await alice.raw('GET', `/api/tournaments/${tid}/boards/${no}`);
+      expect(res.statusCode, `GET board ${no}`).toBe(404);
+      expect((await alice.raw('POST', `/api/tournaments/${tid}/boards/${no}/call`, { call: 0 })).statusCode).toBe(404);
+      expect((await alice.raw('POST', `/api/tournaments/${tid}/boards/${no}/play`, { card: 0 })).statusCode).toBe(404);
+    }
+    expect(boardRows()).toBe(before);
+
+    // And the storage class itself is refused on databases created from the
+    // current DDL, so a future caller that skips the boundary can't reintroduce
+    // the row either.
+    expect(() =>
+      db.prepare(`INSERT INTO boards (tournament_id, user_id, board_no) VALUES (?, ?, 2.5)`).run(tid, uid),
+    ).toThrow(/CHECK constraint/i);
   });
 });

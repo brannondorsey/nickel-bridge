@@ -69,6 +69,15 @@ jobs:
             description ignores, or scope that silently expanded or shrank versus what was
             described.
 
+            This run is single-shot and synchronous: there is no follow-up turn, no
+            background execution, and nothing will ever check back in on work you defer.
+            Do not spawn background or async sub-agents, and do not say you'll "report
+            back" once something finishes — #136 hit exactly that trap (spawned parallel
+            review sub-agents, said it would report back once they completed, then ended
+            its turn with nothing ever posted, twice in a row). Do all analysis directly,
+            synchronously, within this single run, and end by actually posting the comment
+            below — not by describing an intention to post one later.
+
             Post a single top-level PR comment summarizing what you found (or a short note
             if nothing stood out). Do not approve or request changes on the PR — just comment.
           # bypassPermissions: an allowlist of just gh pr view/diff/comment worked but was

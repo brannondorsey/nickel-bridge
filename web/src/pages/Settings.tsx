@@ -57,7 +57,13 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: boolean; betaFeatures: boolean };
+type AccountPrefs = {
+  ladderListed: boolean;
+  fastForward: boolean;
+  bidFeedback: boolean;
+  betaFeatures: boolean;
+  doubleTapBid: boolean;
+};
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -68,6 +74,9 @@ export default function Settings() {
     fastForward: me?.user?.fastForward !== false,
     bidFeedback: me?.user?.bidFeedback !== false,
     betaFeatures: me?.user?.betaFeatures === true,
+    // Fail CLOSED, unlike the three switches above — this preference defaults
+    // off, so an absent/undefined value must read as off, not on.
+    doubleTapBid: me?.user?.doubleTapBid === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -177,6 +186,18 @@ export default function Settings() {
               value={prefs.betaFeatures}
               options={OFF_ON}
               onChange={(betaFeatures) => change({ betaFeatures })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Double-tap to bid"
+            note="A second tap on your selected call submits it immediately, without pressing Bid. Off by default, since that's the tap most mistaken bids come from — turn it on for the faster gesture once you trust it."
+          >
+            <PrefSwitch
+              label="Double-tap to bid"
+              value={prefs.doubleTapBid}
+              options={OFF_ON}
+              onChange={(doubleTapBid) => change({ doubleTapBid })}
             />
           </SettingRow>
           {prefError ? <div className="notice-error settings-error">{prefError}</div> : null}

@@ -5,9 +5,9 @@ import { TournamentInfo, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { Loading } from '../components/ds/Loading';
+import { MedalBar } from '../components/ds/MedalBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { TicketStub } from '../components/ds/TicketStub';
-import { BoardTicketRow } from '../components/game/BoardTicketRow';
 import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 
 const tourneyNo = (t: TournamentInfo) => tournamentNo(t.name, t.id);
@@ -100,16 +100,12 @@ export default function Lobby() {
             )}
           </div>
 
-          {current ? (
-            <div className="home-gate">
-              {/* placement is scored, not sequential — the next tourney's number is unknowable */}
-              <BoardTicketRow
-                no="?"
-                state="sealed"
-                counterLabel="TOURNEY"
-                main={`Opens when you finish #${tourneyNo(current)} — one crossing at a time`}
-              />
-            </div>
+          {/* Held back until the first board is actually on the books — a brand-new
+              account's 0%-toward-club bar has nothing to show yet, and greeting a
+              first-time visitor with a progress rail before they've played a card
+              reads as clutter rather than as an incentive. */}
+          {me?.user?.medals && me.user.boards > 0 ? (
+            <MedalBar progress={me.user.medals} provisionalMin={me.provisionalMin} />
           ) : null}
 
           <div className="home-tolls">

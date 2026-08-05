@@ -72,6 +72,17 @@ describe('Settings', () => {
     expect(segment('Beta features', 'OFF')).toHaveClass('active');
   });
 
+  // Unlike the three switches in the it.each above, "Double-tap to bid" defaults
+  // OFF — so it gets its own test rather than joining that block, which assumes ON.
+  it('defaults "Double-tap to bid" off, and writes it to the account like the other switches', async () => {
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, doubleTapBid: true });
+    const { refresh } = renderSettings();
+    expect(segment('Double-tap to bid', 'OFF')).toHaveClass('active');
+    await userEvent.click(segment('Double-tap to bid', 'ON')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ doubleTapBid: true });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
   // The switch moves under the finger, so a rejected write has to move it
   // back — otherwise the screen quietly claims a state the server never
   // accepted.

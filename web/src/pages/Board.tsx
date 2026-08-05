@@ -98,7 +98,7 @@ export default function Board() {
 
   // "Fast forward settled tricks" (settings gate) — account state, so it
   // follows the player between devices; see runClaim below for what it paces.
-  const { me } = useMe();
+  const { me, refresh } = useMe();
   const fastForward = me?.user?.fastForward !== false;
   // "Bid feedback" (settings gate) — gates only whether the post-call grading
   // toast renders below; grading is computed and stored (bidEvals)
@@ -110,6 +110,12 @@ export default function Board() {
   // /analysis route 403s an account without it), so hiding the door here is
   // a courtesy, not the only guard.
   const betaFeatures = me?.user?.betaFeatures === true;
+  // "Double-tap to bid" (settings gate) — whether a second tap on the already-
+  // selected call submits it. Defaults OFF (fail closed, unlike the flags
+  // above), since accidental bids from that shortcut are what shipping it off
+  // by default fixes; the confirm CTA is always the other, unaffected path.
+  // See the double_tap_bid migration in db.ts.
+  const doubleTapBid = me?.user?.doubleTapBid === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   // The auction length stageOpeningBids' reveal is building toward — see
@@ -199,6 +205,11 @@ export default function Board() {
     } else if (sawLiveRef.current) {
       sawLiveRef.current = false;
       setShowReceipt(true);
+      // The tournament (not just this board) just finished live — Home's
+      // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
+      // neither of which this screen otherwise touches, so without this a
+      // medal earned on this exact board stays uncolored until a hard reload.
+      if (board && board.boardNo === board.totalBoards) refresh();
     }
   }, [boardState]);
 
@@ -686,12 +697,13 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCall={selectedCall}
-          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
+          onSelectCall={(c) => (doubleTapBid && selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           auctionReserve={auctionReserve}
+          doubleTapBid={doubleTapBid}
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
@@ -757,6 +769,7 @@ export function BiddingPhase({
   onInspect,
   hint = null,
   auctionReserve = 0,
+  doubleTapBid = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -770,6 +783,8 @@ export function BiddingPhase({
   hint?: number | null;
   /** see AuctionGrid's reserveThrough — the tour's captured board never needs it (no pre-existing calls precede its human-dealt opening) */
   auctionReserve?: number;
+  /** does a second tap on the selected call actually submit it here? Only used to pick the placeholder's copy — the caller still owns the real gating logic in onSelectCall. */
+  doubleTapBid?: boolean;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -785,7 +800,7 @@ export function BiddingPhase({
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
-      <MeaningPanel placeholder />
+      <MeaningPanel placeholder doubleTapBid={doubleTapBid} />
     )
   ) : lastEval ? (
     <GradeToast evaluation={lastEval} />

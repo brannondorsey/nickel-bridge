@@ -137,14 +137,44 @@ describe('Board — bidding', () => {
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
   });
 
-  it('tap-to-bid: the placeholder teaches it, and a second tap on the selected call submits — no confirm needed', async () => {
+  // "Double-tap to bid" (settings gate) defaults OFF for every account, so by
+  // default a second tap on the already-selected call must NOT submit — only
+  // the confirm CTA does. See the doubleTapBid-on variant below for the
+  // opt-in path.
+  it('placeholder points at the confirm CTA, and a second tap on the selected call does not submit by default', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
       evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
       board: boardBiddingRobots,
     });
     renderBoard();
-    // the placeholder signposts the gesture up front
+    // the placeholder points at the confirm CTA, not a repeat-tap gesture
+    expect(await screen.findByText(/tap bid to make the call/i)).toBeInTheDocument();
+    // first tap selects and previews it — no submit yet
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // second tap on the same call is a no-op by default — still no submit
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // only the confirm CTA submits
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
+  });
+
+  it('tap-to-bid: with "Double-tap to bid" on, a second tap on the selected call submits — no confirm needed', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: { ...meFixture, user: { ...meFixture.user!, doubleTapBid: true } }, route: '/t/12/b/2' },
+    );
+    // the placeholder teaches the repeat-tap gesture, not the confirm CTA, now that it's live
     expect(await screen.findByText(/tap again to make the call/i)).toBeInTheDocument();
     // first tap selects and previews it — no submit yet
     await userEvent.click(screen.getByRole('button', { name: '2♥' }));
@@ -1247,5 +1277,40 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('100, vulnerable')).toBeInTheDocument();
     expect(screen.getByText('Toll refused')).toBeInTheDocument();
     expect(screen.getAllByText('−100').length).toBe(2); // penalty line + total
+  });
+
+  // A tournament (not just a board) completing can change account state Board
+  // never otherwise touches — most notably Home's medal rail, whose bar/copy
+  // is fed by MeContext and would otherwise go stale for the rest of the
+  // session (see App.tsx's refresh()). So the LAST board of a tournament
+  // completing live has to poke MeContext; an ordinary board completing (with
+  // more boards left in the tournament) should not.
+  it('refreshes account state when the LAST board of a tournament completes live', async () => {
+    const lastBoardPlaying = { ...boardPlaying, boardNo: 4 };
+    const lastBoardDone = { ...boardDone, boardNo: 4 };
+    apiMock.board.mockResolvedValue(lastBoardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: lastBoardDone });
+    const { refresh } = renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: meFixture, route: '/t/12/b/4' },
+    );
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 4')).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('does not refresh account state when a non-final board completes live', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: boardDone });
+    const { refresh } = renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

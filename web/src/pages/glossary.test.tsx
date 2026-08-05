@@ -45,7 +45,7 @@ describe('Glossary page', () => {
   it('renders the A–Z core ledger with letter heads and theme badges', () => {
     renderGlossary();
     expect(screen.getByText('The Glossary')).toBeInTheDocument();
-    expect(screen.getByText('125 CORE TERMS')).toBeInTheDocument();
+    expect(screen.getByText('126 CORE TERMS')).toBeInTheDocument();
     // the digit bucket leads, then letters
     const letters = screen.getAllByText(/^[#A-Z]$/, { selector: '.gloss-letter' }).map((el) => el.textContent);
     expect(letters[0]).toBe('#');

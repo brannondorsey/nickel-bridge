@@ -6,6 +6,8 @@ import { db, UserRow } from './db.js';
 import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
 import { completedBoardCount } from './stats.js';
+import { medalProgressFor } from './medals.js';
+import { provisionalMin } from './tournaments.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -33,6 +35,7 @@ const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
 const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
 const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE id = ?`);
+const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -109,8 +112,9 @@ export function startSession(reply: FastifyReply, userId: number): void {
  * Claim `raw` as userId's display handle if it validates and is free; returns
  * the updated row, or null when invalid/taken. The one shared implementation
  * of the validate → uniqueness-check → set sequence — demo mode's Inspector
- * and seeded bots go through here too, so key derivation (NFC-normalized
- * lowercase, see handle.ts) can never diverge between signup paths.
+ * and seeded bots go through here too, so key derivation (case-folded, with
+ * cross-script lookalikes folded onto their Latin twin — see handle.ts) can
+ * never diverge between signup paths.
  */
 export function claimHandle(userId: number, raw: string): UserRow | null {
   const result = validateHandle(raw);
@@ -211,11 +215,17 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             fastForward: user.fast_forward !== 0,
             bidFeedback: user.bid_feedback !== 0,
             betaFeatures: user.beta_features !== 0,
+            doubleTapBid: user.double_tap_bid !== 0,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
             // client has their board count but not its own. One cheap COUNT.
             boards: completedBoardCount(user.id),
+            // Home's medal rail — fully computed server-side (tier, bar %,
+            // tournaments remaining) so the client just renders it; null for
+            // AI/house accounts (never applies to a real session, but keeps
+            // medalProgressFor's human-only gate honest end to end).
+            medals: medalProgressFor(user.id, user.kind),
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -227,6 +237,14 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       // the server then refuses, or hide it where the server would have said
       // yes. app.ts's compareMin() is the one place the env is read.
       compareMinBoards: compareMin(),
+      // The leaderboard's rated-tournament quota (tournaments.ts's
+      // provisionalMin()) — sent so the Home medal rail's club-tier copy can
+      // say "...to join the rankings" only when this deployment's quota
+      // actually matches the club medal's own 4-tournament threshold. DEMO=1
+      // relaxes the quota to 1, so a hardcoded "4" in the copy would keep
+      // claiming rankings aren't joined yet after they already were. See
+      // MedalBar.tsx's doc comment.
+      provisionalMin: provisionalMin(),
     });
   });
 
@@ -273,6 +291,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   deployments — see the beta_features migration in db.ts for why. This
    *   is the one row in Settings that GRANTS access rather than describing a
    *   preference, so it stays visible and settable the same way as the rest.
+   * - doubleTapBid — whether a second tap on the already-selected call in the
+   *   bid box submits it, without pressing the confirm CTA. Defaults false,
+   *   unlike the three above: this is the one preference that changes
+   *   existing accounts' behaviour on purpose, since accidental bids from the
+   *   shortcut are exactly what shipping it off by default fixes — see the
+   *   double_tap_bid migration in db.ts.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -283,6 +307,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
       ['betaFeatures', (on) => stmtSetBetaFeatures.run(on ? 1 : 0, user.id)],
+      ['doubleTapBid', (on) => stmtSetDoubleTapBid.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
     for (const key of Object.keys(body)) {
@@ -298,6 +323,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       fastForward: row.fast_forward !== 0,
       bidFeedback: row.bid_feedback !== 0,
       betaFeatures: row.beta_features !== 0,
+      doubleTapBid: row.double_tap_bid !== 0,
     });
   });
 
