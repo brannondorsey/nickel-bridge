@@ -86,3 +86,10 @@ jobs:
             --model claude-sonnet-5
             --max-turns 75
             --permission-mode bypassPermissions
+          # TEMPORARY debug flag: #136 saw two consecutive reopen-retriggers report clean
+          # success (is_error: false) but post no PR comment at all — no top-level comment,
+          # no inline comments, no review. This flag surfaces the full turn-by-turn
+          # transcript to diagnose it. `pull_request`-triggered runs validate the workflow
+          # file against main's copy and skip entirely if it differs, so this has to land
+          # here before a retrigger will actually pick it up. Revert once diagnosed.
+          show_full_output: true
