@@ -19,14 +19,13 @@ import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
 import {
   boardDifficulty,
-  DEMO_PROVISIONAL_MIN_TOURNAMENTS,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
   myEloDelta,
   myTournaments,
   placeUser,
-  PROVISIONAL_MIN_TOURNAMENTS,
+  provisionalMin,
   visibleStandings,
 } from './tournaments.js';
 
@@ -36,20 +35,6 @@ import {
  * one — see the route's doc comment.
  */
 const ACTIVITY_WINDOW_S = 8 * 86400;
-
-/**
- * The provisional rating quota in force for this deployment.
- *
- * DEMO=1 (previews + the permanent demo app) relaxes it, because the boot
- * seeder plays each bot through at most 2 tournaments — well under the
- * production quota — see DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment.
- * Both the ladder and the activity feed's 'entered-rankings' milestone hang off
- * this one number, so it lives here once rather than as a ternary per route:
- * the feed originally hardcoded the production constant and the milestone was
- * silently unreachable in demo as a result.
- */
-const provisionalMin = () =>
-  process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
 
 /**
  * The board a URL names, or null if it doesn't name one.

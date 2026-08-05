@@ -2013,6 +2013,127 @@ a.ds-btn-secondary:hover {
   border-left: 1px solid var(--ink);
 }
 
+/* ---- MedalBar: Home's medal rail (server/src/medals.ts's MedalProgress) —
+   a bar, then the four suit marks close together with the incentive
+   sentence beside them on the same line. Unboxed — no panel background or
+   border around the widget itself, just page-level padding, sitting
+   directly between .home-current (the OPEN NOW/KEEP GOING card) and
+   .home-tolls. The bar's track keeps trick-meter's 1px ink outline, but its
+   unfilled portion is a flat --chart-track fill (no hatch) — PctBar's plain
+   "nothing here yet" convention, not trick-meter's. Suit coloring goes only
+   through the existing --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c
+   above), so night mode and the colorblind palette need no extra work
+   here. */
+.medal-bar {
+  padding: 18px 16px 0;
+}
+.medal-bar-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.medal-bar-track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: var(--chart-track);
+  border: 1px solid var(--ink);
+  overflow: hidden;
+}
+.medal-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--ink);
+}
+/* caps the fill's growing edge with a solid line, matching trick-meter's own
+   fill-capping convention (.trick-meter-fill.theirs.capped) — keeps the
+   filled/unfilled boundary crisp rather than relying on the color change
+   alone. Applied only above 0% width (see MedalBar.tsx), the same tricks > 0
+   gate trick-meter uses, so a fresh account's 0% bar shows no stray line. */
+.medal-bar-fill.capped {
+  border-right: 1px solid var(--ink);
+}
+.medal-bar-fill.tint-c {
+  background: var(--suit-c);
+}
+.medal-bar-fill.tint-d {
+  background: var(--suit-d);
+}
+.medal-bar-fill.tint-h {
+  background: var(--suit-h);
+}
+.medal-bar-fill.tint-s {
+  background: var(--suit-s);
+}
+/* plain weight on purpose — Besley's tabular-nums bug (see .num above) once
+   made a bolded standalone "40%" read as if one digit carried more weight
+   than the rest; folding it back in as ordinary body-weight text next to
+   the bar avoids the whole class of problem rather than chasing it. */
+.medal-pct {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  flex: none;
+}
+.medal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.medal-glyphs {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+.medal-glyph {
+  font-family: var(--font-body);
+  font-size: 21px;
+  line-height: 1;
+}
+/* the "muted sibling" idiom StarGrade already uses for earned-vs-rest */
+.medal-glyph-locked {
+  color: var(--line);
+}
+.medal-text {
+  flex: 1;
+  min-width: 0;
+}
+.medal-cta {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.5;
+}
+.medal-cta b {
+  font-style: normal;
+  font-weight: 700;
+}
+/* a real navigation (to /leaderboard), so a SOLID underline — unlike
+   .gloss-link's dotted one, which means "opens a term sheet, doesn't leave
+   the page." Stays italic, inherited from .medal-cta — only the underline
+   marks it as a link. */
+.medal-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.medal-link:hover {
+  color: var(--accent);
+}
+/* ---- the profile trophy case: only what's earned, no frame, no caption —
+   MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is.
+   margin-bottom clears the NICKEL RATING hero (FlipDigits) right under it
+   in .stats-hero — without it the row sits flush against the rating. */
+.profile-medals {
+  margin: 6px 0 14px;
+}
+
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
 .play-row {
   display: flex;
@@ -2236,9 +2357,6 @@ a.board-row:hover {
 .home-current-sub {
   color: var(--muted);
   font-size: 13px;
-}
-.home-gate {
-  padding: 14px 16px 0;
 }
 .home-tolls {
   padding: 20px 16px 24px;

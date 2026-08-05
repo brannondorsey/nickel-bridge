@@ -98,7 +98,7 @@ export default function Board() {
 
   // "Fast forward settled tricks" (settings gate) — account state, so it
   // follows the player between devices; see runClaim below for what it paces.
-  const { me } = useMe();
+  const { me, refresh } = useMe();
   const fastForward = me?.user?.fastForward !== false;
   // "Bid feedback" (settings gate) — gates only whether the post-call grading
   // toast renders below; grading is computed and stored (bidEvals)
@@ -194,6 +194,11 @@ export default function Board() {
     } else if (sawLiveRef.current) {
       sawLiveRef.current = false;
       setShowReceipt(true);
+      // The tournament (not just this board) just finished live — Home's
+      // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
+      // neither of which this screen otherwise touches, so without this a
+      // medal earned on this exact board stays uncolored until a hard reload.
+      if (board && board.boardNo === board.totalBoards) refresh();
     }
   }, [boardState]);
 

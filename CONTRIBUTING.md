@@ -30,8 +30,9 @@ packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/P
                 elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
                 biggest file in core), advisor.ts (checks a hand against a meaning's
                 machine-readable `req` constraints — saycConsistent feeds bid grading,
-                saycViolation feeds the robot bidding guardrail), types.ts,
-                barrel in index.ts
+                saycViolation feeds the robot bidding guardrail), medals.ts (the loyalty
+                rail's tier math — computeMedalProgress, pure function of two counts the
+                server supplies — see "Medal progress" below), types.ts, barrel in index.ts
 packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 38 logits),
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall = model argmax constrained to SAYC-admissible
@@ -66,6 +67,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 function of two PlayerStats, see "Compare and the gate" below),
                 activity.ts (the TRAFFIC feed's flat, ungrouped events — see
                 "The activity feed" below),
+                medals.ts (composes stats.ts's two cheap counts into core's
+                computeMedalProgress for /api/me — see "Medal progress" below),
                 ai-players.ts (benchmark AI personas — the "house" rows ranked in
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
@@ -134,7 +137,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 components/ds/ (design-system pieces, incl. BeamBar — the
                 diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
-                that resolves which sign-in doors a deployment has) + components/game/
+                that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
+                the Home rail and the shared suit-glyph row, see "Medal progress" below)
+                + components/game/
                 (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
@@ -1169,6 +1174,130 @@ is the only way to keep a four-board crossing clearly visible while a five-tourn
 still reads taller than a three-tournament one — a linear scale either flattens ordinary
 evenings or pegs the ceiling by the third crossing. A mark is one *run*, not one crossing, so
 five tournaments in a single evening is a single tall mark.
+
+**Medal progress (the loyalty rail):** a Home-screen widget that rewards continuous play
+with a suit medal at the 4th, 25th, 100th and 500th completed tournament — ♣, ♦, ♥, ♠, in
+that order. The tier math itself (`packages/core/src/medals.ts`'s `computeMedalProgress`)
+is pure and dependency-free like the rest of core; it takes two counts and the
+boards-per-tournament constant as plain arguments rather than reading anything, so neither
+core nor its tests know about SQL, `/api/me`, or `BOARDS_PER_TOURNAMENT`'s home in
+`db.ts`.
+
+Two counts feed it, kept deliberately separate — this is the same trap the activity
+feed's milestones and the leaderboard's `rated_tournaments` already navigate, so medals
+reuse the same discipline rather than inventing a third meaning for "how many
+tournaments":
+
+- **`tournamentsCompleted`** (`server/src/stats.ts`'s `completedTournamentCount`, modeled
+  on `activity.ts`'s `stmtAllCrossings` — group by tournament, keep only groups where
+  every board is `done`) is the **authoritative** count. It alone decides which medals are
+  colored in and exactly how many tournaments remain, and it is deliberately **not**
+  `playerStats().totals.tournamentsCompleted` (that one only falls out of a full
+  `standings()` sweep — too expensive for something `/api/me` computes on every load) and
+  **not** `rated_tournaments` (gated on ≥2 human finishers posting to `elo_history` — a
+  stricter, different set that exists only for ladder eligibility).
+- **`totalBoardsCompleted`** (the existing `completedBoardCount()`, already public via
+  `/api/me`'s `user.boards`) only ever smooths the **bar**: a player mid-way through their
+  4th tournament sees it climb board by board, even though the club medal itself doesn't
+  color in until that 4th tournament actually finishes. `computeMedalProgress`'s `pct` is
+  measured from **zero tournaments**, not from the previously-earned tier, so crossing a
+  threshold never resets the bar — the moment club is earned (4 tournaments = 16 boards),
+  the bar already reads 16/100 = 16% toward diamond (25 tournaments = 100 boards), not
+  0%. Because the two counts can drift apart (many tournaments left half-finished at once
+  inflate boards without completing any of them), `pct` is capped at 99 while the tier
+  isn't actually earned — the one defensive rule in the whole function, there because a
+  full bar next to a still-grey medal would read as a bug.
+
+`tournamentsRemaining` is likewise **exact**, off `tournamentsCompleted` alone
+(`threshold − tournamentsCompleted`) — never derived from boards, so the widget's own
+copy ("Complete 2 more tournaments to join the rankings") can't drift from what the medal
+itself is actually waiting on. That first medal's copy is deliberately not generic: on a
+deployment where 4 completed tournaments is also the leaderboard threshold
+(`tournaments.ts`'s `provisionalMin()`, production default `PROVISIONAL_MIN_TOURNAMENTS`),
+"join the rankings" is literally true rather than flavor text, and `MedalBar.tsx`'s copy
+says so. But `DEMO=1` relaxes that quota to `DEMO_PROVISIONAL_MIN_TOURNAMENTS` (1) — the
+identical trap the activity feed's `entered-rankings` milestone was built to avoid — so by
+the club tier a demo player is typically already ranked, and the sentence would be making
+a false claim in exactly the environment used for click-testing it. `/api/me` therefore
+sends `provisionalMin` (alongside `compareMinBoards`, the same "send it rather than
+hardcode it" pattern) and `MedalBar.tsx` only uses the rankings phrasing when it equals
+the club tier's own 4-tournament threshold, falling back to the ordinary glyph phrasing
+otherwise. Every other tier just names its glyph ("earn the ♦ medal") rather than
+spelling out "Diamond"/"Heart"/"Spade" — the colored mark beside the sentence already
+says which one.
+
+**Human-only**, the same gate Elo and placement already use: `server/src/medals.ts`'s
+`medalProgressFor` returns `null` for `kind !== 'human'`, and `stats.ts`'s `playerStats()`
+zeroes `totals.earnedMedals` the same way for a house profile — the benchmark AI personas
+can churn through hundreds of tournaments and never show a medal.
+
+**No new persisted column.** Like `tournamentsCompleted`/`completedBoardCount`
+themselves, a medal tier is derived fresh on every read rather than diaried — the
+evergreen, recompute-on-read discipline the rest of this codebase already follows for
+Elo and placement. There is no "you just earned a medal" toast or celebration moment in
+this first pass; a medal simply appears colored the next time the rail or the profile
+loads, the same way a new `elo_history` row silently updates the RATING chart. "Next
+load" has to mean within the same session, not just after a hard reload: `Board.tsx`
+otherwise never touches `MeContext` (it reads `fastForward`/`bidFeedback` off it but never
+writes), so without an explicit trigger the Home rail would show a stale bar/medal for the
+rest of the visit — including at the exact moment a medal is earned, the one moment this
+widget most wants to be right. So the same effect that flips on the toll receipt
+(`Board.tsx`'s `showReceipt` effect, keyed on the board's `state` going live → `'done'`)
+also calls `refresh()` when the board that just finished was the tournament's **last**
+one (`board.boardNo === board.totalBoards`) — an ordinary mid-tournament board finishing
+doesn't touch account state and skips it.
+
+**Two call sites, two shapes.** `/api/me`'s `medals` field
+(`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,
+the current target, the bar's `pct`, `tournamentsRemaining` — because Home's `MedalBar`
+needs all of it. `playerStats()`'s `totals.earnedMedals` is just the earned list, computed
+inline from the `tournamentsCompleted`/`boardsCompleted` that function already has in
+hand for whichever profile is being viewed (self or someone else's) — no second query —
+because the profile (`Player.tsx`'s `MedalGlyphs earned={...} mode="earnedOnly"`) is
+deliberately a trophy case: only what's been won, no bar, no bounding box, no caption.
+`MedalGlyphs`' other mode, `mode="all"`, is what `MedalBar` uses for Home's rail — all
+four suits always render, close together, colored once earned via the app's existing
+`.suit-s/.suit-h/.suit-d/.suit-c` classes, unearned ones muted via `.medal-glyph-locked`
+(`var(--line)`) — the exact "earned in real color, rest muted" idiom `StarGrade.tsx`
+already established, reused rather than reinvented. Suit coloring goes only through the
+existing `--suit-*` tokens, so night mode and the colorblind palette need no extra work.
+
+**The bar's outline is a deliberate borrow from `TrickArea.tsx`'s trick-meter** — the bar
+in the middle of the card-play screen — rather than `PctBar`'s borderless track:
+`.medal-bar-track` takes the same `1px solid var(--ink)` structural border. The unfilled
+remainder is a flat `--chart-track` fill rather than the trick-meter's diagonal hatch,
+though — `PctBar`'s plainer "nothing here yet" convention, not the trick-meter's. The
+fill's growing edge is capped with the same `1px solid var(--ink)` line trick-meter uses
+to keep its own hatched fill's leading edge crisp against the track
+(`.medal-bar-fill.capped`, gated on `fillPct > 0` — the same `tricks > 0` gate
+trick-meter's own cap uses — so a brand-new 0% bar shows no stray line at the left edge).
+The percentage itself is rendered in plain body weight next to the bar, never as a bolded
+standalone figure — `.num`'s doc comment explains why: Besley's tabular-figure feature is
+broken in every published build (a font bug, not a design choice), and bolding a raw
+number invites exactly the "why does one digit look heavier" problem that comment warns
+about.
+
+**The widget itself is unboxed** — no panel background or border, just page-level
+padding (`.medal-bar`) — and it sits on Home between the "play" block (the OPEN NOW/KEEP
+GOING card) and TOLLS PAID, reading as the bridge between what a player is doing now and
+what they've already finished. A dashed "TOURNEY ?" hint used to sit in that gap,
+sealed shut ("Opens when you finish #N — one crossing at a time") since placement is
+scored, not sequential, and the next tournament's number is unknowable in advance. Cut:
+it said nothing actionable on any of the dozens of times a returning player would see it,
+its dashed "?" risked reading as an unfinished placeholder rather than a deliberate seal,
+and the "one crossing at a time" argument it was making is already made once, elsewhere
+(the landing page, the first-crossing tour) — the same reasoning that cut the old
+onboarding pamphlet for being redundant by the time anyone read it twice.
+
+**Held back until the first board is on the books.** `Lobby.tsx` gates the whole widget on
+`me.user.boards > 0` (`completedBoardCount`, the same count `/api/me` already sends for
+Compare's entry-point gate) alongside the existing `medals` null-check, rather than
+rendering a 0%-toward-club bar the instant an account exists. A brand-new player hasn't
+earned anything and hasn't even seen a deal yet, so a progress rail at that point has
+nothing to show and reads as clutter ahead of the first crossing rather than as an
+incentive during it — the same instinct that cut the old "TOURNEY ?" hint above. The gate
+is on boards, not tournaments, so the widget appears as soon as the player's first board
+finishes rather than waiting for their whole first tournament (four boards) to close.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

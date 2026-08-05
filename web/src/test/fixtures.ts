@@ -36,6 +36,10 @@ export const meFixture: Me = {
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
+    // Club earned; 12 tournaments (48 boards) toward diamond's 100-board
+    // target = 48%, measured from zero per packages/core/src/medals.ts —
+    // crossing the club threshold didn't reset this back to 0%.
+    medals: { earned: ['c'], target: 'd', pct: 48, tournamentsRemaining: 13 },
   },
   devAuth: true,
   googleAuth: true,
@@ -48,7 +52,12 @@ export const meLoggedOut: Me = { user: null, devAuth: true, googleAuth: true };
 // points stay hidden for them.
 export const meFreshCrosser: Me = {
   ...meFixture,
-  user: { ...meFixture.user!, onboardedAt: null, boards: 0 },
+  user: {
+    ...meFixture.user!,
+    onboardedAt: null,
+    boards: 0,
+    medals: { earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 },
+  },
 };
 
 // ---- hands (S = the human's hand from the design prototype: 12 HCP) ----
@@ -423,6 +432,7 @@ export const playerStatsFull: PlayerStats = {
     boardsCompleted: 214,
     tournamentsPlayed: 12,
     tournamentsCompleted: 11,
+    earnedMedals: ['c'],
     streakDays: 5,
     currentElo: 1487,
     peakElo: 1502,
@@ -504,6 +514,7 @@ export const playerStatsEmpty: PlayerStats = {
     boardsCompleted: 0,
     tournamentsPlayed: 0,
     tournamentsCompleted: 0,
+    earnedMedals: [],
     streakDays: 0,
     currentElo: 1200,
     peakElo: 1200,

@@ -6,6 +6,8 @@ import { db, UserRow } from './db.js';
 import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
 import { completedBoardCount } from './stats.js';
+import { medalProgressFor } from './medals.js';
+import { provisionalMin } from './tournaments.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -215,6 +217,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             // has a record worth comparing, and on someone else's profile the
             // client has their board count but not its own. One cheap COUNT.
             boards: completedBoardCount(user.id),
+            // Home's medal rail — fully computed server-side (tier, bar %,
+            // tournaments remaining) so the client just renders it; null for
+            // AI/house accounts (never applies to a real session, but keeps
+            // medalProgressFor's human-only gate honest end to end).
+            medals: medalProgressFor(user.id, user.kind),
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',
@@ -226,6 +233,14 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       // the server then refuses, or hide it where the server would have said
       // yes. app.ts's compareMin() is the one place the env is read.
       compareMinBoards: compareMin(),
+      // The leaderboard's rated-tournament quota (tournaments.ts's
+      // provisionalMin()) — sent so the Home medal rail's club-tier copy can
+      // say "...to join the rankings" only when this deployment's quota
+      // actually matches the club medal's own 4-tournament threshold. DEMO=1
+      // relaxes the quota to 1, so a hardcoded "4" in the copy would keep
+      // claiming rankings aren't joined yet after they already were. See
+      // MedalBar.tsx's doc comment.
+      provisionalMin: provisionalMin(),
     });
   });
 
