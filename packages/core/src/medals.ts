@@ -28,13 +28,16 @@ export interface MedalProgress {
   /** the suit currently being worked toward; null once every tier is earned */
   target: MedalSuit | null;
   /**
-   * 0-100, the current tier's bar fill — driven by TOTAL completed boards
-   * (including boards from a tournament still in progress), not by
-   * `tournamentsCompleted`, so the bar moves board by board rather than
-   * jumping once per tournament. Capped at 99 while the tier isn't actually
-   * earned yet, so the bar can never read full next to a still-grey medal —
-   * see the doc comment on `computeMedalProgress` for why those two counts
-   * can drift apart. `100` once every tier is earned.
+   * 0-100, this tier's bar fill — driven by TOTAL completed boards
+   * (including boards from a tournament still in progress), measured from
+   * ZERO tournaments rather than from the previously-earned tier, so
+   * crossing a threshold never resets the bar: a player who just earned the
+   * club medal (4 tournaments = 16 boards) is already 16/100 = 16% of the
+   * way to diamond (25 tournaments = 100 boards), not starting over. Capped
+   * at 99 while the tier isn't actually earned yet, so the bar can never
+   * read full next to a still-grey medal — see the doc comment on
+   * `computeMedalProgress` for why the two counts can drift apart. `100`
+   * once every tier is earned.
    */
   pct: number;
   /**
@@ -53,12 +56,16 @@ export interface MedalProgress {
  * `totalBoardsCompleted / boardsPerTournament`, which would overcount a
  * player with boards scattered across many still-open tournaments.
  *
- * `totalBoardsCompleted` only ever smooths the BAR: a player mid-way through
- * their 4th tournament sees the bar climb toward the club medal board by
- * board, even though the medal itself doesn't color in until that 4th
- * tournament actually finishes. Because the two counts can drift apart (many
- * tournaments half-finished at once inflate boards without completing any of
- * them), `pct` is capped at 99 until the tier is actually earned.
+ * `totalBoardsCompleted` only ever smooths the BAR — a player mid-way
+ * through their 4th tournament sees it climb board by board, even though
+ * the club medal itself doesn't color in until that 4th tournament actually
+ * finishes. It's measured from ZERO, not from the previously-earned tier,
+ * so the bar never resets at a crossing — see `MedalProgress.pct`'s doc
+ * comment. Because the two counts can drift apart (many tournaments left
+ * half-finished at once inflate boards without completing any of them),
+ * `pct` is capped at 99 while the tier isn't actually earned — the one
+ * defensive rule in the whole function, there because a full bar next to a
+ * still-grey medal would read as a bug.
  */
 export function computeMedalProgress(
   tournamentsCompleted: number,
@@ -80,11 +87,9 @@ export function computeMedalProgress(
   }
 
   const tier = MEDAL_TIERS[targetIndex];
-  const prevThreshold = targetIndex === 0 ? 0 : MEDAL_TIERS[targetIndex - 1].threshold;
-  const prevThresholdBoards = prevThreshold * boardsPerTournament;
-  const boardSpan = (tier.threshold - prevThreshold) * boardsPerTournament;
-  const progressBoards = Math.min(Math.max(totalBoardsCompleted - prevThresholdBoards, 0), boardSpan);
-  const pct = Math.min(Math.round((progressBoards / boardSpan) * 100), 99);
+  const targetBoards = tier.threshold * boardsPerTournament;
+  const progressBoards = Math.min(Math.max(totalBoardsCompleted, 0), targetBoards);
+  const pct = Math.min(Math.round((progressBoards / targetBoards) * 100), 99);
   const tournamentsRemaining = tier.threshold - tournamentsCompleted;
 
   return { earned, target: tier.suit, pct, tournamentsRemaining };

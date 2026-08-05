@@ -1,7 +1,6 @@
 import { MedalProgress, MedalSuit } from '../../api';
 import { MedalGlyphs } from './MedalGlyphs';
 
-const TIER_NAME: Record<MedalSuit, string> = { c: 'Club', d: 'Diamond', h: 'Heart', s: 'Spade' };
 const TIER_GLYPH: Record<MedalSuit, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
 const TIER_CLASS: Record<MedalSuit, string> = { c: 'suit-c', d: 'suit-d', h: 'suit-h', s: 'suit-s' };
 
@@ -12,27 +11,24 @@ function Sentence({ progress }: { progress: MedalProgress }) {
   if (!target) {
     return <p className="medal-cta">Every medal earned — every crossing from here is for its own sake.</p>;
   }
-  if (target === 'c') {
-    // The only tier whose copy names an app mechanic rather than itself: 4
-    // completed tournaments is also this app's leaderboard threshold
-    // (tournaments.ts's PROVISIONAL_MIN_TOURNAMENTS), so "join the rankings"
-    // is literally true, not just flavor — the sub-line ties it back to the
-    // medal being earned in the same breath.
-    return (
+  // The club tier's copy names an app mechanic rather than itself: 4
+  // completed tournaments is also this app's leaderboard threshold
+  // (tournaments.ts's PROVISIONAL_MIN_TOURNAMENTS), so "join the rankings"
+  // is literally true, not just flavor. The other tiers just name the
+  // glyph — it's already colored in the cluster beside this sentence and
+  // in the sentence itself, so spelling out "Diamond"/"Heart"/"Spade" would
+  // only repeat what the mark already says.
+  const goal =
+    target === 'c' ? (
+      'join the rankings'
+    ) : (
       <>
-        <p className="medal-cta">
-          Complete <b>{tournamentsRemaining}</b> more {tournamentWord(tournamentsRemaining)} to join the rankings.
-        </p>
-        <p className="medal-subcap">
-          Also your first medal — <span className="suit-c">♣</span> Club, earned together.
-        </p>
+        earn the <span className={TIER_CLASS[target]}>{TIER_GLYPH[target]}</span> medal
       </>
     );
-  }
   return (
     <p className="medal-cta">
-      Complete <b>{tournamentsRemaining}</b> more {tournamentWord(tournamentsRemaining)} to earn the{' '}
-      <span className={TIER_CLASS[target]}>{TIER_GLYPH[target]}</span> {TIER_NAME[target]} medal.
+      Complete <b>{tournamentsRemaining}</b> more {tournamentWord(tournamentsRemaining)} to {goal}.
     </p>
   );
 }

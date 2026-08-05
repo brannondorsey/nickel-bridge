@@ -31,11 +31,11 @@ describe('computeMedalProgress', () => {
     expect(p.tournamentsRemaining).toBe(1);
   });
 
-  it('exactly at the club threshold: earned, now targeting diamond', () => {
+  it('crossing a threshold does not reset the bar: club earned is already 4/25 (16%) toward diamond', () => {
     const p = computeMedalProgress(4, 16, B);
     expect(p.earned).toEqual(['c']);
     expect(p.target).toBe('d');
-    expect(p.pct).toBe(0);
+    expect(p.pct).toBe(16); // round(16/100*100) == round(4/25*100)
     expect(p.tournamentsRemaining).toBe(21);
   });
 
@@ -49,27 +49,27 @@ describe('computeMedalProgress', () => {
     expect(p.tournamentsRemaining).toBe(1);
   });
 
-  it('mid-way toward diamond (34 of 84 boards into that span), club already earned', () => {
-    const p = computeMedalProgress(8, 16 + 34, B);
+  it('mid-way toward diamond (50 of 100 boards, measured from zero), club already earned', () => {
+    const p = computeMedalProgress(8, 50, B);
     expect(p.earned).toEqual(['c']);
     expect(p.target).toBe('d');
-    expect(p.pct).toBe(40); // round(34/84*100)
+    expect(p.pct).toBe(50); // round(50/100*100)
     expect(p.tournamentsRemaining).toBe(17);
   });
 
-  it('earns diamond at the 25th tournament, now targeting heart', () => {
+  it('earns diamond at the 25th tournament: already 100/400 (25%) toward heart', () => {
     const p = computeMedalProgress(25, 100, B);
     expect(p.earned).toEqual(['c', 'd']);
     expect(p.target).toBe('h');
-    expect(p.pct).toBe(0);
+    expect(p.pct).toBe(25); // round(100/400*100)
     expect(p.tournamentsRemaining).toBe(75);
   });
 
-  it('earns heart at the 100th tournament, now targeting spade', () => {
+  it('earns heart at the 100th tournament: already 400/2000 (20%) toward spade', () => {
     const p = computeMedalProgress(100, 400, B);
     expect(p.earned).toEqual(['c', 'd', 'h']);
     expect(p.target).toBe('s');
-    expect(p.pct).toBe(0);
+    expect(p.pct).toBe(20); // round(400/2000*100)
     expect(p.tournamentsRemaining).toBe(400);
   });
 

@@ -1199,11 +1199,14 @@ tournaments":
 - **`totalBoardsCompleted`** (the existing `completedBoardCount()`, already public via
   `/api/me`'s `user.boards`) only ever smooths the **bar**: a player mid-way through their
   4th tournament sees it climb board by board, even though the club medal itself doesn't
-  color in until that 4th tournament actually finishes. Because the two counts can drift
-  apart (many tournaments left half-finished at once inflate boards without completing
-  any of them), `computeMedalProgress`'s `pct` is capped at 99 while the tier isn't
-  actually earned — the one defensive rule in the whole function, there because a full bar
-  next to a still-grey medal would read as a bug.
+  color in until that 4th tournament actually finishes. `computeMedalProgress`'s `pct` is
+  measured from **zero tournaments**, not from the previously-earned tier, so crossing a
+  threshold never resets the bar — the moment club is earned (4 tournaments = 16 boards),
+  the bar already reads 16/100 = 16% toward diamond (25 tournaments = 100 boards), not
+  0%. Because the two counts can drift apart (many tournaments left half-finished at once
+  inflate boards without completing any of them), `pct` is capped at 99 while the tier
+  isn't actually earned — the one defensive rule in the whole function, there because a
+  full bar next to a still-grey medal would read as a bug.
 
 `tournamentsRemaining` is likewise **exact**, off `tournamentsCompleted` alone
 (`threshold − tournamentsCompleted`) — never derived from boards, so the widget's own
@@ -1211,7 +1214,9 @@ copy ("Complete 2 more tournaments to join the rankings") can't drift from what 
 itself is actually waiting on. That first medal's copy is deliberately not generic: 4
 completed tournaments is also this app's leaderboard threshold
 (`PROVISIONAL_MIN_TOURNAMENTS`), so "join the rankings" is literally true rather than
-flavor text, and `MedalBar.tsx`'s copy says so.
+flavor text, and `MedalBar.tsx`'s copy says so. Every other tier just names its glyph
+("earn the ♦ medal") rather than spelling out "Diamond"/"Heart"/"Spade" — the colored
+mark beside the sentence already says which one.
 
 **Human-only**, the same gate Elo and placement already use: `server/src/medals.ts`'s
 `medalProgressFor` returns `null` for `kind !== 'human'`, and `stats.ts`'s `playerStats()`
@@ -1252,11 +1257,16 @@ number invites exactly the "why does one digit look heavier" problem that commen
 about.
 
 **The widget itself is unboxed** — no panel background or border, just page-level
-padding (`.medal-bar`, styled like the unboxed `.home-gate` hint rather than
-`.home-current`'s boxed ticket card) — and it sits on Home between the "play" block
-(the OPEN NOW/KEEP GOING card, plus the sealed next-tournament hint when one's showing)
-and TOLLS PAID, reading as the bridge between what a player is doing now and what
-they've already finished.
+padding (`.medal-bar`) — and it sits on Home between the "play" block (the OPEN NOW/KEEP
+GOING card) and TOLLS PAID, reading as the bridge between what a player is doing now and
+what they've already finished. A dashed "TOURNEY ?" hint used to sit in that gap,
+sealed shut ("Opens when you finish #N — one crossing at a time") since placement is
+scored, not sequential, and the next tournament's number is unknowable in advance. Cut:
+it said nothing actionable on any of the dozens of times a returning player would see it,
+its dashed "?" risked reading as an unfinished placeholder rather than a deliberate seal,
+and the "one crossing at a time" argument it was making is already made once, elsewhere
+(the landing page, the first-crossing tour) — the same reasoning that cut the old
+onboarding pamphlet for being redundant by the time anyone read it twice.
 
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in

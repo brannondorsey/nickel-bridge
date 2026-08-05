@@ -8,7 +8,6 @@ import { Loading } from '../components/ds/Loading';
 import { MedalBar } from '../components/ds/MedalBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { TicketStub } from '../components/ds/TicketStub';
-import { BoardTicketRow } from '../components/game/BoardTicketRow';
 import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 
 const tourneyNo = (t: TournamentInfo) => tournamentNo(t.name, t.id);
@@ -100,18 +99,6 @@ export default function Lobby() {
               </Button>
             )}
           </div>
-
-          {current ? (
-            <div className="home-gate">
-              {/* placement is scored, not sequential — the next tourney's number is unknowable */}
-              <BoardTicketRow
-                no="?"
-                state="sealed"
-                counterLabel="TOURNEY"
-                main={`Opens when you finish #${tourneyNo(current)} — one crossing at a time`}
-              />
-            </div>
-          ) : null}
 
           {me?.user?.medals ? <MedalBar progress={me.user.medals} /> : null}
 

@@ -36,9 +36,10 @@ export const meFixture: Me = {
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
-    // Club earned (well past 4 tournaments), 40% toward diamond — matches
-    // packages/core/src/medals.ts's tier math for a player this far along.
-    medals: { earned: ['c'], target: 'd', pct: 40, tournamentsRemaining: 13 },
+    // Club earned; 12 tournaments (48 boards) toward diamond's 100-board
+    // target = 48%, measured from zero per packages/core/src/medals.ts —
+    // crossing the club threshold didn't reset this back to 0%.
+    medals: { earned: ['c'], target: 'd', pct: 48, tournamentsRemaining: 13 },
   },
   devAuth: true,
   googleAuth: true,

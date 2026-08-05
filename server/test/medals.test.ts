@@ -28,25 +28,27 @@ describe('medal progress', () => {
     expect(me.user.medals).toEqual({ earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 });
   });
 
-  it('earns the club medal on the 4th completed tournament and starts toward diamond', async () => {
+  it('earns the club medal on the 4th completed tournament, already 16% toward diamond (not reset to 0)', async () => {
     for (let i = 0; i < 4; i++) await completeOneTournament(dana);
     const me = await dana.get('/api/me');
     expect(me.user.medals.earned).toEqual(['c']);
     expect(me.user.medals.target).toBe('d');
     expect(me.user.medals.tournamentsRemaining).toBe(21);
-    expect(me.user.medals.pct).toBe(0);
+    // 16 boards played so far, measured from zero against diamond's 100-board
+    // target (25 tournaments * 4) — 16/100 = 16%, matching 4/25 exactly.
+    expect(me.user.medals.pct).toBe(Math.round((16 / 100) * 100));
   });
 
-  it('the bar climbs board by board mid-tournament, ahead of the next medal actually being earned', async () => {
-    // one more tournament, but stop after its 2nd board (2 of the 84 boards
-    // in the diamond span) — the medal itself must not move.
+  it('the bar keeps climbing board by board mid-tournament, ahead of the next medal actually being earned', async () => {
+    // one more tournament, but stop after its 2nd board — the medal itself
+    // must not move, even though the bar (now 18 of 100 boards) does.
     const placed = await dana.post('/api/play');
     await playBoard(dana, placed.tournamentId, 1);
     await playBoard(dana, placed.tournamentId, 2);
     const me = await dana.get('/api/me');
     expect(me.user.medals.earned).toEqual(['c']);
     expect(me.user.medals.target).toBe('d');
-    expect(me.user.medals.pct).toBe(Math.round((2 / 84) * 100));
+    expect(me.user.medals.pct).toBe(Math.round((18 / 100) * 100));
     expect(me.user.medals.tournamentsRemaining).toBe(21); // still 21 — no NEW tournament completed yet
   });
 

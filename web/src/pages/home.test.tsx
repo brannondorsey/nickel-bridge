@@ -29,8 +29,6 @@ describe('Home', () => {
     expect(cta).toHaveAttribute('href', '/t/12');
     expect(cta.className).toContain('home-cta');
     expect(screen.getByText(/Board 2 of 4 in progress/)).toBeInTheDocument();
-    // the next tourney stays sealed while one is open
-    expect(screen.getByText(/Opens when you finish #12 — one crossing at a time/)).toBeInTheDocument();
   });
 
   it('lists finished crossings under TOLLS PAID with date, field, pct and rank', async () => {
@@ -71,8 +69,6 @@ describe('Home', () => {
     renderWithMe(<Lobby />, { me: meFixture });
     const cta = await screen.findByRole('button', { name: /play the toll/i });
     expect(cta.className).toContain('home-cta');
-    // no sealed gate row without a crossing in progress
-    expect(screen.queryByText(/Opens when you finish/)).not.toBeInTheDocument();
     await userEvent.click(cta);
     expect(screen.getByRole('button', { name: /finding a table…/i })).toBeDisabled();
     seat({ tournamentId: 13, boardNo: 1 });

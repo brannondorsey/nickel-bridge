@@ -2016,13 +2016,14 @@ a.ds-btn-secondary:hover {
 /* ---- MedalBar: Home's medal rail (server/src/medals.ts's MedalProgress) —
    a bar, then the four suit marks close together with the incentive
    sentence beside them on the same line. Unboxed — no panel background or
-   border around the widget itself, just page-level spacing, same as
-   .home-gate below rather than .home-current's boxed ticket card. The bar's
-   track keeps trick-meter's 1px ink outline, but its unfilled portion is a
-   flat --chart-track fill (no hatch) — PctBar's plain "nothing here yet"
-   convention, not trick-meter's. Suit coloring goes only through the
-   existing --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c above), so
-   night mode and the colorblind palette need no extra work here. */
+   border around the widget itself, just page-level padding, sitting
+   directly between .home-current (the OPEN NOW/KEEP GOING card) and
+   .home-tolls. The bar's track keeps trick-meter's 1px ink outline, but its
+   unfilled portion is a flat --chart-track fill (no hatch) — PctBar's plain
+   "nothing here yet" convention, not trick-meter's. Suit coloring goes only
+   through the existing --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c
+   above), so night mode and the colorblind palette need no extra work
+   here. */
 .medal-bar {
   padding: 18px 16px 0;
 }
@@ -2104,16 +2105,12 @@ a.ds-btn-secondary:hover {
   font-style: normal;
   font-weight: 700;
 }
-.medal-subcap {
-  font-size: 11.5px;
-  color: var(--muted);
-  font-style: italic;
-  margin: 4px 0 0;
-}
 /* ---- the profile trophy case: only what's earned, no frame, no caption —
-   MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is */
+   MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is.
+   margin-bottom clears the NICKEL RATING hero (FlipDigits) right under it
+   in .stats-hero — without it the row sits flush against the rating. */
 .profile-medals {
-  margin-top: 6px;
+  margin: 6px 0 14px;
 }
 
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
@@ -2339,9 +2336,6 @@ a.board-row:hover {
 .home-current-sub {
   color: var(--muted);
   font-size: 13px;
-}
-.home-gate {
-  padding: 14px 16px 0;
 }
 .home-tolls {
   padding: 20px 16px 24px;
