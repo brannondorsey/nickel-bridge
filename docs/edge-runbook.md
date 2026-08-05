@@ -272,6 +272,68 @@ purge-frequency change. It is a ZONE-WIDE setting on a shared zone, so it stays 
 deploys/day plus the weekly `--force`, a term page cached at a PoP is usually dropped before a
 second crawler ever reaches it.
 
+### Tiered Cache enabled, 2026-08-05
+
+Done: Tiered Cache → Smart Topology, enabled zone-wide on `brannon.online` (Caching → Tiered
+Cache in the dashboard, or `PATCH /zones/:id/argo/tiered_caching`). Zone-wide is the only mode
+Cloudflare offers — there is no per-hostname or Cache Rule scoping — so this reaches the ten
+other proxied hostnames on the shared zone too. That is a deliberate exception to "nothing here
+writes a zone-wide setting" (see CONTRIBUTING.md "The edge"): Tiered Cache is a strictly
+cache-layer optimization with no plausible way to break another site's traffic, unlike the SSL
+mode decision that section is really guarding against, so it was judged safe to flip as a human
+decision outside `scripts/cloudflare.mjs`'s management — exactly as that script's docstring
+already said this lever would have to be enabled.
+
+**Why a region hint was needed.** Smart Topology normally picks the upper-tier Cloudflare data
+centre nearest an origin by latency probing, and Cloudflare's own docs warn that origins behind
+anycast or regional-unicast networking (their examples: AWS/GCP/Azure/Oracle) defeat that
+probing, because every probe looks equally close. Fly's network is the same shape — a global
+anycast address, SNI-routed internally to whichever machine is actually running — so without a
+hint, Smart Topology's automatic pick could be wrong or unstable even though this app runs a
+single machine in a single region (`fly.toml`'s `primary_region = 'ewr'`, Newark).
+
+A region hint fixes this and is scoped **per origin IP**, not zone-wide, via
+`PUT /zones/:id/origin/cloud_regions/:ip`:
+
+```bash
+ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=brannon.online" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'][0]['id'])")
+
+for IP in 66.241.125.167 "2a09:8280:1::14c:2c8e:0"; do   # nickel-bridge.fly.dev's A/AAAA
+  curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin/cloud_regions/$IP" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+    --data "{\"origin_ip\": \"$IP\", \"vendor\": \"aws\", \"region\": \"us-east-1\"}"
+done
+```
+
+`aws:us-east-1` was picked by checking the live catalogue
+(`GET /zones/:id/origin/cloud_regions/supported_regions`) for which named region's
+`upper_tier_colos` includes `EWR`. Confirmed **tied-optimal**, not merely a rough guess: both
+`aws:us-east-1` and `oci:us-ashburn-1` map to the identical `["IAD", "EWR"]` set — the closest
+any of the four supported vendors (none of which have a region literally in New Jersey) get to
+this app's actual origin metro. Re-verify with:
+
+```bash
+curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin/cloud_regions" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | python3 -m json.tool
+```
+
+**What this changes about verification above.** Steps 2 and 6 in the sweep both lean on
+`cf-cache-status` at the edge to prove the cache is doing its job. With tiering on, a lower-tier
+PoP's own `MISS` no longer proves the origin was reached — the upper tier may have already had
+it and answered without touching Fly. That's the mechanism working, not a false negative, but it
+means those two steps are now only a **rule-matching** check (did a cache rule match this path
+at all), not an **origin-wake** check. `scripts/fly-uptime.mjs` and the request log
+(`server/src/logging.ts`) remain the only signal for whether Fly actually got woken — which the
+"After" section below already treats as authoritative, so nothing there needed to change.
+
+**No automated drift check exists for this.** `--plan`/`--apply`/`--check` manage only the Cache
+Rules and Configuration Rules phases; the Tiered Cache toggle and the region hints sit in a
+different part of the API (`/argo/tiered_caching`, `/origin/cloud_regions`) that this script
+does not touch, so nothing here will notice if either gets flipped back off. If that becomes a
+recurring problem, `--audit` reporting both read-only (the same pattern it already uses for the
+zone's SSL default) would be the fix — not attempted here, since nothing has needed it yet.
+
 ### After
 
 Wait for at least three full UTC days behind the proxy, then, while those days are still at 15s
