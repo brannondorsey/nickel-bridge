@@ -151,6 +151,20 @@ if (!userColumns.has('fast_forward')) {
 if (!userColumns.has('bid_feedback')) {
   db.exec(`ALTER TABLE users ADD COLUMN bid_feedback INTEGER NOT NULL DEFAULT 1`);
 }
+// Migration: `double_tap_bid` — submit a bid on a second tap of the already-
+// selected call, without pressing the confirm CTA (0, the shipped default;
+// 1 opts back in). Unlike its three siblings above, this migration does NOT
+// preserve prior behaviour on purpose: player reports of accidentally
+// submitting a bid are exactly what turning this off by default fixes. The
+// confirm CTA ("BID X →") is unaffected either way — it has always been an
+// equal, independent path to the same submitCall, see BidBox.tsx — so this
+// only removes the shortcut, never the ability to bid. Account state, not
+// localStorage, for the same reason as fast_forward/bid_feedback: it
+// describes how this PERSON wants to interact with the bid box, not a
+// property of the device.
+if (!userColumns.has('double_tap_bid')) {
+  db.exec(`ALTER TABLE users ADD COLUMN double_tap_bid INTEGER NOT NULL DEFAULT 0`);
+}
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
@@ -207,6 +221,8 @@ export interface UserRow {
   fast_forward: number;
   /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
   bid_feedback: number;
+  /** 1 = a second tap on the selected call submits it; 0 (default) = only the confirm CTA submits */
+  double_tap_bid: number;
   elo: number;
   created_at: number;
 }

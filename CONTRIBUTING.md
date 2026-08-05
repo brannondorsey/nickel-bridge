@@ -1428,6 +1428,22 @@ newer settings has one thing worth knowing:
   unaffected: it carries its own scripted `lastEval` and never reads this preference, since
   the tour's pedagogical point is teaching the grading loop regardless of the visitor's (or
   signed-in tester's) own setting.
+- **Double-tap to bid** (`users.double_tap_bid`, **default OFF**) is the one switch on this
+  panel that does not preserve prior behavior — every other row above defaults to whatever the
+  app already did, so it reads as a way OUT rather than a change. This one exists because it
+  IS the change: player reports of accidentally submitting a bid on the bid box's tap-again
+  shortcut are what shipping it off by default fixes. `BidBox.tsx` itself has never
+  distinguished select from submit — every tap just calls `onSelect`, and the caller decides
+  what a repeat tap on the already-selected call means. `Board.tsx` reads the preference
+  (`me?.user?.doubleTapBid === true`, fail-CLOSED unlike the `!== false` reads above) and only
+  submits on a second tap when it's on; the confirm CTA ("BID X →") is unconditionally the
+  other, always-available path to the same `submitCall`, so turning this off never removes the
+  ability to bid, only the shortcut. Scoped to bidding only — card play's own tap-again-to-play
+  gesture (`HandFan`/`onSelectCard`) is a separate code path and is untouched. `Tour.tsx` does
+  not read this preference either: its own `onSelectCall`/`attemptCall` only "submits" the one
+  scripted correct call per decision point regardless of tap count, so a signed-out visitor
+  walking the practice deal is not exposed to the mistap this setting guards against in the
+  first place.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,

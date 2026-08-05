@@ -105,6 +105,12 @@ export default function Board() {
   // unconditionally, so turning this off never affects scoring, stats, or
   // the post-board review table. See the bid_feedback migration in db.ts.
   const bidFeedback = me?.user?.bidFeedback !== false;
+  // "Double-tap to bid" (settings gate) — whether a second tap on the already-
+  // selected call submits it. Defaults OFF (fail closed, unlike the flags
+  // above), since accidental bids from that shortcut are what shipping it off
+  // by default fixes; the confirm CTA is always the other, unaffected path.
+  // See the double_tap_bid migration in db.ts.
+  const doubleTapBid = me?.user?.doubleTapBid === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   // The auction length stageOpeningBids' reveal is building toward — see
@@ -664,12 +670,13 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCall={selectedCall}
-          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
+          onSelectCall={(c) => (doubleTapBid && selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
           auctionReserve={auctionReserve}
+          doubleTapBid={doubleTapBid}
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
@@ -735,6 +742,7 @@ export function BiddingPhase({
   onInspect,
   hint = null,
   auctionReserve = 0,
+  doubleTapBid = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -748,6 +756,8 @@ export function BiddingPhase({
   hint?: number | null;
   /** see AuctionGrid's reserveThrough — the tour's captured board never needs it (no pre-existing calls precede its human-dealt opening) */
   auctionReserve?: number;
+  /** does a second tap on the selected call actually submit it here? Only used to pick the placeholder's copy — the caller still owns the real gating logic in onSelectCall. */
+  doubleTapBid?: boolean;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -763,7 +773,7 @@ export function BiddingPhase({
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
-      <MeaningPanel placeholder />
+      <MeaningPanel placeholder doubleTapBid={doubleTapBid} />
     )
   ) : lastEval ? (
     <GradeToast evaluation={lastEval} />

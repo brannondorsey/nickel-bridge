@@ -29,6 +29,8 @@ export interface Me {
     fastForward: boolean;
     /** show the post-call grading toast (settings: "Bid feedback") */
     bidFeedback: boolean;
+    /** submit a bid on a second tap of the selected call, without pressing Bid (settings: "Double-tap to bid"); default false */
+    doubleTapBid: boolean;
     /**
      * Completed standard boards. Sent because Compare's entry points need to
      * know whether the VIEWER has a record worth comparing — on someone else's
@@ -469,11 +471,14 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; bidFeedback?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean; bidFeedback: boolean }>('/api/me/prefs', {
-      method: 'POST',
-      body: JSON.stringify(prefs),
-    }),
+  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; bidFeedback?: boolean; doubleTapBid?: boolean }) =>
+    request<{ ladderListed: boolean; fastForward: boolean; bidFeedback: boolean; doubleTapBid: boolean }>(
+      '/api/me/prefs',
+      {
+        method: 'POST',
+        body: JSON.stringify(prefs),
+      },
+    ),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),

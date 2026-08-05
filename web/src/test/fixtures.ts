@@ -33,6 +33,7 @@ export const meFixture: Me = {
     ladderListed: true,
     fastForward: true,
     bidFeedback: true,
+    doubleTapBid: false,
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,

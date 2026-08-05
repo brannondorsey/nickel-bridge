@@ -217,9 +217,17 @@ describe('MeaningPanel', () => {
 
   it('renders the placeholder and the no-meaning fallback', () => {
     const ph = render(<MeaningPanel placeholder />);
-    expect(ph.getByText(/tap a bid/i)).toBeInTheDocument();
+    expect(ph.getByText(/tap bid to make the call/i)).toBeInTheDocument();
     const none = render(<MeaningPanel call={8} prefix="Your" />);
     expect(none.getByText(/no standard SAYC meaning/i)).toBeInTheDocument();
+  });
+
+  // "Double-tap to bid" (settings gate, default off) — the placeholder teaches
+  // whichever gesture is actually live: the confirm CTA by default, or the
+  // repeat-tap shortcut when the account (or Tour) has it on.
+  it('placeholder teaches the repeat-tap gesture when doubleTapBid is on', () => {
+    const ph = render(<MeaningPanel placeholder doubleTapBid />);
+    expect(ph.getByText(/tap again to make the call/i)).toBeInTheDocument();
   });
 });
 
