@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BoardView, TrickCard } from '../api';
+import type { BoardView, Me, TrickCard } from '../api';
 import {
   AUTO_PLAY_DELAY_MS,
   BID_GAP_MS,
@@ -37,12 +37,12 @@ vi.mock('../api', async (importOriginal) => ({
   },
 }));
 
-const renderBoard = () =>
+const renderBoard = (me: Me = meFixture) =>
   renderWithMe(
     <Routes>
       <Route path="/t/:tid/b/:no" element={<Board />} />
     </Routes>,
-    { me: meFixture, route: '/t/12/b/2' },
+    { me, route: '/t/12/b/2' },
   );
 
 const inAuction = () => within(document.querySelector('.auction') as HTMLElement);
@@ -1189,6 +1189,25 @@ describe('Board — result', () => {
     expect(screen.getAllByText(/robot bid/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/\(Limit raise\)/).length).toBeGreaterThan(0);
 
+    expect(screen.getByRole('button', { name: /NEXT BOARD — 3 OF 4/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
+  });
+
+  it('offers the ANALYZE PLAY door for a beta account', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    expect(await screen.findByRole('link', { name: /analyze play/i })).toHaveAttribute(
+      'href',
+      '/t/12/b/2/analyze',
+    );
+  });
+
+  it('hides the ANALYZE PLAY door for an account without beta features — Analyze is still in beta', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    await screen.findByText('SCORED');
+    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
+    // the rest of the receipt's actions are unaffected
     expect(screen.getByRole('button', { name: /NEXT BOARD — 3 OF 4/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
   });

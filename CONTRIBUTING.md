@@ -44,15 +44,22 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
-                play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
+                play via vendor/bridge-dds WASM; solveVia/analysePlayVia/
+                ddTableVia/dealerParVia share ONE runVia pool-vs-main-thread
+                policy), play-mc.ts (sampled-DD card play
                 for non-expert difficulty tiers: K seeded hidden-hand layouts
                 constrained by the auction's SAYC `req`s + shown-out voids, solved
-                per layout, aggregate scores summed per legal card — then, per
+                per layout, aggregate scores summed per legal card
+                (scoreCardsSampled — the per-card score map, split out for
+                Analyze's findability verdict; test/play-mc-golden.test.ts pins
+                the split byte-identical) — then, per
                 PLAY_NOISE, either the flat argmax or a seeded weighted pick among
                 the top playTopN cards by that same score), difficulty.ts (tier
                 type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
-                (lazy worker_threads DDS pool for parallel sampled solves —
-                latency only, never outcomes), play-mc-forget.ts (EXPERIMENTAL,
+                (lazy worker_threads DDS pool — one enqueue path serving solve/
+                analysePlay/ddTable/dealerPar under shared priority+starvation+
+                timeout rules; latency only, never outcomes), play-mc-forget.ts
+                (EXPERIMENTAL,
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
@@ -61,6 +68,8 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
+                analyze.ts (the Analyze review's verdict pipeline — two engines,
+                four stages, the board_analyses cache; see "Analyze" below),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
@@ -95,7 +104,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
                 device-local axis, orthogonal to theme.ts — see "Night mode" below),
-                pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
+                pages/ (Board.tsx is the gameplay UI, exporting BiddingPhase/PlayPhase/
+                Result for the tour and Analyze; Analyze.tsx is the post-board review —
+                see "Analyze" below; Settings.tsx is the settings gate,
                 where night mode, suit colors, claim fast-forward, ladder listing and
                 sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
@@ -134,8 +145,13 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 pages/Compare.tsx (the Compare screen — draws the server's
                 verdicts, re-derives no statistics),
+                replay/ (useReplay.ts — the shared replay driver extracted from the
+                tour: staged transitions, the claim beats, cut() for jumps; and
+                replayViews.ts — synthetic per-ply BoardViews for the Analyze play lens),
                 components/ds/ (design-system pieces, incl. BeamBar — the
-                diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
+                diverging centre-line bar with its dashed gates, PrefSwitch — the
+                arity-agnostic segmented lever (lifted out of Settings.tsx when the
+                Analyze lens switch needed it), and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
                 that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
                 the Home rail and the shared suit-glyph row, see "Medal progress" below)
@@ -184,7 +200,12 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 checked-in social share card web/public/og-image.png — offline, no
                 running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
-docs            compare.md — why most Compare rows refuse to name a winner: the
+docs            analyze-design.md — the Analyze design record, with its concept-exploration
+                board analyze-concepts.html (three directions; the owner chose B,
+                "The Second Crossing") and the round-four par-panel board
+                analyze-cards-worth.html (four treatments; the owner chose D,
+                "The Receipt and the Rail");
+                compare.md — why most Compare rows refuse to name a winner: the
                 three error models, the Agresti-Coull requirement, and the
                 production measurement behind FULL_TILT;
                 design-brief.md — requirements spec for the visual redesign;
@@ -426,7 +447,10 @@ Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
 either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
-untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
+untouched. The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
+server-played tail card; NULL = no claim, or a pre-migration board): `GameBoard.claimed` stays
+transient per-request, but a finished board must be able to say at rest where its tail stopped
+being the human's own play — Analyze must never grade past it. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
 needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`).
 `Board.tsx`'s `runClaim` plays that response back in **three beats**, and `planClaim` in
 `playAnim.ts` is the one pure place that decides which cards belong to which:
@@ -588,12 +612,13 @@ the **main-thread** `solveRequest()` — a synchronous WASM solve with no timeou
 event loop for every concurrent request, i.e. a worse freeze than the one being fixed. A
 background request that has waited the bound is promoted to interactive.
 That main-thread fallback is now a genuine last resort rather than the first thing tried:
-`play-ai.ts`'s `solveVia()` is the ONE place that chooses pool-vs-main-thread for every DD
-solve in the app, and it reaches `solveRequest()` only when there is no compiled worker at all
-(vitest on TS sources) or when a second pool has also failed. A pool that died mid-decision —
-which rejects every outstanding solve at once, so `chooseCardSampled`'s K layouts all land here
-together — is retried on the replacement `getSharedDdPool()` mints, instead of becoming K
-sequential event-loop-blocking solves.
+`play-ai.ts`'s private `runVia()` is the ONE policy that chooses pool-vs-main-thread for every
+DD call in the app — `solveVia()` plus the Analyze-era `analysePlayVia`/`ddTableVia`/
+`dealerParVia` are thin instances of it — and it reaches the main thread only when there is no
+compiled worker at all (vitest on TS sources) or when a second pool has also failed. A pool
+that died mid-decision — which rejects every outstanding solve at once, so
+`chooseCardSampled`'s K layouts all land here together — is retried on the replacement
+`getSharedDdPool()` mints, instead of becoming K sequential event-loop-blocking solves.
 Play starts when a human is placed into
 or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
 sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and
@@ -911,6 +936,88 @@ combination that is definitely broken: proxied with TLS-ALPN as the only configu
 And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s `force_https = true` is
 an infinite redirect loop. Note also that once proxied, `Fly-Client-IP` becomes Cloudflare's
 edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
+
+**Analyze (the post-board review) is two engines, because double dummy alone would lie to a
+beginner.** `server/src/analyze.ts` + `GET /api/tournaments/:id/boards/:no/analysis` (+`?par=1`)
+serve verdicts for a FINISHED board — the client only draws them (the Compare precedent). Per
+human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for the whole play)
+converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
+(`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
+insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
+would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
+just because an omniscient trace prefers something else, and a well-played board comes back
+with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
+when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
+sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
+counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
+Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
+`version` = `ANALYZE_VERSION` and the par payload nullable; every solve dispatches
+`priority: 'background'` — a live card-play solve beats a report loading, and
+`STARVATION_PROMOTE_MS` bounds the wait. The cache stores ENGINE facts only: the
+matchpoint layer (`refreshMatchpointLayer` — actualPct, per-ply costs, bid mpGains) is
+recomputed against the LIVE field on every serve, so the whole response shares one field
+with the Result's own table and a refresh sees late finishers; the one as-of-compute
+residue is stage 3's floor selection, and a drifted unjudged ply is captioned honestly
+via the served `momentFloor`. The grading boundary is `boards.claimed_at_ply`
+(re-derived by replaying the claim gate for pre-migration NULLs): cards past it were played by
+the server for both sides and are never graded. Only the human's own cards are graded
+(`humanControls`, both flip orientations — robot partner North never), forced cards are
+skipped, and a one-player field refuses costs (`singleField`) rather than inventing them.
+**MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
+board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
+On the web side (`pages/Analyze.tsx`): TWO lenses on a `?lens=` search param (a reading
+position, not a stored preference) via the ds `PrefSwitch` — THE OVERVIEW (default) and
+THE PLAY; the original three-lens shape's `crossing`/`auction` param values map to the
+overview so early shared links keep working. The overview LEADS with THE CARDS WERE
+WORTH — "The Receipt and the Rail", proposal D of the panel's four-concept redesign
+board (owner-chosen): par and your table as paired receipts (the par stub sealed/dashed,
+its DDS "3D*-EW-1" contract string parsed into the app's own vocabulary by
+`parContractLabel`), over the field as dots on one rail with par as the dashed gate.
+The rail's geometry is the pure, unit-tested `pages/analyzeRail.ts` (the activityFeed.ts
+precedent): positions are LINEAR in the score with an order-preserving minimum-gap
+relaxation — measured against a symlog axis, which flattens exactly the ±420–660 game
+clusters bridge fields produce — with ties merged into counted dots, label bands
+alternated, and the gate left at par's un-relaxed position; a field past `MAX_RAIL_DOTS`
+is SAMPLED (YOU + both extremes always, then the modes) with the omitted tables counted
+under the rail, never silently dropped. The WHERE IT TURNED moments
+ledger follows. The ledger is the overview's ONLY bidding surface: bid moments carry
+their counterfactual auction in the aside and are static findings (no link — the auction
+has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result
+alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
+`--positive` ink (matchpoints that were there for the taking), never a red −penalty. The play lens is a full
+replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
+from the tour, which is now a second consumer): forward steps stage one card at a time
+through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD and the
+trick pips `cut()` with no animation, and the audit ribbon
+(the tollkeeper ribbon's shape, unvoiced) narrates the view the replay is actually showing
+— the tour's lagging-caption move, with its caption slot height RESERVED (the bid-box dock
+rule: a shorter caption must not scoot the board). A moment jump (`?ply=`, the ledger, the
+PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immediately
+stages the played card's glide, so the card that was played (in the trick) and the
+engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
+rank in the suit-line rails) are on screen together — the pager anchors on the moment
+being read, not the replay position, which sits one card past it. A moment on a trick's
+LAST card lands on a synthetic held view (trick complete on the table, un-collected —
+`momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
+always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so
+South-declared and flipped boards show every hand exactly once. Only JUDGED-AND-CHARGED
+decisions (`sampled` non-null — which, since the server drops the excused case before this
+ever arrives, now always means genuinely chargeable) are moments to the pager and the
+collapse; the sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick
+slipped, but the matchpoints barely noticed" annotation and are never charged or landed on.
+The open-hand rails
+wear the dummy rail's kerning (thin-space rank separation + `.dummy-rail-ranks`'s
+letter-spacing), and a centred PLAYED rail under them accumulates every card off the
+hands, its two wrapped lines reserved up front (the dock rule again). Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
+trick-by-trick list instead, a legitimate reading rather than a fallback. Every moment shown
+is charged and keeps `StarGrade` (✗ at 0) — a costly-but-unfindable candidate never reaches
+either lens; the server drops it before the response leaves `computeCore`, so there is
+nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
+gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
+path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
+dissolved the tour's class-for-class `TourResult` copy).
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
@@ -1372,7 +1479,8 @@ deficiency and no time-of-day concept for it.
 
 **The settings gate** (`web/src/pages/Settings.tsx`, the sixth tab) is one perforated panel
 of identical rows — tracked-caps label, the italic aside that says what the setting does,
-then a full-width `.pref-switch` segmented lever. Four segments for appearance, two for a
+then a full-width `.pref-switch` segmented lever (`ds/PrefSwitch.tsx` — Analyze's lens
+switch uses it at three). Four segments for appearance, two for a
 switch: the SAME component at different arities, deliberately, which is why the design
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
@@ -1428,6 +1536,25 @@ newer settings has one thing worth knowing:
   unaffected: it carries its own scripted `lastEval` and never reads this preference, since
   the tour's pedagogical point is teaching the grading loop regardless of the visitor's (or
   signed-in tester's) own setting.
+- **Beta features** (`users.beta_features`) is the odd one out: every switch above describes
+  how an already-shipped feature behaves for this person, while this one GRANTS access to
+  features still being tried out — today, just Analyze (the post-board review screen,
+  `pages/Analyze.tsx`). Its default is environment-dependent rather than a fixed literal: the
+  `beta_features` migration in `db.ts` computes it once, from `DEV_AUTH`/`DEMO`, and bakes
+  that into the column's SQL `DEFAULT` — so it's simultaneously the backfill for existing
+  rows on whatever deployment runs the migration AND, because SQLite reuses an `ADD COLUMN`
+  default for every future `INSERT` that omits the column, the default for every signup after
+  it with no second code path. Off in production (nobody has asked for early access), on
+  wherever `DEV_AUTH` or `DEMO` is set — PR previews and the permanent demo app share that
+  exact shape (`ci.yml`'s `deploy-preview`/`deploy-demo`), so testers and click-testers see
+  new work without hunting for a switch, and a shipped-but-gated feature like Analyze's demo
+  exhibit (`analyze-play`, see "Demo mode" below) just works. A production account reaches a
+  beta feature only by deliberately flipping this switch — the intended path for a named
+  handful of early testers, not a general release. Both the door (`Board.tsx`'s ANALYZE PLAY
+  button, `Tournament.tsx`'s ledger hint, `Analyze.tsx`'s own route) and the data
+  (`GET .../analysis` in `app.ts`) check it independently: the client hiding the door is a
+  courtesy, the route's `403` is the actual gate, since a beta feature that only the UI
+  refuses is one curl command away from everyone.
 - **Double-tap to bid** (`users.double_tap_bid`, **default OFF**) is the one switch on this
   panel that does not preserve prior behavior — every other row above defaults to whatever the
   app already did, so it reads as a way OUT rather than a change. This one exists because it
@@ -1652,7 +1779,10 @@ the sitemap and `robots.txt` follow on their own.
    `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
    non-perfect tournaments: it breaks comparability for in-flight ones, so calibrate
    (`tools/calibrate_k.mjs`, `tools/calibrate_stats.mjs`, `tools/calibrate_stack.mjs`) first,
-   or accept the break knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   or accept the break knowingly. Any such deliberate robot change — and any change to
+   `ANALYZE_K`/`MOMENT_FLOOR`/`gradeFromDeficit` or stage-3 scoring in `server/src/analyze.ts`
+   — must also bump `ANALYZE_VERSION` there: a cached analysis computed against different
+   robots is a stale accusation, and the version is what forces the recompute. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

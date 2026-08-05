@@ -12,6 +12,7 @@ import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } f
 import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
 import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
+import { getBoardAnalysis } from './analyze.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
 import { securityHeaders } from './security.js';
@@ -183,6 +184,37 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     await ensureAdvanced(b);
     return reply.send(boardView(t, b, user.elo));
+  });
+
+  // Analyze — verdicts for a FINISHED board's review screen, computed on
+  // first open and cached (board_analyses). `?par=1` adds stage 4 (par + the
+  // counterfactual auctions) — the crossing/auction lenses request it, the
+  // play lens deliberately doesn't, so its open never pays for
+  // CalcDDTablePBN. Only offered on a board already 'done', whose hidden
+  // hands boardView has therefore already revealed to this player; boards
+  // are per-user rows, so there is no cross-player surface, and /api/* is in
+  // the edge bypass set.
+  //
+  // Still in beta (see the beta_features migration in db.ts): gated here as
+  // well as by the web client hiding its doors, since a client-side gate
+  // alone is only a UI courtesy — this route is the one place that can
+  // actually keep the feature (and the DDS work it costs) off an account
+  // that hasn't opted in.
+  app.get('/api/tournaments/:id/boards/:no/analysis', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const wantPar = (req.query as { par?: string }).par === '1';
+    const t = getTournament(Number(id));
+    const boardNo = Number(no);
+    if (!t || !Number.isInteger(boardNo) || boardNo < 1 || boardNo > 4) {
+      return reply.code(404).send({ error: 'not found' });
+    }
+    const b = loadBoard(t, user.id, boardNo, false);
+    if (!b || b.row.state !== 'done') return reply.code(404).send({ error: 'not analyzable' });
+    if (t.ai_field) noteTournamentActivity(t.id);
+    return reply.send(await getBoardAnalysis(t, b, wantPar));
   });
 
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {

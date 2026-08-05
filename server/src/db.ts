@@ -71,6 +71,29 @@ CREATE TABLE IF NOT EXISTS elo_history (
   after INTEGER NOT NULL
 );
 
+-- Analyze's per-board verdict cache (server/src/analyze.ts). Computed on the
+-- FIRST open of a board's analysis — never on completion — and served cached
+-- thereafter: the pipeline is seeded and DDS is deterministic, so a recompute
+-- is byte-identical (the cache and the screen are the same claim made twice).
+-- "core" holds stages 1-3 (DD trace, per-ply verdicts, moments); "par" holds
+-- stage 4 (DD table, par, counterfactual auctions) and stays NULL until a
+-- lens that needs it is opened, so a play-lens read never pays for
+-- CalcDDTablePBN. A version mismatch (ANALYZE_VERSION) forces a recompute —
+-- a cached analysis computed against different robots is a stale accusation.
+-- ON DELETE CASCADE is load-bearing: boards are deleted by demo mode's
+-- per-exhibit wipe-unfinished-then-replay (demo.ts) and full reset
+-- (demo-seed.ts), and with foreign_keys ON a cache row without the cascade
+-- turns either into FOREIGN KEY constraint failed — a cache must never be
+-- able to block its parent's delete.
+CREATE TABLE IF NOT EXISTS board_analyses (
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  core TEXT NOT NULL,
+  par TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE INDEX IF NOT EXISTS idx_boards_tournament ON boards(tournament_id, board_no);
 CREATE INDEX IF NOT EXISTS idx_boards_user ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
@@ -166,6 +189,27 @@ if (!userColumns.has('double_tap_bid')) {
   db.exec(`ALTER TABLE users ADD COLUMN double_tap_bid INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `beta_features` — opt in to features still being tried out
+// before a general release (currently: Analyze, the post-board review
+// screen). Unlike every other pref above, its default is environment-
+// dependent rather than a fixed literal: DEFAULT is evaluated once, right
+// here, against THIS process's env, which both backfills existing rows
+// correctly for wherever this migration happens to run AND becomes SQLite's
+// column default for every future INSERT that doesn't name the column (the
+// same mechanism ladder_listed/fast_forward/bid_feedback lean on) — so a
+// fresh signup needs no second code path to inherit it. Off (0) in
+// production, where nobody has asked for early access yet; on (1) wherever
+// DEV_AUTH or DEMO is set — PR previews and the permanent demo app share
+// that exact shape (see deploy-preview/deploy-demo in ci.yml) — so testers
+// and click-testers see new work without hunting for a switch. A production
+// account reaches beta features only by deliberately flipping "Beta
+// features" in Settings (POST /api/me/prefs), which is how a feature like
+// Analyze reaches a handful of named testers ahead of everyone else.
+if (!userColumns.has('beta_features')) {
+  const betaDefault = process.env.DEV_AUTH === '1' || process.env.DEMO === '1' ? 1 : 0;
+  db.exec(`ALTER TABLE users ADD COLUMN beta_features INTEGER NOT NULL DEFAULT ${betaDefault}`);
+}
+
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
 // first-class column — not a name convention — because placement, the Elo
@@ -201,6 +245,40 @@ if (!tournamentColumns.has('ai_field')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN ai_field INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `claimed_at_ply` — the plays[] index of the first card the
+// server played as part of resolving a laydown claim (advanceRobots'
+// claim gate in game.ts), NULL when the board finished without claiming.
+// GameBoard.claimed has always been transient (per-request, never saved), so
+// before this column a finished board could not say whether — or where — its
+// tail was claim-played. Analyze needs that boundary at rest: cards past it
+// were played BY THE SERVER for both sides (true-DD, see invariant 1's claim
+// note), so grading them against the human is a false statement. Backfilled
+// NULL: pre-migration boards re-derive the boundary by replaying the claim
+// gate's solve walk (server/src/analyze.ts), and cache the answer.
+const boardColumns = new Set(
+  (db.prepare(`PRAGMA table_info(boards)`).all() as { name: string }[]).map((c) => c.name),
+);
+if (!boardColumns.has('claimed_at_ply')) {
+  db.exec(`ALTER TABLE boards ADD COLUMN claimed_at_ply INTEGER`);
+}
+
+// Migration: board_analyses briefly existed without ON DELETE CASCADE (see
+// the DDL comment above — a cache row blocked board deletes). SQLite can't
+// alter a foreign key in place, and the table is a pure recomputable cache,
+// so a non-cascading copy is simply dropped and recreated empty.
+const baFks = db.prepare(`PRAGMA foreign_key_list(board_analyses)`).all() as { on_delete: string }[];
+if (baFks.length > 0 && baFks[0].on_delete !== 'CASCADE') {
+  db.exec(`DROP TABLE board_analyses;
+CREATE TABLE board_analyses (
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  core TEXT NOT NULL,
+  par TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);`);
+}
+
 export interface UserRow {
   id: number;
   google_id: string;
@@ -221,6 +299,8 @@ export interface UserRow {
   fast_forward: number;
   /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
   bid_feedback: number;
+  /** 1 = this account can reach features still in beta (e.g. Analyze); env-dependent default, see the migration comment in db.ts */
+  beta_features: number;
   /** 1 = a second tap on the selected call submits it; 0 (default) = only the confirm CTA submits */
   double_tap_bid: number;
   elo: number;
@@ -277,5 +357,7 @@ export interface BoardRow {
   contract: string | null;
   tricks_declarer: number | null;
   score_ns: number | null;
+  /** plays[] index of the first server-played card of a resolved claim; NULL = no claim (or pre-migration board — re-derived by analyze.ts) */
+  claimed_at_ply: number | null;
   updated_at: number;
 }

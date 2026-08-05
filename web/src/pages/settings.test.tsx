@@ -51,8 +51,9 @@ describe('Settings', () => {
     ['Fast forward settled tricks', 'fastForward'],
     ['Name on the ladder', 'ladderListed'],
     ['Bid feedback', 'bidFeedback'],
+    ['Beta features', 'betaFeatures'],
   ])('writes %s to the account and refreshes the session', async (group, key) => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, betaFeatures: true });
     const { refresh } = renderSettings();
     expect(segment(group, 'ON')).toHaveClass('active');
     await userEvent.click(segment(group, 'OFF')!);
@@ -66,8 +67,13 @@ describe('Settings', () => {
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
   });
 
-  // Unlike the three switches above, "Double-tap to bid" defaults OFF — so it
-  // gets its own test rather than joining the it.each, which assumes ON.
+  it('reflects an account that has not opted into beta features', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    expect(segment('Beta features', 'OFF')).toHaveClass('active');
+  });
+
+  // Unlike the three switches in the it.each above, "Double-tap to bid" defaults
+  // OFF — so it gets its own test rather than joining that block, which assumes ON.
   it('defaults "Double-tap to bid" off, and writes it to the account like the other switches', async () => {
     apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, doubleTapBid: true });
     const { refresh } = renderSettings();

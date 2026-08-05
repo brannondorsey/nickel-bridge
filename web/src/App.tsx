@@ -10,6 +10,7 @@ import { TabBar } from './components/ds/TabBar';
 import { GlossaryProvider } from './glossary/GlossaryContext';
 import Activity from './pages/Activity';
 import Board from './pages/Board';
+import Analyze from './pages/Analyze';
 import CreateHandle from './pages/CreateHandle';
 import Glossary from './pages/Glossary';
 import Leaderboard from './pages/Leaderboard';
@@ -330,6 +331,7 @@ export default function App() {
               <Route path="/t/:tid" element={<Tournament />} />
               <Route path="/t/:tid/review" element={<TournamentReviewRedirect />} />
               <Route path="/t/:tid/b/:no" element={<Board />} />
+              <Route path="/t/:tid/b/:no/analyze" element={<Analyze />} />
               <Route path="/tour" element={<Tour />} />
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="*" element={<NotFound />} />

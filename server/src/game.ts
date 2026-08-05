@@ -39,7 +39,7 @@ import {
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
 import { boardDifficulty, recomputeElo } from './tournaments.js';
 
-const HUMAN_SEAT: Seat = 2; // South
+export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
 
 // Exported for the benchmark AI personas (ai-players.ts), which bid their own
@@ -56,7 +56,7 @@ const stmtCreateBoard = db.prepare(
 // recycled id belonging to a different user's board. With the full scope the
 // stale write matches nothing and drops harmlessly.
 const stmtSaveBoard = db.prepare(
-  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch()
+  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, claimed_at_ply = ?, updated_at = unixepoch()
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
@@ -194,6 +194,7 @@ function save(b: GameBoard): void {
     b.contract ? JSON.stringify(b.contract) : null,
     b.row.tricks_declarer,
     b.row.score_ns,
+    b.row.claimed_at_ply,
     b.row.id,
     b.row.tournament_id,
     b.row.user_id,
@@ -209,9 +210,11 @@ function boardDone(row: BoardRow): boolean {
  * Does the human play this hand? The human plays their whole side: South
  * always, and North whenever N-S is the declaring side (South declaring →
  * South + dummy North; North declaring → the board flips and the human runs
- * partner's hand). Defending, the human plays only South.
+ * partner's hand). Defending, the human plays only South. Exported for
+ * analyze.ts, which must grade exactly the cards this says the human chose —
+ * not "South's cards" — in both flip orientations.
  */
-function humanControls(hand: Seat, contract: Contract): boolean {
+export function humanControls(hand: Seat, contract: Contract): boolean {
   if (hand === HUMAN_SEAT) return true;
   return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
 }
@@ -280,6 +283,13 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
           // the only way the claim's outcome is guaranteed identical to what
           // continued play would have produced.
           b.claimed = true;
+          // Persist the boundary: everything from this plays-index on is the
+          // server fast-playing the settled tail for both sides — including,
+          // when the claim fires on the human's own turn, cards from the
+          // human's hand. Analyze must never grade past it (see the
+          // claimed_at_ply migration comment in db.ts). At most one claim per
+          // board: resolveClaim finishes it.
+          b.row.claimed_at_ply = b.plays.length;
           b.plays.push(pickFromSolve(legal, solve));
           await resolveClaim(b, priority);
           continue;
@@ -568,6 +578,18 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
 
 function tricksOf(r: BoardRow): number | undefined {
   return r.tricks_declarer ?? undefined;
+}
+
+/**
+ * The finished-board rows a board is matchpointed against — the SAME query
+ * boardResult() uses (everyone who finished the board, humans and house, in
+ * updated_at order), exported for analyze.ts's counterfactual arithmetic so
+ * the analysis can never disagree with the field table about who is in the
+ * field. Analyze SUBSTITUTES its hypothetical score into this array by row
+ * index — never appends — per tournaments.ts's order-preservation argument.
+ */
+export function boardFieldRows(tournamentId: number, boardNo: number): { user_id: number; score_ns: number | null }[] {
+  return stmtBoardResults.all(tournamentId, boardNo) as (BoardRow & { user_handle: string })[];
 }
 
 function bidAccuracy(evals: { score: number }[]): number | null {

@@ -1,0 +1,716 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyze — Concept Board · Nickel Bridge</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Besley:wght@400..900&family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=Josefin+Sans:wght@600&family=Poiret+One&display=swap');
+
+/* ---------- tokens (verbatim from the design system) ---------- */
+:root{
+  --ink:#141414; --paper:#FCFBF8; --panel:#FFFFFF; --surface:#F1EFE9;
+  --line:#D8D5CE; --hair:#E4E1D8; --dash:#B9B4A9; --muted:#6E6A62;
+  --verdigris:#6F8F68; --track:#EDEBE4;
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  --accent:#C22F21; --positive:#00775A; --negative:#C22F21;
+}
+@media (prefers-color-scheme: dark){ /* concept board is a document — keep it printed-paper in both themes */ }
+
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper); color:var(--ink); font-family:'Crimson Pro',Georgia,serif; font-size:17px; line-height:1.5}
+.wrap{max-width:1480px; margin:0 auto; padding:34px 30px 80px}
+
+/* ---------- concept-board chrome ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:6px}
+.wordmark{font-family:'Poiret One',cursive; font-size:19px; letter-spacing:.14em; text-transform:uppercase}
+.crumb{margin-left:auto}
+.label{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted)}
+h1{font-family:'Crimson Pro',serif; font-weight:600; font-size:42px; line-height:1.12; margin:26px 0 14px; max-width:820px; text-wrap:balance}
+.lede{max-width:78ch; font-size:18px; margin-bottom:10px}
+.aside,i,em{font-style:italic; color:var(--muted)}
+.lede.aside{font-size:15.5px}
+.num{font-family:'Besley',serif}
+.rule{border:0; border-top:1px solid var(--line); margin:34px 0}
+
+/* suit glyphs */
+.ss{color:var(--suit-s)} .sh{color:var(--suit-h)} .sd{color:var(--suit-d)} .sc{color:var(--suit-c)}
+
+/* ---------- the specimen strip ---------- */
+.specimen{display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; margin:26px 0 6px}
+.spec-card{border:1px solid var(--ink); background:var(--panel); padding:16px 18px 14px; max-width:432px}
+.spec-card .label{display:block; margin-bottom:8px}
+.spec-line{font-size:15.5px; margin-bottom:4px}
+.matrix{border-collapse:collapse; font-size:13.5px; margin-top:4px}
+.matrix th,.matrix td{border:1px solid var(--line); padding:7px 12px; text-align:left; vertical-align:top}
+.matrix th{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); background:var(--surface)}
+.matrix td b{font-family:'Besley',serif; font-size:12px}
+
+/* ---------- concept sections ---------- */
+.concept{margin-top:56px}
+.concept-kicker{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; border-top:2px solid var(--ink); padding-top:14px}
+.concept-kicker h2{font-family:'Crimson Pro',serif; font-weight:600; font-size:29px}
+.flowline{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:10px 0 2px}
+.flowline b{color:var(--ink)}
+.concept-note{max-width:82ch; margin:10px 0 20px; font-size:16.5px}
+
+/* ---------- frames ---------- */
+.frames{display:flex; gap:26px; overflow-x:auto; padding:6px 2px 18px; align-items:flex-start}
+.framecol{flex:0 0 392px; width:392px}
+.phone{width:392px; min-height:730px; background:var(--paper); border:1px solid var(--ink); box-shadow:3px 3px 0 rgba(20,20,20,.12); display:flex; flex-direction:column; padding:16px 0 0; overflow:hidden}
+.flexgrow{flex:1}
+.cap{padding:12px 4px 0}
+.cap .label{display:block; margin-bottom:4px}
+.cap p{font-size:14px; color:var(--muted); line-height:1.45}
+
+/* ---------- shared in-app pieces ---------- */
+.btn{display:flex; align-items:center; justify-content:center; min-height:46px; background:var(--ink); color:var(--paper); font-family:'Besley',serif; font-weight:700; font-size:12px; letter-spacing:.18em; text-transform:uppercase; border:1px solid var(--ink); border-radius:2px; padding:0 18px; text-align:center}
+.btn.secondary{background:var(--panel); color:var(--ink)}
+.quietlink{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); text-decoration:underline; text-underline-offset:3px; text-align:center}
+.actions{display:flex; flex-direction:column; gap:8px; padding:14px 12px 16px; margin-top:auto}
+
+.screenhead{display:flex; align-items:center; gap:10px; padding:0 14px 12px}
+.backchev{font-family:'Besley',serif; font-size:16px; color:var(--muted)}
+.screenhead .t{font-family:'Besley',serif; font-weight:800; font-size:15px; letter-spacing:.06em}
+.screenhead .sub{font-size:13px; color:var(--muted); font-style:italic; margin-top:1px}
+
+/* mini ticket board-head */
+.bhead{display:flex; align-items:center; gap:12px; padding:0 14px 12px}
+.tstub{flex:0 0 auto; display:flex; border:1px solid var(--ink); background:var(--panel); font-family:'Besley',serif}
+.tstub .tside{border-right:1.5px dashed var(--dash); padding:5px 4px; font-size:7px; letter-spacing:.12em; writing-mode:vertical-rl; transform:rotate(180deg); color:var(--muted); text-transform:uppercase}
+.tstub .tmain{padding:5px 9px 6px}
+.tstub .tl{font-size:7.5px; font-weight:700; letter-spacing:.18em; color:var(--muted); text-transform:uppercase}
+.tstub .tv{font-size:13px; font-weight:800}
+.bhead-mid{flex:1}
+.bhead-mid .bt{font-family:'Besley',serif; font-weight:800; font-size:14.5px}
+.bhead-mid .bs{font-size:12.5px; color:var(--muted); font-family:'Besley',serif}
+.stamp{font-family:'Josefin Sans',sans-serif; font-weight:600; font-size:10px; letter-spacing:.14em; text-transform:uppercase; border:1.5px solid var(--ink); border-radius:50%/ 42%; padding:6px 12px; transform:rotate(-5deg); color:var(--ink); -webkit-mask-image:linear-gradient(105deg,rgba(0,0,0,.92) 55%,rgba(0,0,0,.55)); mask-image:linear-gradient(105deg,rgba(0,0,0,.92) 55%,rgba(0,0,0,.55))}
+.stamp.red{color:var(--accent); border-color:var(--accent)}
+.stamp.sm{font-size:8.5px; padding:4px 9px}
+
+/* lens switch — the settings pref-switch at arity three */
+.lens{display:flex; gap:6px; padding:0 12px 14px}
+.lens button{flex:1; min-height:38px; border:1px solid var(--ink); background:var(--panel); color:var(--ink); font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.1em; border-radius:2px; display:flex; align-items:center; justify-content:center; text-transform:uppercase}
+.lens button.active{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+
+/* perforated panel */
+.perf{position:relative; border:1px solid var(--ink); background:var(--panel); margin:0 12px 12px; padding:12px 14px 12px 22px}
+.perf::before{content:''; position:absolute; top:6px; bottom:6px; left:8px; border-left:1.5px dashed var(--dash)}
+.perf .phead{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); margin-bottom:9px}
+.perf.sealed{border:1.5px dashed var(--dash); color:var(--muted)}
+.perf.sealed::before{display:none}
+
+/* star grade */
+.stars{font-size:12px; letter-spacing:.1em; white-space:nowrap}
+.stars .off{color:var(--line)}
+.gx{color:var(--negative); font-weight:700; font-size:12px}
+
+/* moment ledger rows */
+.mrow{padding:9px 0 10px; border-top:1px solid var(--hair)}
+.mrow:first-of-type{border-top:0}
+.mrow-main{display:flex; align-items:baseline; gap:10px}
+.mwhere{font-family:'Besley',serif; font-weight:800; font-size:12px; letter-spacing:.06em; min-width:64px}
+.mcost{font-family:'Besley',serif; font-weight:800; font-size:13px; margin-left:auto}
+.mcost.neg{color:var(--negative)}
+.mchev{font-family:'Besley',serif; color:var(--muted); font-size:13px}
+.maside{font-size:13.5px; font-style:italic; color:var(--muted); line-height:1.4; margin-top:4px}
+.maside .gl{text-decoration:underline dotted; text-underline-offset:2px}
+.mfoot{font-size:12.5px; font-style:italic; color:var(--muted); border-top:1px solid var(--hair); padding-top:8px; margin-top:2px}
+
+/* field table */
+.ftable{width:100%; border-collapse:collapse; font-size:12.5px; font-family:'Besley',serif}
+.ftable td{padding:5px 0; border-top:1px solid var(--hair); vertical-align:middle}
+.ftable tr:first-child td{border-top:0}
+.ftable .me td{background:var(--surface); font-weight:800}
+.ftable .house td{font-style:italic; color:var(--muted); font-family:'Crimson Pro',serif; font-size:13px}
+.htag{font-size:8px; border:1px solid var(--line); padding:1px 4px; letter-spacing:.12em; margin-left:5px; font-style:normal; font-family:'Besley',serif; color:var(--muted)}
+.fscore{text-align:right; padding-right:10px !important; color:var(--muted)}
+.fpct{display:flex; align-items:center; gap:6px; justify-content:flex-end}
+.pctbar{width:52px; height:7px; background:var(--track); position:relative}
+.pctbar i{position:absolute; inset:0; background:var(--ink)}
+
+/* bidding rows */
+.bidrow{display:flex; align-items:baseline; gap:9px; font-size:13px; padding:7px 0; border-top:1px solid var(--hair)}
+.bidrow:first-of-type{border-top:0}
+.bidcall{font-family:'Besley',serif; font-weight:800; font-size:13px; min-width:34px}
+.bidtext{color:var(--ink)}
+.bidcf{font-size:13px; font-style:italic; color:var(--muted); line-height:1.4; margin:-2px 0 8px 43px}
+
+/* dashed cut divider with knocked-out label */
+.cut{position:relative; border-top:1.5px dashed var(--dash); margin:16px 12px 14px; text-align:center}
+.cut span{position:relative; top:-8px; background:var(--paper); padding:0 10px; font-family:'Besley',serif; font-weight:700; font-size:8.5px; letter-spacing:.16em; color:var(--muted); text-transform:uppercase}
+
+/* trick table (the printed play record) */
+.trow{display:flex; align-items:center; gap:7px; padding:6px 0; border-top:1px solid var(--hair); font-family:'Besley',serif}
+.trow:first-of-type{border-top:0}
+.tno{font-weight:800; font-size:11px; min-width:22px; color:var(--muted)}
+.tcards{display:flex; gap:5px; align-items:center}
+.tc{font-weight:700; font-size:12px; white-space:nowrap}
+.tc small{font-size:8px; color:var(--muted); letter-spacing:.06em; margin-right:1px}
+.tc.win{text-decoration:underline; text-underline-offset:3px}
+.ddmark{margin-left:auto; font-size:11px; font-weight:800; color:var(--muted)}
+.ddmark.drop{color:var(--negative)}
+.ddmark.back{color:var(--verdigris)}
+.texp{background:var(--surface); margin:0 -14px 0 -22px; padding:8px 14px 10px 22px; border-top:1px solid var(--hair)}
+.texp .mrow-main{margin-bottom:3px}
+
+/* playing cards */
+.pc{display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:34px; height:47px; border:1px solid var(--line); border-radius:3px; background:var(--panel); box-shadow:0 1px 2px rgba(0,0,0,.14); font-family:'Besley',serif; font-weight:800; font-size:12.5px; line-height:1.05}
+.pc.lg{width:44px; height:61px; font-size:15px}
+.pc.dim{opacity:.38}
+.pc.ph{border:1.5px dashed var(--dash); background:transparent; box-shadow:none}
+.pc.hot{outline:2px solid var(--ink); outline-offset:1px}
+
+/* trick area (compass) */
+.tarea{margin:6px 12px 10px; border:1px solid var(--ink); background:var(--panel); padding:10px 12px 8px}
+.tgrid{display:grid; grid-template-columns:1fr auto 1fr; grid-template-rows:auto auto auto; gap:2px 6px; justify-items:center; align-items:center}
+.tseat{font-family:'Besley',serif; font-weight:700; font-size:7.5px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; text-align:center; margin-bottom:2px}
+.tslot{display:flex; flex-direction:column; align-items:center}
+.tmeter{display:flex; align-items:center; justify-content:center; gap:8px; font-family:'Besley',serif; font-weight:800; font-size:12px; margin-top:8px}
+.tmeter .side{color:var(--muted); font-size:9px; font-weight:700; letter-spacing:.12em}
+.ttrack{height:6px; width:120px; background:var(--track); position:relative}
+.ttrack .fl{position:absolute; left:0; top:0; bottom:0; background:var(--ink)}
+.ttrack .fr{position:absolute; right:0; top:0; bottom:0; background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)}
+.tpost{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--accent)}
+
+/* rails + fan */
+.rail{display:flex; gap:4px; align-items:center; padding:2px 12px 6px; font-family:'Besley',serif; font-weight:700; font-size:11px}
+.rail .rl{font-size:7.5px; letter-spacing:.14em; color:var(--muted); min-width:52px; text-transform:uppercase}
+.rail span{white-space:nowrap}
+.fan{display:flex; justify-content:center; padding:8px 12px 4px}
+.fan .pc{margin-left:-7px}
+.fan .pc:first-child{margin-left:0}
+
+/* the audit ribbon (caption bar over the replay) */
+.ribbon{position:relative; background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:9px 14px 10px; margin-bottom:8px}
+.ribbon .rhead{display:flex; align-items:baseline; gap:8px; margin-bottom:3px}
+.ribbon .rwho{font-family:'Besley',serif; font-weight:700; font-size:9px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase}
+.ribbon .rstamp{margin-left:auto}
+.ribbon p{font-size:14px; font-style:italic; line-height:1.42}
+.ribbon p .gl{text-decoration:underline dotted; text-underline-offset:2px}
+.ribbon .rcost{font-family:'Besley',serif; font-weight:800; font-style:normal; font-size:12px; color:var(--negative)}
+
+/* replay dock */
+.dock{border-top:1px solid var(--ink); background:var(--panel); padding:10px 12px 14px; margin-top:auto}
+.pips{display:flex; gap:5px; justify-content:center; margin-bottom:10px}
+.pip{width:9px; height:9px; border-radius:50%; border:1px solid var(--ink); background:var(--panel)}
+.pip.done{background:var(--ink)}
+.pip.cur{background:var(--ink); outline:2px solid var(--ink); outline-offset:2px}
+.pip.tail{border-style:dashed; border-color:var(--dash)}
+.dockrow{display:flex; gap:8px}
+.dockrow .btn{flex:1; min-height:40px; font-size:10.5px}
+.docklabel{text-align:center; font-family:'Besley',serif; font-weight:700; font-size:9px; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; margin-bottom:8px}
+
+/* hero (result) */
+.hero{text-align:center; padding:2px 16px 0}
+.hero .contract{font-family:'Besley',serif; font-weight:800; font-size:21px}
+.hero .hsub{font-family:'Besley',serif; font-size:12px; color:var(--muted); margin-top:2px}
+.flip{display:inline-flex; gap:3px; margin:10px 0 4px}
+.flip b{display:flex; align-items:center; justify-content:center; width:34px; height:48px; background:var(--ink); color:var(--paper); font-family:'Besley',serif; font-weight:800; font-size:30px; position:relative; border-radius:2px}
+.flip b::after{content:''; position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(252,251,248,.28)}
+.flip.neg b{background:var(--negative)}
+.flip .suf{width:auto; padding:0 7px; font-size:19px}
+.hero .hline{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; margin-top:4px}
+
+/* bottom sheet (moment sheet) */
+.sheetwrap{position:relative; margin-top:auto}
+.scrim{position:absolute; left:0; right:0; bottom:100%; height:90px; background:linear-gradient(rgba(20,20,20,0),rgba(20,20,20,.10))}
+.dimmed{opacity:.35; pointer-events:none}
+.sheet{border-top:1px solid var(--ink); background:var(--panel); padding:8px 16px 16px; box-shadow:0 -2px 0 rgba(20,20,20,.08)}
+.grip{width:38px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 10px}
+.sheet .shead{display:flex; align-items:baseline; gap:8px; margin-bottom:10px}
+.sheet .stitle{font-family:'Besley',serif; font-weight:800; font-size:13px; letter-spacing:.06em}
+.sheet .sclose{margin-left:auto; font-family:'Besley',serif; font-size:13px; color:var(--muted)}
+.dealmini{display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px 8px; font-family:'Besley',serif; font-size:10.5px; background:var(--surface); border:1px solid var(--line); padding:8px 10px; margin-bottom:12px}
+.dh{line-height:1.35}
+.dh .dl{font-size:7.5px; font-weight:700; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; display:block}
+.dh.n{grid-column:2; text-align:center}
+.dh.w{grid-column:1; grid-row:2}
+.dh.e{grid-column:3; grid-row:2; text-align:right}
+.dh.s{grid-column:2; grid-row:3; text-align:center}
+.dcomp{grid-column:2; grid-row:2; align-self:center; justify-self:center; font-size:8px; color:var(--muted); letter-spacing:.2em}
+.cards2{display:flex; gap:16px; justify-content:center; align-items:flex-start; margin:6px 0 10px; position:relative}
+.c2{display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center}
+.c2 .label{font-size:8.5px; letter-spacing:.14em}
+.c2 .c2sub{font-family:'Besley',serif; font-size:10px; color:var(--muted); line-height:1.5}
+.c2 .c2sub b{font-size:11px; color:var(--ink)}
+.overstamp{position:absolute; right:4px; top:2px}
+.turncost{display:flex; align-items:baseline; border-top:1.5px dashed var(--dash); padding-top:9px; margin-top:2px; font-family:'Besley',serif}
+.turncost .label{font-size:9.5px}
+.turncost b{margin-left:auto; font-size:16px; font-weight:800; color:var(--negative)}
+.pager{display:flex; align-items:center; gap:10px; margin-top:12px}
+.pager .btn{flex:1; min-height:38px; font-size:15px; letter-spacing:0}
+.pager .pmid{font-family:'Besley',serif; font-weight:700; font-size:9px; letter-spacing:.14em; color:var(--muted); white-space:nowrap}
+
+/* notice / findings */
+.finding{font-size:14.5px; font-style:italic; color:var(--muted); line-height:1.45}
+
+/* comparison + recommendation */
+table.compare{border-collapse:collapse; width:100%; margin:18px 0 26px; font-size:14.5px}
+table.compare th{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); text-align:left; background:var(--surface)}
+table.compare th, table.compare td{border:1px solid var(--line); padding:10px 13px; vertical-align:top}
+table.compare td b{font-family:'Besley',serif; font-size:12.5px}
+.rec{max-width:920px; background:var(--surface); border:1px solid var(--ink); padding:18px 22px}
+.rec .label{display:block; margin-bottom:8px}
+.rec p{font-size:16.5px; margin-bottom:10px}
+.rec p:last-child{margin-bottom:0}
+
+@media (max-width:900px){ h1{font-size:32px} .wrap{padding:24px 16px 60px} }
+</style>
+
+<div class="wrap">
+
+  <!-- ═══════════════════════ CHROME ═══════════════════════ -->
+  <div class="brand">
+    <svg width="30" height="23" viewBox="0 0 30 23" fill="none" aria-hidden="true">
+      <path d="M1 18 H29" stroke="#6F8F68" stroke-width="1.6"/>
+      <path d="M3 18 C3 8, 27 8, 27 18" stroke="#6F8F68" stroke-width="1.6" fill="none"/>
+      <path d="M8 18 V13 M15 18 V10.5 M22 18 V13" stroke="#6F8F68" stroke-width="1.2"/>
+      <path d="M1 21.5 H29" stroke="#141414" stroke-width="1"/>
+    </svg>
+    <span class="wordmark">Nickel Bridge</span>
+    <span class="label crumb">Analyze · Concept Board · Three Directions</span>
+  </div>
+
+  <h1>Walking it back</h1>
+  <p class="lede" style="border:1px solid var(--ink); background:var(--surface); padding:10px 14px; max-width:900px"><span class="label">Status — direction chosen · Aug 3, 2026</span><br><b>Concept B, The Second Crossing</b>, with the EXCUSED stamp for set-aside moments and NEXT BOARD keeping the Result’s primary slot (WALK IT BACK → as secondary). The exploration below is kept as the design record; the closing recommendation was not taken — the owner chose the full replay.</p>
+  <p class="lede">The Tournament ledger has promised <i>“Tap a board to look back over the play”</i> since the redesign, and the tap has never kept the promise. Analyze is that missing surface: a finished board, walked again, with the app saying where it turned and what the alternatives were worth. The verdict machinery is settled by the spec and is <b>not</b> re-litigated here — two engines (double-dummy for <i>cost</i>, sampled-DD for <i>findability</i>), cost measured in matchpoints against the real field, a floor (<span class="num">MOMENT_FLOOR</span>) under what gets said, and the claim tail off limits. What the spec leaves open is the part a player actually touches: <b>how the reading arrives.</b></p>
+  <p class="lede">The three concepts below differ on exactly that axis — <b>read it</b> as one printed audit, <b>walk it</b> as a second crossing of the live board, or <b>jump to it</b> as turning points surfaced on the score itself. They share entries, verdicts, copy register, and refusing states; each could ship alone, and the closing table weighs them.</p>
+  <p class="lede aside">All frames at 390×844 reference, real house voice, design-system components only. Copy is proposed final, not lorem. Every frame draws the same worked board so the concepts can be compared like-for-like — the specimen is below.</p>
+
+  <div class="specimen">
+    <div class="spec-card">
+      <span class="label">The specimen — board 3 of 4</span>
+      <p class="spec-line"><b class="num">4<span class="ss">♠</span> by South, down one</b> <span class="num">(−100)</span> · N–S vul · field of five · <b class="num">25%</b></p>
+      <p class="spec-line aside">Three of the five bid the spade game; two made it. The Shark squeezed an overtrick. Two moments cleared the floor: the club finesse at trick 4 (findable — charged), and a double-dummy drop at trick 8 (invisible — excused). One bid graded but worth nothing in matchpoints: the 3♣ game try.</p>
+    </div>
+    <table class="matrix">
+      <tr><th></th><th>Cost — high</th><th>Cost — none</th></tr>
+      <tr><th>Fault — high</th><td><b>A MOMENT</b><br><i>“the club was there to be found”</i> — trick 4</td><td>listed in the play lens,<br>never promoted — the 3♣ try</td></tr>
+      <tr><th>Fault — none</th><td><b>SHOWN, EXCUSED</b><br><i>“invisible from your seat”</i> — trick 8</td><td>silent</td></tr>
+    </table>
+  </div>
+
+  <p class="lede aside" style="margin-top:14px">The two doors are shared by all three concepts — the Result’s action block, and the Tournament ledger row whose hint finally comes true. Concept C rebuilds the first door in place rather than opening a new room behind it.</p>
+
+  <div class="frames">
+    <div class="framecol">
+      <div class="phone">
+        <div class="bhead">
+          <div class="tstub"><span class="tside">Admit</span><span class="tmain"><span class="tl">Board</span><br><span class="tv num">3 of 4</span></span></div>
+          <div class="bhead-mid"><div class="bt num">4<span class="ss">♠</span> by South −1</div><div class="bs num">−100 for N–S · both vul</div></div>
+          <span class="stamp sm">Scored</span>
+        </div>
+        <div class="hero">
+          <div class="flip neg"><b>2</b><b>5</b><b class="suf">%</b></div>
+          <div class="hline">Matchpoints · vs 4 other players · bidding 71%</div>
+        </div>
+        <div class="cut"><span>The field — board 3</span></div>
+        <div style="padding:0 16px">
+          <table class="ftable">
+            <tr class="house"><td>The Shark<span class="htag">HOUSE</span></td><td class="fscore num">+650</td><td><div class="fpct"><span class="pctbar"><i style="right:0%"></i></span><b>100</b></div></td></tr>
+            <tr><td>MARGARET</td><td class="fscore num">+620</td><td><div class="fpct"><span class="pctbar"><i style="right:25%"></i></span><b>75</b></div></td></tr>
+            <tr class="house"><td>The Regular<span class="htag">HOUSE</span></td><td class="fscore num">+170</td><td><div class="fpct"><span class="pctbar"><i style="right:50%"></i></span><b>50</b></div></td></tr>
+            <tr class="me"><td>WREN — YOU</td><td class="fscore num">−100</td><td><div class="fpct"><span class="pctbar"><i style="right:75%"></i></span><b>25</b></div></td></tr>
+            <tr class="house"><td>The Novice<span class="htag">HOUSE</span></td><td class="fscore num">−200</td><td><div class="fpct"><span class="pctbar"><i style="right:100%"></i></span><b>0</b></div></td></tr>
+          </table>
+        </div>
+        <div class="actions">
+          <span class="btn">Walk it back →</span>
+          <span class="btn secondary">Next board — 4 of 4 →</span>
+          <span class="quietlink">Back to lobby</span>
+        </div>
+      </div>
+      <div class="cap"><span class="label">E1 · Door one — the Result</span><p>The completed-board Result gains one action. Drawn here as the primary with NEXT BOARD demoted — the spec’s stated preference — but the counter-argument is real: mid-crossing, the tournament’s momentum may deserve the ink plate. A decision to take at review, not a blocker. VIEW THE TOLL RECEIPT stays where it is in the hero (not shown, frame cropped).</p></div>
+    </div>
+
+    <div class="framecol">
+      <div class="phone" style="min-height:0; padding-bottom:4px">
+        <div class="screenhead"><span class="backchev">‹</span><div><div class="t">THE LEDGER</div><div class="sub">Crossing №41 · scored Jul 30</div></div></div>
+        <div class="perf">
+          <div class="phead">Board by board</div>
+          <div class="trow" style="align-items:baseline"><span class="tno">1</span><span class="tc num">3NT S =</span><span class="ddmark" style="color:var(--ink)">+400 · <b>75</b></span><span class="mchev">›</span></div>
+          <div class="trow" style="align-items:baseline"><span class="tno">2</span><span class="tc num">2<span class="sh">♥</span> W +1</span><span class="ddmark" style="color:var(--ink)">−140 · <b>38</b></span><span class="mchev">›</span></div>
+          <div class="trow" style="align-items:baseline; background:var(--surface); margin:0 -14px 0 -22px; padding:6px 14px 6px 22px"><span class="tno">3</span><span class="tc num">4<span class="ss">♠</span> S −1</span><span class="ddmark" style="color:var(--ink)">−100 · <b>25</b></span><span class="mchev">›</span></div>
+          <div class="trow" style="align-items:baseline"><span class="tno">4</span><span class="tc num" style="color:var(--muted)">Sealed</span><span class="ddmark">—</span><span class="mchev" style="opacity:0">›</span></div>
+          <div class="mfoot">Tap a board to walk it back.</div>
+        </div>
+      </div>
+      <div class="cap"><span class="label">E2 · Door two — the Tournament ledger</span><p>The row already links to the board; the destination just starts honoring the hint, which is amended by one word. No new control — the whole row stays the tap target, exactly as shipped. Where it lands depends on the concept: A and B open their own screen, C opens the Result it already opened, now carrying the moments.</p></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════ CONCEPT A ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept A</span><h2>The Auditor’s Ledger</h2><span class="aside">read it — one printed audit, no machinery</span></div>
+    <p class="flowline">Result · <b>WALK IT BACK →</b> · one scrolling audit at /t/:tid/b/:no/analyze — lens switch filters the page · moment rows jump-scroll to their trick · back returns to the Result</p>
+    <p class="concept-note">The whole analysis is a single printed document, in the register the app already reads best: a perforated ledger at the top saying where it turned, the auction deepened below it, and the play as a trick-by-trick table — every card of all thirteen tricks, DD marks in the margin, the two moments expanded in place with their asides. Nothing animates; nothing is hidden behind a step-through. It is the toll office’s audit of your crossing, stamped and filed. Cheapest to build by a distance — no replay driver, no rewind semantics, and it <i>is</i> the reduced-motion rendering the other concepts must carry anyway — and every moment is a shareable anchor on a URL. The cost: nobody watches a card land, and thirteen rows of card notation ask more bridge literacy than a beginner has — the asides carry them, but the table between the asides is a wall a newer player reads past rather than through.</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:2px">
+          <div class="screenhead"><span class="backchev">‹</span><div><div class="t">THE CROSSING — BOARD 3</div><div class="sub num">4♠ by South, down one · 25%</div></div></div>
+          <div class="lens"><button class="active">The Crossing</button><button>The Auction</button><button>The Play</button></div>
+          <div class="perf">
+            <div class="phead">Where it turned</div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 4</span><span class="gx">✗</span><span class="mcost neg num">−38 MP</span></div>
+              <div class="maside">The <span class="gl">club</span> <span class="gl">finesse</span> was there — dummy’s queen was still guarded.</div>
+            </div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 8</span><span class="stamp sm" style="transform:rotate(-4deg)">Excused</span><span class="mcost neg num">−25 MP</span></div>
+              <div class="maside">Nothing to fault here. The winning card was invisible from your seat.</div>
+            </div>
+            <div class="mfoot">Your 3♣ call is graded in the auction — no matchpoints turned on it.</div>
+          </div>
+          <div class="cut"><span>The auction</span></div>
+          <div class="perf" style="margin-bottom:6px">
+            <div class="phead">Your bidding</div>
+            <div class="bidrow"><span class="bidcall num">1<span class="ss">♠</span></span><span class="stars">★★★</span><span class="bidtext">Excellent — the robot’s choice too.</span></div>
+            <div class="bidrow"><span class="bidcall num">3<span class="sc">♣</span></span><span class="stars">★<span class="off">★★</span></span><span class="bidtext">Questionable — robot bid 4<span class="ss">♠</span>.</span></div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">A1 · The audit, from the top</span><p>Screen head names the board; the lens switch is the settings gate’s segmented lever at arity three, THE CROSSING (both) default. WHERE IT TURNED is a PerforatedPanel of at most five rows ranked by cost — the faulted moment carries the grade mark, the excused one an EXCUSED ink stamp arguing on the player’s behalf. The footer states the graded-but-costless call rather than hiding it. Asides render through GlossaryProse, so <i>finesse</i> opens the term sheet.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:2px">
+          <div class="cut" style="margin-top:2px"><span>The auction</span></div>
+          <div class="perf">
+            <div class="phead">Your bidding</div>
+            <div class="bidrow"><span class="bidcall num">1<span class="ss">♠</span></span><span class="stars">★★★</span><span class="bidtext">Excellent — the robot’s choice too.</span></div>
+            <div class="bidrow" style="border-bottom:0"><span class="bidcall num">3<span class="sc">♣</span></span><span class="stars">★<span class="off">★★</span></span><span class="bidtext">Questionable — robot bid 4<span class="ss">♠</span> <i>(game values, spades agreed)</i>.</span></div>
+            <div class="bidcf">4<span class="ss">♠</span> directly reaches the same game — no matchpoints turned on it. The robots’ replies are re-run, not remembered.</div>
+          </div>
+          <div class="perf">
+            <div class="phead">The cards were worth</div>
+            <p style="font-size:15px" class="num"><b>4<span class="ss">♠</span> N–S — +620.</b></p>
+            <p class="maside" style="margin-top:3px">Par is played with all four hands face up. Nobody bids that way.</p>
+            <p style="font-size:13.5px; margin-top:8px; border-top:1px solid var(--hair); padding-top:8px"><i>Three of the five here bid 4<span class="ss">♠</span>; two made it.</i></p>
+          </div>
+        </div>
+        <div class="cap"><span class="label">A2 · The auction lens</span><p>The existing YOUR BIDDING rows, deepened: each call keeps its stars and the robot’s preference, and gains a counterfactual line where one exists — always with the “re-run, not remembered” caveat attached, never floated separately. Par and the field share one panel on purpose: the field is the reality check on par, and neither number is allowed to appear alone.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:2px">
+          <div class="cut" style="margin-top:2px"><span>The play</span></div>
+          <div class="perf">
+            <div class="phead">Trick by trick — <span style="text-transform:none">=</span> holds the contract · −1 drops a trick</div>
+            <div class="trow"><span class="tno">2</span><span class="tcards"><span class="tc"><small>W</small><span class="sh">♥</span>K</span><span class="tc"><small>N</small><span class="sh">♥</span>3</span><span class="tc"><small>E</small><span class="sh">♥</span>8</span><span class="tc win"><small>S</small><span class="sh">♥</span>A</span></span><span class="ddmark">=</span></div>
+            <div class="trow"><span class="tno">3</span><span class="tcards"><span class="tc win"><small>S</small><span class="ss">♠</span>K</span><span class="tc"><small>W</small><span class="ss">♠</span>4</span><span class="tc"><small>N</small><span class="ss">♠</span>7</span><span class="tc"><small>E</small><span class="ss">♠</span>2</span></span><span class="ddmark">=</span></div>
+            <div class="texp">
+              <div class="trow" style="border-top:0; padding-top:0"><span class="tno">4</span><span class="tcards"><span class="tc"><small>S</small><span class="sh">♥</span>J</span><span class="tc"><small>W</small><span class="sh">♥</span>Q</span><span class="tc"><small>N</small><span class="sh">♥</span>5</span><span class="tc"><small>E</small><span class="sh">♥</span>2</span></span><span class="ddmark drop">−1</span></div>
+              <div class="mrow-main" style="margin-top:2px"><span class="gx">✗</span><span class="mcost neg num" style="margin-left:8px">−38 MP</span></div>
+              <div class="maside">The club finesse was there — dummy’s queen was still guarded. The engine leads ♣7 toward her; the finesse held in eight of eight deals sampled from your seat.</div>
+            </div>
+            <div class="trow"><span class="tno">5</span><span class="tcards"><span class="tc"><small>W</small><span class="sd">♦</span>9</span><span class="tc"><small>N</small><span class="sd">♦</span>A</span><span class="tc"><small>E</small><span class="sd">♦</span>5</span><span class="tc win"><small>S</small><span class="ss">♠</span>3</span></span><span class="ddmark">=</span></div>
+            <div class="trow"><span class="tno">6</span><span class="tcards"><span class="tc"><small>S</small><span class="sc">♣</span>K</span><span class="tc win"><small>W</small><span class="sc">♣</span>A</span><span class="tc"><small>N</small><span class="sc">♣</span>4</span><span class="tc"><small>E</small><span class="sc">♣</span>9</span></span><span class="ddmark back">+1</span></div>
+            <div class="maside" style="margin:2px 0 6px">West handed one back — the robots’ own slips show in the margin, and are never charged to you.</div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">A3 · The play lens — the printed record</span><p>All thirteen tricks as rows, winner underlined, the DD margin in RealBridge notation (=, −1, +1). Only the two moments expand — the wall of thirteen captions every other bridge tool builds is exactly what the floor exists to prevent. Robot slips get the margin mark and one disarming line, never a grade. Forced cards and the claim tail carry no marks at all.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:2px">
+          <div class="screenhead"><span class="backchev">‹</span><div><div class="t">THE CROSSING — BOARD 2</div><div class="sub num">2♥ West +1 · 38%</div></div></div>
+          <div class="lens"><button class="active">The Crossing</button><button>The Auction</button><button>The Play</button></div>
+          <div class="perf">
+            <div class="phead">Where it turned</div>
+            <p class="finding">Nothing turned on a single card. The field played it much as you did.</p>
+          </div>
+          <div class="perf sealed">
+            <div class="phead" style="color:var(--muted)">Board 4 · the toll not yet taken</div>
+            <p class="finding">Only you have played this board. Come back once the field fills — a cost needs a field to be measured against.</p>
+          </div>
+        </div>
+        <div class="cap"><span class="label">A4 · The findings that aren’t moments</span><p>The empty ledger is a finding, not an empty state — the Compare screen’s house move. And the one-player board refuses in the sealed treatment (dashed border, no perforation) rather than inventing a number: DD values and grades could still be shown below with the cost column absent, footnoted. Every refusal names its reason and its remedy.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ CONCEPT B ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept B</span><h2>The Second Crossing</h2><span class="aside">walk it — the live board, replayed under a caption ribbon</span></div>
+    <p class="flowline">Result · <b>WALK IT BACK →</b> · ledger hub → tap a moment → the board replays from that trick, four hands open · step or scrub · ‹ back to the hub</p>
+    <p class="concept-note">The spec’s fullest shape: the moments ledger is a hub, and each row opens the real board — AuctionGrid, TrickArea, HandFan, the same staged glides as live play — stepping trick by trick with an audit ribbon narrating over it. This is the only concept where a beginner <i>watches</i> the hand happen again, which is the form they can actually read; card notation never has to carry the story. It is also the most build by a distance: a replay driver extracted from the tour (which already proves the shape works), rewind semantics TrickArea has never needed, a new replay dock, and the multi-trick stager for jumps. The ribbon is the tour’s narration surface re-registered — unvoiced, no tollkeeper; the audit speaks in the app’s own quiet second person.</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0">
+          <div class="screenhead"><span class="backchev">‹</span><div><div class="t">THE CROSSING — BOARD 3</div><div class="sub num">4♠ by South, down one · 25%</div></div></div>
+          <div class="lens"><button class="active">The Crossing</button><button>The Auction</button><button>The Play</button></div>
+          <div class="perf">
+            <div class="phead">Where it turned</div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 4</span><span class="gx">✗</span><span class="mcost neg num">−38 MP</span><span class="mchev">›</span></div>
+              <div class="maside">The club finesse was there — dummy’s queen was still guarded.</div>
+            </div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 8</span><span class="stamp sm" style="transform:rotate(-4deg)">Excused</span><span class="mcost neg num">−25 MP</span><span class="mchev">›</span></div>
+              <div class="maside">Nothing to fault here. The winning card was invisible from your seat.</div>
+            </div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">YOUR 3<span class="sc">♣</span></span><span class="stars">★<span class="off">★★</span></span><span class="mcost num" style="color:var(--muted)">— MP</span><span class="mchev">›</span></div>
+              <div class="maside">Robot bid 4♠ directly — the same game, a road fewer questions. Nothing turned on it.</div>
+            </div>
+          </div>
+          <div class="actions">
+            <span class="btn">Walk the play →</span>
+            <span class="quietlink">Back to the board</span>
+          </div>
+        </div>
+        <div class="cap"><span class="label">B1 · The hub</span><p>Same ledger as A — deliberately; the hub <i>is</i> the audit’s first panel — but every row is a door: chevrons lead into the replay at that trick, or into the auction lens for a bid row. The costless-but-graded call sits in the ledger here (em-dash cost) because in this concept the ledger is navigation, not only findings. WALK THE PLAY starts at trick one for the reader who wants the whole crossing.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:0">
+          <div class="ribbon">
+            <div class="rhead"><span class="rwho">The audit — trick 4 of 13</span><span class="rcost">−38 MP</span></div>
+            <p>You led <span class="sh">♥</span>J. From your seat the engine leads <span class="sc">♣</span>7 toward the queen — the <span class="gl">finesse</span> held in eight of eight sampled deals. The contract turned here.</p>
+          </div>
+          <div class="rail"><span class="rl">North · Dummy</span><span class="num"><span class="ss">♠</span>Q75 · <span class="sh">♥</span>53 · <span class="sd">♦</span>K84 · <span class="sc">♣</span>Q9642</span></div>
+          <div class="tarea">
+            <div class="tgrid">
+              <div class="tslot" style="grid-column:2"><div class="tseat">N · Dummy</div><span class="pc ph"></span></div>
+              <div class="tslot" style="grid-column:1; grid-row:2"><div class="tseat">W</div><span class="pc ph"></span></div>
+              <div class="tslot" style="grid-column:3; grid-row:2"><div class="tseat">E</div><span class="pc ph"></span></div>
+              <div class="tslot" style="grid-column:2; grid-row:3"><div class="tseat">S · Decl · You</div><span class="pc hot"><span class="sh">♥</span>J</span></div>
+            </div>
+            <div class="tmeter"><span class="side">You</span><b class="num">3</b><span class="ttrack"><span class="fl" style="width:36%"></span><span class="fr" style="width:0%"></span><span class="tpost" style="left:76%"></span></span><b class="num">0</b><span class="side">Them</span></div>
+          </div>
+          <div class="fan">
+            <span class="pc"><span class="ss">♠</span>A</span><span class="pc"><span class="ss">♠</span>J</span><span class="pc"><span class="ss">♠</span>9</span><span class="pc hot"><span class="sh">♥</span>J</span><span class="pc dim"><span class="sh">♥</span>9</span><span class="pc"><span class="sd">♦</span>Q</span><span class="pc"><span class="sd">♦</span>J</span><span class="pc"><span class="sc">♣</span>K</span><span class="pc"><span class="sc">♣</span>7</span><span class="pc"><span class="sc">♣</span>3</span>
+          </div>
+          <div class="dock">
+            <div class="docklabel">Your lead · tap any trick</div>
+            <div class="pips">
+              <span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip cur"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+            </div>
+            <div class="dockrow"><span class="btn secondary">‹ Back a card</span><span class="btn">Next card →</span></div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">B2 · The replay at the turn</span><p>The literal board UI — dummy rail, TrickArea, your fan, all hands open — with the audit ribbon where the tollkeeper’s ribbon sits in the tour, and a dock where the bid box docks in play. Forward steps stage the real glide; BACK A CARD and pip-jumps cut without animating (the multi-trick stager, not stagePlaySteps). Landing from a ledger row opens exactly this frame, held for a reading beat before anything moves.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:0">
+          <div class="ribbon">
+            <div class="rhead"><span class="rwho">The audit — trick 8 of 13</span><span class="rstamp"><span class="stamp sm red">Excused</span></span></div>
+            <p>Nothing to fault here. Only a double-dummy drop of the king saves this trick — the winning card was invisible from your seat, and the engine never found it either.</p>
+          </div>
+          <div class="rail"><span class="rl">North · Dummy</span><span class="num"><span class="ss">♠</span>— · <span class="sh">♥</span>— · <span class="sd">♦</span>K8 · <span class="sc">♣</span>Q964</span></div>
+          <div class="tarea">
+            <div class="tgrid">
+              <div class="tslot" style="grid-column:2"><div class="tseat">N · Dummy</div><span class="pc"><span class="sd">♦</span>4</span></div>
+              <div class="tslot" style="grid-column:1; grid-row:2"><div class="tseat">W</div><span class="pc"><span class="sd">♦</span>T</span></div>
+              <div class="tslot" style="grid-column:3; grid-row:2"><div class="tseat">E</div><span class="pc ph"></span></div>
+              <div class="tslot" style="grid-column:2; grid-row:3"><div class="tseat">S · Decl · You</div><span class="pc hot"><span class="sd">♦</span>Q</span></div>
+            </div>
+            <div class="tmeter"><span class="side">You</span><b class="num">5</b><span class="ttrack"><span class="fl" style="width:44%"></span><span class="fr" style="width:18%"></span><span class="tpost" style="left:76%"></span></span><b class="num">2</b><span class="side">Them</span></div>
+          </div>
+          <div class="fan">
+            <span class="pc"><span class="ss">♠</span>A</span><span class="pc"><span class="ss">♠</span>J</span><span class="pc hot"><span class="sd">♦</span>Q</span><span class="pc dim"><span class="sd">♦</span>J</span><span class="pc dim"><span class="sc">♣</span>K</span><span class="pc dim"><span class="sc">♣</span>3</span>
+          </div>
+          <div class="dock">
+            <div class="docklabel">Your lead · tap any trick</div>
+            <div class="pips">
+              <span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip cur"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+            </div>
+            <div class="dockrow"><span class="btn secondary">‹ Back a card</span><span class="btn">Next card →</span></div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">B3 · The excused beat</span><p>The screen most worth building the feature for: the app catching a cost and <i>arguing the player’s side</i>. The EXCUSED stamp in the ribbon does what stars can’t — a grade rates you, a stamp rules for you. This is open question §13 answered in the mockup two ways (B3 stamp, ledger stars); the closing section asks you to pick.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:0">
+          <div class="ribbon">
+            <div class="rhead"><span class="rwho">The audit — trick 11</span></div>
+            <p>Settled from here — the rest was already yours. The remaining tricks were fast-played for both sides; the audit has nothing to say inside a settled tail.</p>
+          </div>
+          <div class="rail"><span class="rl">North · Dummy</span><span class="num"><span class="sc">♣</span>Q96</span></div>
+          <div class="tarea">
+            <div class="tgrid">
+              <div class="tslot" style="grid-column:2"><div class="tseat">N · Dummy</div><span class="pc"><span class="sc">♣</span>Q</span></div>
+              <div class="tslot" style="grid-column:1; grid-row:2"><div class="tseat">W</div><span class="pc"><span class="sc">♣</span>T</span></div>
+              <div class="tslot" style="grid-column:3; grid-row:2"><div class="tseat">E</div><span class="pc"><span class="sc">♣</span>5</span></div>
+              <div class="tslot" style="grid-column:2; grid-row:3"><div class="tseat">S · Decl · You</div><span class="pc"><span class="sc">♣</span>8</span></div>
+            </div>
+            <div class="tmeter"><span class="side">You</span><b class="num">7</b><span class="ttrack"><span class="fl" style="width:54%"></span><span class="fr" style="width:23%"></span><span class="tpost" style="left:76%"></span></span><b class="num">3</b><span class="side">Them</span></div>
+          </div>
+          <div class="flexgrow"></div>
+          <div class="dock">
+            <div class="docklabel">Settled — fast-forwarding</div>
+            <div class="pips">
+              <span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip done"></span><span class="pip cur"></span><span class="pip tail"></span><span class="pip tail"></span>
+            </div>
+            <div class="dockrow"><span class="btn secondary">‹ Back a card</span><span class="btn">To the ledger →</span></div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">B4 · The claim tail, off limits</span><p>Past the claim boundary the pips go dashed, the ribbon says why once, and the tail replays at the claim’s own compressed pacing with no marks and no grades — the server played these cards, not you, and grading them would be a false statement. The same boundary drawn the same way in every concept; only B has to draw it mid-motion.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ CONCEPT C ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Concept C</span><h2>Where It Turned, In Place</h2><span class="aside">jump to it — turning points on the score itself, no new room</span></div>
+    <p class="flowline">Result <b>is</b> the surface · moments panel under the hero → tap a moment → bottom sheet with the frozen position · ‹ › pages between moments · no new route</p>
+    <p class="concept-note">Chess.com’s Key Moments, filed where the score already lives: the Result gains the WHERE IT TURNED panel, and each moment opens a bottom sheet — the app’s existing inspector furniture — holding the frozen position, the card you played beside the card that was findable, and the cost as a two-line toll receipt. No lens switch, no separate screen, no replay: the auction’s deepening happens in the YOUR BIDDING rows the Result already has, which become tappable where a counterfactual exists. One tap from the score to the answer, and a board where nothing turned costs the screen a single quiet line. The trade is scope: nobody ever re-watches the play, the frozen diagram asks notation literacy at the exact moment a replay would have shown the story, and the Result — already the app’s densest screen — takes on more weight.</p>
+    <div class="frames">
+
+      <div class="framecol">
+        <div class="phone" style="min-height:0; padding-bottom:2px">
+          <div class="bhead">
+            <div class="tstub"><span class="tside">Admit</span><span class="tmain"><span class="tl">Board</span><br><span class="tv num">3 of 4</span></span></div>
+            <div class="bhead-mid"><div class="bt num">4<span class="ss">♠</span> by South −1</div><div class="bs num">−100 for N–S · both vul</div></div>
+            <span class="stamp sm">Scored</span>
+          </div>
+          <div class="hero">
+            <div class="flip neg"><b>2</b><b>5</b><b class="suf">%</b></div>
+            <div class="hline">Matchpoints · vs 4 other players</div>
+          </div>
+          <div class="cut"><span>Where it turned</span></div>
+          <div class="perf" style="margin-bottom:8px">
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 4</span><span class="gx">✗</span><span class="mcost neg num">−38 MP</span><span class="mchev">›</span></div>
+              <div class="maside">The club finesse was there — dummy’s queen was still guarded.</div>
+            </div>
+            <div class="mrow">
+              <div class="mrow-main"><span class="mwhere">TRICK 8</span><span class="stamp sm" style="transform:rotate(-4deg)">Excused</span><span class="mcost neg num">−25 MP</span><span class="mchev">›</span></div>
+              <div class="maside">Nothing to fault here. The winning card was invisible from your seat.</div>
+            </div>
+          </div>
+          <div class="cut"><span>The field — board 3</span></div>
+          <div style="padding:0 16px 8px">
+            <table class="ftable">
+              <tr class="house"><td>The Shark<span class="htag">HOUSE</span></td><td class="fscore num">+650</td><td><div class="fpct"><span class="pctbar"><i style="right:0%"></i></span><b>100</b></div></td></tr>
+              <tr><td>MARGARET</td><td class="fscore num">+620</td><td><div class="fpct"><span class="pctbar"><i style="right:25%"></i></span><b>75</b></div></td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="cap"><span class="label">C1 · The Result, deepened</span><p>The moments panel lands between the hero and the field — the score says what happened, the panel says why, the field says what it cost you against whom. On a board where nothing cleared the floor the panel collapses to one italic line under the hero: <i>“Nothing turned on a single card.”</i> The Result’s computed-on-first-open cost applies here too — the panel arrives a beat after the score, placeholder-first, never blocking the receipt.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="dimmed">
+            <div class="bhead">
+              <div class="tstub"><span class="tside">Admit</span><span class="tmain"><span class="tl">Board</span><br><span class="tv num">3 of 4</span></span></div>
+              <div class="bhead-mid"><div class="bt num">4<span class="ss">♠</span> by South −1</div><div class="bs num">−100 for N–S · both vul</div></div>
+              <span class="stamp sm">Scored</span>
+            </div>
+            <div class="hero">
+              <div class="flip neg"><b>2</b><b>5</b><b class="suf">%</b></div>
+              <div class="hline">Matchpoints · vs 4 other players</div>
+            </div>
+            <div class="cut"><span>Where it turned</span></div>
+            <div class="perf" style="margin-bottom:0">
+              <div class="mrow">
+                <div class="mrow-main"><span class="mwhere">TRICK 4</span><span class="gx">✗</span><span class="mcost neg num">−38 MP</span><span class="mchev">›</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="sheetwrap">
+            <div class="scrim"></div>
+            <div class="sheet">
+              <div class="grip"></div>
+              <div class="shead"><span class="stitle">TRICK 4 — THE TURN</span><span class="sclose">✕</span></div>
+              <div class="dealmini">
+                <div class="dh n"><span class="dl">North · Dummy</span><span class="ss">♠</span>Q75 <span class="sh">♥</span>53 <span class="sd">♦</span>K84 <span class="sc">♣</span>Q96</div>
+                <div class="dh w"><span class="dl">West</span><span class="ss">♠</span>T8 <span class="sh">♥</span>KQ9 <span class="sd">♦</span>T97 <span class="sc">♣</span>AJ</div>
+                <div class="dcomp">N<br>W&nbsp;&nbsp;E<br>S</div>
+                <div class="dh e"><span class="dl">East</span><span class="ss">♠</span>62 <span class="sh">♥</span>T82 <span class="sd">♦</span>652 <span class="sc">♣</span>T85</div>
+                <div class="dh s"><span class="dl">South · You</span><span class="ss">♠</span>AJ9 <span class="sh">♥</span>J9 <span class="sd">♦</span>QJ <span class="sc">♣</span>K73</div>
+              </div>
+              <div class="cards2">
+                <div class="c2"><span class="label">You led</span><span class="pc lg"><span class="sh">♥</span>J</span><span class="c2sub"><b>9 tricks</b> · −100 · 25%</span></div>
+                <div class="c2"><span class="label">There to be found</span><span class="pc lg hot"><span class="sc">♣</span>7</span><span class="c2sub"><b>10 tricks</b> · +620 · 63%</span></div>
+              </div>
+              <p class="maside" style="text-align:center; margin-bottom:8px">Toward dummy’s queen — the <span class="gl">finesse</span> held in eight of eight deals sampled from your seat.</p>
+              <div class="turncost"><span class="label">The turn cost</span><b class="num">−38 MP</b></div>
+              <div class="pager"><span class="btn secondary">‹</span><span class="pmid">Moment 1 of 2</span><span class="btn secondary">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">C2 · The moment sheet — charged</span><p>The inspector furniture the app already owns (grip, scrim, Escape, swipe-down), holding one decision: the frozen position, the two cards side by side, and the cost as a toll receipt — what you paid, what the found line pays, the difference stamped at the bottom. The counterfactual caveat (“assumes the rest as you played it”) lives in the sheet footer, stated once.</p></div>
+      </div>
+
+      <div class="framecol">
+        <div class="phone">
+          <div class="dimmed">
+            <div class="bhead">
+              <div class="tstub"><span class="tside">Admit</span><span class="tmain"><span class="tl">Board</span><br><span class="tv num">3 of 4</span></span></div>
+              <div class="bhead-mid"><div class="bt num">4<span class="ss">♠</span> by South −1</div><div class="bs num">−100 for N–S · both vul</div></div>
+              <span class="stamp sm">Scored</span>
+            </div>
+            <div class="hero">
+              <div class="flip neg"><b>2</b><b>5</b><b class="suf">%</b></div>
+              <div class="hline">Matchpoints · vs 4 other players</div>
+            </div>
+            <div class="cut"><span>Where it turned</span></div>
+            <div class="perf" style="margin-bottom:0">
+              <div class="mrow">
+                <div class="mrow-main"><span class="mwhere">TRICK 8</span><span class="stamp sm" style="transform:rotate(-4deg)">Excused</span><span class="mcost neg num">−25 MP</span><span class="mchev">›</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="sheetwrap">
+            <div class="scrim"></div>
+            <div class="sheet">
+              <div class="grip"></div>
+              <div class="shead"><span class="stitle">TRICK 8 — SET ASIDE</span><span class="rstamp" style="margin-left:auto"><span class="stamp sm red">Excused</span></span><span class="sclose" style="margin-left:0">✕</span></div>
+              <div class="cards2">
+                <div class="c2"><span class="label">You led</span><span class="pc lg"><span class="sd">♦</span>Q</span><span class="c2sub"><b>9 tricks</b> · −100 · 25%</span></div>
+                <div class="c2"><span class="label">Double dummy’s card</span><span class="pc lg dim"><span class="sd">♦</span>4</span><span class="c2sub"><b>10 tricks</b> · +620 · 63%</span></div>
+              </div>
+              <p class="maside" style="text-align:center; margin-bottom:8px">Nothing to fault here. Only a double-dummy drop of the king wins this trick — found in zero of eight deals sampled from your seat. The winning card was invisible.</p>
+              <div class="turncost"><span class="label">Set aside — not charged</span><b class="num" style="color:var(--muted)">−25 MP</b></div>
+              <div class="pager"><span class="btn secondary">‹</span><span class="pmid">Moment 2 of 2</span><span class="btn secondary">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="label">C3 · The moment sheet — excused</span><p>The same sheet ruling for the player: the cost is shown struck to muted, the stamp does the arguing, and the sampled count (“zero of eight”) is the evidence, stated plainly. Auction moments reuse this sheet with the two calls where the two cards sit — not drawn here; the shape is identical with a one-line auction strip in place of the diagram.</p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ WEIGHING ═══════════════════════ -->
+  <section class="concept">
+    <div class="concept-kicker"><span class="label">Weighing them</span><h2>Comparison &amp; recommendation</h2></div>
+    <table class="compare">
+      <tr><th>Concept</th><th>The reading arrives as</th><th>Answers “where did it turn” in</th><th>Machinery beyond the shared verdict pipeline</th><th>Sharpest edge / dullest edge</th></tr>
+      <tr>
+        <td><b>A</b> · The Auditor’s Ledger</td>
+        <td>one printed, scrolling audit — read</td>
+        <td>one screen, zero taps</td>
+        <td>two new panels and a trick table; no replay driver, no rewind. It <i>is</i> the reduced-motion rendering B needs anyway.</td>
+        <td>Cheapest, calmest, shareable to the anchor / thirteen rows of card notation between the asides — the beginner reads past the wall.</td>
+      </tr>
+      <tr>
+        <td><b>B</b> · The Second Crossing</td>
+        <td>the live board, replayed under a ribbon — watch</td>
+        <td>one tap from the hub, then motion</td>
+        <td>useReplay extracted from the tour, Result exported with an actions slot, a replay dock, rewind + multi-trick staging TrickArea has never done.</td>
+        <td>The only form a beginner can truly read, and the spec’s promise kept literally / the most build, and the spec’s own success measure admits the replay may be over-built.</td>
+      </tr>
+      <tr>
+        <td><b>C</b> · Where It Turned, In Place</td>
+        <td>turning points on the Result, each a bottom sheet — jump</td>
+        <td>zero navigation; it’s on the score</td>
+        <td>a moment sheet on existing Dialog furniture and Result surgery; no new route, no lens switch, no replay.</td>
+        <td>Shortest path from “25%” to “why” in the whole design space / the play is never re-watchable, and the Result carries yet more weight.</td>
+      </tr>
+    </table>
+    <div class="rec">
+      <span class="label">Recommendation</span>
+      <p><b>A as the spine, wearing C’s best move.</b> Ship the Auditor’s Ledger — route, lens switch, refusing states, and the verdict pipeline it shares with everything else — but let its moment rows expand into C’s treatment: the frozen position, the two cards, the cost receipt, in place in the scroll (or as the sheet, on the same data). That composite answers the beginner with the two-cards picture instead of the notation wall, keeps the audit shareable and motionless, and builds nothing that later work throws away.</p>
+      <p><b>B is a phase, not a casualty.</b> A’s page is byte-for-byte the reduced-motion rendering B must carry, and its ledger is B’s hub — so the replay mounts <i>behind the same rows</i> later, if A’s asides prove not to be enough. The spec’s own success measure (“share of opened analyses that reach the replay”) then gets decided by usage rather than argued in advance. What would change my recommendation: if the tour’s replay machinery extracts more cleanly than estimated, B’s marginal cost shrinks and “walk it” could lead — worth one timeboxed spike on <span class="num">useReplay</span> before committing.</p>
+      <p><b>Two decisions wanted with the direction:</b> the verdict vocabulary — stars everywhere (one scale, arguably over-claiming commensurability) versus the EXCUSED stamp for set-aside moments (drawn in A1, B3, C3; a stamp rules <i>for</i> you where a grade rates you) — and which action leads the Result, WALK IT BACK or NEXT BOARD (drawn in E1).</p>
+    </div>
+  </section>
+
+</div>

@@ -32,6 +32,13 @@ export interface Me {
     /** submit a bid on a second tap of the selected call, without pressing Bid (settings: "Double-tap to bid"); default false */
     doubleTapBid: boolean;
     /**
+     * Opt in to features still being tried out before a general release —
+     * currently gates Analyze. Off by default in production, on by default
+     * on preview/demo deployments (settings: "Beta features"); see the
+     * beta_features migration in server/src/db.ts.
+     */
+    betaFeatures: boolean;
+    /**
      * Completed standard boards. Sent because Compare's entry points need to
      * know whether the VIEWER has a record worth comparing — on someone else's
      * profile the client has their board count but not its own.
@@ -180,6 +187,82 @@ export interface BoardView {
   playHistory?: TrickCard[][];
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
+}
+
+/**
+ * The Analyze review's verdicts, mirrored from server/src/analyze.ts —
+ * pre-computed server-side and only DRAWN here (the Compare precedent: a
+ * client that re-derived verdicts would eventually disagree with a cached
+ * one). MP figures from these types render only inside the Analyze screen.
+ */
+export interface AnalysisPly {
+  ply: number;
+  trick: number;
+  seat: number;
+  card: number;
+  /** tricks the human's side lost at this card per the DD trace (> 0 always) */
+  ddLoss: number;
+  cfTricksDeclarer: number;
+  cfScoreNS: number;
+  cfPct: number | null;
+  mpCost: number | null;
+  /** only present for a genuine, chargeable fault — an excused candidate (the
+   *  sampled engine would also have played the card) never reaches the
+   *  client at all; see server/src/analyze.ts's stage-3 doc comment */
+  sampled: { bestCard: number; deficit: number; grade: 0 | 1 | 2 | 3 } | null;
+}
+
+export interface AnalysisMoment {
+  kind: 'play' | 'bid';
+  ply?: number;
+  trick?: number;
+  card?: number;
+  grade?: 0 | 1 | 2 | 3;
+  callIndex?: number;
+  call?: number;
+  mpCost: number;
+}
+
+export interface AnalysisCall {
+  callIndex: number;
+  call: number;
+  bestCall: number;
+  cf: {
+    calls: number[];
+    contractLabel: string;
+    ddTricks: number | null;
+    scoreNS: number;
+    cfPct: number | null;
+    mpGain: number | null;
+  } | null;
+}
+
+export interface AnalysisPar {
+  parScore: number;
+  parContracts: string[];
+  calls: AnalysisCall[];
+}
+
+export interface AnalysisView {
+  version: number;
+  boardNo: number;
+  contract: Contract | null;
+  claimedAtPly: number | null;
+  singleField: boolean;
+  /** the field snapshot the verdicts were computed against, refreshed against the live
+   * field on every request (never frozen at first compute — see refreshMatchpointLayer) */
+  fieldScores: number[];
+  myIndex: number;
+  actualPct: number | null;
+  ddTricks: number[] | null;
+  plies: AnalysisPly[];
+  moments: AnalysisMoment[];
+  setAside: number;
+  par: AnalysisPar | null;
+  /** MOMENT_FLOOR — the mpCost figures are refreshed against the live field
+   *  per request while stage 3's floor selection ran at first open, so the
+   *  caption for a drifted unjudged ply needs the floor to compare against */
+  momentFloor: number;
 }
 
 interface Standing {
@@ -471,14 +554,20 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; bidFeedback?: boolean; doubleTapBid?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean; bidFeedback: boolean; doubleTapBid: boolean }>(
-      '/api/me/prefs',
-      {
-        method: 'POST',
-        body: JSON.stringify(prefs),
-      },
-    ),
+  setPrefs: (prefs: {
+    ladderListed?: boolean;
+    fastForward?: boolean;
+    bidFeedback?: boolean;
+    betaFeatures?: boolean;
+    doubleTapBid?: boolean;
+  }) =>
+    request<{
+      ladderListed: boolean;
+      fastForward: boolean;
+      bidFeedback: boolean;
+      betaFeatures: boolean;
+      doubleTapBid: boolean;
+    }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),
@@ -493,6 +582,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ card }),
     }),
+  /** Analyze verdicts for a finished board; par=true adds stage 4 (the crossing/auction lenses) */
+  analysis: (tid: number, no: number, par: boolean) =>
+    request<AnalysisView>(`/api/tournaments/${tid}/boards/${no}/analysis${par ? '?par=1' : ''}`),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery
