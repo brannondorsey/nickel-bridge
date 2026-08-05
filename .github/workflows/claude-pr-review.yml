@@ -86,3 +86,8 @@ jobs:
             --model claude-sonnet-5
             --max-turns 75
             --permission-mode bypassPermissions
+          # TEMPORARY debug flag: two consecutive reopen-retriggers of #136 (runs
+          # 30962729887, 30963718431) reported clean success/is_error:false but posted
+          # no PR comment of any kind. This flag surfaces the full turn-by-turn
+          # transcript so we can see what the agent actually did. Revert once diagnosed.
+          show_full_output: true
