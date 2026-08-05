@@ -668,7 +668,7 @@ export default function Board() {
                     Still in beta — see the betaFeatures note above. */}
                 {betaFeatures ? (
                   <Button variant="secondary" to={`/t/${tournamentId}/b/${board.boardNo}/analyze`}>
-                    ANALYZE PLAY →
+                    Analyze play →
                   </Button>
                 ) : null}
                 <Button variant="secondary" to="/">
@@ -999,7 +999,7 @@ export function PlayPhase({
  * exists for the same reason (№0 wants its own board label).
  *
  * Deliberately NO analysis data here: MP costs and verdicts render only
- * inside the Analyze screen — the Result carries the door (ANALYZE PLAY →,
+ * inside the Analyze screen — the Result carries the door (Analyze play →,
  * threaded through `actions` by Board below) and nothing else.
  */
 export function Result({
