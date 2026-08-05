@@ -105,6 +105,12 @@ export default function Board() {
   // unconditionally, so turning this off never affects scoring, stats, or
   // the post-board review table. See the bid_feedback migration in db.ts.
   const bidFeedback = me?.user?.bidFeedback !== false;
+  // "Double-tap to bid" (settings gate) — whether a second tap on the already-
+  // selected call submits it. Defaults OFF (fail closed, unlike the flags
+  // above), since accidental bids from that shortcut are what shipping it off
+  // by default fixes; the confirm CTA is always the other, unaffected path.
+  // See the double_tap_bid migration in db.ts.
+  const doubleTapBid = me?.user?.doubleTapBid === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   // The auction length stageOpeningBids' reveal is building toward — see
@@ -659,7 +665,7 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCall={selectedCall}
-          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
+          onSelectCall={(c) => (doubleTapBid && selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}

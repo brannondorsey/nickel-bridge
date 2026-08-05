@@ -206,17 +206,32 @@ describe('handle (first-login username)', () => {
     const pete = new TestClient(app, 'Pete');
     await pete.login();
 
-    // defaults, and a partial patch leaves the untouched key alone
+    // defaults — doubleTapBid is the one that defaults false, not true, since
+    // it is the one preference this endpoint deliberately ships as a
+    // behavior change rather than a preserved default (see the
+    // double_tap_bid migration in db.ts)
     let me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([true, true, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.doubleTapBid]).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+    // a partial patch leaves the untouched keys alone
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
       ladderListed: true,
       fastForward: false,
       bidFeedback: true,
+      doubleTapBid: false,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
-    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback]).toEqual([false, false, true]);
+    expect([me.user.ladderListed, me.user.fastForward, me.user.bidFeedback, me.user.doubleTapBid]).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
@@ -224,6 +239,7 @@ describe('handle (first-login username)', () => {
       ladderListed: false,
       fastForward: false,
       bidFeedback: true,
+      doubleTapBid: false,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -234,8 +250,18 @@ describe('handle (first-login username)', () => {
       ladderListed: false,
       fastForward: false,
       bidFeedback: false,
+      doubleTapBid: false,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
+
+    // doubleTapBid patches — and reads back — the same way, opting in from its false default
+    expect(await pete.post('/api/me/prefs', { doubleTapBid: true })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: false,
+      doubleTapBid: true,
+    });
+    expect((await pete.get('/api/me')).user.doubleTapBid).toBe(true);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

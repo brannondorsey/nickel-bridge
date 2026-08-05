@@ -32,6 +32,7 @@ const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch()
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
 const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
 const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
+const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -210,6 +211,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             ladderListed: user.ladder_listed !== 0,
             fastForward: user.fast_forward !== 0,
             bidFeedback: user.bid_feedback !== 0,
+            doubleTapBid: user.double_tap_bid !== 0,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
@@ -267,6 +269,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
    *   the bid_feedback migration in db.ts.
+   * - doubleTapBid — whether a second tap on the already-selected call in the
+   *   bid box submits it, without pressing the confirm CTA. Defaults false,
+   *   unlike the three above: this is the one preference that changes
+   *   existing accounts' behaviour on purpose, since accidental bids from the
+   *   shortcut are exactly what shipping it off by default fixes — see the
+   *   double_tap_bid migration in db.ts.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -276,6 +284,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
       ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
+      ['doubleTapBid', (on) => stmtSetDoubleTapBid.run(on ? 1 : 0, user.id)],
     ];
     const known = new Set(fields.map(([key]) => key));
     for (const key of Object.keys(body)) {
@@ -290,6 +299,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ladderListed: row.ladder_listed !== 0,
       fastForward: row.fast_forward !== 0,
       bidFeedback: row.bid_feedback !== 0,
+      doubleTapBid: row.double_tap_bid !== 0,
     });
   });
 
