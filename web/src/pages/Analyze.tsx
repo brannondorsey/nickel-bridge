@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMe } from '../App';
 import {
@@ -30,7 +31,7 @@ import { HandFan } from '../components/game/HandFan';
 import { motionOK, trickWinner } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore } from '../format';
-import { buildReplayViews, firstPlyOfTrick } from '../replay/replayViews';
+import { buildReplayViews, firstPlyOfTrick, plyOfSeatInTrick } from '../replay/replayViews';
 import { useReplay } from '../replay/useReplay';
 import { railLayout } from './analyzeRail';
 
@@ -622,6 +623,20 @@ function ReplayLens({
   // than the text rails' `.analyze-hl` bold-underline.
   const acrossHighlight = highlight !== null && acrossOpen.includes(highlight) ? highlight : null;
 
+  // The Compass Fill: each pip is four wedges, one per absolute seat
+  // (0=N,1=E,2=S,3=W — never flip-adjusted, same as the WEST/EAST rails
+  // above). A wedge inks the instant that seat's card is revealed at the
+  // current scrub position; if that specific ply was a graded moment, only
+  // THAT wedge turns verdigris, so the compass stays legible instead of
+  // flooding the whole pip. Per-wedge rather than per-pip on purpose: when
+  // N-S declares, the human is graded on both declarer's and dummy's
+  // plays, so a single trick can carry two moment wedges.
+  const wedgeColor = (t: number, seat: number): string => {
+    const p = plyOfSeatInTrick(flat, t, seat);
+    if (p === null || p >= shownPly) return 'var(--panel)';
+    return momentPlies.some((v) => v.ply === p) ? 'var(--positive)' : 'var(--ink)';
+  };
+
   return (
     <>
       <div className="audit-ribbon" role="status">
@@ -674,14 +689,20 @@ function ReplayLens({
         <div className="replay-pips" role="group" aria-label="Jump to a trick">
           {Array.from({ length: Math.ceil(totalPlies / 4) }, (_, i) => {
             const t = i + 1;
-            const done = shownPly >= t * 4;
             const cur = trick === t;
             const inTail = analysis.claimedAtPly !== null && firstPlyOfTrick(t) >= analysis.claimedAtPly;
+            const pipStyle = {
+              '--pip-n': wedgeColor(t, 0),
+              '--pip-e': wedgeColor(t, 1),
+              '--pip-s': wedgeColor(t, 2),
+              '--pip-w': wedgeColor(t, 3),
+            } as CSSProperties;
             return (
               <button
                 key={t}
                 type="button"
-                className={`replay-pip${done ? ' done' : ''}${cur ? ' cur' : ''}${inTail ? ' tail' : ''}`}
+                className={`replay-pip${cur ? ' cur' : ''}${inTail ? ' tail' : ''}`}
+                style={pipStyle}
                 aria-label={`Trick ${t}`}
                 aria-current={cur ? 'step' : undefined}
                 onClick={() => jumpTo(t)}
