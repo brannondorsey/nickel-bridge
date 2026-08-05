@@ -182,7 +182,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     const wantPar = (req.query as { par?: string }).par === '1';
     const t = getTournament(Number(id));
     const boardNo = Number(no);
-    if (!t || boardNo < 1 || boardNo > 4) return reply.code(404).send({ error: 'not found' });
+    if (!t || !Number.isInteger(boardNo) || boardNo < 1 || boardNo > 4) {
+      return reply.code(404).send({ error: 'not found' });
+    }
     const b = loadBoard(t, user.id, boardNo, false);
     if (!b || b.row.state !== 'done') return reply.code(404).send({ error: 'not analyzable' });
     if (t.ai_field) noteTournamentActivity(t.id);

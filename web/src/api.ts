@@ -222,7 +222,8 @@ export interface AnalysisView {
   contract: Contract | null;
   claimedAtPly: number | null;
   singleField: boolean;
-  /** the field snapshot the verdicts were computed against (frozen at first compute) */
+  /** the field snapshot the verdicts were computed against, refreshed against the live
+   * field on every request (never frozen at first compute — see refreshMatchpointLayer) */
   fieldScores: number[];
   myIndex: number;
   actualPct: number | null;
