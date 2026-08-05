@@ -2105,6 +2105,19 @@ a.ds-btn-secondary:hover {
   font-style: normal;
   font-weight: 700;
 }
+/* a real navigation (to /leaderboard), so a SOLID underline — unlike
+   .gloss-link's dotted one, which means "opens a term sheet, doesn't leave
+   the page." font-style: normal keeps it out of the surrounding italic. */
+.medal-link {
+  color: var(--ink);
+  font-style: normal;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.medal-link:hover {
+  color: var(--accent);
+}
 /* ---- the profile trophy case: only what's earned, no frame, no caption —
    MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is.
    margin-bottom clears the NICKEL RATING hero (FlipDigits) right under it

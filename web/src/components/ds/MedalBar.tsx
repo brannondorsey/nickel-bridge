@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { MedalProgress, MedalSuit } from '../../api';
 import { MedalGlyphs } from './MedalGlyphs';
 
@@ -14,13 +15,20 @@ function Sentence({ progress }: { progress: MedalProgress }) {
   // The club tier's copy names an app mechanic rather than itself: 4
   // completed tournaments is also this app's leaderboard threshold
   // (tournaments.ts's PROVISIONAL_MIN_TOURNAMENTS), so "join the rankings"
-  // is literally true, not just flavor. The other tiers just name the
-  // glyph — it's already colored in the cluster beside this sentence and
-  // in the sentence itself, so spelling out "Diamond"/"Heart"/"Spade" would
-  // only repeat what the mark already says.
+  // is literally true, not just flavor — "rankings" links straight there,
+  // a solid underline (.medal-link) rather than GlossaryProse's dotted one,
+  // since this is a real navigation, not a term sheet. The other tiers just
+  // name the glyph — it's already colored in the cluster beside this
+  // sentence and in the sentence itself, so spelling out
+  // "Diamond"/"Heart"/"Spade" would only repeat what the mark already says.
   const goal =
     target === 'c' ? (
-      'join the rankings'
+      <>
+        join the{' '}
+        <Link to="/leaderboard" className="medal-link">
+          rankings
+        </Link>
+      </>
     ) : (
       <>
         earn the <span className={TIER_CLASS[target]}>{TIER_GLYPH[target]}</span> medal
