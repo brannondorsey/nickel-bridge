@@ -90,7 +90,7 @@
           var isNight =
             pref === 'night' ||
             (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ||
-            (pref === 'adaptive' && (hour >= 21 || hour < 7));
+            (pref === 'adaptive' && (hour >= 19 || hour < 8));
           if (pref !== 'system') {
             document.documentElement.setAttribute('data-theme', isNight ? 'night' : 'light');
           }

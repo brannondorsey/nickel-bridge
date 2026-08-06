@@ -104,7 +104,7 @@ export default function Settings() {
         <PerforatedPanel className="settings-panel">
           <SettingRow
             label="Appearance"
-            note="Adaptive turns the lamps down from 9 PM to 7 AM. System follows this device."
+            note="Adaptive turns the lamps down from 7 PM to 8 AM. System follows this device."
           >
             <PrefSwitch
               label="Appearance"
