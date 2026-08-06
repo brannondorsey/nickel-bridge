@@ -20,10 +20,12 @@ import {
   boardBiddingRobots,
   boardDone,
   boardDoneLow,
+  boardDoneRehearsal,
   boardPlaying,
   boardPlayingDummyTurn,
   boardPlayingEastDummy,
   boardPlayingFlipped,
+  boardPlayingRehearsal,
   boardPlayingWestDummy,
   meFixture,
 } from '../test/fixtures';
@@ -1312,5 +1314,45 @@ describe('Board — toll receipt', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
     expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('Board — rehearsal', () => {
+  it('relabels the header and shows END instead of the vul chip, mid-play', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingRehearsal);
+    renderBoard();
+    // branchPly 24 -> trick floor(24/4)+1 = 7
+    expect(await screen.findByText('REHEARSAL — Board 2, from Trick 7')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'END' })).toHaveAttribute('href', '/t/20/b/2/analyze');
+    // the ordinary vulnerability chip is gone — this is the one thing that swaps
+    expect(screen.queryByText('NS VUL')).not.toBeInTheDocument();
+    // everything below the header is the untouched live PlayPhase — the hand fan renders as usual
+    expect(screen.getByRole('button', { name: 'A of ♠' })).toBeInTheDocument();
+  });
+
+  it('shows the adjusted receipt instead of the toll receipt or the field, once the rehearsal finishes', async () => {
+    apiMock.board.mockResolvedValue(boardDoneRehearsal);
+    renderBoard();
+    // the REHEARSAL stamp replaces SCORED
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument();
+    expect(screen.queryByText('SCORED')).not.toBeInTheDocument();
+
+    // itemized like a real toll receipt, but never one — no TOLL PAID/REFUSED postmark
+    expect(screen.getAllByText('THIS LINE').length).toBe(2); // the panel heading and the stub label
+    expect(document.querySelector('.result-contract')!.textContent).toBe('4♠+1 by S');
+    expect(screen.queryByText(/TOLL PAID/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/TOLL REFUSED/)).not.toBeInTheDocument();
+
+    // the comparison against the real table, framed as a genuine delta (not
+    // the moments ledger's opportunity-only +N)
+    expect(screen.getByText('VS YOUR REAL TABLE')).toBeInTheDocument();
+    expect(screen.getByText('YOUR REAL TABLE')).toBeInTheDocument();
+    expect(screen.getByText('This line does +30 better than your real table.')).toBeInTheDocument();
+
+    // never the matchpoint field view — pct is meaningless for a rehearsal's own field of one
+    expect(screen.queryByText(/MATCHPOINTS · VS/)).not.toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /TRY ANOTHER LINE/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to analyze/i })).toBeInTheDocument();
   });
 });

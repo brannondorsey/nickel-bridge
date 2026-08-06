@@ -697,3 +697,108 @@ describe('the play lens: trick pips (the compass fill)', () => {
     expect(screen.getByRole('button', { name: 'Trick 2' })).toHaveAttribute('aria-current', 'step');
   });
 });
+
+describe('Play From Here', () => {
+  it('a play moment carries a PLAY FROM HERE action beside WATCH IT; a bid moment carries neither', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    const bidMoment = { kind: 'bid' as const, callIndex: parPayload.calls[0].callIndex, call: parPayload.calls[0].call, mpCost: 25 };
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload, moments: [...makeAnalysis().moments, bidMoment] }));
+    apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    expect(screen.getByRole('button', { name: /PLAY FROM HERE/ })).toBeInTheDocument();
+    // the bid moment's static row carries no rehearse action — the auction never branches
+    const bidRow = document.querySelector('.moment-row-static')!;
+    expect(within(bidRow as HTMLElement).queryByText(/PLAY FROM HERE/)).not.toBeInTheDocument();
+  });
+
+  it('clicking PLAY FROM HERE on a moment row launches a rehearsal at that exact ply and navigates into it', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+    apiMock.rehearse.mockResolvedValue({ tournamentId: 99, boardNo: 2 });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    await userEvent.click(screen.getByRole('button', { name: /PLAY FROM HERE/ }));
+    expect(apiMock.rehearse).toHaveBeenCalledWith(12, 2, chargedPly);
+  });
+
+  it('the play lens carries a standing PLAY FROM HERE action, usable at whatever ply is on screen', async () => {
+    // jsdom has no WAAPI, so motionOK() is false by default and this lens
+    // silently renders the reduced-motion static list instead — stub
+    // Element.prototype.animate to reach the real replay dock (same pattern
+    // "the play lens" describe block above uses).
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+      apiMock.rehearse.mockResolvedValue({ tournamentId: 99, boardNo: 2 });
+      const midPly = firstPlyOfTrick(2) + 1;
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${midPly}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+
+      await userEvent.click(screen.getByRole('button', { name: /PLAY FROM HERE/ }));
+      expect(apiMock.rehearse).toHaveBeenCalledWith(12, 2, midPly);
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it('disables the standing action once scrubbed to the very end (nothing left to redecide)', async () => {
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${flat.length}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+      expect(screen.getByRole('button', { name: /PLAY FROM HERE/ })).toBeDisabled();
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
+  it('shows past attempts under the moment they branched from, and on the board-wide ledger', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠+1 by S', scoreNS: 650 },
+        { tournamentId: 56, boardNo: 2, branchPly: chargedPly, state: 'playing', createdAt: 101, contractLabel: null, scoreNS: null },
+      ],
+    });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    // the per-moment rail: one stub per attempt at THIS ply
+    const rail = await waitFor(() => document.querySelector('.rehearsal-rail')!);
+    expect(rail).not.toBeNull();
+    expect(within(rail as HTMLElement).getByText('+650')).toBeInTheDocument();
+    expect(within(rail as HTMLElement).getByText('IN PROGRESS')).toBeInTheDocument();
+
+    // the board-wide ledger, further down the overview — both attempts, same trick
+    expect(screen.getByText('YOUR REHEARSALS')).toBeInTheDocument();
+    expect(screen.getAllByText(`FROM TRICK ${chargedTrick}`)).toHaveLength(2);
+
+    // THE CARDS WERE WORTH grows a third stub for the best (highest-score) done attempt
+    expect(screen.getByText('YOUR BEST REHEARSAL')).toBeInTheDocument();
+    const bestStub = document.querySelector('.worth-stub-rehearsal')!;
+    expect(bestStub.textContent).toContain('4♠+1 by S');
+    expect(bestStub.textContent).toContain('+650');
+  });
+
+  it('renders neither history surface when no rehearsal exists yet', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+    expect(screen.queryByText('YOUR REHEARSALS')).not.toBeInTheDocument();
+    expect(screen.queryByText('YOUR BEST REHEARSAL')).not.toBeInTheDocument();
+  });
+});

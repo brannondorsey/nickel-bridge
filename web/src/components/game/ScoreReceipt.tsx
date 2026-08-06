@@ -108,7 +108,7 @@ export function ScoreReceipt({
   );
 }
 
-function ReceiptRow({
+export function ReceiptRow({
   index,
   label,
   detail,
@@ -141,8 +141,9 @@ function ReceiptRow({
   );
 }
 
-/** Teaching aside for a receipt line — warm, precise, one clause. */
-function caption(line: ScoreLine): string | undefined {
+/** Teaching aside for a receipt line — warm, precise, one clause. Exported for
+ *  AdjustedReceipt.tsx, which itemizes a rehearsal's own score the same way. */
+export function caption(line: ScoreLine): string | undefined {
   switch (line.kind) {
     case 'odd-tricks':
       return 'the tricks past book (six) are the ones that pay';

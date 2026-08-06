@@ -239,8 +239,13 @@ function humanSideDeclares(contract: Contract): boolean {
  * node, does either side have 100% of the remaining tricks double-dummy? DDS
  * is deterministic, so this finds precisely the ply where the live game
  * claimed (or none). Costs one solve per decision node once, then cached.
+ *
+ * Exported for rehearsal.ts: a "Play From Here" branch must never be allowed
+ * past a board's claim boundary (the server already played both sides from
+ * there, true-DD — there is nothing left to redecide), and this is the exact
+ * same gate that boundary is defined by.
  */
-async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
+export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
   for (let i = 0; i < plays.length; i++) {
     const prefix = plays.slice(0, i);
     const ps = playState(deal, contract, prefix);

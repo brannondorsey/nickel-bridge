@@ -70,6 +70,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
                 analyze.ts (the Analyze review's verdict pipeline — two engines,
                 four stages, the board_analyses cache; see "Analyze" below),
+                rehearsal.ts (createRehearsal/listRehearsals — "Play From Here,"
+                branching a finished board's real play into a live, never-scored
+                board of its own; see "Play From Here" below),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
@@ -158,6 +161,8 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 + components/game/
                 (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
+                AdjustedReceipt.tsx — the never-tolled twin ScoreReceipt lends its
+                ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
                 the landing page share),
@@ -1018,6 +1023,87 @@ nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
 gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
 path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
 dissolved the tour's class-for-class `TourResult` copy).
+
+**Play From Here lets a player take the cards from any point in a finished board's real
+play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
+the overview: a `PLAY FROM HERE →` action beside WHERE IT TURNED's existing `WATCH IT`
+(re-deciding that exact flagged card; `MomentRow` split from one whole-row `<button>` into
+a wrapper holding both, since two actions can't nest — the accessible name on `WATCH IT`
+is unchanged, so existing `getByRole('button', {name: ...})` assertions kept passing), and
+a standing action in THE PLAY lens's replay dock, usable at whatever ply the reader has
+scrubbed to, disabled past `analysis.claimedAtPly` (a UX courtesy — the server enforces the
+same boundary). Neither confirms first; both `POST .../rehearse {ply}` and navigate straight
+into the result. Never scored (no Elo/matchpoints/leaderboard/stats), never re-Analyzable
+(one level deep only — `GET .../analysis` 404s a rehearsal tournament).
+
+A rehearsal is its own **single-board `tournaments.kind = 'rehearsal'` row**
+(`server/src/rehearsal.ts`'s `createRehearsal`), the same move demo mode's `kind = 'exhibit'`
+tournaments already make — every placement/lobby/Elo-replay/leaderboard/stats/activity-feed
+query in this codebase is an ALLOWLIST on `kind = 'standard'`, so a new kind value is excluded
+from all of them for free. `origin_tournament_id`/`origin_board_no`/`branch_ply` (new
+`tournaments` columns, NULL on every other kind) record what it branched from. It reuses the
+**origin's own seed** and **origin board's own `board_no`** — `dealBoard(seed, boardNo)`
+depends on exactly that pair, so the deal comes out byte-identical for free, and
+`mcDecisionSeed`/`bidDecisionSeed` depend only on `(seed, boardNo, decisionIndex)`, never
+tournament id, so reusing the seed is desirable rather than a collision risk: redeciding
+nothing differently reproduces the real game byte-for-byte, diverging still applies the same
+seed to a genuinely different position. The board itself is **raw-seeded** — `calls`/
+`bidEvals`/`contract` copied verbatim from the origin (the auction never branches) and
+`plays` truncated to `plays.slice(0, branchPly)` — then handed to the ordinary
+`advanceRobots`/`submitPlay`/`boardView` machinery completely unmodified (nothing in them
+checks provenance, only the row's own columns), followed by one `ensureAdvanced()` call to
+fast-forward any robot turn sitting right at the branch point. This is new territory for the
+codebase (every other "synthesize a board" path — demo exhibits, the AI personas, the
+onboarding capture — replays through real `submitCall`/`submitPlay` instead), but mechanically
+safe by the same argument.
+
+**The rehearsal screen reuses `Board.tsx`'s existing route and default component completely
+unmodified in its state machine** — optimistic card play, staged robot bursts, claim
+handling, resync-on-reject, auto-play all come for free, which is what makes "identical to
+the ordinary live play screen" (the one hard requirement here) close to free too:
+`PlayPhase`/`BiddingPhase` need zero changes. `boardView()` adds a `rehearsal` field
+(`{originTournamentId, originBoardNo, branchPly}`) whenever `t.kind === 'rehearsal'`, which
+`BoardHead` reads to relabel the header (`"REHEARSAL — Board N, from Trick M"` in the
+tournament-name slot) and swap the vulnerability chip for an `END` link back to
+`/t/:originTournamentId/b/:originBoardNo/analyze` — the only two things that differ during
+play. Leaving mid-rehearsal loses nothing (it persists, resumable — reload survival, mid-play
+or after finishing, is just the same plain `GET` re-fetch any live board already relies on),
+which is why `END` asks no confirmation either. At `state === 'done'`, a rehearsal renders
+`AdjustedReceipt` instead of `ScoreReceipt`/`Result` — never `Result`: `matchpoints()` returns
+a placeholder `pct: 50` against a rehearsal's own field of exactly one (nobody else ever plays
+it), which would be a meaningless number to show. `AdjustedReceipt` itemizes the rehearsal's
+own score the same way `ScoreReceipt` does (its `ReceiptRow`/`caption` exported for reuse), no
+postmark (this never counted), then compares against `board.originResult` — the origin
+board's own already-computed result, sent inline on a finished rehearsal's `boardView` (one
+extra `boardResult()` call server-side) so no second client fetch is needed — as a plain
+signed delta, framed bidirectionally (`--positive`/`--negative`, unlike the moments ledger's
+opportunity-only `+N`) since a rehearsal's outcome genuinely can be worse, not only better.
+Two exits: `TRY ANOTHER LINE` re-invokes `api.rehearse` at the exact same
+`(originTournamentId, originBoardNo, branchPly)` and navigates straight into a fresh attempt
+— the literal "try this decision again," no detour through Analyze — and `Back to Analyze`
+returns to the origin board's overview, where the just-finished attempt already shows up in
+both history surfaces below.
+
+Two history surfaces, both fed by one `api.rehearsals(tid, no)` fetch (`listRehearsals`,
+ordered `created_at DESC, id DESC` — `created_at` is unix-seconds resolution, so `id` breaks
+ties between attempts created inside the same second): a **per-moment rail** of small ticket
+stubs under each `MomentRow`, filtered to that moment's own `branchPly`, and a board-wide
+**YOUR REHEARSALS** panel listing every attempt regardless of branch point, uncapped ("no
+cap, just scroll" — no truncation, no dedicated UI limit). In-progress attempts show up
+too, as resumable links — otherwise reload survival would have nothing to be discoverable
+*from* once a player has navigated away. Once at least one rehearsal is `done`, THE CARDS
+WERE WORTH's `.worth-stubs` panel grows a third stub for the best one (highest `scoreNS` —
+unambiguous since the human is always N–S) as a full-width row beneath the PAR/YOUR TABLE
+pair rather than forcing a cramped 3-up grid at the 390px smoke-test breakpoint, opting out
+of that pair's subgrid row-alignment rather than fighting it (a different shape: no sealed
+treatment, one aside line).
+
+One incidental fix that came out of building this: `submitCall`/`submitPlay`/`ensureAdvanced`'s
+`recomputeElo()` trigger had no tournament-kind guard at all (`boardDone(b.row) &&
+!isAiUser(...)`), so a demo exhibit finishing already triggered a wasted full Elo replay-sweep
+today — harmless (the replay's own source query filters `kind = 'standard'`) but expensive.
+Now gated on `b.tournament.kind === 'standard'` too, closing it for exhibits as well as
+rehearsals — worth doing here specifically because rehearsals are explicitly uncapped.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you

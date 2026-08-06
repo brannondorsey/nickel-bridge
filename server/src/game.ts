@@ -37,7 +37,7 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
-import { boardDifficulty, recomputeElo } from './tournaments.js';
+import { boardDifficulty, getTournament, recomputeElo } from './tournaments.js';
 
 export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
@@ -383,7 +383,12 @@ export async function submitCall(
     b.bidEvals.push(evaluation);
     await advanceRobots(b, priority);
     save(b);
-    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    // kind === 'standard' excludes exhibit AND rehearsal boards: recomputeElo's
+    // own replay already filters to standard tournaments, so calling it here
+    // for either would be a wasted full replay-sweep, not a correctness bug —
+    // but rehearsals are explicitly uncapped, so skipping the call outright
+    // (rather than relying on the replay to no-op) actually matters here.
+    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
     return evaluation;
   });
 }
@@ -398,7 +403,8 @@ export async function submitPlay(b: GameBoard, card: Card, priority: SolvePriori
     b.plays.push(card);
     await advanceRobots(b, priority);
     save(b);
-    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    // see the matching comment in submitCall above
+    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
   });
 }
 
@@ -422,7 +428,8 @@ export async function ensureAdvanced(b: GameBoard, priority: SolvePriority = 'in
     await advanceRobots(b, priority);
     if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
       save(b);
-      if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+      // see the matching comment in submitCall above
+      if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
     }
   });
 }
@@ -468,6 +475,19 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     auction: auctionView,
     bidEvals: b.bidEvals,
   };
+
+  // A "Play From Here" rehearsal: never scored (see the kind allowlist
+  // exclusion on TournamentRow.kind), so the client needs to know it's
+  // looking at one — Board.tsx uses this to relabel the header, add an END
+  // action, and swap in the adjusted receipt instead of the ordinary
+  // Result/ScoreReceipt once it finishes.
+  if (t.kind === 'rehearsal' && t.origin_tournament_id != null && t.origin_board_no != null && t.branch_ply != null) {
+    view.rehearsal = {
+      originTournamentId: t.origin_tournament_id,
+      originBoardNo: t.origin_board_no,
+      branchPly: t.branch_ply,
+    };
+  }
 
   if (b.row.state === 'bidding') {
     if (!auction.isOver && auction.turn === HUMAN_SEAT) {
@@ -523,6 +543,19 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     view.allHands = deal.hands;
     view.playHistory = b.contract ? playState(deal, b.contract, b.plays).completedTricks : [];
     if (b.claimed) view.claimed = true;
+    // The origin board's own real result, for the adjusted-receipt
+    // comparison — sent inline so the client never needs a second fetch. A
+    // rehearsal's own `result.pct`/`.field` are meaningless (matchpoints()
+    // returns a placeholder pct against a field of exactly one, since nobody
+    // else ever plays a rehearsal tournament); the client compares scoreNS/
+    // contractLabel against THIS field instead.
+    if (t.kind === 'rehearsal' && t.origin_tournament_id != null && t.origin_board_no != null) {
+      const originT = getTournament(t.origin_tournament_id);
+      const originBoard = originT ? loadBoard(originT, b.row.user_id, t.origin_board_no, false) : null;
+      if (originT && originBoard?.row.state === 'done') {
+        view.originResult = boardResult(originT, originBoard, viewerElo);
+      }
+    }
   }
   return view;
 }
