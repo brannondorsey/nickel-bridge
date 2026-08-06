@@ -625,16 +625,23 @@ function ReplayLens({
 
   // The Compass Fill: each pip is four wedges, one per absolute seat
   // (0=N,1=E,2=S,3=W — never flip-adjusted, same as the WEST/EAST rails
-  // above). A wedge inks the instant that seat's card is revealed at the
-  // current scrub position; if that specific ply was a graded moment, only
-  // THAT wedge turns verdigris, so the compass stays legible instead of
-  // flooding the whole pip. Per-wedge rather than per-pip on purpose: when
-  // N-S declares, the human is graded on both declarer's and dummy's
-  // plays, so a single trick can carry two moment wedges.
+  // above). An ordinary wedge inks only once that seat's card is revealed
+  // at the current scrub position — but a MOMENT wedge is lit from the
+  // very first render, however far ahead its trick is, and stays lit
+  // regardless of where the reader has scrubbed to. This is deliberate,
+  // not a spoiler: the board is already finished and scored, and the
+  // Overview lens's WHERE IT TURNED ledger already lists every moment
+  // up front — the pip strip giving the same "how many, and where in the
+  // 13 tricks" view at a glance is consistent with that, not a new leak.
+  // Only THAT wedge turns verdigris, never the whole pip, so the compass
+  // stays legible. Per-wedge rather than per-pip on purpose: when N-S
+  // declares, the human is graded on both declarer's and dummy's plays,
+  // so a single trick can carry two moment wedges.
   const wedgeColor = (t: number, seat: number): string => {
     const p = plyOfSeatInTrick(flat, t, seat);
-    if (p === null || p >= shownPly) return 'var(--panel)';
-    return momentPlies.some((v) => v.ply === p) ? 'var(--positive)' : 'var(--ink)';
+    if (p === null) return 'var(--panel)';
+    if (momentPlies.some((v) => v.ply === p)) return 'var(--positive)';
+    return p < shownPly ? 'var(--ink)' : 'var(--panel)';
   };
 
   return (

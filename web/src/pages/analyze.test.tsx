@@ -606,6 +606,23 @@ describe('the play lens: trick pips (the compass fill)', () => {
     expect([colors[0], colors[1], colors[3]]).toEqual(['var(--ink)', 'var(--ink)', 'var(--ink)']);
   });
 
+  it('a moment wedge is lit from the very first render, before its trick is reached', async () => {
+    // the board is already finished — moments are known up front, the same
+    // way the Overview lens's ledger lists all of them without scrubbing —
+    // so a moment shouldn't wait on reveal state the way an ordinary card
+    // does. chargedTrick is trick 1 for this fixture (South plays fourth),
+    // so landing at the default position (nothing revealed yet) still
+    // shows the charge, while the trick's other three wedges — not yet
+    // revealed — stay empty.
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    renderAnalyze('/t/12/b/2/analyze?lens=play');
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const colors = wedgeColors(`Trick ${chargedTrick}`);
+    expect(colors[2]).toBe('var(--positive)'); // South's charge, lit already
+    expect([colors[0], colors[1], colors[3]]).toEqual(['var(--panel)', 'var(--panel)', 'var(--panel)']);
+  });
+
   it('a trick graded on both hands (N-S declaring) lights two wedges, not one', async () => {
     // when N-S declares, the human is graded on declarer's AND dummy's
     // plays, so a single trick can carry two independently-charged moments
