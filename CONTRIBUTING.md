@@ -1433,9 +1433,10 @@ attribute set; the settings gate's Day/Night/Adaptive/System switch (`theme.ts`,
 in localStorage) sets `data-theme` explicitly to override it, or clears it for "System".
 "Adaptive" is also an explicit override (there's no media query for time-of-day): it
 resolves to night on a fixed local-time window, `ADAPTIVE_NIGHT_START_HOUR`–
-`ADAPTIVE_NIGHT_END_HOUR` in `theme.ts` (9 PM–7 AM, the industry-standard fixed
-dark-mode schedule — e.g. Windows Night Light's default "set hours" — rather than a
-sunset/sunrise calculation, since that needs geolocation this app doesn't request); a
+`ADAPTIVE_NIGHT_END_HOUR` in `theme.ts` (7 PM–8 AM, close to but wider than the
+industry-standard fixed dark-mode schedule — e.g. Windows Night Light's default "set
+hours" of 9 PM–7 AM — rather than a sunset/sunrise calculation, since that needs
+geolocation this app doesn't request); a
 60s timer in `App.tsx` re-applies it so a tab left open across the boundary still flips
 live, the same problem `system`'s `matchMedia` listener solves for OS changes. A
 blocking inline script in `web/index.html` applies the persisted choice before first

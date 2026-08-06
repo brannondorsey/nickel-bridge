@@ -141,7 +141,7 @@ export default function App() {
   }, []);
 
   // 'adaptive' has no media query to repaint it for free — re-apply on a timer so a
-  // visitor who leaves the tab open across the 9 PM/7 AM boundary still flips live.
+  // visitor who leaves the tab open across the 7 PM/8 AM boundary still flips live.
   useEffect(() => {
     const id = setInterval(() => {
       if (readThemePref() === 'adaptive') applyThemePref('adaptive');
