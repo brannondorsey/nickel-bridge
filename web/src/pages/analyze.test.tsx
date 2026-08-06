@@ -1,8 +1,9 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, type AnalysisView } from '../api';
+import { firstPlyOfTrick } from '../replay/replayViews';
 import { allHands, donePlayed, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Analyze from './Analyze';
@@ -559,5 +560,140 @@ describe('the play lens', () => {
     } finally {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     }
+  });
+});
+
+describe('the play lens: trick pips (the compass fill)', () => {
+  const WEDGE_KEYS = ['--pip-n', '--pip-e', '--pip-s', '--pip-w'] as const;
+
+  // jsdom ships no WAAPI, so motionOK() is false and this lens would
+  // otherwise silently render StaticPlayList instead of the replay dock the
+  // pips live in — same gotcha this file's own header comment flags.
+  beforeEach(() => {
+    (Element.prototype as unknown as { animate: unknown }).animate = vi.fn(() => ({
+      onfinish: null,
+      cancel: vi.fn(),
+      finish: vi.fn(),
+    }));
+  });
+  afterEach(() => {
+    delete (Element.prototype as unknown as { animate?: unknown }).animate;
+  });
+
+  function wedgeColors(pipName: string) {
+    const pip = screen.getByRole('button', { name: pipName });
+    return WEDGE_KEYS.map((k) => pip.style.getPropertyValue(k));
+  }
+
+  it('a plain done trick fills all four wedges ink', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    // trick 2 carries no moment (the fixture's only one is on trick 1) —
+    // land on trick 3's lead so trick 2 is fully revealed
+    renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${firstPlyOfTrick(3)}`);
+    await screen.findByText(/THE AUDIT — TRICK/);
+    expect(wedgeColors('Trick 2')).toEqual(['var(--ink)', 'var(--ink)', 'var(--ink)', 'var(--ink)']);
+  });
+
+  it('a trick with one moment lights only that seat’s wedge, not the whole pip', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    // land on the charged trick's own follow-up lead so it's fully revealed
+    renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${firstPlyOfTrick(chargedTrick + 1)}`);
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const colors = wedgeColors(`Trick ${chargedTrick}`);
+    expect(colors[2]).toBe('var(--positive)'); // the charge is South's card
+    expect([colors[0], colors[1], colors[3]]).toEqual(['var(--ink)', 'var(--ink)', 'var(--ink)']);
+  });
+
+  it('a moment wedge is lit from the very first render, before its trick is reached', async () => {
+    // the board is already finished — moments are known up front, the same
+    // way the Overview lens's ledger lists all of them without scrubbing —
+    // so a moment shouldn't wait on reveal state the way an ordinary card
+    // does. chargedTrick is trick 1 for this fixture (South plays fourth),
+    // so landing at the default position (nothing revealed yet) still
+    // shows the charge, while the trick's other three wedges — not yet
+    // revealed — stay empty.
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    renderAnalyze('/t/12/b/2/analyze?lens=play');
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const colors = wedgeColors(`Trick ${chargedTrick}`);
+    expect(colors[2]).toBe('var(--positive)'); // South's charge, lit already
+    expect([colors[0], colors[1], colors[3]]).toEqual(['var(--panel)', 'var(--panel)', 'var(--panel)']);
+  });
+
+  it('a trick graded on both hands (N-S declaring) lights two wedges, not one', async () => {
+    // when N-S declares, the human is graded on declarer's AND dummy's
+    // plays, so a single trick can carry two independently-charged moments
+    // — the wedge treatment is per seat, not per pip, exactly for this case.
+    // South declares donePlayed's contract, so the dummy (North, seat 0) is
+    // the only OTHER seat humanControls ever grades — a defender's card
+    // (e.g. West's) is never charged, so the fixture must target the dummy
+    // specifically rather than "any other seat in the trick".
+    apiMock.board.mockResolvedValue(donePlayed);
+    const dummySeat = donePlayed.dummy!;
+    const dummyPly = flat.findIndex((c, i) => Math.floor(i / 4) + 1 === chargedTrick && c.seat === dummySeat);
+    const dummyBestCard = allHands[dummySeat].filter((c) => c !== flat[dummyPly].card)[0];
+    const base = makeAnalysis();
+    const secondPly = {
+      ply: dummyPly,
+      trick: chargedTrick,
+      seat: dummySeat,
+      card: flat[dummyPly].card,
+      ddLoss: 1,
+      cfTricksDeclarer: 11,
+      cfScoreNS: 650,
+      cfPct: 83,
+      mpCost: 25,
+      sampled: { bestCard: dummyBestCard, deficit: 1, grade: 1 as const },
+    };
+    const secondMoment = {
+      kind: 'play' as const,
+      ply: dummyPly,
+      trick: chargedTrick,
+      card: flat[dummyPly].card,
+      grade: 1 as const,
+      mpCost: 25,
+    };
+    apiMock.analysis.mockResolvedValue(
+      makeAnalysis({ plies: [...base.plies, secondPly], moments: [...base.moments, secondMoment] }),
+    );
+    renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${firstPlyOfTrick(chargedTrick + 1)}`);
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const colors = wedgeColors(`Trick ${chargedTrick}`);
+    expect(colors[2]).toBe('var(--positive)'); // South, the original charge
+    expect(colors[dummySeat]).toBe('var(--positive)'); // the second graded seat (dummy)
+  });
+
+  it('a not-yet-reached trick stays fully empty', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    renderAnalyze('/t/12/b/2/analyze?lens=play');
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const lastTrick = Math.ceil(flat.length / 4);
+    expect(wedgeColors(`Trick ${lastTrick}`)).toEqual([
+      'var(--panel)',
+      'var(--panel)',
+      'var(--panel)',
+      'var(--panel)',
+    ]);
+  });
+
+  it('the trick being viewed mid-play shows a genuine partial read, not a forced-solid one', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis());
+    // trick 2 (plies 4-7) is moment-free — land two cards into it
+    const midPly = firstPlyOfTrick(2) + 2;
+    renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${midPly}`);
+    await screen.findByText(/THE AUDIT — TRICK/);
+    const trick2 = flat.slice(firstPlyOfTrick(2), firstPlyOfTrick(2) + 4);
+    const expected = ['var(--panel)', 'var(--panel)', 'var(--panel)', 'var(--panel)'];
+    trick2.forEach((c, i) => {
+      expected[c.seat] = i < 2 ? 'var(--ink)' : 'var(--panel)';
+    });
+    expect(wedgeColors('Trick 2')).toEqual(expected);
+    // the outline still marks it as the trick on screen, independent of fill
+    expect(screen.getByRole('button', { name: 'Trick 2' })).toHaveAttribute('aria-current', 'step');
   });
 });

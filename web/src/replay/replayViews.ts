@@ -74,3 +74,12 @@ export function trickOfPly(ply: number, totalPlies: number): number {
   const capped = Math.min(ply, Math.max(0, totalPlies - 1));
   return Math.floor(capped / 4) + 1;
 }
+
+/** absolute ply index of the given seat's card within a 1-based trick, or
+ *  null if that seat has no card there (defensive — every trick in a
+ *  finished board's playHistory has exactly one card per seat) */
+export function plyOfSeatInTrick(flat: TrickCard[], trick: number, seat: number): number | null {
+  const start = firstPlyOfTrick(trick);
+  const k = flat.slice(start, start + 4).findIndex((c) => c.seat === seat);
+  return k === -1 ? null : start + k;
+}

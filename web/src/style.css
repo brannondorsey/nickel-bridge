@@ -5374,6 +5374,11 @@ a.stat-tile:hover {
   justify-content: center;
   margin-bottom: 10px;
 }
+/* the compass fill: four wedges (N/E/S/W, --pip-n/e/s/w) per pip — ink once
+   that seat's card is revealed at the current scrub position, verdigris if
+   that ply was a graded moment. Fallback to var(--panel) so a pip rendered
+   with no inline overrides still reads as the plain "not reached" hollow
+   circle. See Analyze.tsx's ReplayLens for how the four properties are set. */
 .replay-pip {
   appearance: none;
   cursor: pointer;
@@ -5382,13 +5387,15 @@ a.stat-tile:hover {
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--ink);
-  background: var(--panel);
-}
-.replay-pip.done {
-  background: var(--ink);
+  background: conic-gradient(
+    from -45deg,
+    var(--pip-n, var(--panel)) 0deg 90deg,
+    var(--pip-e, var(--panel)) 90deg 180deg,
+    var(--pip-s, var(--panel)) 180deg 270deg,
+    var(--pip-w, var(--panel)) 270deg 360deg
+  );
 }
 .replay-pip.cur {
-  background: var(--ink);
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
