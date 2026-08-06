@@ -212,7 +212,7 @@ test('learn-and-play loop works end to end on mobile', async ({ page, context })
   // one-player field is a legitimate refusing state here) and the lens
   // switch land, and THE PLAY lens answers without par (a pass-out board
   // shows its own refusal instead of a replay)
-  await page.click('text=ANALYZE PLAY');
+  await page.click('text=Analyze play');
   await expect(page.locator('.analyze-moments')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.analyze-lens .pref-switch button')).toHaveCount(2);
   await page.click('.analyze-lens .pref-switch button:has-text("THE PLAY")');
