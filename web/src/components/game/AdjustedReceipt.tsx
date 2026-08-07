@@ -75,13 +75,6 @@ export function AdjustedReceipt({
       <PerforatedPanel heading="VS YOUR REAL TABLE" className="rehearsal-compare">
         <div className="worth-stubs rehearsal-compare-stubs">
           <div className="worth-stub">
-            <span className="worth-stub-label">THIS LINE</span>
-            <b className="worth-contract num">
-              <ContractLabel label={r.contractLabel} />
-            </b>
-            <b className="worth-score num">{signedScore(r.scoreNS)}</b>
-          </div>
-          <div className="worth-stub">
             <span className="worth-stub-label">YOUR REAL TABLE</span>
             {orig ? (
               <>
@@ -93,6 +86,15 @@ export function AdjustedReceipt({
             ) : (
               <span className="worth-aside">not available</span>
             )}
+          </div>
+          <div className="worth-stub">
+            <span className="worth-stub-label">THIS LINE</span>
+            <b className="worth-contract num">
+              <ContractLabel label={r.contractLabel} />
+            </b>
+            <b className={`worth-score num${delta !== null && delta > 0 ? ' positive' : delta !== null && delta < 0 ? ' negative' : ''}`}>
+              {signedScore(r.scoreNS)}
+            </b>
           </div>
         </div>
         {delta !== null ? (
