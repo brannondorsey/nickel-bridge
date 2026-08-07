@@ -66,6 +66,16 @@ export function AdjustedReceipt({
               amount={bd.total}
               total
             />
+            {!declarerNS ? (
+              <ReceiptRow
+                index={bd.lines.length + 1}
+                label="Your side"
+                detail="N–S, defending"
+                caption="the robots declared — this line's score is yours, sign reversed"
+                amount={-bd.total}
+                total
+              />
+            ) : null}
           </>
         ) : (
           <ReceiptRow index={0} label="Passed out" detail="for N–S" caption="no contract, no toll — every hand passed" amount={0} total />

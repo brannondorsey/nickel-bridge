@@ -258,6 +258,20 @@ export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays:
   return null;
 }
 
+/**
+ * The claim boundary Analyze already computed and cached for this board, if
+ * a current-version analysis exists — exported so rehearsal.ts's
+ * createRehearsal can reuse it instead of re-running deriveClaimBoundary's
+ * DD solve walk from scratch on every "Play From Here" launch. Returns
+ * `undefined` (never `null`, which is claimedAtPly's own valid "no claim"
+ * answer) when there is no usable cache and the caller must derive fresh.
+ */
+export function cachedClaimBoundary(boardId: number): number | null | undefined {
+  const cached = stmtGetAnalysis.get(boardId) as { version: number; core: string } | undefined;
+  if (!cached || cached.version !== ANALYZE_VERSION) return undefined;
+  return (JSON.parse(cached.core) as AnalysisCore).claimedAtPly;
+}
+
 /** substitute — never append — my counterfactual score into the real field (see boardFieldRows) */
 function substitutePct(scores: number[], myIndex: number, myScore: number): number {
   const next = [...scores];

@@ -193,7 +193,10 @@ export default function Analyze() {
   // all-hands-open replay). No confirmation step: straight into the new
   // board, the same way the two ordinary board actions below never confirm.
   const startRehearsal = (ply: number) => {
-    api.rehearse(tournamentId, boardNo, ply).then((r) => navigate(`/t/${r.tournamentId}/b/${r.boardNo}`));
+    api
+      .rehearse(tournamentId, boardNo, ply)
+      .then((r) => navigate(`/t/${r.tournamentId}/b/${r.boardNo}`))
+      .catch((e) => setError((e as Error).message));
   };
   // Explicit discard for an attempt the player doesn't want kept — the
   // escape hatch beside startRehearsal's own same-ply resume (a second tap

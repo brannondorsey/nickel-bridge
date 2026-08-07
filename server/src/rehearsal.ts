@@ -1,7 +1,8 @@
 import { Contract, contractLabel } from '@bridge/core';
-import { deriveClaimBoundary } from './analyze.js';
+import { cachedClaimBoundary, deriveClaimBoundary } from './analyze.js';
 import { TournamentRow, db } from './db.js';
 import { GameBoard, ensureAdvanced, httpError, loadBoard } from './game.js';
+import { getTournament } from './tournaments.js';
 
 /**
  * "Play From Here" — branching a FINISHED board's real play at `branchPly`
@@ -44,10 +45,27 @@ const stmtInProgressAtPly = db.prepare(`
 
 /**
  * One tournament row + its one board row, atomically — never a tournament
- * with no board, or a board pointing at a half-created tournament.
+ * with no board, or a board pointing at a half-created tournament. Also
+ * re-runs the same-ply dedupe check inside this transaction, immediately
+ * before inserting: createRehearsal's own check up front is racy against
+ * concurrent requests, since it can be followed by a real `await` (the
+ * claim-boundary DD solve) that yields the event loop before this function
+ * runs. Because a better-sqlite3 transaction executes synchronously with no
+ * await inside it, this second check-then-insert can't be interleaved by
+ * another request, so it's the one that's actually authoritative.
  */
 const createRehearsalTx = db.transaction(
-  (origin: TournamentRow, userId: number, originBoardNo: number, b: GameBoard, branchPly: number): TournamentRow => {
+  (
+    origin: TournamentRow,
+    userId: number,
+    originBoardNo: number,
+    b: GameBoard,
+    branchPly: number,
+  ): { tournamentId: number; boardNo: number; created: boolean } => {
+    const resumable = stmtInProgressAtPly.get(origin.id, originBoardNo, branchPly, userId) as
+      | { tournament_id: number; board_no: number }
+      | undefined;
+    if (resumable) return { tournamentId: resumable.tournament_id, boardNo: resumable.board_no, created: false };
     const trick = Math.floor(branchPly / 4) + 1;
     const t = stmtCreateRehearsalTournament.get(
       `Rehearsal — Board ${originBoardNo}, from Trick ${trick}`,
@@ -73,7 +91,7 @@ const createRehearsalTx = db.transaction(
       JSON.stringify(b.bidEvals),
       JSON.stringify(b.contract),
     );
-    return t;
+    return { tournamentId: t.id, boardNo: originBoardNo, created: true };
   },
 );
 
@@ -123,16 +141,28 @@ export async function createRehearsal(
   if (!Number.isInteger(branchPly) || branchPly < 0 || branchPly >= originBoard.plays.length) {
     throw httpError(400, 'invalid branch ply');
   }
+  // Prefer claimed_at_ply, then whatever Analyze already cached for this
+  // board (cachedClaimBoundary returns undefined — never null, which is a
+  // real "no claim" answer — when there's no usable cache), and only derive
+  // from scratch as a last resort.
+  const cached = cachedClaimBoundary(originBoard.row.id);
   const boundary =
     originBoard.row.claimed_at_ply ??
-    (await deriveClaimBoundary(originBoard.deal, originBoard.contract, originBoard.plays));
+    (cached !== undefined ? cached : await deriveClaimBoundary(originBoard.deal, originBoard.contract, originBoard.plays));
   if (boundary !== null && branchPly >= boundary) {
     throw httpError(400, 'cannot branch past the claim boundary — the server played both sides from there');
   }
-  const t = createRehearsalTx(origin, userId, originBoardNo, originBoard, branchPly);
-  const b = loadBoard(t, userId, originBoardNo, false)!;
-  await ensureAdvanced(b); // fast-forward any robot turns sitting right at the branch point
-  return { tournamentId: t.id, boardNo: originBoardNo };
+  const result = createRehearsalTx(origin, userId, originBoardNo, originBoard, branchPly);
+  // result.created is false only when a concurrent request (e.g. a double
+  // tap) won the race inside createRehearsalTx's own re-check — that
+  // request already fast-forwards its board, so there's nothing left to do
+  // here but hand back the same tournament/board it resumed.
+  if (result.created) {
+    const t = getTournament(result.tournamentId)!;
+    const b = loadBoard(t, userId, originBoardNo, false)!;
+    await ensureAdvanced(b); // fast-forward any robot turns sitting right at the branch point
+  }
+  return { tournamentId: result.tournamentId, boardNo: result.boardNo };
 }
 
 const stmtRehearsalForDiscard = db.prepare(`

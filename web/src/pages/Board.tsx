@@ -660,7 +660,8 @@ export default function Board() {
               const rr = board.rehearsal!;
               api
                 .rehearse(rr.originTournamentId, rr.originBoardNo, rr.branchPly)
-                .then((next) => navigate(`/t/${next.tournamentId}/b/${next.boardNo}`));
+                .then((next) => navigate(`/t/${next.tournamentId}/b/${next.boardNo}`))
+                .catch((e) => setError((e as Error).message));
             }}
             onBackToAnalyze={() => navigate(`/t/${board.rehearsal!.originTournamentId}/b/${board.rehearsal!.originBoardNo}/analyze`)}
           />
