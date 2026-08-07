@@ -275,9 +275,10 @@ describe('Stats', () => {
     const tiles = (await screen.findByText('TOURNAMENTS')).closest('.stats-tiles') as HTMLElement;
     const declaring = within(tiles).getByText('DECLARING').closest('.stat-tile')!;
     expect(within(declaring as HTMLElement).getByText('61%')).toBeInTheDocument();
-    expect(within(declaring as HTMLElement).getByText('88 boards')).toBeInTheDocument();
+    expect(within(declaring as HTMLElement).getByText('54 of 88 made')).toBeInTheDocument();
     const defending = within(tiles).getByText('DEFENDING').closest('.stat-tile')!;
     expect(within(defending as HTMLElement).getByText('52%')).toBeInTheDocument();
+    expect(within(defending as HTMLElement).getByText('66 of 126 set')).toBeInTheDocument();
     expect(screen.getByText('TOURNAMENTS')).toBeInTheDocument();
     expect(screen.getByText(/better than 72% of 54 rated players/)).toBeInTheDocument();
   });

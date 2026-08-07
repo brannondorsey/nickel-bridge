@@ -707,12 +707,12 @@ export default function Player() {
             <Tile
               label="DECLARING"
               value={declaring !== null ? `${declaring}%` : '—'}
-              sub={`${t.declarer.boards} boards`}
+              sub={`${t.declarer.made} of ${t.declarer.boards} made`}
             />
             <Tile
               label="DEFENDING"
               value={defending !== null ? `${defending}%` : '—'}
-              sub={`${t.defense.boards} boards`}
+              sub={`${t.defense.beat} of ${t.defense.boards} set`}
             />
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
