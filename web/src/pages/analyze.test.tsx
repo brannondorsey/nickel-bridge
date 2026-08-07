@@ -830,4 +830,50 @@ describe('Play From Here', () => {
     expect(screen.queryByText('YOUR REHEARSALS')).not.toBeInTheDocument();
     expect(screen.queryByText('YOUR BEST REHEARSAL')).not.toBeInTheDocument();
   });
+
+  it('discarding a stub calls the API and drops it, optimistically, from both history surfaces', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠+1 by S', scoreNS: 650 },
+      ],
+    });
+    apiMock.discardRehearsal.mockResolvedValue({ ok: true });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+    await waitFor(() => expect(document.querySelector('.rehearsal-rail')).not.toBeNull());
+    expect(screen.getByText('YOUR REHEARSALS')).toBeInTheDocument();
+
+    const discardButtons = screen.getAllByRole('button', { name: 'Discard this rehearsal attempt' });
+    expect(discardButtons.length).toBeGreaterThan(0); // one per surface, same attempt
+    await userEvent.click(discardButtons[0]);
+
+    expect(apiMock.discardRehearsal).toHaveBeenCalledWith(12, 2, 55);
+    await waitFor(() => expect(document.querySelector('.rehearsal-rail')).toBeNull());
+    expect(screen.queryByText('YOUR REHEARSALS')).not.toBeInTheDocument();
+  });
+
+  it('reconciles from the server instead of leaving a stale gap if the discard actually fails', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠+1 by S', scoreNS: 650 },
+      ],
+    });
+    apiMock.discardRehearsal.mockRejectedValue(new Error('nope'));
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+    await waitFor(() => expect(document.querySelector('.rehearsal-rail')).not.toBeNull());
+
+    const discardButtons = screen.getAllByRole('button', { name: 'Discard this rehearsal attempt' });
+    await userEvent.click(discardButtons[0]);
+
+    // The failed delete's catch re-fetches rehearsals, and the mock still
+    // reports the attempt as present, so the stub reappears rather than
+    // leaving the screen out of sync with the server.
+    await waitFor(() => expect(apiMock.rehearsals).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.querySelector('.rehearsal-rail')).not.toBeNull());
+  });
 });

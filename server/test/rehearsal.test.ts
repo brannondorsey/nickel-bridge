@@ -238,12 +238,17 @@ describe('reload survival', () => {
 });
 
 describe('GET .../rehearsals', () => {
-  it('lists every attempt on this origin board, newest first, scoped to the caller', async () => {
+  it('lists every FINISHED attempt on this origin board, newest first, scoped to the caller', async () => {
     const { tournamentId, boardNo } = await finishedBoard(alice);
     const origin = boardRow(tournamentId, boardNo);
     const branchPly = safeBranchPly(origin);
+    // Two distinct attempts at the SAME ply requires finishing the first —
+    // see 'resuming an in-progress attempt' below for what a repeat tap
+    // while the first is still open does instead.
     const first = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    await playBoard(alice, first.tournamentId, first.boardNo);
     const second = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    expect(second.tournamentId).not.toBe(first.tournamentId);
 
     const { rehearsals } = await alice.get(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals`);
     const ids = rehearsals.map((r: { tournamentId: number }) => r.tournamentId);
@@ -255,5 +260,131 @@ describe('GET .../rehearsals', () => {
     const bobsBoard = await finishedBoard(bob);
     const bobsList = await bob.get(`/api/tournaments/${bobsBoard.tournamentId}/boards/${bobsBoard.boardNo}/rehearsals`);
     expect(bobsList.rehearsals).toEqual([]);
+  });
+});
+
+describe('resuming an in-progress attempt', () => {
+  it('a repeat POST at the same ply resumes the still-open attempt instead of creating another', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const branchPly = safeBranchPly(origin);
+
+    const first = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    const repeat = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    expect(repeat).toEqual(first);
+
+    const { rehearsals } = await alice.get(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals`);
+    expect(rehearsals.filter((r: { branchPly: number }) => r.branchPly === branchPly).length).toBe(1);
+  });
+
+  it('a DIFFERENT branch ply is unaffected by an in-progress attempt elsewhere on the board', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const branchPly = safeBranchPly(origin);
+    if (branchPly === 0) return; // needs a second, distinct valid ply below it
+    const a = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    const b = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly - 1 });
+    expect(a.tournamentId).not.toBe(b.tournamentId);
+  });
+
+  it('once an attempt finishes, the same ply is open again for a genuinely new one', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const branchPly = safeBranchPly(origin);
+
+    const first = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    await playBoard(alice, first.tournamentId, first.boardNo);
+    const second = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    expect(second.tournamentId).not.toBe(first.tournamentId);
+  });
+});
+
+describe('DELETE .../rehearsals/:rehearsalId', () => {
+  it('discards an attempt outright — it stops appearing in the listing and its rows are gone', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const created = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, {
+      ply: safeBranchPly(origin),
+    });
+
+    const res = await alice.raw(
+      'DELETE',
+      `/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals/${created.tournamentId}`,
+    );
+    expect(res.statusCode).toBe(200);
+
+    const { rehearsals } = await alice.get(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals`);
+    expect(rehearsals.some((r: { tournamentId: number }) => r.tournamentId === created.tournamentId)).toBe(false);
+    expect(tournamentRow(created.tournamentId)).toBeUndefined();
+    expect(boardRow(created.tournamentId)).toBeUndefined();
+  });
+
+  it('discarding frees the branch ply for a genuinely fresh attempt, not a resume of the deleted progress', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const branchPly = safeBranchPly(origin);
+    const first = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    const freshPlaysLen = JSON.parse(boardRow(first.tournamentId).plays).length;
+
+    // Advance the discarded attempt a card, if it's the human's turn — a
+    // resumed (rather than freshly created) row would carry this forward.
+    const firstView = await alice.get(`/api/tournaments/${first.tournamentId}/boards/${first.boardNo}`);
+    if (firstView.state === 'playing' && firstView.legalCards?.length) {
+      await alice.post(`/api/tournaments/${first.tournamentId}/boards/${first.boardNo}/play`, {
+        card: firstView.legalCards[0],
+      });
+    }
+
+    await alice.raw('DELETE', `/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals/${first.tournamentId}`);
+
+    // Note: SQLite reuses a deleted row's rowid for the next insert on a
+    // non-AUTOINCREMENT table, so `second.tournamentId` can legitimately
+    // equal `first.tournamentId` — that alone proves nothing. What matters
+    // is the CONTENT: a fresh row's plays[] length matches what the FIRST
+    // attempt had right after creation (deterministic, same seed/prefix),
+    // not the longer one that included the extra card played above.
+    const second = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
+    const secondPlays = JSON.parse(boardRow(second.tournamentId).plays);
+    expect(secondPlays.slice(0, branchPly)).toEqual(JSON.parse(origin.plays).slice(0, branchPly));
+    expect(secondPlays.length).toBe(freshPlaysLen);
+  });
+
+  it("404s discarding someone else's rehearsal", async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const created = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, {
+      ply: safeBranchPly(origin),
+    });
+
+    const res = await bob.raw(
+      'DELETE',
+      `/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals/${created.tournamentId}`,
+    );
+    expect(res.statusCode).toBe(404);
+
+    // Untouched — the refused delete didn't quietly succeed.
+    const { rehearsals } = await alice.get(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals`);
+    expect(rehearsals.some((r: { tournamentId: number }) => r.tournamentId === created.tournamentId)).toBe(true);
+  });
+
+  it('404s when the origin (tournamentId, boardNo) in the URL does not match the rehearsal', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const created = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, {
+      ply: safeBranchPly(origin),
+    });
+
+    const otherBoard = await finishedBoard(bob);
+    const res = await alice.raw(
+      'DELETE',
+      `/api/tournaments/${otherBoard.tournamentId}/boards/${otherBoard.boardNo}/rehearsals/${created.tournamentId}`,
+    );
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404s an id that is not a rehearsal tournament at all', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const res = await alice.raw('DELETE', `/api/tournaments/${tournamentId}/boards/${boardNo}/rehearsals/${tournamentId}`);
+    expect(res.statusCode).toBe(404);
   });
 });

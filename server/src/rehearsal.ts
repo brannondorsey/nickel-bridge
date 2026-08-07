@@ -29,6 +29,18 @@ const stmtInsertRehearsalBoard = db.prepare(`
   INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract)
   VALUES (?, ?, ?, 'playing', ?, ?, ?, ?)
 `);
+// A repeat PLAY FROM HERE at the exact same branch point resumes whichever
+// attempt is still in progress there, rather than minting another one — see
+// createRehearsal's doc comment. 'done' rows are deliberately excluded (a
+// finished attempt at this ply is a genuinely new line to try again, not
+// something to resume), and only one row can ever match: this same dedupe
+// check is what stops a second one from ever being created.
+const stmtInProgressAtPly = db.prepare(`
+  SELECT t.id AS tournament_id, b.board_no
+  FROM tournaments t JOIN boards b ON b.tournament_id = t.id
+  WHERE t.kind = 'rehearsal' AND t.origin_tournament_id = ? AND t.origin_board_no = ? AND t.branch_ply = ?
+    AND b.user_id = ? AND b.state != 'done'
+`);
 
 /**
  * One tournament row + its one board row, atomically — never a tournament
@@ -83,6 +95,12 @@ const createRehearsalTx = db.transaction(
  *   still applies to a genuinely different position (a different calls/plays
  *   prefix), producing a different but still fully deterministic outcome. Do
  *   not "fix" this into a fresh random seed.
+ *
+ * Deliberately NOT one-attempt-per-ply forever: it's one IN-PROGRESS attempt
+ * per ply. A repeat tap at a spot already being rehearsed resumes it instead
+ * of piling up another (the accumulation problem this dedupe exists to
+ * prevent); once that attempt finishes, the same ply is open again for a
+ * genuinely new line.
  */
 export async function createRehearsal(
   origin: TournamentRow,
@@ -95,6 +113,10 @@ export async function createRehearsal(
   // route takes an arbitrary tournament id, so this has to be enforced here
   // rather than assumed from the caller.
   if (origin.kind === 'rehearsal') throw httpError(400, 'cannot rehearse a rehearsal');
+  const resumable = stmtInProgressAtPly.get(origin.id, originBoardNo, branchPly, userId) as
+    | { tournament_id: number; board_no: number }
+    | undefined;
+  if (resumable) return { tournamentId: resumable.tournament_id, boardNo: resumable.board_no };
   const originBoard = loadBoard(origin, userId, originBoardNo, false);
   if (!originBoard || originBoard.row.state !== 'done') throw httpError(404, 'origin board not finished');
   if (!originBoard.contract) throw httpError(400, 'a passed-out board has no play to rehearse');
@@ -111,6 +133,58 @@ export async function createRehearsal(
   const b = loadBoard(t, userId, originBoardNo, false)!;
   await ensureAdvanced(b); // fast-forward any robot turns sitting right at the branch point
   return { tournamentId: t.id, boardNo: originBoardNo };
+}
+
+const stmtRehearsalForDiscard = db.prepare(`
+  SELECT t.id AS tournament_id, t.kind, t.origin_tournament_id, t.origin_board_no, b.user_id
+  FROM tournaments t JOIN boards b ON b.tournament_id = t.id
+  WHERE t.id = ?
+`);
+const stmtDeleteRehearsalBoards = db.prepare(`DELETE FROM boards WHERE tournament_id = ?`);
+const stmtDeleteRehearsalTournament = db.prepare(`DELETE FROM tournaments WHERE id = ?`);
+
+// No PRAGMA foreign_keys=ON anywhere in this codebase (see db.ts) — FK
+// constraints here are declarative only, so the board row has to be deleted
+// before its tournament explicitly, inside one transaction.
+const discardRehearsalTx = db.transaction((rehearsalTournamentId: number) => {
+  stmtDeleteRehearsalBoards.run(rehearsalTournamentId);
+  stmtDeleteRehearsalTournament.run(rehearsalTournamentId);
+});
+
+/**
+ * Delete one rehearsal attempt outright — the explicit escape hatch for a
+ * line the player doesn't want kept, alongside createRehearsal's own
+ * same-ply dedupe (which only ever resumes, never discards). Ownership is
+ * re-checked against the CALLER's own (originTournamentId, originBoardNo,
+ * userId) rather than trusted from the row alone, the same discipline
+ * listRehearsals' join uses — a rehearsal tournament carries no user id of
+ * its own, only its one board row does.
+ */
+export function discardRehearsal(
+  originTournamentId: number,
+  originBoardNo: number,
+  rehearsalTournamentId: number,
+  userId: number,
+): void {
+  const row = stmtRehearsalForDiscard.get(rehearsalTournamentId) as
+    | {
+        tournament_id: number;
+        kind: string;
+        origin_tournament_id: number | null;
+        origin_board_no: number | null;
+        user_id: number;
+      }
+    | undefined;
+  if (
+    !row ||
+    row.kind !== 'rehearsal' ||
+    row.origin_tournament_id !== originTournamentId ||
+    row.origin_board_no !== originBoardNo ||
+    row.user_id !== userId
+  ) {
+    throw httpError(404, 'rehearsal not found');
+  }
+  discardRehearsalTx(rehearsalTournamentId);
 }
 
 export interface RehearsalSummary {

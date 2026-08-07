@@ -15,7 +15,7 @@ import { registerDemoRoutes } from './demo.js';
 import { getBoardAnalysis } from './analyze.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
-import { createRehearsal, listRehearsals } from './rehearsal.js';
+import { createRehearsal, discardRehearsal, listRehearsals } from './rehearsal.js';
 import { securityHeaders } from './security.js';
 import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
@@ -252,6 +252,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     const boardNo = boardNoParam(no);
     if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
     return reply.send({ rehearsals: listRehearsals(t.id, boardNo, user.id) });
+  });
+
+  // Explicit discard for a rehearsal attempt the player doesn't want kept —
+  // the escape hatch alongside createRehearsal's own same-ply dedupe/resume.
+  app.delete('/api/tournaments/:id/boards/:no/rehearsals/:rehearsalId', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no, rehearsalId } = req.params as { id: string; no: string; rehearsalId: string };
+    const boardNo = boardNoParam(no);
+    if (boardNo === null) return reply.code(404).send({ error: 'not found' });
+    discardRehearsal(Number(id), boardNo, Number(rehearsalId), user.id);
+    return reply.send({ ok: true });
   });
 
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {

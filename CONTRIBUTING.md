@@ -1098,6 +1098,31 @@ pair rather than forcing a cramped 3-up grid at the 390px smoke-test breakpoint,
 of that pair's subgrid row-alignment rather than fighting it (a different shape: no sealed
 treatment, one aside line).
 
+**Repeat taps resume rather than pile up, and an explicit ✕ discards.** Both entry points fire
+with no confirmation, so a player idly re-tapping PLAY FROM HERE at the same moment (or
+scrubbing back to the same ply in THE PLAY lens) would otherwise mint a fresh, functionally
+duplicate rehearsal every time — "no cap, just scroll" on the history surfaces makes that
+clutter visible rather than hidden, which is what surfaced the problem. `createRehearsal`
+checks for a still-`'playing'` rehearsal at the exact same `(originTournamentId,
+originBoardNo, branchPly, userId)` first (`stmtInProgressAtPly`) and returns ITS
+`{tournamentId, boardNo}` instead of creating another — a repeat tap reopens the one attempt
+already in flight there, exactly like clicking its own rail stub would. `'done'` rows are
+deliberately excluded from that check: once an attempt finishes, the same ply is open again
+for a genuinely new line, which is the point of PLAY FROM HERE existing at all. This is
+dedupe-by-resume, not dedupe-by-refusal, so it needed its own explicit escape hatch for a line
+the player actually wants gone: `discardRehearsal` (`DELETE
+.../rehearsals/:rehearsalId`) deletes the rehearsal's `boards` row then its `tournaments` row
+in one transaction (this codebase runs with no `PRAGMA foreign_keys = ON` — see `db.ts` — so
+FK constraints are declarative only and the child row has to go first, by hand). Ownership is
+re-verified against the CALLER's own `(originTournamentId, originBoardNo, userId)` rather than
+trusted from the target row alone, the same discipline `listRehearsals`' join already uses.
+Both `RehearsalRail` and `YourRehearsals` grow a small ✕ beside every stub/row; since a
+`<button>` cannot nest inside the `<a>` a react-router `Link` renders, the two are siblings in
+a small wrapper rather than one interactive element holding the other. The discard is
+optimistic (the stub disappears on tap) and reconciles from a fresh `api.rehearsals()` fetch
+only if the delete itself failed, so a genuine failure doesn't leave the screen silently out
+of sync with the server.
+
 One incidental fix that came out of building this: `submitCall`/`submitPlay`/`ensureAdvanced`'s
 `recomputeElo()` trigger had no tournament-kind guard at all (`boardDone(b.row) &&
 !isAiUser(...)`), so a demo exhibit finishing already triggered a wasted full Elo replay-sweep

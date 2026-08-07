@@ -195,6 +195,20 @@ export default function Analyze() {
   const startRehearsal = (ply: number) => {
     api.rehearse(tournamentId, boardNo, ply).then((r) => navigate(`/t/${r.tournamentId}/b/${r.boardNo}`));
   };
+  // Explicit discard for an attempt the player doesn't want kept — the
+  // escape hatch beside startRehearsal's own same-ply resume (a second tap
+  // on the same moment reopens whichever attempt is still in progress there
+  // rather than piling up another). Optimistic: the stub disappears on tap,
+  // and only reconciles from the server if the delete actually failed.
+  const discardRehearsalAttempt = (rehearsalTournamentId: number) => {
+    setRehearsals((prev) => prev.filter((rh) => rh.tournamentId !== rehearsalTournamentId));
+    api.discardRehearsal(tournamentId, boardNo, rehearsalTournamentId).catch(() => {
+      api
+        .rehearsals(tournamentId, boardNo)
+        .then((r) => setRehearsals(r.rehearsals))
+        .catch(() => {});
+    });
+  };
 
   if (!betaFeatures) {
     return (
@@ -242,9 +256,15 @@ export default function Analyze() {
 
       {lens === 'overview' ? <CardsWorthPanel board={board} analysis={analysis} rehearsals={rehearsals} /> : null}
       {lens === 'overview' ? (
-        <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} onRehearse={startRehearsal} rehearsals={rehearsals} />
+        <WhereItTurned
+          analysis={analysis}
+          onOpenPlay={openPlayAt}
+          onRehearse={startRehearsal}
+          onDiscardRehearsal={discardRehearsalAttempt}
+          rehearsals={rehearsals}
+        />
       ) : null}
-      {lens === 'overview' ? <YourRehearsals rehearsals={rehearsals} /> : null}
+      {lens === 'overview' ? <YourRehearsals rehearsals={rehearsals} onDiscard={discardRehearsalAttempt} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
           <PlayLens
@@ -280,6 +300,7 @@ function WhereItTurned({
   analysis,
   onOpenPlay,
   onRehearse,
+  onDiscardRehearsal,
   rehearsals,
 }: {
   analysis: AnalysisView;
@@ -287,6 +308,7 @@ function WhereItTurned({
   /** launches a "Play From Here" rehearsal at `ply` — only ever wired to play
    *  moments below (the auction never branches, only card play does) */
   onRehearse: (ply: number) => void;
+  onDiscardRehearsal: (rehearsalTournamentId: number) => void;
   rehearsals: RehearsalSummary[];
 }) {
   const { moments, setAside } = analysis;
@@ -305,6 +327,7 @@ function WhereItTurned({
               analysis={analysis}
               onOpen={m.kind === 'play' ? () => onOpenPlay(m.ply!) : null}
               onRehearse={m.kind === 'play' ? () => onRehearse(m.ply!) : null}
+              onDiscardRehearsal={onDiscardRehearsal}
               rehearsals={m.kind === 'play' ? rehearsals.filter((rh) => rh.branchPly === m.ply) : []}
             />
           ))}
@@ -340,6 +363,7 @@ function MomentRow({
   analysis,
   onOpen,
   onRehearse,
+  onDiscardRehearsal,
   rehearsals,
 }: {
   moment: AnalysisMoment;
@@ -348,6 +372,7 @@ function MomentRow({
   onOpen: (() => void) | null;
   /** null = no branch point here either (bid moments again — see onOpen) */
   onRehearse: (() => void) | null;
+  onDiscardRehearsal: (rehearsalTournamentId: number) => void;
   /** past attempts branched from exactly this moment's ply — always [] on a bid moment */
   rehearsals: RehearsalSummary[];
 }) {
@@ -388,7 +413,7 @@ function MomentRow({
           PLAY FROM HERE →
         </Button>
       ) : null}
-      <RehearsalRail rehearsals={rehearsals} />
+      <RehearsalRail rehearsals={rehearsals} onDiscard={onDiscardRehearsal} />
     </div>
   );
 }
@@ -398,15 +423,28 @@ function MomentRow({
  *  survival guarantee; shows its adjusted receipt if done). Renders nothing
  *  when there are none yet — the row's own PLAY FROM HERE button is already
  *  the "start one" affordance, so this never needs an empty-state stub. */
-function RehearsalRail({ rehearsals }: { rehearsals: RehearsalSummary[] }) {
+function RehearsalRail({ rehearsals, onDiscard }: { rehearsals: RehearsalSummary[]; onDiscard: (rehearsalTournamentId: number) => void }) {
   if (!rehearsals.length) return null;
   return (
     <div className="rehearsal-rail">
       {rehearsals.map((rh) => (
-        <Link key={rh.tournamentId} to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-stub">
-          <span className="rehearsal-stub-label">{rh.state === 'done' ? 'TRIED' : 'IN PROGRESS'}</span>
-          <b className="rehearsal-stub-score num">{rh.state === 'done' && rh.scoreNS !== null ? signedScore(rh.scoreNS) : '···'}</b>
-        </Link>
+        // A <button> can't nest inside the <a> react-router's Link renders,
+        // so the stub and its discard control are siblings in a small wrap
+        // rather than one interactive element holding another.
+        <div key={rh.tournamentId} className="rehearsal-stub-wrap">
+          <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-stub">
+            <span className="rehearsal-stub-label">{rh.state === 'done' ? 'TRIED' : 'IN PROGRESS'}</span>
+            <b className="rehearsal-stub-score num">{rh.state === 'done' && rh.scoreNS !== null ? signedScore(rh.scoreNS) : '···'}</b>
+          </Link>
+          <button
+            type="button"
+            className="rehearsal-stub-discard"
+            aria-label="Discard this rehearsal attempt"
+            onClick={() => onDiscard(rh.tournamentId)}
+          >
+            ✕
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -421,18 +459,35 @@ function RehearsalRail({ rehearsals }: { rehearsals: RehearsalSummary[] }) {
  * exists, the same restraint TOURNEY hints and other empty widgets follow
  * elsewhere in the app.
  */
-function YourRehearsals({ rehearsals }: { rehearsals: RehearsalSummary[] }) {
+function YourRehearsals({
+  rehearsals,
+  onDiscard,
+}: {
+  rehearsals: RehearsalSummary[];
+  onDiscard: (rehearsalTournamentId: number) => void;
+}) {
   if (!rehearsals.length) return null;
   return (
     <PerforatedPanel heading="YOUR REHEARSALS" className="analyze-rehearsals">
       {rehearsals.map((rh) => (
-        <Link key={rh.tournamentId} to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-ledger-row">
-          <span className="rehearsal-ledger-from num">FROM TRICK {Math.floor(rh.branchPly / 4) + 1}</span>
-          <span className="rehearsal-ledger-score num">
-            {rh.state === 'done' && rh.scoreNS !== null ? `${rh.contractLabel ?? ''} · ${signedScore(rh.scoreNS)}` : 'IN PROGRESS'}
-          </span>
-          <span className="rehearsal-ledger-chev">›</span>
-        </Link>
+        // Same button-can't-nest-in-a constraint as RehearsalRail above.
+        <div key={rh.tournamentId} className="rehearsal-ledger-row-wrap">
+          <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-ledger-row">
+            <span className="rehearsal-ledger-from num">FROM TRICK {Math.floor(rh.branchPly / 4) + 1}</span>
+            <span className="rehearsal-ledger-score num">
+              {rh.state === 'done' && rh.scoreNS !== null ? `${rh.contractLabel ?? ''} · ${signedScore(rh.scoreNS)}` : 'IN PROGRESS'}
+            </span>
+            <span className="rehearsal-ledger-chev">›</span>
+          </Link>
+          <button
+            type="button"
+            className="rehearsal-ledger-discard"
+            aria-label="Discard this rehearsal attempt"
+            onClick={() => onDiscard(rh.tournamentId)}
+          >
+            ✕
+          </button>
+        </div>
       ))}
     </PerforatedPanel>
   );

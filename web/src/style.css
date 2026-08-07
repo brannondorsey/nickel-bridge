@@ -5031,21 +5031,30 @@ a.stat-tile:hover {
 .analyze-moments .moment-row:first-of-type {
   border-top: 0;
 }
+/* A quiet 1px border, not PLAY FROM HERE's structural ink one — sitting
+   right beside a clearly-boxed button, an unbordered tap target (the
+   pre-rehearsal shape: nothing else in the row to contrast against) reads as
+   inert text instead of a second control. The lighter --line border keeps
+   the hierarchy honest: this is content you can drill into, PLAY FROM HERE
+   is the action. Static bid-moment rows never get this — see the doc
+   comment on .moment-row above — so the border itself doubles as "this row
+   is interactive," which the chevron alone no longer carried on its own. */
 .moment-row-open {
   appearance: none;
   background: none;
-  border: 0;
+  border: 1px solid var(--line);
   cursor: pointer;
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0;
+  padding: 9px 11px;
   font: inherit;
   color: inherit;
 }
 .moment-row-open:hover,
 .moment-row-open:focus-visible {
   background: var(--surface);
+  border-color: var(--ink);
 }
 .moment-row-rehearse {
   display: inline-flex;
@@ -5113,6 +5122,14 @@ a.stat-tile:hover {
   overflow-x: auto;
   padding-bottom: 2px;
 }
+/* Wraps one stub + its discard control — a <button> can't nest inside the
+   <a> the stub's Link renders, so they're siblings here instead of one
+   interactive element holding another. */
+.rehearsal-stub-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
 .rehearsal-stub {
   flex: 0 0 auto;
   min-width: 84px;
@@ -5136,22 +5153,45 @@ a.stat-tile:hover {
   font-weight: 800;
   font-size: 13px;
 }
+.rehearsal-stub-discard {
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-left: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+}
+.rehearsal-stub-discard:hover,
+.rehearsal-stub-discard:focus-visible {
+  background: var(--surface);
+  color: var(--negative);
+}
 .analyze-rehearsals {
   margin-top: 20px;
 }
+.rehearsal-ledger-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--line-quiet);
+}
+.rehearsal-ledger-row-wrap:first-of-type {
+  border-top: 0;
+}
 .rehearsal-ledger-row {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid var(--line-quiet);
   padding: 9px 0;
   text-decoration: none;
   color: inherit;
+  min-width: 0;
 }
-.rehearsal-ledger-row:first-of-type {
-  border-top: 0;
-}
-.rehearsal-ledger-row:hover,
+.rehearsal-ledger-row-wrap:hover,
 .rehearsal-ledger-row:focus-visible {
   background: var(--surface);
 }
@@ -5167,6 +5207,22 @@ a.stat-tile:hover {
 .rehearsal-ledger-chev {
   color: var(--muted);
   font-size: 14px;
+}
+.rehearsal-ledger-discard {
+  appearance: none;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 7px;
+  font-size: 11px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.rehearsal-ledger-discard:hover,
+.rehearsal-ledger-discard:focus-visible {
+  border-color: var(--negative);
+  color: var(--negative);
 }
 
 /* ---- the par panel ---- */

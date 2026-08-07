@@ -609,6 +609,11 @@ export const api = {
   /** Every rehearsal attempt on this origin board, newest first, uncapped */
   rehearsals: (tid: number, no: number) =>
     request<{ rehearsals: RehearsalSummary[] }>(`/api/tournaments/${tid}/boards/${no}/rehearsals`),
+  /** Delete one rehearsal attempt outright — the escape hatch beside rehearse's own same-ply resume */
+  discardRehearsal: (tid: number, no: number, rehearsalId: number) =>
+    request<{ ok: boolean }>(`/api/tournaments/${tid}/boards/${no}/rehearsals/${rehearsalId}`, {
+      method: 'DELETE',
+    }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery

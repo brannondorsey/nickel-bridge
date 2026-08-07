@@ -43,6 +43,7 @@ function freshApiMock(): ApiMock {
     analysis: stub(),
     rehearse: stub(),
     rehearsals: stub(),
+    discardRehearsal: stub(),
     playerStats: stub(),
     compare: stub(),
     leaderboard: stub(),
