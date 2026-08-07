@@ -90,6 +90,11 @@ export async function createRehearsal(
   originBoardNo: number,
   branchPly: number,
 ): Promise<{ tournamentId: number; boardNo: number }> {
+  // One level deep only — a rehearsal can never itself be rehearsed. The web
+  // client only ever calls this with a top-level origin's own ids, but the
+  // route takes an arbitrary tournament id, so this has to be enforced here
+  // rather than assumed from the caller.
+  if (origin.kind === 'rehearsal') throw httpError(400, 'cannot rehearse a rehearsal');
   const originBoard = loadBoard(origin, userId, originBoardNo, false);
   if (!originBoard || originBoard.row.state !== 'done') throw httpError(404, 'origin board not finished');
   if (!originBoard.contract) throw httpError(400, 'a passed-out board has no play to rehearse');

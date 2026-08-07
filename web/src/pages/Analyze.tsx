@@ -870,15 +870,22 @@ function ReplayLens({
           </Button>
         </div>
         {/* Standing action, usable at whatever ply the reader has scrubbed
-            to — not only the flagged moments above. Disabled past the claim
-            boundary too: from there the server already played both sides,
-            true-DD, so there is nothing left to redecide (createRehearsal
-            rejects this server-side regardless — this is a UX courtesy, not
-            the only guard). */}
+            to — not only the flagged moments above. Branches at `anchor`,
+            not raw `ply`: a moment landing leaves `ply` one card PAST the
+            decision (the played card is already animated into the trick —
+            see the anchor comment above), so redeciding at `ply` would lock
+            in exactly the card the moment flagged instead of offering it up.
+            This is the same anchor PREV/NEXT MOMENT already use, and it's
+            what keeps this button agreeing with the moment row's own
+            PLAY FROM HERE (which always uses the true m.ply). Disabled past
+            the claim boundary too: from there the server already played
+            both sides, true-DD, so there is nothing left to redecide
+            (createRehearsal rejects this server-side regardless — this is a
+            UX courtesy, not the only guard). */}
         <div className="replay-dock-row replay-dock-rehearse">
           <Button
-            onClick={() => onRehearse(ply)}
-            disabled={ply >= totalPlies || (analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)}
+            onClick={() => onRehearse(anchor)}
+            disabled={anchor >= totalPlies || (analysis.claimedAtPly !== null && anchor >= analysis.claimedAtPly)}
           >
             PLAY FROM HERE →
           </Button>

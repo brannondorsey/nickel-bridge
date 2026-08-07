@@ -1355,4 +1355,17 @@ describe('Board — rehearsal', () => {
     expect(screen.getByRole('button', { name: /TRY ANOTHER LINE/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to analyze/i })).toBeInTheDocument();
   });
+
+  it('does not refresh account state when a rehearsal branched from the last board finishes live — it is not a real tournament board', async () => {
+    const lastBoardPlaying = { ...boardPlayingRehearsal, boardNo: 4 };
+    const lastBoardDone = { ...boardDoneRehearsal, boardNo: 4 };
+    apiMock.board.mockResolvedValue(lastBoardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: lastBoardDone });
+    const { refresh } = renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument(); // reached the adjusted receipt
+    expect(refresh).not.toHaveBeenCalled();
+  });
 });

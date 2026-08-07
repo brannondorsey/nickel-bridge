@@ -763,6 +763,35 @@ describe('Play From Here', () => {
     }
   });
 
+  it('landing on a moment (via a moment jump) branches from the flagged decision itself, not one card later', async () => {
+    // landAt's collapsed landing deliberately leaves `ply` one card PAST a
+    // moment's decision (the played card is already animated into the
+    // trick) — the true decision lives in `curMoment`. The standing dock
+    // button has to branch from that anchor, not raw `ply`, or it would
+    // silently lock in exactly the card the moment flagged.
+    const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+    try {
+      apiMock.board.mockResolvedValue(donePlayed);
+      apiMock.analysis.mockResolvedValue(makeAnalysis());
+      apiMock.rehearsals.mockResolvedValue({ rehearsals: [] });
+      apiMock.rehearse.mockResolvedValue({ tournamentId: 99, boardNo: 2 });
+      // ?ply=<a moment's ply> triggers the same collapsed landAt path a
+      // moment-row WATCH IT / NEXT MOMENT click does (see "a moment jump
+      // collapses to one step" above).
+      renderAnalyze(`/t/12/b/2/analyze?lens=play&ply=${chargedPly}`);
+      await screen.findByText(/THE AUDIT — TRICK/);
+      await waitFor(() => expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/the moment turned here/));
+
+      await userEvent.click(screen.getByRole('button', { name: /PLAY FROM HERE/ }));
+      // the moment's own ply, not chargedPly + 1 — must agree with the
+      // moment row's own PLAY FROM HERE for the identical decision
+      expect(apiMock.rehearse).toHaveBeenCalledWith(12, 2, chargedPly);
+    } finally {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    }
+  });
+
   it('shows past attempts under the moment they branched from, and on the board-wide ledger', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
     apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));

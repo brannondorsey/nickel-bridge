@@ -210,7 +210,9 @@ export default function Board() {
       // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
       // neither of which this screen otherwise touches, so without this a
       // medal earned on this exact board stays uncolored until a hard reload.
-      if (board && board.boardNo === board.totalBoards) refresh();
+      // Never true for a rehearsal (board.rehearsal set): it isn't a real
+      // tournament board, so this would just be a wasted /api/me round trip.
+      if (board && !board.rehearsal && board.boardNo === board.totalBoards) refresh();
     }
   }, [boardState]);
 

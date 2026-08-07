@@ -193,6 +193,23 @@ describe('one level deep', () => {
     const res = await alice.raw('GET', `/api/tournaments/${created.tournamentId}/boards/${created.boardNo}/analysis`);
     expect(res.statusCode).toBe(404);
   });
+
+  it('400s a rehearsal-of-a-rehearsal, even called directly against the API', async () => {
+    const { tournamentId, boardNo } = await finishedBoard(alice);
+    const origin = boardRow(tournamentId, boardNo);
+    const created = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, {
+      ply: safeBranchPly(origin),
+    });
+    // Finish the rehearsal so it has a genuine 'done' board of its own to
+    // (attempt to) branch from — the UI never offers this door, but the
+    // route takes an arbitrary tournament id, so it must refuse this itself
+    // rather than relying on the client only ever passing top-level ids.
+    await playBoard(alice, created.tournamentId, created.boardNo);
+    const res = await alice.raw('POST', `/api/tournaments/${created.tournamentId}/boards/${created.boardNo}/rehearse`, {
+      ply: 0,
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe('reload survival', () => {
