@@ -20,15 +20,24 @@ import { GlossaryProse } from './GlossaryProse';
  * first-crossing tour renders in place of the routes, so a link to the lobby
  * changes the URL and nothing else — leaving it has to go through the tour's
  * own exit (which stamps the onboarding gate) instead.
+ *
+ * `analyzeHref` mirrors the Result screen's own beta-gated "Analyze play →"
+ * door (Board.tsx passes it only when betaFeatures is on) — the toll receipt
+ * is reached first, before a player ever taps SEE THE FIELD, so the door
+ * belongs here too rather than only one screen later. Omitted entirely (not
+ * just hidden) when the caller has nothing to link to — Tour.tsx's captured
+ * practice board has no real tournamentId to analyze.
  */
 export function ScoreReceipt({
   board,
   onContinue,
   onLeave,
+  analyzeHref,
 }: {
   board: BoardView;
   onContinue: () => void;
   onLeave?: () => void;
+  analyzeHref?: string;
 }) {
   const r = board.result!;
   const bd = r.breakdown;
@@ -94,6 +103,11 @@ export function ScoreReceipt({
 
       <div className="board-actions">
         <Button onClick={onContinue}>SEE THE FIELD →</Button>
+        {analyzeHref ? (
+          <Button variant="secondary" to={analyzeHref}>
+            Analyze play →
+          </Button>
+        ) : null}
         {onLeave ? (
           <Button variant="secondary" onClick={onLeave}>
             Back to lobby

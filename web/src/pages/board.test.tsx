@@ -1271,6 +1271,22 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('Toll collected')).toBeInTheDocument();
   });
 
+  it('carries the same ANALYZE PLAY door as the field view, beta-gated the same way', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /analyze play/i })).toHaveAttribute('href', '/t/12/b/2/analyze');
+  });
+
+  it('hides ANALYZE PLAY on the toll receipt for an account without beta features', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
+  });
+
   it('itemizes a set contract as Toll refused with the penalty in red', async () => {
     apiMock.board.mockResolvedValue(boardDoneLow);
     renderBoard();

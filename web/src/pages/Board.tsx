@@ -665,7 +665,11 @@ export default function Board() {
             onBackToAnalyze={() => navigate(`/t/${board.rehearsal!.originTournamentId}/b/${board.rehearsal!.originBoardNo}/analyze`)}
           />
         ) : showReceipt ? (
-          <ScoreReceipt board={board} onContinue={() => setShowReceipt(false)} />
+          <ScoreReceipt
+            board={board}
+            onContinue={() => setShowReceipt(false)}
+            analyzeHref={betaFeatures ? `/t/${tournamentId}/b/${board.boardNo}/analyze` : undefined}
+          />
         ) : (
           <Result
             board={board}
