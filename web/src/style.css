@@ -5020,6 +5020,17 @@ a.stat-tile:hover {
 }
 
 /* ---- the moments ledger ---- */
+/* Same outer margin as .analyze-par/.analyze-rehearsals below — one shared
+   value (16px top, 12px sides) so the three overview sections read as a
+   consistent stack rather than each carrying its own ad hoc gap. The side
+   margin also matters on its own: without it the panel's own solid border
+   (.perf-panel's base rule) sits flush against the viewport edge, right next
+   to the browser chrome, and reads as no border at all — the margin is what
+   makes that solid edge visible to the left of the panel's inset dashed tear
+   line, not a replacement for it. */
+.analyze-moments {
+  margin: 16px 12px 0;
+}
 /* .moment-row is the ROW (a plain wrapper for a play moment carrying two
    actions, or the whole element for a static bid-moment finding); the
    interactive button-reset styling that used to be on this selector lives on
@@ -5169,8 +5180,9 @@ a.stat-tile:hover {
   background: var(--surface);
   color: var(--negative);
 }
+/* Same shared outer margin as .analyze-moments above — see its doc comment. */
 .analyze-rehearsals {
-  margin-top: 20px;
+  margin: 16px 12px 0;
 }
 .rehearsal-ledger-row-wrap {
   display: flex;
@@ -5226,8 +5238,10 @@ a.stat-tile:hover {
 }
 
 /* ---- the par panel ---- */
+/* Same shared outer margin as .analyze-moments/.analyze-rehearsals above —
+   see the doc comment on .analyze-moments. */
 .analyze-par {
-  margin-bottom: 12px;
+  margin: 16px 12px 0;
 }
 .analyze-par .analyze-finding {
   margin-top: 10px;
