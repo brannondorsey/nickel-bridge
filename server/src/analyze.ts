@@ -239,8 +239,13 @@ function humanSideDeclares(contract: Contract): boolean {
  * node, does either side have 100% of the remaining tricks double-dummy? DDS
  * is deterministic, so this finds precisely the ply where the live game
  * claimed (or none). Costs one solve per decision node once, then cached.
+ *
+ * Exported for rehearsal.ts: a "Play From Here" branch must never be allowed
+ * past a board's claim boundary (the server already played both sides from
+ * there, true-DD — there is nothing left to redecide), and this is the exact
+ * same gate that boundary is defined by.
  */
-async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
+export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
   for (let i = 0; i < plays.length; i++) {
     const prefix = plays.slice(0, i);
     const ps = playState(deal, contract, prefix);
@@ -251,6 +256,20 @@ async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]
     if (solve.bestScore === remaining || solve.bestScore === 0) return i;
   }
   return null;
+}
+
+/**
+ * The claim boundary Analyze already computed and cached for this board, if
+ * a current-version analysis exists — exported so rehearsal.ts's
+ * createRehearsal can reuse it instead of re-running deriveClaimBoundary's
+ * DD solve walk from scratch on every "Play From Here" launch. Returns
+ * `undefined` (never `null`, which is claimedAtPly's own valid "no claim"
+ * answer) when there is no usable cache and the caller must derive fresh.
+ */
+export function cachedClaimBoundary(boardId: number): number | null | undefined {
+  const cached = stmtGetAnalysis.get(boardId) as { version: number; core: string } | undefined;
+  if (!cached || cached.version !== ANALYZE_VERSION) return undefined;
+  return (JSON.parse(cached.core) as AnalysisCore).claimedAtPly;
 }
 
 /** substitute — never append — my counterfactual score into the real field (see boardFieldRows) */

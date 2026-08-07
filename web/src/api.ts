@@ -131,7 +131,7 @@ export interface ScoreBreakdown {
   total: number;
 }
 
-interface BoardResult {
+export interface BoardResult {
   contractLabel: string;
   tricksDeclarer: number | null;
   scoreNS: number;
@@ -187,6 +187,21 @@ export interface BoardView {
   playHistory?: TrickCard[][];
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
+  /** present only when this board is a "Play From Here" rehearsal — never scored, see server/src/rehearsal.ts */
+  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
+  /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
+  originResult?: BoardResult;
+}
+
+/** One "Play From Here" attempt on a board — see server/src/rehearsal.ts */
+export interface RehearsalSummary {
+  tournamentId: number;
+  boardNo: number;
+  branchPly: number;
+  state: 'playing' | 'done';
+  createdAt: number;
+  contractLabel: string | null;
+  scoreNS: number | null;
 }
 
 /**
@@ -585,6 +600,20 @@ export const api = {
   /** Analyze verdicts for a finished board; par=true adds stage 4 (the crossing/auction lenses) */
   analysis: (tid: number, no: number, par: boolean) =>
     request<AnalysisView>(`/api/tournaments/${tid}/boards/${no}/analysis${par ? '?par=1' : ''}`),
+  /** Launch a "Play From Here" rehearsal branching at `ply` (a plays[] index — see AnalysisMoment/AnalysisPly) */
+  rehearse: (tid: number, no: number, ply: number) =>
+    request<{ tournamentId: number; boardNo: number }>(`/api/tournaments/${tid}/boards/${no}/rehearse`, {
+      method: 'POST',
+      body: JSON.stringify({ ply }),
+    }),
+  /** Every rehearsal attempt on this origin board, newest first, uncapped */
+  rehearsals: (tid: number, no: number) =>
+    request<{ rehearsals: RehearsalSummary[] }>(`/api/tournaments/${tid}/boards/${no}/rehearsals`),
+  /** Delete one rehearsal attempt outright — the escape hatch beside rehearse's own same-ply resume */
+  discardRehearsal: (tid: number, no: number, rehearsalId: number) =>
+    request<{ ok: boolean }>(`/api/tournaments/${tid}/boards/${no}/rehearsals/${rehearsalId}`, {
+      method: 'DELETE',
+    }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),
   // demo mode only (404 elsewhere): the /scenarios gallery

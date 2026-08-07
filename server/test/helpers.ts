@@ -65,7 +65,7 @@ export class TestClient {
   }
 
   /** raw variant when the test wants to assert the status itself */
-  async raw(method: 'GET' | 'POST', url: string, body?: unknown) {
+  async raw(method: 'GET' | 'POST' | 'DELETE', url: string, body?: unknown) {
     const res = await this.app.inject({
       method,
       url,

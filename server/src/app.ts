@@ -15,6 +15,7 @@ import { registerDemoRoutes } from './demo.js';
 import { getBoardAnalysis } from './analyze.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
+import { createRehearsal, discardRehearsal, listRehearsals } from './rehearsal.js';
 import { securityHeaders } from './security.js';
 import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
@@ -213,8 +214,57 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const b = loadBoard(t, user.id, boardNo, false);
     if (!b || b.row.state !== 'done') return reply.code(404).send({ error: 'not analyzable' });
+    // One level deep only: a rehearsal can never itself be re-Analyzed or
+    // re-branched. Excludes 'rehearsal' specifically rather than allowlisting
+    // 'standard' — the demo gallery's analyze-play exhibit genuinely does
+    // analyze an 'exhibit'-kind tournament.
+    if (t.kind === 'rehearsal') return reply.code(404).send({ error: 'not analyzable' });
     if (t.ai_field) noteTournamentActivity(t.id);
     return reply.send(await getBoardAnalysis(t, b, wantPar));
+  });
+
+  // "Play From Here" — branch a finished board's real play at `ply` into a
+  // new, live, ordinary board the player plays out themselves. See
+  // rehearsal.ts's doc comment for the whole design. Gated on beta_features,
+  // matching Analyze's own gate — this is only reachable from there today.
+  app.post('/api/tournaments/:id/boards/:no/rehearse', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const { ply } = (req.body ?? {}) as { ply?: number };
+    const t = getTournament(Number(id));
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    if (typeof ply !== 'number') return reply.code(400).send({ error: 'bad ply' });
+    const created = await createRehearsal(t, user.id, boardNo, ply);
+    return reply.send(created);
+  });
+
+  // Every rehearsal attempt on this origin board — feeds both the per-moment
+  // rail and the board-wide YOUR REHEARSALS list on Analyze, uncapped.
+  app.get('/api/tournaments/:id/boards/:no/rehearsals', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const t = getTournament(Number(id));
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    return reply.send({ rehearsals: listRehearsals(t.id, boardNo, user.id) });
+  });
+
+  // Explicit discard for a rehearsal attempt the player doesn't want kept —
+  // the escape hatch alongside createRehearsal's own same-ply dedupe/resume.
+  app.delete('/api/tournaments/:id/boards/:no/rehearsals/:rehearsalId', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no, rehearsalId } = req.params as { id: string; no: string; rehearsalId: string };
+    const boardNo = boardNoParam(no);
+    if (boardNo === null) return reply.code(404).send({ error: 'not found' });
+    discardRehearsal(Number(id), boardNo, Number(rehearsalId), user.id);
+    return reply.send({ ok: true });
   });
 
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {

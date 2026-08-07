@@ -296,6 +296,16 @@ export const boardPlayingWestDummy: BoardView = {
   dummyHcp: 8,
 };
 
+/** A "Play From Here" rehearsal, mid-play — everything about the live
+ *  PlayPhase screen is identical to boardPlaying; only board.rehearsal is
+ *  new, which BoardHead reads to relabel the header and swap in END.
+ *  originBoardNo matches board.boardNo (2, from `base`) — a rehearsal's own
+ *  board_no is always copied verbatim from the board it branched from. */
+export const boardPlayingRehearsal: BoardView = {
+  ...boardPlaying,
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+};
+
 // ---- done ----
 
 export const bidEvalsFixture: BidEval[] = [
@@ -363,6 +373,38 @@ export const boardDoneLow: BoardView = {
       vulnerable: true,
       total: -100,
     },
+  },
+};
+
+/** A finished "Play From Here" rehearsal — an overtrick better than the real
+ *  table (boardDone's own +620), so it exercises both the itemized THIS LINE
+ *  receipt and the positive delta framing in the VS YOUR REAL TABLE panel. */
+export const boardDoneRehearsal: BoardView = {
+  ...boardDone,
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  result: {
+    ...boardDone.result!,
+    contractLabel: '4♠+1 by S',
+    tricksDeclarer: 11,
+    scoreNS: 650,
+    breakdown: {
+      lines: [
+        { kind: 'odd-tricks', label: 'Odd tricks', detail: '4 × 30', amount: 120 },
+        { kind: 'game-bonus', label: 'Game bonus', detail: 'vulnerable', amount: 500 },
+        { kind: 'overtricks', label: 'Overtricks', detail: '1 × 30', amount: 30 },
+      ],
+      vulnerable: true,
+      total: 650,
+    },
+  },
+  originResult: {
+    contractLabel: '4♠ by S',
+    tricksDeclarer: 10,
+    scoreNS: 620,
+    pct: 58,
+    bidAccuracy: 89,
+    breakdown: boardDone.result!.breakdown,
+    field: boardDone.result!.field,
   },
 };
 

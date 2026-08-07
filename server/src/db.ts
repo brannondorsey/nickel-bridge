@@ -245,6 +245,23 @@ if (!tournamentColumns.has('ai_field')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN ai_field INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: `origin_tournament_id`/`origin_board_no`/`branch_ply` identify a
+// 'rehearsal'-kind tournament's origin — the real, finished board it branched
+// from, and the plays[] index (see analyze.ts's ply convention) of the first
+// redecided card. NULL for every non-rehearsal row. Kept directly on
+// tournaments rather than a side table: a rehearsal is 1:1 with exactly one
+// tournament row and one branch point, the same reasoning that already put
+// kind/ai_field/board_difficulties here instead of elsewhere.
+if (!tournamentColumns.has('origin_tournament_id')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN origin_tournament_id INTEGER REFERENCES tournaments(id)`);
+}
+if (!tournamentColumns.has('origin_board_no')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN origin_board_no INTEGER`);
+}
+if (!tournamentColumns.has('branch_ply')) {
+  db.exec(`ALTER TABLE tournaments ADD COLUMN branch_ply INTEGER`);
+}
+
 // Migration: `claimed_at_ply` — the plays[] index of the first card the
 // server played as part of resolving a laydown claim (advanceRobots'
 // claim gate in game.ts), NULL when the board finished without claiming.
@@ -312,14 +329,18 @@ export interface TournamentRow {
   id: number;
   name: string;
   seed: string;
-  /** 'standard' = real play; 'exhibit' = demo-mode scenario holder, excluded from placement/rating/lobby/stats */
-  kind: 'standard' | 'exhibit';
+  /** 'standard' = real play; 'exhibit' = demo-mode scenario holder; 'rehearsal' = a Play-From-Here branch — all three non-'standard' kinds are excluded from placement/rating/lobby/stats via the same kind='standard' allowlist everywhere */
+  kind: 'standard' | 'exhibit' | 'rehearsal';
   /** placement-tier label ('perfect' = legacy true-DD); per-board truth via boardDifficulty() */
   difficulty: Difficulty;
   /** JSON Difficulty[4], one entry per board; NULL = uniform at `difficulty` */
   board_difficulties: string | null;
   /** 1 = the benchmark AI personas play this tournament (stamped at creation, never backfilled) */
   ai_field: number;
+  /** rehearsal only: the real tournament/board this branched from, and the plays[] index of the first redecided card. NULL on every other kind. */
+  origin_tournament_id: number | null;
+  origin_board_no: number | null;
+  branch_ply: number | null;
   created_at: number;
 }
 

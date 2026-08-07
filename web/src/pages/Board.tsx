@@ -54,6 +54,7 @@ import {
   totalDuration,
   trimStagedPrefix,
 } from '../components/game/playAnim';
+import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
@@ -209,7 +210,9 @@ export default function Board() {
       // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
       // neither of which this screen otherwise touches, so without this a
       // medal earned on this exact board stays uncolored until a hard reload.
-      if (board && board.boardNo === board.totalBoards) refresh();
+      // Never true for a rehearsal (board.rehearsal set): it isn't a real
+      // tournament board, so this would just be a wasted /api/me round trip.
+      if (board && !board.rehearsal && board.boardNo === board.totalBoards) refresh();
     }
   }, [boardState]);
 
@@ -643,8 +646,31 @@ export default function Board() {
     <div className={`board-page${board.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <BoardHead board={board} vulPulse={vulPulseKey === `${tournamentId}:${board.boardNo}`} />
       {board.state === 'done' ? (
-        showReceipt ? (
-          <ScoreReceipt board={board} onContinue={() => setShowReceipt(false)} />
+        board.rehearsal ? (
+          // Never a toll receipt — this was never going to be tolled. Also
+          // never the ordinary Result: matchpoints() gives a placeholder
+          // pct against a field of exactly one (nobody else ever plays a
+          // rehearsal tournament), which would be a meaningless number to
+          // show. Shown on live completion AND on a later reload alike —
+          // unlike showReceipt below, there is no "field view" to fall
+          // through to afterward.
+          <AdjustedReceipt
+            board={board}
+            onTryAnotherLine={() => {
+              const rr = board.rehearsal!;
+              api
+                .rehearse(rr.originTournamentId, rr.originBoardNo, rr.branchPly)
+                .then((next) => navigate(`/t/${next.tournamentId}/b/${next.boardNo}`))
+                .catch((e) => setError((e as Error).message));
+            }}
+            onBackToAnalyze={() => navigate(`/t/${board.rehearsal!.originTournamentId}/b/${board.rehearsal!.originBoardNo}/analyze`)}
+          />
+        ) : showReceipt ? (
+          <ScoreReceipt
+            board={board}
+            onContinue={() => setShowReceipt(false)}
+            analyzeHref={betaFeatures ? `/t/${tournamentId}/b/${board.boardNo}/analyze` : undefined}
+          />
         ) : (
           <Result
             board={board}
@@ -711,14 +737,26 @@ export default function Board() {
   );
 }
 
-/** Compact ticket header: mini stub, tournament context, vul chip (or SCORED stamp). */
+/**
+ * Compact ticket header: mini stub, tournament context, vul chip (or SCORED
+ * stamp). A rehearsal (board.rehearsal set) is the ONE thing that changes
+ * this screen from an ordinary live board — everything below this header,
+ * PlayPhase/BiddingPhase included, is untouched. Two swaps: the name slot
+ * reads "REHEARSAL — Board N, from Trick M" instead of the tournament name,
+ * and the right-hand slot trades the vulnerability chip for an END action
+ * (live play has nowhere to go mid-board; a rehearsal does, since leaving
+ * loses nothing — it persists, resumable from Analyze's history surfaces).
+ */
 function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean }) {
   const vul = vulLabel(board.vul).toUpperCase();
+  const r = board.rehearsal;
   return (
     <div className="board-head">
       <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
       <div className="board-head-mid">
-        <div className="board-head-name">{board.tournamentName}</div>
+        <div className="board-head-name">
+          {r ? `REHEARSAL — Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}` : board.tournamentName}
+        </div>
         <div className="board-head-sub num">
           Dealer {SEAT_SHORT[board.dealer]}
           {board.state === 'playing' && board.contractLabel ? (
@@ -732,7 +770,13 @@ function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean })
         </div>
       </div>
       {board.state === 'done' ? (
-        <InkStamp rotate={-4}>SCORED</InkStamp>
+        <InkStamp rotate={-4} color={r ? 'var(--muted)' : undefined}>
+          {r ? 'REHEARSAL' : 'SCORED'}
+        </InkStamp>
+      ) : r ? (
+        <Button variant="secondary" to={`/t/${r.originTournamentId}/b/${r.originBoardNo}/analyze`} className="board-head-end">
+          END
+        </Button>
       ) : (
         <Chip
           color={board.vul.ns ? 'var(--suit-h)' : undefined}

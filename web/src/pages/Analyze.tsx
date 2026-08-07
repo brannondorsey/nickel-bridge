@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMe } from '../App';
 import {
   AnalysisMoment,
@@ -8,6 +8,7 @@ import {
   AnalysisView,
   BoardView,
   RANK_CHARS,
+  RehearsalSummary,
   SEAT_SHORT,
   SUIT_SYMBOLS,
   TrickCard,
@@ -26,6 +27,7 @@ import { PrefSwitch } from '../components/ds/PrefSwitch';
 import { ScreenHeader } from '../components/ds/AppHeader';
 import { StarGrade } from '../components/ds/StarGrade';
 import { CallText } from '../components/game/CallText';
+import { ContractLabel } from '../components/game/ContractLabel';
 import { GlossaryProse } from '../components/game/GlossaryProse';
 import { HandFan } from '../components/game/HandFan';
 import { motionOK, trickWinner } from '../components/game/playAnim';
@@ -119,6 +121,11 @@ export default function Analyze() {
   const [board, setBoard] = useState<BoardView | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Every "Play From Here" attempt on this board, newest first — feeds the
+  // per-moment rail, the board-wide YOUR REHEARSALS list, and THE CARDS WERE
+  // WORTH's third stub. Fetched alongside board/analysis rather than lazily,
+  // since all three surfaces can render as soon as the overview does.
+  const [rehearsals, setRehearsals] = useState<RehearsalSummary[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -130,6 +137,21 @@ export default function Analyze() {
       alive = false;
     };
   }, [tournamentId, boardNo]);
+
+  useEffect(() => {
+    if (!betaFeatures) return;
+    let alive = true;
+    api
+      .rehearsals(tournamentId, boardNo)
+      .then((r) => alive && setRehearsals(r.rehearsals))
+      .catch(() => {
+        // Non-fatal: a rehearsal-history hiccup shouldn't block the rest of
+        // the overview from rendering — the surfaces below just stay empty.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tournamentId, boardNo, betaFeatures]);
 
   // The analysis, computed server-side on first open and cached. Refetched
   // with par=1 when a lens that shows it is opened and the cached payload
@@ -165,6 +187,30 @@ export default function Analyze() {
     next.set('ply', String(ply));
     next.delete('trick');
     setParams(next);
+  };
+  // "Play From Here" — branch the real board at `ply` into a live rehearsal
+  // (a real, ordinary, hidden-hand board of its own — never Analyze's own
+  // all-hands-open replay). No confirmation step: straight into the new
+  // board, the same way the two ordinary board actions below never confirm.
+  const startRehearsal = (ply: number) => {
+    api
+      .rehearse(tournamentId, boardNo, ply)
+      .then((r) => navigate(`/t/${r.tournamentId}/b/${r.boardNo}`))
+      .catch((e) => setError((e as Error).message));
+  };
+  // Explicit discard for an attempt the player doesn't want kept — the
+  // escape hatch beside startRehearsal's own same-ply resume (a second tap
+  // on the same moment reopens whichever attempt is still in progress there
+  // rather than piling up another). Optimistic: the stub disappears on tap,
+  // and only reconciles from the server if the delete actually failed.
+  const discardRehearsalAttempt = (rehearsalTournamentId: number) => {
+    setRehearsals((prev) => prev.filter((rh) => rh.tournamentId !== rehearsalTournamentId));
+    api.discardRehearsal(tournamentId, boardNo, rehearsalTournamentId).catch(() => {
+      api
+        .rehearsals(tournamentId, boardNo)
+        .then((r) => setRehearsals(r.rehearsals))
+        .catch(() => {});
+    });
   };
 
   if (!betaFeatures) {
@@ -211,8 +257,17 @@ export default function Analyze() {
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
 
-      {lens === 'overview' ? <CardsWorthPanel board={board} analysis={analysis} /> : null}
-      {lens === 'overview' ? <WhereItTurned analysis={analysis} onOpenPlay={openPlayAt} /> : null}
+      {lens === 'overview' ? <CardsWorthPanel board={board} analysis={analysis} rehearsals={rehearsals} /> : null}
+      {lens === 'overview' ? (
+        <WhereItTurned
+          analysis={analysis}
+          onOpenPlay={openPlayAt}
+          onRehearse={startRehearsal}
+          onDiscardRehearsal={discardRehearsalAttempt}
+          rehearsals={rehearsals}
+        />
+      ) : null}
+      {lens === 'overview' ? <YourRehearsals rehearsals={rehearsals} onDiscard={discardRehearsalAttempt} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
           <PlayLens
@@ -220,6 +275,7 @@ export default function Analyze() {
             analysis={analysis}
             initialPly={params.get('ply') !== null ? Number(params.get('ply')) || 0 : null}
             initialTrick={Number(params.get('trick') ?? '1') || 1}
+            onRehearse={startRehearsal}
           />
         ) : (
           <div className="perf-panel analyze-panel">
@@ -246,9 +302,17 @@ export default function Analyze() {
 function WhereItTurned({
   analysis,
   onOpenPlay,
+  onRehearse,
+  onDiscardRehearsal,
+  rehearsals,
 }: {
   analysis: AnalysisView;
   onOpenPlay: (ply: number) => void;
+  /** launches a "Play From Here" rehearsal at `ply` — only ever wired to play
+   *  moments below (the auction never branches, only card play does) */
+  onRehearse: (ply: number) => void;
+  onDiscardRehearsal: (rehearsalTournamentId: number) => void;
+  rehearsals: RehearsalSummary[];
 }) {
   const { moments, setAside } = analysis;
   return (
@@ -265,6 +329,9 @@ function WhereItTurned({
               moment={m}
               analysis={analysis}
               onOpen={m.kind === 'play' ? () => onOpenPlay(m.ply!) : null}
+              onRehearse={m.kind === 'play' ? () => onRehearse(m.ply!) : null}
+              onDiscardRehearsal={onDiscardRehearsal}
+              rehearsals={m.kind === 'play' ? rehearsals.filter((rh) => rh.branchPly === m.ply) : []}
             />
           ))}
           {setAside > 0 ? (
@@ -298,11 +365,19 @@ function MomentRow({
   moment: m,
   analysis,
   onOpen,
+  onRehearse,
+  onDiscardRehearsal,
+  rehearsals,
 }: {
   moment: AnalysisMoment;
   analysis: AnalysisView;
   /** null = a finding with nowhere to go (bid moments — the auction has no replay) */
   onOpen: (() => void) | null;
+  /** null = no branch point here either (bid moments again — see onOpen) */
+  onRehearse: (() => void) | null;
+  onDiscardRehearsal: (rehearsalTournamentId: number) => void;
+  /** past attempts branched from exactly this moment's ply — always [] on a bid moment */
+  rehearsals: RehearsalSummary[];
 }) {
   const aside = momentAside(m, analysis);
   const name =
@@ -322,14 +397,102 @@ function MomentRow({
       </span>
     </>
   );
-  // a play moment opens the replay at its decision; a bid moment is a
-  // finding, not a door — its whole reading is already on the row
-  return onOpen ? (
-    <button type="button" className="moment-row" onClick={onOpen} aria-label={name}>
-      {body}
-    </button>
-  ) : (
-    <div className="moment-row moment-row-static">{body}</div>
+  // A bid moment is a finding, not a door — its whole reading is already on
+  // the row, and the auction never branches, so it stays exactly as before:
+  // a plain, non-interactive row.
+  if (!onOpen) return <div className="moment-row moment-row-static">{body}</div>;
+  // A play moment gets TWO actions, not one: WATCH IT opens the read-only
+  // replay at this decision (the row's own accessible name carries the whole
+  // reading, unchanged from before), and PLAY FROM HERE branches it live.
+  // Two buttons can't nest, so the row is now a wrapper rather than the
+  // button itself.
+  return (
+    <div className="moment-row">
+      <button type="button" className="moment-row-open" onClick={onOpen} aria-label={name}>
+        {body}
+      </button>
+      {onRehearse ? (
+        <Button variant="secondary" className="moment-row-rehearse" onClick={onRehearse}>
+          PLAY FROM HERE →
+        </Button>
+      ) : null}
+      <RehearsalRail rehearsals={rehearsals} onDiscard={onDiscardRehearsal} />
+    </div>
+  );
+}
+
+/** Past attempts branched from one specific moment — a small ticket-stub
+ *  rail, tappable to reopen (resumes if still in progress, per the reload-
+ *  survival guarantee; shows its adjusted receipt if done). Renders nothing
+ *  when there are none yet — the row's own PLAY FROM HERE button is already
+ *  the "start one" affordance, so this never needs an empty-state stub. */
+function RehearsalRail({ rehearsals, onDiscard }: { rehearsals: RehearsalSummary[]; onDiscard: (rehearsalTournamentId: number) => void }) {
+  if (!rehearsals.length) return null;
+  return (
+    <div className="rehearsal-rail">
+      {rehearsals.map((rh) => (
+        // A <button> can't nest inside the <a> react-router's Link renders,
+        // so the stub and its discard control are siblings in a small wrap
+        // rather than one interactive element holding another.
+        <div key={rh.tournamentId} className="rehearsal-stub-wrap">
+          <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-stub">
+            <span className="rehearsal-stub-label">{rh.state === 'done' ? 'TRIED' : 'IN PROGRESS'}</span>
+            <b className="rehearsal-stub-score num">{rh.state === 'done' && rh.scoreNS !== null ? signedScore(rh.scoreNS) : '···'}</b>
+          </Link>
+          <button
+            type="button"
+            className="rehearsal-stub-discard"
+            aria-label="Discard this rehearsal attempt"
+            onClick={() => onDiscard(rh.tournamentId)}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Every rehearsal attempt on this board, from any moment — the board-wide
+ * companion to the per-moment RehearsalRail above: that one says "try again
+ * right here," this says "everything I've tried on this board." Newest
+ * first (the server's own order), uncapped — nothing here truncates,
+ * matching "no cap, just scroll." Renders nothing until at least one attempt
+ * exists, the same restraint TOURNEY hints and other empty widgets follow
+ * elsewhere in the app.
+ */
+function YourRehearsals({
+  rehearsals,
+  onDiscard,
+}: {
+  rehearsals: RehearsalSummary[];
+  onDiscard: (rehearsalTournamentId: number) => void;
+}) {
+  if (!rehearsals.length) return null;
+  return (
+    <PerforatedPanel heading="YOUR REHEARSALS" className="analyze-rehearsals">
+      {rehearsals.map((rh) => (
+        // Same button-can't-nest-in-a constraint as RehearsalRail above.
+        <div key={rh.tournamentId} className="rehearsal-ledger-row-wrap">
+          <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-ledger-row">
+            <span className="rehearsal-ledger-from num">FROM TRICK {Math.floor(rh.branchPly / 4) + 1}</span>
+            <span className="rehearsal-ledger-score num">
+              {rh.state === 'done' && rh.scoreNS !== null ? `${rh.contractLabel ?? ''} · ${signedScore(rh.scoreNS)}` : 'IN PROGRESS'}
+            </span>
+            <span className="rehearsal-ledger-chev">›</span>
+          </Link>
+          <button
+            type="button"
+            className="rehearsal-ledger-discard"
+            aria-label="Discard this rehearsal attempt"
+            onClick={() => onDiscard(rh.tournamentId)}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </PerforatedPanel>
   );
 }
 
@@ -368,10 +531,23 @@ function parContractLabel(raw: string): string {
  * covers the call-by-call recap; the ledger's bid moments carry the
  * counterfactual auctions, so neither is repeated here.)
  */
-function CardsWorthPanel({ board, analysis }: { board: BoardView; analysis: AnalysisView }) {
+function CardsWorthPanel({
+  board,
+  analysis,
+  rehearsals,
+}: {
+  board: BoardView;
+  analysis: AnalysisView;
+  rehearsals: RehearsalSummary[];
+}) {
   const par = analysis.par;
   const r = board.result;
   const field = r?.field ?? [];
+  // "Best" = highest scoreNS among finished attempts — unambiguous here
+  // specifically because the human is always N-S, so scoreNS is already
+  // signed from their own side; no seat-flip logic needed.
+  const done = rehearsals.filter((rh) => rh.state === 'done' && rh.scoreNS !== null);
+  const best = done.length ? done.reduce((a, b) => (b.scoreNS! > a.scoreNS! ? b : a)) : null;
   return (
     <PerforatedPanel heading="THE CARDS WERE WORTH" className="analyze-par">
       {par && r ? (
@@ -400,6 +576,17 @@ function CardsWorthPanel({ board, analysis }: { board: BoardView; analysis: Anal
                   : 'the only table so far'}
               </span>
             </div>
+            {best ? (
+              <div className="worth-stub worth-stub-rehearsal">
+                <span className="worth-stub-label">YOUR BEST REHEARSAL</span>
+                <b className="worth-contract num">{best.contractLabel ?? '—'}</b>
+                <b className="worth-score num">{signedScore(best.scoreNS!)}</b>
+                <span className="worth-aside">
+                  {rehearsals.length === 1 ? '1 line tried' : `${rehearsals.length} lines tried`} · {signedScore(best.scoreNS! - r.scoreNS)} vs your
+                  table
+                </span>
+              </div>
+            ) : null}
           </div>
           {field.length > 1 ? <WorthRail field={field} parScore={par.parScore} /> : null}
           <p className="analyze-finding">
@@ -482,13 +669,17 @@ function PlayLens({
   analysis,
   initialPly,
   initialTrick,
+  onRehearse,
 }: {
   board: BoardView;
   analysis: AnalysisView;
   initialPly: number | null;
   initialTrick: number;
+  onRehearse: (ply: number) => void;
 }) {
   const views = useMemo(() => buildReplayViews(board), [board]);
+  // The reduced-motion static list has no scrub position to branch from —
+  // PLAY FROM HERE stays reachable from the moments ledger either way.
   if (!motionOK()) return <StaticPlayList board={board} analysis={analysis} />;
   return (
     <ReplayLens
@@ -496,6 +687,7 @@ function PlayLens({
       analysis={analysis}
       views={views}
       initialPly={initialPly ?? firstPlyOfTrick(initialTrick)}
+      onRehearse={onRehearse}
     />
   );
 }
@@ -505,11 +697,13 @@ function ReplayLens({
   analysis,
   views,
   initialPly,
+  onRehearse,
 }: {
   board: BoardView;
   analysis: AnalysisView;
   views: BoardView[];
   initialPly: number;
+  onRehearse: (ply: number) => void;
 }) {
   const replay = useReplay({ fastForward: true });
   const totalPlies = views.length - 1;
@@ -731,6 +925,27 @@ function ReplayLens({
           </Button>
           <Button variant="secondary" onClick={() => nextMomentPly !== null && landAt(nextMomentPly)} disabled={nextMomentPly === null}>
             NEXT MOMENT ›
+          </Button>
+        </div>
+        {/* Standing action, usable at whatever ply the reader has scrubbed
+            to — not only the flagged moments above. Branches at `anchor`,
+            not raw `ply`: a moment landing leaves `ply` one card PAST the
+            decision (the played card is already animated into the trick —
+            see the anchor comment above), so redeciding at `ply` would lock
+            in exactly the card the moment flagged instead of offering it up.
+            This is the same anchor PREV/NEXT MOMENT already use, and it's
+            what keeps this button agreeing with the moment row's own
+            PLAY FROM HERE (which always uses the true m.ply). Disabled past
+            the claim boundary too: from there the server already played
+            both sides, true-DD, so there is nothing left to redecide
+            (createRehearsal rejects this server-side regardless — this is a
+            UX courtesy, not the only guard). */}
+        <div className="replay-dock-row replay-dock-rehearse">
+          <Button
+            onClick={() => onRehearse(anchor)}
+            disabled={anchor >= totalPlies || (analysis.claimedAtPly !== null && anchor >= analysis.claimedAtPly)}
+          >
+            PLAY FROM HERE →
           </Button>
         </div>
       </div>
