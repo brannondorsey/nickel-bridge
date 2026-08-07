@@ -5141,15 +5141,27 @@ a.stat-tile:hover {
   display: flex;
   align-items: stretch;
 }
+/* The PerforatedPanel ticket-stub motif, one size down: a solid box border
+   all the way around, with the dashed "tear line" inset a few px from the
+   left edge (::before) rather than replacing the left border outright — so
+   the stub reads as a torn-off ticket stub, not a box with one dashed side. */
 .rehearsal-stub {
+  position: relative;
   flex: 0 0 auto;
   min-width: 84px;
   border: 1px solid var(--ink);
-  border-left: 1.5px dashed var(--line-dashed);
   background: var(--panel);
-  padding: 7px 9px;
+  padding: 7px 9px 7px 13px;
   text-decoration: none;
   color: inherit;
+}
+.rehearsal-stub::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px dashed var(--line-dashed);
 }
 .rehearsal-stub-label {
   display: block;
