@@ -406,6 +406,7 @@ export const boardDoneRehearsal: BoardView = {
     breakdown: boardDone.result!.breakdown,
     field: boardDone.result!.field,
   },
+  lineMatchpoints: 70,
 };
 
 // ---- tournaments ----

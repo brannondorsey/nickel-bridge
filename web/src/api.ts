@@ -191,6 +191,8 @@ export interface BoardView {
   rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
   /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
   originResult?: BoardResult;
+  /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
+  lineMatchpoints?: number | null;
 }
 
 /** One "Play From Here" attempt on a board — see server/src/rehearsal.ts */
