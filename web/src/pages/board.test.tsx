@@ -1363,13 +1363,26 @@ describe('Board — rehearsal', () => {
     // the moments ledger's opportunity-only +N)
     expect(screen.getByText('VS YOUR REAL TABLE')).toBeInTheDocument();
     expect(screen.getByText('YOUR REAL TABLE')).toBeInTheDocument();
-    expect(screen.getByText('This line does +30 better than your real table.')).toBeInTheDocument();
+    expect(screen.getByText('This line does +30 better than your real table — +12 MP.')).toBeInTheDocument();
+
+    // the old (real table) and new (this line, substituted into that same
+    // real field) matchpoint pcts, beside each stub's score
+    expect(screen.getByText("58% of the field's matchpoints")).toBeInTheDocument();
+    expect(screen.getByText("70% of the field's matchpoints")).toBeInTheDocument();
 
     // never the matchpoint field view — pct is meaningless for a rehearsal's own field of one
     expect(screen.queryByText(/MATCHPOINTS · VS/)).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: /TRY ANOTHER LINE/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to analyze/i })).toBeInTheDocument();
+  });
+
+  it("falls back to a plain caption, no MP delta sentence, when the origin field was too small to matchpoint (lineMatchpoints null)", async () => {
+    apiMock.board.mockResolvedValue({ ...boardDoneRehearsal, lineMatchpoints: null });
+    renderBoard();
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument();
+    expect(screen.getByText('matchpoints not available')).toBeInTheDocument();
+    expect(screen.getByText('This line does +30 better than your real table.')).toBeInTheDocument();
   });
 
   it('does not refresh account state when a rehearsal branched from the last board finishes live — it is not a real tournament board', async () => {

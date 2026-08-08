@@ -1,9 +1,11 @@
+import { matchpoints } from '@bridge/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 freshDbEnv('rehearsal');
 const app = await makeApp();
 const { db } = await import('../src/db.js');
+const { boardFieldRows } = await import('../src/game.js');
 
 const alice = new TestClient(app, 'Alice');
 const bob = new TestClient(app, 'Bob');
@@ -235,6 +237,103 @@ describe('reload survival', () => {
     expect(doneA.originResult.contractLabel).toBe(originView.result.contractLabel);
     expect(doneA.originResult.scoreNS).toBe(originView.result.scoreNS);
   });
+});
+
+describe('matchpoint comparison (old vs new)', () => {
+  // Driven through the real engine module directly (game.js/rehearsal.js on
+  // raw-inserted tournaments), the same style analyze.test.ts uses for its
+  // own "one-player field" case — going through HTTP placement instead would
+  // be at the mercy of the grace window force-joining whatever tournaments
+  // this file's earlier tests already left lying around, so field size
+  // couldn't be controlled from here.
+  it("is null against a one-player origin field, and matches a direct substitution against the origin's real multi-player field", async () => {
+    const gameMod = await import('../src/game.js');
+    const rehearsalMod = await import('../src/rehearsal.js');
+
+    function makeUser(handle: string): number {
+      return (
+        db
+          .prepare(`INSERT INTO users (google_id, name, handle) VALUES (?, ?, ?) RETURNING id`)
+          .get(`module:${handle}`, handle, handle) as { id: number }
+      ).id;
+    }
+    function makeTournament(seed: string): any {
+      return db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', ?) RETURNING *`).get(seed);
+    }
+    async function driveDirect(t: any, uid: number, boardNo: number): Promise<any> {
+      const b = gameMod.loadBoard(t, uid, boardNo, true)!;
+      await gameMod.ensureAdvanced(b);
+      let view = gameMod.boardView(t, b, 1200);
+      let safety = 250;
+      while (view.state !== 'done' && safety-- > 0) {
+        if (view.state === 'bidding' && view.myTurn) await gameMod.submitCall(b, 0);
+        else if (view.state === 'playing' && view.myTurn) await gameMod.submitPlay(b, (view.legalCards as number[])[0]);
+        else throw new Error(`stuck: ${view.state} myTurn=${view.myTurn}`);
+        view = gameMod.boardView(t, b, 1200);
+      }
+      if (view.state !== 'done') throw new Error('board did not finish');
+      return b;
+    }
+    async function playRehearsalOut(rehTournamentId: number, uid: number, boardNo: number): Promise<any> {
+      const t = tournamentRow(rehTournamentId);
+      const b = gameMod.loadBoard(t, uid, boardNo, false)!;
+      let view = gameMod.boardView(t, b, 1200);
+      let safety = 250;
+      while (view.state !== 'done' && safety-- > 0) {
+        if (view.state === 'bidding' && view.myTurn) await gameMod.submitCall(b, 0);
+        else if (view.state === 'playing' && view.myTurn) await gameMod.submitPlay(b, (view.legalCards as number[])[0]);
+        else throw new Error(`stuck: ${view.state} myTurn=${view.myTurn}`);
+        view = gameMod.boardView(t, b, 1200);
+      }
+      if (view.state !== 'done') throw new Error('rehearsal board did not finish');
+      return view;
+    }
+    // Retries across board numbers to dodge a pass-out or a claim right at
+    // ply 0 (see finishedBoard's own doc comment above for why both are
+    // possible) — same shape, just against the direct engine calls.
+    async function rehearsableBoard(t: any, uid: number): Promise<{ b: any; branchPly: number }> {
+      for (let boardNo = 1; boardNo <= 4; boardNo++) {
+        const b = await driveDirect(t, uid, boardNo);
+        if (b.contract && b.row.claimed_at_ply !== 0) return { b, branchPly: safeBranchPly(b.row) };
+      }
+      throw new Error('no rehearsable board found among 4');
+    }
+
+    // One-player field: matchpoints() would be the meaningless n<=1
+    // placeholder — the server must refuse to invent a number.
+    const lonely = makeUser('rehearsal-mp-lonely');
+    const tLonely = makeTournament('rehearsal-mp-lonely');
+    const { b: originLonely, branchPly: plyLonely } = await rehearsableBoard(tLonely, lonely);
+    const rehLonely = await rehearsalMod.createRehearsal(tLonely, lonely, originLonely.row.board_no, plyLonely);
+    const vLonely = await playRehearsalOut(rehLonely.tournamentId, lonely, rehLonely.boardNo);
+    expect(vLonely.originResult.field.length).toBe(1);
+    expect(vLonely.lineMatchpoints).toBeNull();
+
+    // Two-player field: substitute — never append — this line's score for
+    // the player's own row, and matchpoint that.
+    const carol = makeUser('rehearsal-mp-carol');
+    const dave = makeUser('rehearsal-mp-dave');
+    const tShared = makeTournament('rehearsal-mp-shared');
+    const { b: originCarol, branchPly: plyShared } = await rehearsableBoard(tShared, carol);
+    await driveDirect(tShared, dave, originCarol.row.board_no); // same tournament, same board — one real field
+
+    const rehCarol = await rehearsalMod.createRehearsal(tShared, carol, originCarol.row.board_no, plyShared);
+    const vCarol = await playRehearsalOut(rehCarol.tournamentId, carol, rehCarol.boardNo);
+    expect(vCarol.originResult.field.length).toBe(2);
+
+    const rows = boardFieldRows(tShared.id, originCarol.row.board_no);
+    const myIndex = rows.findIndex((r) => r.user_id === carol);
+    expect(myIndex).toBeGreaterThanOrEqual(0);
+
+    const realScores = rows.map((r) => r.score_ns ?? 0);
+    const expectedOldPct = Math.round(matchpoints(realScores)[myIndex].pct * 10) / 10;
+    expect(vCarol.originResult.pct).toBe(expectedOldPct);
+
+    const substitutedScores = [...realScores];
+    substitutedScores[myIndex] = vCarol.result.scoreNS;
+    const expectedNewPct = Math.round(matchpoints(substitutedScores)[myIndex].pct * 10) / 10;
+    expect(vCarol.lineMatchpoints).toBe(expectedNewPct);
+  }, 60_000);
 });
 
 describe('GET .../rehearsals', () => {

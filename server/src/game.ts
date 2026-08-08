@@ -548,12 +548,24 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     // rehearsal's own `result.pct`/`.field` are meaningless (matchpoints()
     // returns a placeholder pct against a field of exactly one, since nobody
     // else ever plays a rehearsal tournament); the client compares scoreNS/
-    // contractLabel against THIS field instead.
+    // contractLabel against THIS field instead. originResult.pct is the real
+    // "old" matchpoint pct the player actually earned at that table;
+    // lineMatchpoints is the "new" counterfactual pct this line's score would
+    // have earned against that same real field (see lineMatchpointsVsOrigin).
     if (t.kind === 'rehearsal' && t.origin_tournament_id != null && t.origin_board_no != null) {
       const originT = getTournament(t.origin_tournament_id);
       const originBoard = originT ? loadBoard(originT, b.row.user_id, t.origin_board_no, false) : null;
       if (originT && originBoard?.row.state === 'done') {
-        view.originResult = boardResult(originT, originBoard, viewerElo);
+        // Fetched once and shared: boardResult needs it for originResult's
+        // field/pct, lineMatchpointsVsOrigin needs it for the substitution —
+        // same (tournament, board) query, no reason to run it twice.
+        const originRows = stmtBoardResults.all(originT.id, originBoard.row.board_no) as (BoardRow & {
+          user_handle: string;
+          user_kind: 'human' | 'ai';
+          user_google: string;
+        })[];
+        view.originResult = boardResult(originT, originBoard, viewerElo, originRows);
+        view.lineMatchpoints = lineMatchpointsVsOrigin(originRows, b.row.user_id, b.row.score_ns);
       }
     }
   }
@@ -572,12 +584,19 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
  * in this comparison (see standings()'s doc comment); the persona/human
  * split survives only in Elo and placement.
  */
-function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
-  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & {
-    user_handle: string;
-    user_kind: 'human' | 'ai';
-    user_google: string;
-  })[];
+function boardResult(
+  t: TournamentRow,
+  b: GameBoard,
+  _viewerElo: number,
+  // Callers that already fetched this (tournament, board)'s field rows for
+  // another purpose — boardView's rehearsal branch, for lineMatchpointsVsOrigin
+  // — pass them straight through instead of paying for a second identical
+  // query.
+  rows: (BoardRow & { user_handle: string; user_kind: 'human' | 'ai'; user_google: string })[] = stmtBoardResults.all(
+    t.id,
+    b.row.board_no,
+  ) as (BoardRow & { user_handle: string; user_kind: 'human' | 'ai'; user_google: string })[],
+): Record<string, unknown> {
   const mps = matchpoints(rows.map((r) => r.score_ns ?? 0));
   const field = rows.map((r, i) => ({
     userId: r.user_id,
@@ -623,6 +642,34 @@ function tricksOf(r: BoardRow): number | undefined {
  */
 export function boardFieldRows(tournamentId: number, boardNo: number): { user_id: number; score_ns: number | null }[] {
   return stmtBoardResults.all(tournamentId, boardNo) as (BoardRow & { user_handle: string })[];
+}
+
+/**
+ * What matchpoint pct a "Play From Here" rehearsal LINE's score would have
+ * earned against the origin board's own real field, substituting it for the
+ * player's row — never appending, the same substitute-never-append rule
+ * analyze.ts's counterfactual arithmetic uses. Takes the field rows rather
+ * than re-querying them (boardFieldRows' own SELECT) so a caller that already
+ * fetched them for another purpose — boardView's rehearsal branch, alongside
+ * boardResult's originResult — pays for the query once. This does not make
+ * the rehearsal itself scored (see rehearsal.ts's doc comment): the
+ * rehearsal's own field is still exactly one player and its own matchpoints()
+ * call would still be the meaningless placeholder — this reads the ORIGIN
+ * tournament's already-real, already-scored field instead. Null when that
+ * field has too few entrants for a pct to mean anything (matchpoints()
+ * returns a placeholder 50 for n<=1, the same guard analyze.ts's singleField
+ * uses).
+ */
+function lineMatchpointsVsOrigin(
+  rows: { user_id: number; score_ns: number | null }[],
+  userId: number,
+  lineScoreNS: number | null,
+): number | null {
+  const myIndex = rows.findIndex((r) => r.user_id === userId);
+  if (rows.length <= 1 || myIndex < 0) return null;
+  const scores = rows.map((r) => r.score_ns ?? 0);
+  scores[myIndex] = lineScoreNS ?? 0;
+  return Math.round(matchpoints(scores)[myIndex].pct * 10) / 10;
 }
 
 function bidAccuracy(evals: { score: number }[]): number | null {
