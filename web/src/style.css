@@ -4856,13 +4856,13 @@ a.stat-tile:hover {
 
 /* ---- Landing (pages/Login.tsx — what a visitor without an account gets) ----
 
-   The splash hero is untouched: it's still `.splash`, still 100dvh, and
+   The splash hero is untouched: it's still `.splash`, still 100svh, and
    `.splash-auto` (the returning-visitor overlay) is the same element with six
    properties swapped. So nothing here may add a rule to bare `.splash` — every
    landing rule hangs off `.landing`, and the hero simply becomes the first
    child of a taller page instead of the whole of a short one.
 
-   `.shell` is already a flex column at min-height 100dvh, so appending
+   `.shell` is already a flex column at min-height 100svh, so appending
    siblings under a `flex: 1` hero works without touching the frame. */
 .landing {
   display: flex;
