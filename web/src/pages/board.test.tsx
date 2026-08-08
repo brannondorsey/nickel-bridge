@@ -865,6 +865,50 @@ describe('Board — trick clearing', () => {
       restore();
     }
   });
+
+  it('tap: still holds under prefers-reduced-motion (no WAAPI stub, so motionOK() is false)', async () => {
+    // Deliberately no withWaapi() here — jsdom's ambient no-animate() state
+    // is exactly what a real prefers-reduced-motion visitor sees. Unlike
+    // every other staged sequence in this file, "Trick clearing: tap" must
+    // NOT go inert here: applyBoard's holdsOnTapWithoutMotion clause exists
+    // precisely so this still pauses, just with every other delay collapsed
+    // to 0 since there is nothing left to animate.
+    expect(motionOK()).toBe(false);
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+    const tapMe: Me = { ...meFixture, user: { ...meFixture.user!, trickClearMode: 'tap' } };
+
+    renderBoard(tapMe);
+    await screen.findByText('SOUTH · YOU');
+    const queen = screen.getByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(queen);
+
+    // held, not cleared — the whole point
+    await waitFor(() => expect(southCardOnTable()).toHaveTextContent('Q'));
+    expect(screen.getByText('Tap the trick to continue')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tap to clear the trick' }));
+    await waitFor(() => expect(southCardOnTable()).not.toBeInTheDocument());
+    expect(screen.queryByText('Tap the trick to continue')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+  });
+
+  it('auto: without motion, a completed trick still clears in one jump with no hold to tap', async () => {
+    expect(motionOK()).toBe(false);
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+
+    renderBoard();
+    await screen.findByText('SOUTH · YOU');
+    const queen = screen.getByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(queen);
+
+    await waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+    expect(southCardOnTable()).not.toBeInTheDocument();
+    expect(screen.queryByText('Tap the trick to continue')).not.toBeInTheDocument();
+  });
 });
 
 describe('Board — staged bidding', () => {

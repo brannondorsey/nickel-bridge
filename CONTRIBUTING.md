@@ -1700,6 +1700,20 @@ newer settings has one thing worth knowing:
   purpose, and the claim's own announcement already holds the board deliberately. Purely a
   client pacing preference — the server never reads `trick_clear_mode` and scoring/robot
   play/claim resolution are unaffected either way.
+  **Unlike every other staged sequence on this page, it holds even under
+  `prefers-reduced-motion`/no-WAAPI** — it is a reading pause on a real tap, not an animation,
+  the same argument `CLAIM_ANNOUNCE_HOLD_MS`/`CLAIM_LEAD_SETTLE_MS` already make for the claim
+  announcement. `Board.tsx`'s `applyBoard` normally only computes a staged sequence at all when
+  `motionOK()` is true (every other setting on this page — `fastForward` included — genuinely
+  has "no replay to pace" without motion); an explicit `holdsOnTapWithoutMotion` clause computes
+  `stagePlaySteps` for an ordinary-play transition regardless, so its `holdForClear` step still
+  exists to hold on. Every OTHER step's `delayBefore` is then collapsed to 0 when `!motionOK()`
+  — nothing to animate, so the burst up to the hold lands as fast as a render allows, and only
+  the held step itself still waits on a tap. Without this, a reduced-motion player who turned
+  "Trick clearing" to `tap` would see it silently do nothing — the trick would clear the instant
+  the response landed, same as `auto` (actually faster, since even `auto`'s timed hold is
+  skipped under reduced motion) — which directly contradicts the setting's own purpose for
+  exactly the population likeliest to want a manual, unhurried pause.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,

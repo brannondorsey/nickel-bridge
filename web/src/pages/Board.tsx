@@ -348,8 +348,21 @@ export default function Board() {
   // ever has an optimistic view on screen, so the bid branch never trims.
   const applyBoard = useCallback(
     (prev: BoardView | null, next: BoardView, shown?: { view: BoardView; at: number } | null) => {
+      // "Trick clearing: tap" holds on a real user action, not on animation —
+      // unlike every other staged sequence here, it must not go inert under
+      // prefers-reduced-motion/no-WAAPI (motionOK() false), the same
+      // reasoning CLAIM_ANNOUNCE_HOLD_MS/CLAIM_LEAD_SETTLE_MS already apply to
+      // the claim announcement. Without this clause, `staged` below would
+      // stay [] whenever motion is off and the trick would clear the instant
+      // the response landed — silently undoing the whole setting for exactly
+      // the population likeliest to want a deliberate pause. Scoped to
+      // ordinary play only (matching what actually carries holdForClear —
+      // see its doc comment): bidding and claims keep their untouched,
+      // motion-gated behavior.
+      const ordinaryPlay = prev !== null && !next.claimed && prev.state !== 'bidding';
+      const holdsOnTapWithoutMotion = trickClearMode === 'tap' && ordinaryPlay;
       const staged =
-        prev && motionOK()
+        prev && (motionOK() || holdsOnTapWithoutMotion)
           ? next.claimed
             ? stageClaimSteps(prev, next)
             : prev.state === 'bidding'
@@ -364,7 +377,15 @@ export default function Board() {
       // rather than from when the card appeared, i.e. the claim's first beat
       // runs about a round trip long. Accepted rather than threaded through:
       // that sequence is already paced by a 2s announcement hold.
-      const steps = shown && !next.claimed ? trimStagedPrefix(staged, shown.view, Date.now() - shown.at) : staged;
+      let steps = shown && !next.claimed ? trimStagedPrefix(staged, shown.view, Date.now() - shown.at) : staged;
+      // No WAAPI/motion to animate the rest of the burst with — collapse
+      // every OTHER delay to 0 so it lands as fast as a render allows, and
+      // leave the held step itself alone: scheduleSteps gates it on a tap
+      // regardless of its numeric delay, so this is the only change needed
+      // to make the rest of the sequence feel instant. A no-op whenever
+      // `steps` has no holdForClear step (nothing here changes the final
+      // state, only how many synchronous renders it takes to reach it).
+      if (!motionOK()) steps = steps.map((step) => (step.holdForClear ? step : { ...step, delayBefore: 0 }));
       if (!steps.length) {
         cancelStaging();
         setBoard(next);
@@ -374,7 +395,7 @@ export default function Board() {
       // (scheduleSteps' newPlay) has to diff against that, not against prev.
       scheduleSteps(shown?.view ?? prev!, steps);
     },
-    [cancelStaging, scheduleSteps],
+    [cancelStaging, scheduleSteps, trickClearMode],
   );
 
   // Bracket a claim in three beats. First the LEAD: the newly-completed
