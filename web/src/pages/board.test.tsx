@@ -9,6 +9,7 @@ import {
   CLAIM_ANNOUNCE_HOLD_MS,
   CLAIM_LEAD_SETTLE_MS,
   GLIDE_MS,
+  HOLD_MS,
   ROBOT_GAP_MS,
   motionOK,
 } from '../components/game/playAnim';
@@ -760,6 +761,153 @@ describe('Board — the robot reply is paced from the tap, not from the response
       vi.useRealTimers();
       restore();
     }
+  });
+});
+
+describe('Board — trick clearing', () => {
+  // Same jsdom-has-no-WAAPI workaround as the block above — stub animate()
+  // so stagePlaySteps' staged path (and with it playAnim's holdForClear
+  // step, which is what "Trick clearing: tap" holds on) actually runs
+  // instead of applyBoard jumping straight to `next`.
+  const withWaapi = () => {
+    const had = Object.prototype.hasOwnProperty.call(Element.prototype, 'animate');
+    const before = Element.prototype.animate;
+    Element.prototype.animate = (() => ({ onfinish: null, oncancel: null, cancel() {} })) as never;
+    return () => {
+      if (had) Element.prototype.animate = before;
+      else delete (Element.prototype as { animate?: unknown }).animate;
+    };
+  };
+
+  const advance = async (ms: number) => {
+    await vi.advanceTimersByTimeAsync(ms);
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  // South plays the last card of the trick boardPlaying ships mid-progress
+  // (West/North/East already down) — a boundary with no further robot plays,
+  // since South (the winner) leads the next trick and it's the human's own turn.
+  const myCard = boardPlaying.legalCards![1]; // Q♠
+  const afterTrick: BoardView = {
+    ...boardPlaying,
+    hand: boardPlaying.hand.filter((c) => c !== myCard),
+    currentTrick: [],
+    completedTricks: 5,
+    declarerTricks: 4,
+    lastTrick: [...boardPlaying.currentTrick!, { seat: 2, card: myCard }],
+    myTurn: true,
+    handToPlay: 2,
+    legalCards: boardPlaying.hand.filter((c) => c !== myCard),
+  };
+  const southCardOnTable = () => document.querySelector('.trick .seatpos.s .pcard');
+
+  it('auto (the default): sweeps the completed trick off the table on its own timer', async () => {
+    const restore = withWaapi();
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(queen);
+      await advance(0);
+
+      expect(southCardOnTable()).toHaveTextContent('Q');
+      // holds for GLIDE_MS + HOLD_MS before sweeping, exactly as it always has
+      await advance(GLIDE_MS + HOLD_MS - 60);
+      expect(southCardOnTable()).toBeInTheDocument();
+      await advance(120);
+      expect(southCardOnTable()).not.toBeInTheDocument();
+
+      await advance(2000);
+      await vi.waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it('tap: holds the completed trick until the trick area is tapped, and never on its own', async () => {
+    const restore = withWaapi();
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+    const tapMe: Me = { ...meFixture, user: { ...meFixture.user!, trickClearMode: 'tap' } };
+
+    vi.useFakeTimers();
+    try {
+      renderBoard(tapMe);
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      const queen = screen.getByRole('button', { name: 'Q of ♠' });
+      fireEvent.click(queen);
+      fireEvent.click(queen);
+      await advance(0);
+
+      expect(southCardOnTable()).toHaveTextContent('Q');
+      expect(screen.getByText('Tap the trick to continue')).toBeInTheDocument();
+
+      // never clears on its own, no matter how long the clock runs
+      await advance(60_000);
+      expect(southCardOnTable()).toBeInTheDocument();
+      expect(screen.getByText('Tap the trick to continue')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Tap to clear the trick' }));
+      await advance(0);
+      expect(southCardOnTable()).not.toBeInTheDocument();
+      expect(screen.queryByText('Tap the trick to continue')).not.toBeInTheDocument();
+
+      await advance(2000);
+      await vi.waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it('tap: still holds under prefers-reduced-motion (no WAAPI stub, so motionOK() is false)', async () => {
+    // Deliberately no withWaapi() here — jsdom's ambient no-animate() state
+    // is exactly what a real prefers-reduced-motion visitor sees. Unlike
+    // every other staged sequence in this file, "Trick clearing: tap" must
+    // NOT go inert here: applyBoard's holdsOnTapWithoutMotion clause exists
+    // precisely so this still pauses, just with every other delay collapsed
+    // to 0 since there is nothing left to animate.
+    expect(motionOK()).toBe(false);
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+    const tapMe: Me = { ...meFixture, user: { ...meFixture.user!, trickClearMode: 'tap' } };
+
+    renderBoard(tapMe);
+    await screen.findByText('SOUTH · YOU');
+    const queen = screen.getByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(queen);
+
+    // held, not cleared — the whole point
+    await waitFor(() => expect(southCardOnTable()).toHaveTextContent('Q'));
+    expect(screen.getByText('Tap the trick to continue')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tap to clear the trick' }));
+    await waitFor(() => expect(southCardOnTable()).not.toBeInTheDocument());
+    expect(screen.queryByText('Tap the trick to continue')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+  });
+
+  it('auto: without motion, a completed trick still clears in one jump with no hold to tap', async () => {
+    expect(motionOK()).toBe(false);
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: afterTrick });
+
+    renderBoard();
+    await screen.findByText('SOUTH · YOU');
+    const queen = screen.getByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(queen);
+
+    await waitFor(() => expect(screen.getByText(/your turn/)).toBeInTheDocument());
+    expect(southCardOnTable()).not.toBeInTheDocument();
+    expect(screen.queryByText('Tap the trick to continue')).not.toBeInTheDocument();
   });
 });
 

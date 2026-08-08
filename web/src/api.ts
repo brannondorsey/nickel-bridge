@@ -31,6 +31,8 @@ export interface Me {
     bidFeedback: boolean;
     /** submit a bid on a second tap of the selected call, without pressing Bid (settings: "Double-tap to bid"); default false */
     doubleTapBid: boolean;
+    /** how a completed trick leaves the table (settings: "Trick clearing") — 'auto' times out on its own, 'tap' holds until the trick area is tapped */
+    trickClearMode: 'auto' | 'tap';
     /**
      * Opt in to features still being tried out before a general release —
      * currently gates Analyze. Off by default in production, on by default
@@ -577,6 +579,7 @@ export const api = {
     bidFeedback?: boolean;
     betaFeatures?: boolean;
     doubleTapBid?: boolean;
+    trickClearMode?: 'auto' | 'tap';
   }) =>
     request<{
       ladderListed: boolean;
@@ -584,6 +587,7 @@ export const api = {
       bidFeedback: boolean;
       betaFeatures: boolean;
       doubleTapBid: boolean;
+      trickClearMode: 'auto' | 'tap';
     }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
