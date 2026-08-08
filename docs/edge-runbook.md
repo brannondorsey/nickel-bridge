@@ -444,6 +444,53 @@ remaining source — worth checking before concluding tiering has done all it's 
 as **a real but partial improvement, not yet at the stated target**, with that question left open
 rather than assumed away.
 
+### What's still waking it, investigated 2026-08-08
+
+Ran the check the section above left open: 16 real glossary slugs, each fetched twice against
+`bridge.brannon.online`, `cf-cache-status` recorded on both, with `flyctl logs --app nickel-bridge
+--json` tailing in parallel to see whether the pass-1 MISS actually reached origin.
+
+Clean and consistent, but not the answer hoped for: every pass-1 was `MISS`, every pass-2 was
+`HIT`, and **every single MISS correlated 1:1 with exactly one `GET /glossary/<slug>` line in the
+app's own request log** — sixteen probes, sixteen origin hits, zero absorbed upstream of Fly.
+From this vantage point, tiering bought nothing for this traffic.
+
+The reason turns out to be the vantage point itself, not the mechanism: all 32 probes landed on
+the identical Cloudflare colo — `cf-ray` end in `-IAD` on every one, because this sandbox has one
+fixed network egress point. IAD is not an arbitrary lower-tier PoP here: it's one of the two
+colos (`[IAD, EWR]`) the `aws:us-east-1` region hint set two rounds ago designates as this
+origin's **upper tier**. A MISS at the upper tier was always going to reach origin, with or
+without Tiered Cache — there's no higher tier above it to check. So this test could only ever
+prove the null result it found; the actual consolidation, if it's happening, shows up in what
+OTHER (non-upper-tier) PoPs do on a miss, which a single fixed vantage point structurally cannot
+observe. Re-running this from several distinct regions would settle it; nothing available here
+can reach more than one.
+
+That reframes what "success" should even look like. Tiered Cache's ceiling was never *zero*
+origin hits for glossary content — the upper tier itself still takes exactly one hit per page
+**per purge cycle**, from whichever PoP reaches it first, and a purge clears the upper tier same
+as everywhere else. Checked the actual deploy history for the two clean measurement days:
+
+```
+v124  2026-08-06T00:33:15Z  complete
+v125  2026-08-06T01:05:21Z  complete
+v126  2026-08-07T00:12:57Z  complete
+v127  2026-08-07T22:07:04Z  complete
+```
+
+Four deploys, each a full-glossary purge (`purgeUrls()` — see "The edge" in CONTRIBUTING.md) —
+close to the "~3 deploys/day" this doc has cited from the start, and each one re-opens the
+one-hit-per-page floor across every PoP tier at once. That points at the lever PR #132 already
+named second — purge frequency — as the more likely place left to gain, rather than at Tiered
+Cache being incompletely effective: the mechanism did exactly what it could from what's directly
+observable, and 66.5 vs. a ~40 target is plausibly that purge-driven floor rather than a sign
+something's wrong.
+
+Not settled by this round: whether episodes cluster in the hours right after each purge (the
+per-day episode counts from `fly-uptime.mjs` don't carry sub-day timing — a narrower Prometheus
+window around a known deploy timestamp would show it), and the cross-PoP question above. Recorded
+as a sharpened hypothesis, not a closed case.
+
 ## If something looks wrong
 
 | Symptom | First thing to check |
