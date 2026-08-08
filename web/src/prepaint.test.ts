@@ -37,6 +37,13 @@ describe('pre-paint scripts', () => {
     expect(marked, 'index.html no longer marks the document from nb:lastVisit').not.toBeNull();
 
     const attr = marked![1];
+    // Pinned literally, not just cross-checked against whatever prerender.mjs
+    // happens to also use: the two files can't share a real import (this is
+    // raw, pre-module-graph HTML), so a consistent rename on BOTH sides would
+    // otherwise sail through a check that only compares them to each other.
+    // This is the one place the intended name is written down as a fact
+    // rather than derived, so drifting it is a deliberate edit here too.
+    expect(attr).toBe('data-returning-player');
     // .pr is the prerendered article's class; #root would stay hidden after
     // React refilled it. Both halves are pinned — a rule naming a class the
     // markup stopped using would pass a check on either one alone.
