@@ -37,9 +37,9 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
-import { boardDifficulty, recomputeElo } from './tournaments.js';
+import { boardDifficulty, getTournament, recomputeElo } from './tournaments.js';
 
-const HUMAN_SEAT: Seat = 2; // South
+export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
 
 // Exported for the benchmark AI personas (ai-players.ts), which bid their own
@@ -56,7 +56,7 @@ const stmtCreateBoard = db.prepare(
 // recycled id belonging to a different user's board. With the full scope the
 // stale write matches nothing and drops harmlessly.
 const stmtSaveBoard = db.prepare(
-  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, updated_at = unixepoch()
+  `UPDATE boards SET state = ?, calls = ?, plays = ?, bid_evals = ?, contract = ?, tricks_declarer = ?, score_ns = ?, claimed_at_ply = ?, updated_at = unixepoch()
    WHERE id = ? AND tournament_id = ? AND user_id = ?`,
 );
 const stmtBoardResults = db.prepare(
@@ -194,6 +194,7 @@ function save(b: GameBoard): void {
     b.contract ? JSON.stringify(b.contract) : null,
     b.row.tricks_declarer,
     b.row.score_ns,
+    b.row.claimed_at_ply,
     b.row.id,
     b.row.tournament_id,
     b.row.user_id,
@@ -209,9 +210,11 @@ function boardDone(row: BoardRow): boolean {
  * Does the human play this hand? The human plays their whole side: South
  * always, and North whenever N-S is the declaring side (South declaring →
  * South + dummy North; North declaring → the board flips and the human runs
- * partner's hand). Defending, the human plays only South.
+ * partner's hand). Defending, the human plays only South. Exported for
+ * analyze.ts, which must grade exactly the cards this says the human chose —
+ * not "South's cards" — in both flip orientations.
  */
-function humanControls(hand: Seat, contract: Contract): boolean {
+export function humanControls(hand: Seat, contract: Contract): boolean {
   if (hand === HUMAN_SEAT) return true;
   return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
 }
@@ -280,6 +283,13 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
           // the only way the claim's outcome is guaranteed identical to what
           // continued play would have produced.
           b.claimed = true;
+          // Persist the boundary: everything from this plays-index on is the
+          // server fast-playing the settled tail for both sides — including,
+          // when the claim fires on the human's own turn, cards from the
+          // human's hand. Analyze must never grade past it (see the
+          // claimed_at_ply migration comment in db.ts). At most one claim per
+          // board: resolveClaim finishes it.
+          b.row.claimed_at_ply = b.plays.length;
           b.plays.push(pickFromSolve(legal, solve));
           await resolveClaim(b, priority);
           continue;
@@ -373,7 +383,12 @@ export async function submitCall(
     b.bidEvals.push(evaluation);
     await advanceRobots(b, priority);
     save(b);
-    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    // kind === 'standard' excludes exhibit AND rehearsal boards: recomputeElo's
+    // own replay already filters to standard tournaments, so calling it here
+    // for either would be a wasted full replay-sweep, not a correctness bug —
+    // but rehearsals are explicitly uncapped, so skipping the call outright
+    // (rather than relying on the replay to no-op) actually matters here.
+    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
     return evaluation;
   });
 }
@@ -388,7 +403,8 @@ export async function submitPlay(b: GameBoard, card: Card, priority: SolvePriori
     b.plays.push(card);
     await advanceRobots(b, priority);
     save(b);
-    if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+    // see the matching comment in submitCall above
+    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
   });
 }
 
@@ -412,7 +428,8 @@ export async function ensureAdvanced(b: GameBoard, priority: SolvePriority = 'in
     await advanceRobots(b, priority);
     if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
       save(b);
-      if (boardDone(b.row) && !isAiUser(b.row.user_id)) recomputeElo();
+      // see the matching comment in submitCall above
+      if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
     }
   });
 }
@@ -458,6 +475,19 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     auction: auctionView,
     bidEvals: b.bidEvals,
   };
+
+  // A "Play From Here" rehearsal: never scored (see the kind allowlist
+  // exclusion on TournamentRow.kind), so the client needs to know it's
+  // looking at one — Board.tsx uses this to relabel the header, add an END
+  // action, and swap in the adjusted receipt instead of the ordinary
+  // Result/ScoreReceipt once it finishes.
+  if (t.kind === 'rehearsal' && t.origin_tournament_id != null && t.origin_board_no != null && t.branch_ply != null) {
+    view.rehearsal = {
+      originTournamentId: t.origin_tournament_id,
+      originBoardNo: t.origin_board_no,
+      branchPly: t.branch_ply,
+    };
+  }
 
   if (b.row.state === 'bidding') {
     if (!auction.isOver && auction.turn === HUMAN_SEAT) {
@@ -513,6 +543,31 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     view.allHands = deal.hands;
     view.playHistory = b.contract ? playState(deal, b.contract, b.plays).completedTricks : [];
     if (b.claimed) view.claimed = true;
+    // The origin board's own real result, for the adjusted-receipt
+    // comparison — sent inline so the client never needs a second fetch. A
+    // rehearsal's own `result.pct`/`.field` are meaningless (matchpoints()
+    // returns a placeholder pct against a field of exactly one, since nobody
+    // else ever plays a rehearsal tournament); the client compares scoreNS/
+    // contractLabel against THIS field instead. originResult.pct is the real
+    // "old" matchpoint pct the player actually earned at that table;
+    // lineMatchpoints is the "new" counterfactual pct this line's score would
+    // have earned against that same real field (see lineMatchpointsVsOrigin).
+    if (t.kind === 'rehearsal' && t.origin_tournament_id != null && t.origin_board_no != null) {
+      const originT = getTournament(t.origin_tournament_id);
+      const originBoard = originT ? loadBoard(originT, b.row.user_id, t.origin_board_no, false) : null;
+      if (originT && originBoard?.row.state === 'done') {
+        // Fetched once and shared: boardResult needs it for originResult's
+        // field/pct, lineMatchpointsVsOrigin needs it for the substitution —
+        // same (tournament, board) query, no reason to run it twice.
+        const originRows = stmtBoardResults.all(originT.id, originBoard.row.board_no) as (BoardRow & {
+          user_handle: string;
+          user_kind: 'human' | 'ai';
+          user_google: string;
+        })[];
+        view.originResult = boardResult(originT, originBoard, viewerElo, originRows);
+        view.lineMatchpoints = lineMatchpointsVsOrigin(originRows, b.row.user_id, b.row.score_ns);
+      }
+    }
   }
   return view;
 }
@@ -529,12 +584,19 @@ function remaining(deal: Deal, plays: Card[], seat: Seat): Card[] {
  * in this comparison (see standings()'s doc comment); the persona/human
  * split survives only in Elo and placement.
  */
-function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record<string, unknown> {
-  const rows = stmtBoardResults.all(t.id, b.row.board_no) as (BoardRow & {
-    user_handle: string;
-    user_kind: 'human' | 'ai';
-    user_google: string;
-  })[];
+function boardResult(
+  t: TournamentRow,
+  b: GameBoard,
+  _viewerElo: number,
+  // Callers that already fetched this (tournament, board)'s field rows for
+  // another purpose — boardView's rehearsal branch, for lineMatchpointsVsOrigin
+  // — pass them straight through instead of paying for a second identical
+  // query.
+  rows: (BoardRow & { user_handle: string; user_kind: 'human' | 'ai'; user_google: string })[] = stmtBoardResults.all(
+    t.id,
+    b.row.board_no,
+  ) as (BoardRow & { user_handle: string; user_kind: 'human' | 'ai'; user_google: string })[],
+): Record<string, unknown> {
   const mps = matchpoints(rows.map((r) => r.score_ns ?? 0));
   const field = rows.map((r, i) => ({
     userId: r.user_id,
@@ -568,6 +630,46 @@ function boardResult(t: TournamentRow, b: GameBoard, _viewerElo: number): Record
 
 function tricksOf(r: BoardRow): number | undefined {
   return r.tricks_declarer ?? undefined;
+}
+
+/**
+ * The finished-board rows a board is matchpointed against — the SAME query
+ * boardResult() uses (everyone who finished the board, humans and house, in
+ * updated_at order), exported for analyze.ts's counterfactual arithmetic so
+ * the analysis can never disagree with the field table about who is in the
+ * field. Analyze SUBSTITUTES its hypothetical score into this array by row
+ * index — never appends — per tournaments.ts's order-preservation argument.
+ */
+export function boardFieldRows(tournamentId: number, boardNo: number): { user_id: number; score_ns: number | null }[] {
+  return stmtBoardResults.all(tournamentId, boardNo) as (BoardRow & { user_handle: string })[];
+}
+
+/**
+ * What matchpoint pct a "Play From Here" rehearsal LINE's score would have
+ * earned against the origin board's own real field, substituting it for the
+ * player's row — never appending, the same substitute-never-append rule
+ * analyze.ts's counterfactual arithmetic uses. Takes the field rows rather
+ * than re-querying them (boardFieldRows' own SELECT) so a caller that already
+ * fetched them for another purpose — boardView's rehearsal branch, alongside
+ * boardResult's originResult — pays for the query once. This does not make
+ * the rehearsal itself scored (see rehearsal.ts's doc comment): the
+ * rehearsal's own field is still exactly one player and its own matchpoints()
+ * call would still be the meaningless placeholder — this reads the ORIGIN
+ * tournament's already-real, already-scored field instead. Null when that
+ * field has too few entrants for a pct to mean anything (matchpoints()
+ * returns a placeholder 50 for n<=1, the same guard analyze.ts's singleField
+ * uses).
+ */
+function lineMatchpointsVsOrigin(
+  rows: { user_id: number; score_ns: number | null }[],
+  userId: number,
+  lineScoreNS: number | null,
+): number | null {
+  const myIndex = rows.findIndex((r) => r.user_id === userId);
+  if (rows.length <= 1 || myIndex < 0) return null;
+  const scores = rows.map((r) => r.score_ns ?? 0);
+  scores[myIndex] = lineScoreNS ?? 0;
+  return Math.round(matchpoints(scores)[myIndex].pct * 10) / 10;
 }
 
 function bidAccuracy(evals: { score: number }[]): number | null {

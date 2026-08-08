@@ -24,6 +24,7 @@ describe('pageTitle', () => {
   it('numbers crossings and boards, so two open tabs are tellable apart', () => {
     expect(pageTitle('/t/17', '')).toBe('Crossing 17 | Nickel Bridge');
     expect(pageTitle('/t/17/b/3', '')).toBe('Board 3 · Crossing 17 | Nickel Bridge');
+    expect(pageTitle('/t/17/b/3/analyze', '')).toBe('Analyze board 3 · Crossing 17 | Nickel Bridge');
     // /t/:tid/review only ever redirects, but it should read as its crossing
     // while it does.
     expect(pageTitle('/t/17/review', '')).toBe('Crossing 17 | Nickel Bridge');

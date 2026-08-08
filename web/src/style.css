@@ -1414,6 +1414,14 @@ a.ds-btn-secondary:hover {
   font-family: var(--font-label);
   font-weight: 800;
   flex: none;
+  /* .rank/.suit are plain block divs with no width of their own, so they
+     span the full padded card body and their glyph's horizontal position
+     depends on text-align — pin it left (the corner-index design) so it
+     can never inherit a centered value from a container built for prose
+     (e.g. .analyze-rail.north), which would center each glyph inside the
+     card body instead of flush in the exposed top-left sliver a fanned
+     card relies on. */
+  text-align: left;
 }
 .pcard .rank {
   font-size: calc(var(--card-h) * 15 / 66);
@@ -1534,10 +1542,16 @@ a.ds-btn-secondary:hover {
 }
 .auction table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: center;
 }
 .auction th {
+  /* explicit rather than leaning on table-layout: fixed's "no width
+     specified → divide equally" fallback — this is the actual column
+     width, not a hint, so N/E/S/W stay equal from the empty tray's first
+     frame regardless of how a given engine resolves the implicit case */
+  width: 25%;
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 10.5px;
@@ -1561,6 +1575,14 @@ a.ds-btn-secondary:hover {
   font-weight: 600;
 }
 .auction td button {
+  padding: 2px 5px;
+  min-height: 30px;
+}
+/* invisible, same box model as .auction td button — see AuctionGrid's
+   comment on the blank-cell placeholder for why this exists */
+.auction-blank {
+  display: inline-block;
+  visibility: hidden;
   padding: 2px 5px;
   min-height: 30px;
 }
@@ -1591,9 +1613,14 @@ a.ds-btn-secondary:hover {
 }
 .auction-pending {
   display: inline-block;
+  box-sizing: border-box;
+  /* matches .auction td button's box model (padding + min-height), the
+     same reasoning as .auction-blank above: without it, the row this
+     marker sits in grows again the instant a real call replaces it. */
+  min-height: 30px;
+  padding: 2px 5px;
   outline: 1.5px solid var(--ink);
   outline-offset: 2px;
-  padding: 0 5px;
   font-weight: 800;
 }
 .auction-hint {
@@ -1994,6 +2021,127 @@ a.ds-btn-secondary:hover {
   border-left: 1px solid var(--ink);
 }
 
+/* ---- MedalBar: Home's medal rail (server/src/medals.ts's MedalProgress) —
+   a bar, then the four suit marks close together with the incentive
+   sentence beside them on the same line. Unboxed — no panel background or
+   border around the widget itself, just page-level padding, sitting
+   directly between .home-current (the OPEN NOW/KEEP GOING card) and
+   .home-tolls. The bar's track keeps trick-meter's 1px ink outline, but its
+   unfilled portion is a flat --chart-track fill (no hatch) — PctBar's plain
+   "nothing here yet" convention, not trick-meter's. Suit coloring goes only
+   through the existing --suit-* tokens (see .suit-s/.suit-h/.suit-d/.suit-c
+   above), so night mode and the colorblind palette need no extra work
+   here. */
+.medal-bar {
+  padding: 18px 16px 0;
+}
+.medal-bar-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.medal-bar-track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: var(--chart-track);
+  border: 1px solid var(--ink);
+  overflow: hidden;
+}
+.medal-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--ink);
+}
+/* caps the fill's growing edge with a solid line, matching trick-meter's own
+   fill-capping convention (.trick-meter-fill.theirs.capped) — keeps the
+   filled/unfilled boundary crisp rather than relying on the color change
+   alone. Applied only above 0% width (see MedalBar.tsx), the same tricks > 0
+   gate trick-meter uses, so a fresh account's 0% bar shows no stray line. */
+.medal-bar-fill.capped {
+  border-right: 1px solid var(--ink);
+}
+.medal-bar-fill.tint-c {
+  background: var(--suit-c);
+}
+.medal-bar-fill.tint-d {
+  background: var(--suit-d);
+}
+.medal-bar-fill.tint-h {
+  background: var(--suit-h);
+}
+.medal-bar-fill.tint-s {
+  background: var(--suit-s);
+}
+/* plain weight on purpose — Besley's tabular-nums bug (see .num above) once
+   made a bolded standalone "40%" read as if one digit carried more weight
+   than the rest; folding it back in as ordinary body-weight text next to
+   the bar avoids the whole class of problem rather than chasing it. */
+.medal-pct {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  flex: none;
+}
+.medal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.medal-glyphs {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+.medal-glyph {
+  font-family: var(--font-body);
+  font-size: 21px;
+  line-height: 1;
+}
+/* the "muted sibling" idiom StarGrade already uses for earned-vs-rest */
+.medal-glyph-locked {
+  color: var(--line);
+}
+.medal-text {
+  flex: 1;
+  min-width: 0;
+}
+.medal-cta {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.5;
+}
+.medal-cta b {
+  font-style: normal;
+  font-weight: 700;
+}
+/* a real navigation (to /leaderboard), so a SOLID underline — unlike
+   .gloss-link's dotted one, which means "opens a term sheet, doesn't leave
+   the page." Stays italic, inherited from .medal-cta — only the underline
+   marks it as a link. */
+.medal-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.medal-link:hover {
+  color: var(--accent);
+}
+/* ---- the profile trophy case: only what's earned, no frame, no caption —
+   MedalGlyphs mode="earnedOnly", reusing .medal-glyphs/.medal-glyph as-is.
+   margin-bottom clears the NICKEL RATING hero (FlipDigits) right under it
+   in .stats-hero — without it the row sits flush against the rating. */
+.profile-medals {
+  margin: 6px 0 14px;
+}
+
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
 .play-row {
   display: flex;
@@ -2217,9 +2365,6 @@ a.board-row:hover {
 .home-current-sub {
   color: var(--muted);
   font-size: 13px;
-}
-.home-gate {
-  padding: 14px 16px 0;
 }
 .home-tolls {
   padding: 20px 16px 24px;
@@ -3665,6 +3810,16 @@ a.stat-tile:hover {
   white-space: nowrap;
   position: relative;
 }
+/* the rehearsal header's END action, standing in the vul chip's slot — sized
+   down to the header's compact scale rather than the ordinary board-action
+   Button (display:block, full-width) */
+.board-head-end {
+  display: inline-block;
+  width: auto;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  font-size: 11px;
+}
 /* one-shot entrance cue on a vulnerable board's vul chip, played by Board.tsx
    the first time a vulnerable board is seen in the bidding phase — a ring of
    ink blooms and fades around the chip, twice, then everything settles back
@@ -4842,4 +4997,686 @@ a.stat-tile:hover {
   flex-direction: column;
   gap: 10px;
   margin-top: 12px;
+}
+
+/* ============================== ANALYZE ==============================
+   The Second Crossing — /t/:tid/b/:no/analyze. Everything here is built on
+   the base tokens (var()-chained), so night mode repaints it for free; cost
+   direction is carried by the − sign and the row position, never by colour
+   alone (--negative only reinforces). MP figures render on this screen and
+   nowhere else in the app. */
+
+.analyze-page .screenheader {
+  padding-bottom: 16px;
+}
+.analyze-lens {
+  /* the top padding is the breathing room under the header's rule, before
+     the two lens buttons — the header's own padding sits inside its border */
+  padding: 12px 12px 14px;
+}
+.analyze-lens .pref-switch button {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+}
+
+/* ---- the moments ledger ---- */
+/* Same outer margin as .analyze-par/.analyze-rehearsals below — one shared
+   value (16px top, 12px sides) so the three overview sections read as a
+   consistent stack rather than each carrying its own ad hoc gap. The side
+   margin also matters on its own: without it the panel's own solid border
+   (.perf-panel's base rule) sits flush against the viewport edge, right next
+   to the browser chrome, and reads as no border at all — the margin is what
+   makes that solid edge visible to the left of the panel's inset dashed tear
+   line, not a replacement for it. */
+.analyze-moments {
+  margin: 16px 12px 0;
+}
+/* .moment-row is the ROW (a plain wrapper for a play moment carrying two
+   actions, or the whole element for a static bid-moment finding); the
+   interactive button-reset styling that used to be on this selector lives on
+   .moment-row-open now — two actions can't nest inside one <button>. */
+.analyze-moments .moment-row {
+  border-top: 1px solid var(--line-quiet);
+  padding: 9px 0 10px;
+}
+.analyze-moments .moment-row:first-of-type {
+  border-top: 0;
+}
+/* A quiet 1px border, not PLAY FROM HERE's structural ink one — sitting
+   right beside a clearly-boxed button, an unbordered tap target (the
+   pre-rehearsal shape: nothing else in the row to contrast against) reads as
+   inert text instead of a second control. The lighter --line border keeps
+   the hierarchy honest: this is content you can drill into, PLAY FROM HERE
+   is the action. Static bid-moment rows never get this — see the doc
+   comment on .moment-row above — so the border itself doubles as "this row
+   is interactive," which the chevron alone no longer carried on its own. */
+.moment-row-open {
+  appearance: none;
+  background: none;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 11px;
+  font: inherit;
+  color: inherit;
+}
+.moment-row-open:hover,
+.moment-row-open:focus-visible {
+  background: var(--surface);
+  border-color: var(--ink);
+}
+.moment-row-rehearse {
+  display: inline-flex;
+  width: auto;
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 10px;
+}
+.moment-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.moment-where {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  min-width: 64px;
+}
+/* Opportunity ink: a moment is matchpoints that were there for the taking,
+   so the figure is +N in the positive (club-green) token — the sign carries
+   the direction, colour only reinforces (the colourblind palette leaves
+   --positive alone). */
+.moment-gain {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--positive);
+}
+.moment-chev {
+  font-family: var(--font-label);
+  color: var(--muted);
+  font-size: 13px;
+}
+.moment-aside {
+  display: block;
+  margin-top: 4px;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.analyze-finding {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.analyze-overflow {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12.5px;
+  border-top: 1px solid var(--line-quiet);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+/* ---- rehearsals: the per-moment rail and the board-wide ledger ---- */
+.rehearsal-rail {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+/* Wraps one stub + its discard control — a <button> can't nest inside the
+   <a> the stub's Link renders, so they're siblings here instead of one
+   interactive element holding another. */
+.rehearsal-stub-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+/* The PerforatedPanel ticket-stub motif, one size down: a solid box border
+   all the way around, with the dashed "tear line" inset a few px from the
+   left edge (::before) rather than replacing the left border outright — so
+   the stub reads as a torn-off ticket stub, not a box with one dashed side. */
+.rehearsal-stub {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 84px;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 7px 9px 7px 13px;
+  text-decoration: none;
+  color: inherit;
+}
+.rehearsal-stub::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px dashed var(--line-dashed);
+}
+.rehearsal-stub-label {
+  display: block;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.rehearsal-stub-score {
+  font-weight: 800;
+  font-size: 13px;
+}
+.rehearsal-stub-discard {
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  border-left: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+}
+.rehearsal-stub-discard:hover,
+.rehearsal-stub-discard:focus-visible {
+  background: var(--surface);
+  color: var(--negative);
+}
+/* Same shared outer margin as .analyze-moments above — see its doc comment. */
+.analyze-rehearsals {
+  margin: 16px 12px 0;
+}
+.rehearsal-ledger-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--line-quiet);
+}
+.rehearsal-ledger-row-wrap:first-of-type {
+  border-top: 0;
+}
+.rehearsal-ledger-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+.rehearsal-ledger-row-wrap:hover,
+.rehearsal-ledger-row:focus-visible {
+  background: var(--surface);
+}
+.rehearsal-ledger-from {
+  font-weight: 700;
+  font-size: 12px;
+}
+.rehearsal-ledger-score {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rehearsal-ledger-chev {
+  color: var(--muted);
+  font-size: 14px;
+}
+.rehearsal-ledger-discard {
+  appearance: none;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 7px;
+  font-size: 11px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.rehearsal-ledger-discard:hover,
+.rehearsal-ledger-discard:focus-visible {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+
+/* ---- the par panel ---- */
+/* Same shared outer margin as .analyze-moments/.analyze-rehearsals above —
+   see the doc comment on .analyze-moments. */
+.analyze-par {
+  margin: 16px 12px 0;
+}
+.analyze-par .analyze-finding {
+  margin-top: 10px;
+}
+
+/* ---- THE CARDS WERE WORTH: the receipt and the rail ---- */
+/* par and your table as paired receipts; the par stub wears the sealed
+   (dashed) treatment — a receipt for a crossing nobody made */
+.worth-stubs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.worth-stub {
+  /* each stub spans the shared row grid (label / contract / score / aside),
+     so the two receipts' rows stay aligned even when one label wraps — "THE
+     CARDS ALLOWED" runs two lines beside "YOUR TABLE"'s one, and the
+     contract/score lines must not scoot apart */
+  min-width: 0;
+  position: relative;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 10px 10px 8px;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+  align-content: start;
+  row-gap: 2px;
+}
+.worth-stub.sealed {
+  border: var(--border-sealed);
+  background: var(--paper);
+}
+/* the third stub (once a rehearsal exists) spans both columns as a shorter
+   row beneath the PAR/YOUR TABLE pair, rather than forcing a cramped 3-up
+   grid at the 390px smoke-test breakpoint — it opts out of the pair's own
+   subgrid row-alignment (a different shape: no sealed treatment, one aside
+   line) rather than trying to fit it. */
+.worth-stub-rehearsal {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  grid-template-rows: none;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.worth-stub-rehearsal .worth-stub-label {
+  flex: 1 0 100%;
+  margin-bottom: 0;
+}
+.worth-stamp {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  font-size: 10px;
+}
+.worth-stub-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+/* the PAR stamp docks top-right; the label wraps short of it */
+.worth-stub.sealed .worth-stub-label {
+  padding-right: 40px;
+}
+.worth-contract {
+  font-weight: 800;
+  font-size: 14px;
+}
+.worth-score {
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.1;
+}
+.worth-aside {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.worth-rail-label {
+  display: block;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 14px;
+}
+/* the rail: fixed-height bands (gate flag / upper labels / axis / lower
+   labels) so nothing collides — geometry (0..1 lefts) from analyzeRail.ts */
+.worth-rail {
+  position: relative;
+  height: 104px;
+  margin-top: 2px;
+  font-family: var(--font-label);
+}
+.worth-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52px;
+  border-top: 1px solid var(--ink);
+}
+.worth-gate {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  border-left: 1.5px dashed var(--accent);
+}
+.worth-gatelab {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.worth-dot {
+  position: absolute;
+  top: 47.5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--panel);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+.worth-dot.you {
+  background: var(--ink);
+}
+.worth-dotlab {
+  position: absolute;
+  top: 64px;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.worth-dotlab.up {
+  top: auto;
+  bottom: 58px;
+}
+.worth-dotlab small {
+  display: block;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+/* the sampling disclosure for a crowded rail — counted, never silent */
+.worth-rail-note {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 2px;
+}
+
+/* ---- the audit ribbon (the tour ribbon's shape, unvoiced) ---- */
+.audit-ribbon {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 9px 16px 10px;
+  margin-bottom: 8px;
+}
+.audit-ribbon-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+.audit-ribbon-who {
+  letter-spacing: 0.18em;
+  font-size: 9px;
+}
+.audit-ribbon-gain {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--positive);
+}
+.audit-ribbon p {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.42;
+  margin: 0;
+  /* Reserved, not sized-to-content: the caption changes on every step, and a
+     shorter line must not slide the whole board up and back down (the same
+     layout-shift rule the bid box's docked `waiting` treatment exists for —
+     see BiddingPhase's dock comment). Three lines fits every caption the
+     audit writes at the reference width. */
+  min-height: calc(3 * 1.42em);
+}
+
+/* ---- the open-hand rails around the replay ---- */
+.analyze-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 16px 4px;
+  font-size: 12px;
+}
+.analyze-rail.north {
+  align-items: center;
+  text-align: center;
+  /* no label above this rail any more (the fan is the only child) — pull
+     its own top padding and the fan's own top padding in, so the fan sits
+     close under the WEST/EAST rails instead of leaving the label's old
+     clearance as dead space */
+  padding-top: 0;
+}
+.analyze-rail.north .board-fan {
+  padding-top: 0;
+}
+.analyze-rails {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+}
+.analyze-rails .analyze-rail {
+  padding: 2px 0 4px;
+  flex-direction: column;
+  gap: 2px;
+  /* equal halves: a full 13-card hand is wider than half a phone, so it must
+     wrap inside its own column rather than shove its twin off the screen */
+  flex: 1 1 0;
+  min-width: 0;
+}
+.analyze-rails .analyze-rail.right {
+  text-align: right;
+}
+.analyze-rail-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 7.5px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  min-width: 52px;
+}
+/* A hand as suit groups on a line, wearing the dummy rail's kerning
+   (.dummy-rail-ranks' letter-spacing; the ranks are thin-space separated in
+   the markup — a full space × two 13-card hands side by side outgrows a
+   phone). A suit group never breaks internally; the flex gap separates
+   groups and, where the line is allowed to wrap, provides the break points. */
+.analyze-suitline {
+  display: inline-flex;
+  column-gap: 6px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.analyze-suitgroup {
+  white-space: nowrap;
+}
+/* The side rails and the PLAYED rail wrap between suit groups — a full hand
+   (or most of the deck) doesn't fit their line — with the two lines they
+   will need reserved from the start (the bid-box dock rule: the board below
+   must not scoot when a wrap appears or collapses mid-replay). North isn't
+   targeted here at all: it renders as a card fan, not a suitline. */
+.analyze-rails .analyze-suitline,
+.analyze-rail.played .analyze-suitline {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: calc(2 * 1.42em);
+}
+.analyze-rails .analyze-rail.right .analyze-suitline {
+  justify-content: flex-end;
+}
+/* ---- the PLAYED accumulator, first under the ribbon (North's old slot —
+   North's card fan now sits just above the trick box instead) */
+.analyze-rail.played {
+  align-items: center;
+  text-align: center;
+}
+.analyze-rail.played .analyze-suitline {
+  justify-content: center;
+  align-self: stretch;
+  color: var(--muted);
+}
+
+/* ---- the replay dock ---- */
+.replay-dock {
+  border-top: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 10px 12px 14px;
+  margin-top: 10px;
+}
+.replay-pips {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+/* the compass fill: four wedges (N/E/S/W, --pip-n/e/s/w) per pip — ink once
+   that seat's card is revealed at the current scrub position, verdigris if
+   that ply was a graded moment. Fallback to var(--panel) so a pip rendered
+   with no inline overrides still reads as the plain "not reached" hollow
+   circle. See Analyze.tsx's ReplayLens for how the four properties are set. */
+.replay-pip {
+  appearance: none;
+  cursor: pointer;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  background: conic-gradient(
+    from -45deg,
+    var(--pip-n, var(--panel)) 0deg 90deg,
+    var(--pip-e, var(--panel)) 90deg 180deg,
+    var(--pip-s, var(--panel)) 180deg 270deg,
+    var(--pip-w, var(--panel)) 270deg 360deg
+  );
+}
+.replay-pip.cur {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.replay-pip.tail {
+  border-style: dashed;
+  border-color: var(--line-dashed);
+}
+.replay-dock-row {
+  display: flex;
+  gap: 8px;
+}
+.replay-dock-row .ds-btn {
+  flex: 1;
+}
+.replay-dock-moment {
+  margin-top: 8px;
+}
+.replay-dock-rehearse {
+  margin-top: 8px;
+}
+
+/* the engine's card, marked in a suit-line rail — the fan uses the live
+   pre-confirmation .selected treatment for the same reading */
+.analyze-hl {
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--positive);
+}
+
+/* ---- the reduced-motion / static trick list ---- */
+.analyze-tricks .analyze-trickrow {
+  border-top: 1px solid var(--line-quiet);
+  padding: 6px 0;
+}
+.analyze-tricks .analyze-trickrow:first-of-type {
+  border-top: 0;
+}
+.analyze-trickrow.turned {
+  background: var(--surface);
+  margin: 0 -14px 0 -22px;
+  padding: 8px 14px 10px 22px;
+}
+.analyze-trickrow-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-label);
+}
+.analyze-trickno {
+  font-weight: 800;
+  font-size: 11px;
+  min-width: 22px;
+  color: var(--muted);
+}
+.analyze-trickcards {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.analyze-tc {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.analyze-tc small {
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  margin-right: 1px;
+}
+.analyze-tc.win b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.analyze-ddmark {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.analyze-ddmark.drop {
+  color: var(--negative);
+}
+.analyze-ddmark.back {
+  color: var(--verdigris);
+}
+.analyze-trick-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 4px;
+}
+.analyze-trick-verdict .moment-aside {
+  margin-top: 0;
 }

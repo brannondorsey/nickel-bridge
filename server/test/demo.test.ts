@@ -82,6 +82,15 @@ describe('demo mode', () => {
     expect(handles).toContain('ProvisionalBotB');
   }, 120_000);
 
+  it('DEMO=1 relaxes /api/me\'s provisionalMin too, so the medal rail\'s club-tier copy stays honest', async () => {
+    // Same quota as the leaderboard test above (server/src/tournaments.ts's
+    // provisionalMin(), the one place both routes read DEMO from) — sent on
+    // /api/me so MedalBar.tsx can tell whether "...to join the rankings" is
+    // still true on this deployment before the club medal is even earned.
+    const me = await inspector.get('/api/me');
+    expect(me.provisionalMin).toBe(1);
+  });
+
   it('the handle-collision exhibit prefill is guaranteed to 409', async () => {
     const { collisionHandle } = await inspector.get('/api/demo/scenarios');
     const visitor = new TestClient(app, 'Handle Collision Visitor');

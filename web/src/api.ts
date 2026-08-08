@@ -1,5 +1,20 @@
 /** Thin typed client for the server API. */
 
+/** ♣/♦/♥/♠, matching packages/core/src/medals.ts's tier order (4/25/100/500 tournaments). */
+export type MedalSuit = 'c' | 'd' | 'h' | 's';
+
+/**
+ * The Home rail's medal progress (server/src/medals.ts), fully computed
+ * server-side — the client only renders it. `target`/`pct`/`tournamentsRemaining`
+ * are null/0 once every medal is earned (`target === null`).
+ */
+export interface MedalProgress {
+  earned: MedalSuit[];
+  target: MedalSuit | null;
+  pct: number;
+  tournamentsRemaining: number;
+}
+
 export interface Me {
   user: {
     id: number;
@@ -14,12 +29,23 @@ export interface Me {
     fastForward: boolean;
     /** show the post-call grading toast (settings: "Bid feedback") */
     bidFeedback: boolean;
+    /** submit a bid on a second tap of the selected call, without pressing Bid (settings: "Double-tap to bid"); default false */
+    doubleTapBid: boolean;
+    /**
+     * Opt in to features still being tried out before a general release —
+     * currently gates Analyze. Off by default in production, on by default
+     * on preview/demo deployments (settings: "Beta features"); see the
+     * beta_features migration in server/src/db.ts.
+     */
+    betaFeatures: boolean;
     /**
      * Completed standard boards. Sent because Compare's entry points need to
      * know whether the VIEWER has a record worth comparing — on someone else's
      * profile the client has their board count but not its own.
      */
     boards: number;
+    /** null only for a signed-out/non-human session; never applies to a real user's own /api/me */
+    medals: MedalProgress | null;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -32,6 +58,14 @@ export interface Me {
    * server then refuses. server/src/compare.ts's compareMin() is the authority.
    */
   compareMinBoards?: number;
+  /**
+   * The leaderboard's rated-tournament quota (server/src/tournaments.ts's
+   * provisionalMin()). Sent because DEMO=1 relaxes it to 1 (from a
+   * production 4) — the Home medal rail's club-tier copy uses this to know
+   * whether "...to join the rankings" is still true rather than hardcoding
+   * the production number. See MedalBar.tsx's doc comment.
+   */
+  provisionalMin?: number;
 }
 
 export interface BidMeaning {
@@ -97,7 +131,7 @@ export interface ScoreBreakdown {
   total: number;
 }
 
-interface BoardResult {
+export interface BoardResult {
   contractLabel: string;
   tricksDeclarer: number | null;
   scoreNS: number;
@@ -153,6 +187,99 @@ export interface BoardView {
   playHistory?: TrickCard[][];
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
+  /** present only when this board is a "Play From Here" rehearsal — never scored, see server/src/rehearsal.ts */
+  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
+  /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
+  originResult?: BoardResult;
+  /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
+  lineMatchpoints?: number | null;
+}
+
+/** One "Play From Here" attempt on a board — see server/src/rehearsal.ts */
+export interface RehearsalSummary {
+  tournamentId: number;
+  boardNo: number;
+  branchPly: number;
+  state: 'playing' | 'done';
+  createdAt: number;
+  contractLabel: string | null;
+  scoreNS: number | null;
+}
+
+/**
+ * The Analyze review's verdicts, mirrored from server/src/analyze.ts —
+ * pre-computed server-side and only DRAWN here (the Compare precedent: a
+ * client that re-derived verdicts would eventually disagree with a cached
+ * one). MP figures from these types render only inside the Analyze screen.
+ */
+export interface AnalysisPly {
+  ply: number;
+  trick: number;
+  seat: number;
+  card: number;
+  /** tricks the human's side lost at this card per the DD trace (> 0 always) */
+  ddLoss: number;
+  cfTricksDeclarer: number;
+  cfScoreNS: number;
+  cfPct: number | null;
+  mpCost: number | null;
+  /** only present for a genuine, chargeable fault — an excused candidate (the
+   *  sampled engine would also have played the card) never reaches the
+   *  client at all; see server/src/analyze.ts's stage-3 doc comment */
+  sampled: { bestCard: number; deficit: number; grade: 0 | 1 | 2 | 3 } | null;
+}
+
+export interface AnalysisMoment {
+  kind: 'play' | 'bid';
+  ply?: number;
+  trick?: number;
+  card?: number;
+  grade?: 0 | 1 | 2 | 3;
+  callIndex?: number;
+  call?: number;
+  mpCost: number;
+}
+
+export interface AnalysisCall {
+  callIndex: number;
+  call: number;
+  bestCall: number;
+  cf: {
+    calls: number[];
+    contractLabel: string;
+    ddTricks: number | null;
+    scoreNS: number;
+    cfPct: number | null;
+    mpGain: number | null;
+  } | null;
+}
+
+export interface AnalysisPar {
+  parScore: number;
+  parContracts: string[];
+  calls: AnalysisCall[];
+}
+
+export interface AnalysisView {
+  version: number;
+  boardNo: number;
+  contract: Contract | null;
+  claimedAtPly: number | null;
+  singleField: boolean;
+  /** the field snapshot the verdicts were computed against, refreshed against the live
+   * field on every request (never frozen at first compute — see refreshMatchpointLayer) */
+  fieldScores: number[];
+  myIndex: number;
+  actualPct: number | null;
+  ddTricks: number[] | null;
+  plies: AnalysisPly[];
+  moments: AnalysisMoment[];
+  setAside: number;
+  par: AnalysisPar | null;
+  /** MOMENT_FLOOR — the mpCost figures are refreshed against the live field
+   *  per request while stage 3's floor selection ran at first open, so the
+   *  caption for a drifted unjudged ply needs the floor to compare against */
+  momentFloor: number;
 }
 
 interface Standing {
@@ -233,6 +360,8 @@ export interface PlayerStats {
     boardsCompleted: number;
     tournamentsPlayed: number;
     tournamentsCompleted: number;
+    /** loyalty medals actually earned (packages/core/src/medals.ts) — always [] for house/AI profiles */
+    earnedMedals: MedalSuit[];
     /** longest run of consecutive UTC calendar days with >=1 completed board (server/src/stats.ts) */
     streakDays: number;
     currentElo: number;
@@ -442,11 +571,20 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   setOnboarded: () => request<{ ok: boolean }>('/api/me/onboarded', { method: 'POST' }),
   /** Partial update of the account-backed settings; absent keys are left alone. */
-  setPrefs: (prefs: { ladderListed?: boolean; fastForward?: boolean; bidFeedback?: boolean }) =>
-    request<{ ladderListed: boolean; fastForward: boolean; bidFeedback: boolean }>('/api/me/prefs', {
-      method: 'POST',
-      body: JSON.stringify(prefs),
-    }),
+  setPrefs: (prefs: {
+    ladderListed?: boolean;
+    fastForward?: boolean;
+    bidFeedback?: boolean;
+    betaFeatures?: boolean;
+    doubleTapBid?: boolean;
+  }) =>
+    request<{
+      ladderListed: boolean;
+      fastForward: boolean;
+      bidFeedback: boolean;
+      betaFeatures: boolean;
+      doubleTapBid: boolean;
+    }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
   tournament: (id: number) => request<TournamentInfo>(`/api/tournaments/${id}`),
@@ -460,6 +598,23 @@ export const api = {
     request<{ board: BoardView }>(`/api/tournaments/${tid}/boards/${no}/play`, {
       method: 'POST',
       body: JSON.stringify({ card }),
+    }),
+  /** Analyze verdicts for a finished board; par=true adds stage 4 (the crossing/auction lenses) */
+  analysis: (tid: number, no: number, par: boolean) =>
+    request<AnalysisView>(`/api/tournaments/${tid}/boards/${no}/analysis${par ? '?par=1' : ''}`),
+  /** Launch a "Play From Here" rehearsal branching at `ply` (a plays[] index — see AnalysisMoment/AnalysisPly) */
+  rehearse: (tid: number, no: number, ply: number) =>
+    request<{ tournamentId: number; boardNo: number }>(`/api/tournaments/${tid}/boards/${no}/rehearse`, {
+      method: 'POST',
+      body: JSON.stringify({ ply }),
+    }),
+  /** Every rehearsal attempt on this origin board, newest first, uncapped */
+  rehearsals: (tid: number, no: number) =>
+    request<{ rehearsals: RehearsalSummary[] }>(`/api/tournaments/${tid}/boards/${no}/rehearsals`),
+  /** Delete one rehearsal attempt outright — the escape hatch beside rehearse's own same-ply resume */
+  discardRehearsal: (tid: number, no: number, rehearsalId: number) =>
+    request<{ ok: boolean }>(`/api/tournaments/${tid}/boards/${no}/rehearsals/${rehearsalId}`, {
+      method: 'DELETE',
     }),
   playerStats: (id: number) => request<PlayerStats>(`/api/users/${id}/stats`),
   compare: (id: number) => request<CompareView>(`/api/compare/${id}`),

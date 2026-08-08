@@ -8,9 +8,10 @@
  * `adaptive` is a third kind of override: it also sets `data-theme` explicitly (there's
  * no CSS media query for time-of-day), but recomputes which one on a fixed local-time
  * schedule — night from `ADAPTIVE_NIGHT_START_HOUR` to `ADAPTIVE_NIGHT_END_HOUR` — rather
- * than following the OS. The window matches the industry-standard fixed dark-mode
- * schedule (e.g. Windows Night Light's default "set hours" of 9 PM-7 AM) rather than a
- * sunset/sunrise calculation, since that needs geolocation this app doesn't request.
+ * than following the OS. The window is close to (but wider than) the industry-standard
+ * fixed dark-mode schedule (e.g. Windows Night Light's default "set hours" of 9 PM-7 AM);
+ * it isn't a sunset/sunrise calculation, since that needs geolocation this app doesn't
+ * request.
  * The persisted choice is applied twice: once by a blocking inline script in
  * index.html (before first paint, so there's no light-mode flash) duplicating the
  * logic below in plain JS since it must run before this module loads, and again by
@@ -24,8 +25,8 @@ export type ThemePref = 'day' | 'night' | 'system' | 'adaptive';
 export const THEME_KEY = 'nb:theme';
 
 /** Local-time window `adaptive` treats as night — see the module doc comment above. */
-export const ADAPTIVE_NIGHT_START_HOUR = 21; // 9 PM
-export const ADAPTIVE_NIGHT_END_HOUR = 7; // 7 AM
+export const ADAPTIVE_NIGHT_START_HOUR = 19; // 7 PM
+export const ADAPTIVE_NIGHT_END_HOUR = 8; // 8 AM
 
 const NIGHT_THEME_COLOR = '#171512';
 const DAY_THEME_COLOR = '#fcfbf8';

@@ -4,6 +4,7 @@ import { SUIT_SYMBOLS, api, suitClass } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { PrefSwitch } from '../components/ds/PrefSwitch';
 import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -41,35 +42,6 @@ const SUIT_PALETTE_OPTIONS: { pref: SuitPalette; label: string }[] = [
   { pref: 'colorblind', label: 'COLORBLIND' },
 ];
 
-/** The shared lever: n segments, the chosen one on the ink plate. */
-function PrefSwitch<T>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="pref-switch" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.label}
-          type="button"
-          className={o.value === value ? 'active' : ''}
-          aria-pressed={o.value === value}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 const OFF_ON = [
   { value: false, label: 'OFF' },
   { value: true, label: 'ON' },
@@ -85,7 +57,13 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
   );
 }
 
-type AccountPrefs = { ladderListed: boolean; fastForward: boolean; bidFeedback: boolean };
+type AccountPrefs = {
+  ladderListed: boolean;
+  fastForward: boolean;
+  bidFeedback: boolean;
+  betaFeatures: boolean;
+  doubleTapBid: boolean;
+};
 
 export default function Settings() {
   const { me, refresh } = useMe();
@@ -95,6 +73,10 @@ export default function Settings() {
     ladderListed: me?.user?.ladderListed !== false,
     fastForward: me?.user?.fastForward !== false,
     bidFeedback: me?.user?.bidFeedback !== false,
+    betaFeatures: me?.user?.betaFeatures === true,
+    // Fail CLOSED, unlike the three switches above — this preference defaults
+    // off, so an absent/undefined value must read as off, not on.
+    doubleTapBid: me?.user?.doubleTapBid === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -122,7 +104,7 @@ export default function Settings() {
         <PerforatedPanel className="settings-panel">
           <SettingRow
             label="Appearance"
-            note="Adaptive turns the lamps down from 9 PM to 7 AM. System follows this device."
+            note="Adaptive turns the lamps down from 7 PM to 8 AM. System follows this device."
           >
             <PrefSwitch
               label="Appearance"
@@ -192,6 +174,30 @@ export default function Settings() {
               value={prefs.bidFeedback}
               options={OFF_ON}
               onChange={(bidFeedback) => change({ bidFeedback })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Beta features"
+            note="Try screens still being tried out before they reach everyone — currently: Analyze, the after-the-fact review of a finished board's play."
+          >
+            <PrefSwitch
+              label="Beta features"
+              value={prefs.betaFeatures}
+              options={OFF_ON}
+              onChange={(betaFeatures) => change({ betaFeatures })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Double-tap to bid"
+            note="A second tap on your selected call submits it immediately, without pressing Bid. Off by default, since that's the tap most mistaken bids come from — turn it on for the faster gesture once you trust it."
+          >
+            <PrefSwitch
+              label="Double-tap to bid"
+              value={prefs.doubleTapBid}
+              options={OFF_ON}
+              onChange={(doubleTapBid) => change({ doubleTapBid })}
             />
           </SettingRow>
           {prefError ? <div className="notice-error settings-error">{prefError}</div> : null}

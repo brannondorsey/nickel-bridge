@@ -19,9 +19,13 @@ const VISIBLE_LEVELS = 4;
  * auction used to render all seven rows with 20+ of them greyed out, pushing
  * the auction off screen.
  *
- * Every tap just calls onSelect; the parent decides select-vs-commit, so a
- * second tap on the already-selected call bids it (tap-to-bid, mirroring card
- * play) while the confirm CTA remains an equal path. Class names
+ * Every tap just calls onSelect; the parent decides select-vs-commit. By
+ * default a second tap on the already-selected call does nothing beyond
+ * re-selecting it — the confirm CTA is the only way to submit — but an
+ * account can opt into tap-to-bid (mirroring card play's tap-again-to-play)
+ * via the "Double-tap to bid" setting, in which case Board.tsx's onSelect
+ * submits on that second tap instead. BidBox itself never knows which mode
+ * is active; that decision lives entirely in the caller. Class names
  * .bidbox/.bid/.callrow/.confirm-row are selected on by the e2e smoke test.
  */
 export function BidBox({

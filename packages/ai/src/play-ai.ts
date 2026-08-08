@@ -14,8 +14,16 @@ import {
 // Vendored WASM build of Bo Haglund & Soren Hein's DDS (Apache-2.0),
 // from github.com/bookchris/bridge-dds-js with its ESM import path fixed.
 import { Dds, loadDds } from '../vendor/bridge-dds/api.js';
-import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
-import { SolvePriority, getSharedDdPool } from './dd-pool.js';
+import type {
+  DdTableDealPbn,
+  DdTableResults,
+  DealPbn,
+  FutureTricks,
+  ParResultsDealer,
+  PlayTracePbn,
+  SolvedPlay,
+} from '../vendor/bridge-dds/api.js';
+import { DdPool, SolvePriority, getSharedDdPool } from './dd-pool.js';
 
 let ddsInstance: Dds | null = null;
 
@@ -26,8 +34,8 @@ async function getDds(): Promise<Dds> {
   return ddsInstance;
 }
 
-/** our strain (0=♣..4=NT) → DDS trump (0=♠ 1=♥ 2=♦ 3=♣ 4=NT) */
-function ddsTrump(strain: number): number {
+/** our strain (0=♣..4=NT) → DDS trump (0=♠ 1=♥ 2=♦ 3=♣ 4=NT) — the ONE copy (analyse.ts imports it) */
+export function ddsTrump(strain: number): number {
   return strain === 4 ? 4 : 3 - strain;
 }
 
@@ -119,18 +127,21 @@ export interface SolveSource {
 }
 
 /**
- * Solve one request, on a worker whenever that is possible at all — the one
- * place that decides pool-vs-main-thread, for every DD solve in the app
+ * Run one DDS operation, on a worker whenever that is possible at all — the
+ * one POLICY that decides pool-vs-main-thread, for every DD call in the app
  * (solveFutureTricks here, chooseCardSampled in play-mc.ts, the unshipped
- * play-mc-forget.ts). Three copies of this used to reach for the main thread
- * the moment a pool call rejected, which is backwards: a slow solve on a
- * worker costs one request some latency, while the same solve on the main
- * thread costs EVERY concurrent request the whole of it (see solveRequest).
+ * play-mc-forget.ts, and analyse.ts's board-review operations). Three copies
+ * of this used to reach for the main thread the moment a pool call rejected,
+ * which is backwards: a slow call on a worker costs one request some latency,
+ * while the same call on the main thread costs EVERY concurrent request the
+ * whole of it (see solveRequest). Generalized over the operation rather than
+ * copy-pasted per op — four near-copies is exactly how eager main-thread
+ * fallbacks creep back in.
  *
- * The case that actually reached it is a pool dying MID-FLIGHT. A pool that
- * is already dead never gets handed out — getSharedDdPool() replaces it on
- * lookup — but a worker erroring or exiting during a decision rejects every
- * outstanding solve at once, and callers arrive here in bulk
+ * The case that actually reached the fallback is a pool dying MID-FLIGHT. A
+ * pool that is already dead never gets handed out — getSharedDdPool()
+ * replaces it on lookup — but a worker erroring or exiting during a decision
+ * rejects every outstanding call at once, and callers arrive here in bulk
  * (chooseCardSampled solves K layouts under one Promise.all). So one worker
  * crash became K sequential main-thread solves with nothing able to
  * interleave. Measured on one core, K=8 with the pool killed mid-decision:
@@ -142,35 +153,96 @@ export interface SolveSource {
  * means the old one died and the replacement answers in milliseconds. A
  * rejection from a pool that is still usable is a timeout instead, and
  * re-queueing that would land behind the same backlog — so it falls
- * through. Since SOLVE_TIMEOUT_MS is ~10x the slowest solve measured above,
+ * through. Since SOLVE_TIMEOUT_MS is ~10x the slowest solve measured,
  * a timeout means the pool is wedged rather than the deal being hard, and
  * the main thread really is the only way left to answer.
  *
  * Never changes a result, only where it is computed — DDS is deterministic,
  * so invariant 1 is untouched (same argument as the pool itself).
  */
-export async function solveVia(
-  req: DealPbn,
-  priority: SolvePriority = 'interactive',
-  /** overridable only so tests can drive this policy without a built worker */
-  getPool: () => SolveSource | null = getSharedDdPool,
-): Promise<FutureTricks> {
+async function runVia<T, S>(
+  getPool: () => S | null,
+  onPool: (pool: S) => Promise<T>,
+  onMainThread: () => Promise<T>,
+): Promise<T> {
   const pool = getPool();
   if (pool) {
     try {
-      return await pool.solve(req, priority);
+      return await onPool(pool);
     } catch {
       const fresh = getPool();
       if (fresh && fresh !== pool) {
         try {
-          return await fresh.solve(req, priority);
+          return await onPool(fresh);
         } catch {
           // the replacement died too — the main thread is all that is left
         }
       }
     }
   }
-  return solveRequest(req);
+  return onMainThread();
+}
+
+/** Solve one request via the runVia policy — see that function's doc comment. */
+export async function solveVia(
+  req: DealPbn,
+  priority: SolvePriority = 'interactive',
+  /** overridable only so tests can drive this policy without a built worker */
+  getPool: () => SolveSource | null = getSharedDdPool,
+): Promise<FutureTricks> {
+  return runVia(getPool, (pool) => pool.solve(req, priority), () => solveRequest(req));
+}
+
+/**
+ * AnalysePlayPBN via the runVia policy: the DD trick count after every card
+ * of a completed play, in one call — Analyze's stage 1. Main-thread last
+ * resort only (p50 9.4ms, p90 32.6ms, max 132ms measured — cheap, but the
+ * policy is shared so the fallback rules can't diverge per op).
+ */
+export async function analysePlayVia(
+  req: DealPbn,
+  play: PlayTracePbn,
+  priority: SolvePriority = 'interactive',
+  getPool: () => DdPool | null = getSharedDdPool,
+): Promise<SolvedPlay> {
+  return runVia(
+    getPool,
+    (pool) => pool.analysePlay(req, play, priority),
+    async () => (await getDds()).AnalysePlayPBN(req, play),
+  );
+}
+
+/**
+ * CalcDDTablePBN via the runVia policy: twenty independent full-board solves
+ * (5 strains x 4 declarers) — the slowest DDS call in the app (p50 163ms,
+ * p90 576ms, max 780ms measured), which is exactly why it should sit on a
+ * worker and at 'background' priority whenever Analyze asks for it.
+ */
+export async function ddTableVia(
+  req: DdTableDealPbn,
+  priority: SolvePriority = 'interactive',
+  getPool: () => DdPool | null = getSharedDdPool,
+): Promise<DdTableResults> {
+  return runVia(
+    getPool,
+    (pool) => pool.ddTable(req, priority),
+    async () => (await getDds()).CalcDDTablePBN(req),
+  );
+}
+
+/** DealerPar via the runVia policy (0.1ms — kept behind the same door for uniformity). */
+export async function dealerParVia(
+  table: DdTableResults,
+  dealer: number,
+  vul: number,
+  priority: SolvePriority = 'interactive',
+  getPool: () => DdPool | null = getSharedDdPool,
+): Promise<ParResultsDealer> {
+  return runVia(
+    getPool,
+    (pool) => pool.dealerPar(table, dealer, vul, priority),
+    async () => (await getDds()).DealerPar(table, dealer, vul),
+  );
 }
 
 /**

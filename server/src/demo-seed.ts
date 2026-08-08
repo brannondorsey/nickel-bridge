@@ -110,6 +110,7 @@ export function wipeDemoData(): Promise<void> {
     withAiPlayersSuspended(() => {
       db.exec(
         `DELETE FROM elo_history;
+         DELETE FROM board_analyses;
          DELETE FROM boards;
          DELETE FROM sessions;
          DELETE FROM tournaments;

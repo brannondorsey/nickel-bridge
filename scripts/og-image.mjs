@@ -128,7 +128,7 @@ const html = `<!doctype html>
   <div class="wordmark">NICKEL BRIDGE</div>
   <div class="rule"></div>
   <div class="sub">DUPLICATE · SAYC</div>
-  <div class="pitch">Play duplicate bridge against an AI field.</div>
+  <div class="pitch">Learn &amp; play duplicate bridge.</div>
   <div class="suits"><span class="s-spade">♠</span><span class="s-heart">♥</span><span
     class="s-diamond">♦</span><span class="s-club">♣</span></div>
 </div>

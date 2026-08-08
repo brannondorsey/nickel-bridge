@@ -16,8 +16,10 @@ import type {
   Me,
   PlayerStats,
   TournamentInfo,
+  TrickCard,
 } from '../api';
-import { makeBid } from '../api';
+import { cardSuit, makeBid } from '../api';
+import { trickWinner } from '../components/game/playAnim';
 
 // ---- users ----
 
@@ -33,9 +35,15 @@ export const meFixture: Me = {
     ladderListed: true,
     fastForward: true,
     bidFeedback: true,
+    betaFeatures: true,
+    doubleTapBid: false,
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
+    // Club earned; 12 tournaments (48 boards) toward diamond's 100-board
+    // target = 48%, measured from zero per packages/core/src/medals.ts —
+    // crossing the club threshold didn't reset this back to 0%.
+    medals: { earned: ['c'], target: 'd', pct: 48, tournamentsRemaining: 13 },
   },
   devAuth: true,
   googleAuth: true,
@@ -48,7 +56,12 @@ export const meLoggedOut: Me = { user: null, devAuth: true, googleAuth: true };
 // points stay hidden for them.
 export const meFreshCrosser: Me = {
   ...meFixture,
-  user: { ...meFixture.user!, onboardedAt: null, boards: 0 },
+  user: {
+    ...meFixture.user!,
+    onboardedAt: null,
+    boards: 0,
+    medals: { earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 },
+  },
 };
 
 // ---- hands (S = the human's hand from the design prototype: 12 HCP) ----
@@ -283,6 +296,16 @@ export const boardPlayingWestDummy: BoardView = {
   dummyHcp: 8,
 };
 
+/** A "Play From Here" rehearsal, mid-play — everything about the live
+ *  PlayPhase screen is identical to boardPlaying; only board.rehearsal is
+ *  new, which BoardHead reads to relabel the header and swap in END.
+ *  originBoardNo matches board.boardNo (2, from `base`) — a rehearsal's own
+ *  board_no is always copied verbatim from the board it branched from. */
+export const boardPlayingRehearsal: BoardView = {
+  ...boardPlaying,
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+};
+
 // ---- done ----
 
 export const bidEvalsFixture: BidEval[] = [
@@ -351,6 +374,39 @@ export const boardDoneLow: BoardView = {
       total: -100,
     },
   },
+};
+
+/** A finished "Play From Here" rehearsal — an overtrick better than the real
+ *  table (boardDone's own +620), so it exercises both the itemized THIS LINE
+ *  receipt and the positive delta framing in the VS YOUR REAL TABLE panel. */
+export const boardDoneRehearsal: BoardView = {
+  ...boardDone,
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  result: {
+    ...boardDone.result!,
+    contractLabel: '4♠+1 by S',
+    tricksDeclarer: 11,
+    scoreNS: 650,
+    breakdown: {
+      lines: [
+        { kind: 'odd-tricks', label: 'Odd tricks', detail: '4 × 30', amount: 120 },
+        { kind: 'game-bonus', label: 'Game bonus', detail: 'vulnerable', amount: 500 },
+        { kind: 'overtricks', label: 'Overtricks', detail: '1 × 30', amount: 30 },
+      ],
+      vulnerable: true,
+      total: 650,
+    },
+  },
+  originResult: {
+    contractLabel: '4♠ by S',
+    tricksDeclarer: 10,
+    scoreNS: 620,
+    pct: 58,
+    bidAccuracy: 89,
+    breakdown: boardDone.result!.breakdown,
+    field: boardDone.result!.field,
+  },
+  lineMatchpoints: 70,
 };
 
 // ---- tournaments ----
@@ -423,6 +479,7 @@ export const playerStatsFull: PlayerStats = {
     boardsCompleted: 214,
     tournamentsPlayed: 12,
     tournamentsCompleted: 11,
+    earnedMedals: ['c'],
     streakDays: 5,
     currentElo: 1487,
     peakElo: 1502,
@@ -504,6 +561,7 @@ export const playerStatsEmpty: PlayerStats = {
     boardsCompleted: 0,
     tournamentsPlayed: 0,
     tournamentsCompleted: 0,
+    earnedMedals: [],
     streakDays: 0,
     currentElo: 1200,
     peakElo: 1200,
@@ -751,4 +809,37 @@ export const compareThin: CompareView = {
   measures: [],
   context: [],
   tally: { you: 0, them: 0, level: 0, aside: 0 },
+};
+
+
+// ---- a fully played-out done board, for the Analyze/replay tests ----
+
+/** simple legal play-out: follow suit when possible, else the first card */
+export function genPlayHistory(hands: number[][], declarer: number, strain: number): TrickCard[][] {
+  const remaining = hands.map((h) => [...h]);
+  let leader = (declarer + 1) % 4;
+  const tricks: TrickCard[][] = [];
+  for (let t = 0; t < 13; t++) {
+    const trick: TrickCard[] = [];
+    for (let i = 0; i < 4; i++) {
+      const seat = (leader + i) % 4;
+      const hand = remaining[seat];
+      const led = trick.length ? cardSuit(trick[0].card) : null;
+      let idx = led !== null ? hand.findIndex((c) => cardSuit(c) === led) : 0;
+      if (idx < 0) idx = 0;
+      trick.push({ seat, card: hand.splice(idx, 1)[0] });
+    }
+    tricks.push(trick);
+    leader = trickWinner(trick, strain);
+  }
+  return tricks;
+}
+
+/** boardDone with a consistent 13-trick playHistory (4♠ by South over allHands) */
+export const donePlayed: BoardView = {
+  ...boardDone,
+  contract: { level: 4, strain: 3, declarer: 2, doubled: false, redoubled: false },
+  playingSeat: 2,
+  flipped: false,
+  playHistory: genPlayHistory(allHands, 2, 3),
 };

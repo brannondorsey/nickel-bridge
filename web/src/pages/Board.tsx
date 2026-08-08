@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMe } from '../App';
 import {
@@ -54,6 +54,7 @@ import {
   totalDuration,
   trimStagedPrefix,
 } from '../components/game/playAnim';
+import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
 import { signedScore, vulLabel } from '../format';
@@ -98,15 +99,33 @@ export default function Board() {
 
   // "Fast forward settled tricks" (settings gate) — account state, so it
   // follows the player between devices; see runClaim below for what it paces.
-  const { me } = useMe();
+  const { me, refresh } = useMe();
   const fastForward = me?.user?.fastForward !== false;
   // "Bid feedback" (settings gate) — gates only whether the post-call grading
   // toast renders below; grading is computed and stored (bidEvals)
   // unconditionally, so turning this off never affects scoring, stats, or
   // the post-board review table. See the bid_feedback migration in db.ts.
   const bidFeedback = me?.user?.bidFeedback !== false;
+  // "Beta features" (settings gate) — Analyze is still in beta; see the
+  // beta_features migration in db.ts. The server enforces this too (the
+  // /analysis route 403s an account without it), so hiding the door here is
+  // a courtesy, not the only guard.
+  const betaFeatures = me?.user?.betaFeatures === true;
+  // "Double-tap to bid" (settings gate) — whether a second tap on the already-
+  // selected call submits it. Defaults OFF (fail closed, unlike the flags
+  // above), since accidental bids from that shortcut are what shipping it off
+  // by default fixes; the confirm CTA is always the other, unaffected path.
+  // See the double_tap_bid migration in db.ts.
+  const doubleTapBid = me?.user?.doubleTapBid === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
+  // The auction length stageOpeningBids' reveal is building toward — see
+  // AuctionGrid's reserveThrough. Set alongside the reveal it paces (load,
+  // below) so the tray is already at its settled row count on the empty
+  // first frame instead of growing a row partway through the replay; 0
+  // outside that reveal is a no-op (AuctionGrid takes the max against the
+  // real auction length, which only grows from there).
+  const [auctionReserve, setAuctionReserve] = useState(0);
   const [error, setError] = useState<string | null>(null);
   // A REJECTED CARD PLAY means this screen is BEHIND THE SERVER, and that is
   // the only thing it means. Every rejection submitPlay can raise — 'not in
@@ -187,6 +206,13 @@ export default function Board() {
     } else if (sawLiveRef.current) {
       sawLiveRef.current = false;
       setShowReceipt(true);
+      // The tournament (not just this board) just finished live — Home's
+      // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
+      // neither of which this screen otherwise touches, so without this a
+      // medal earned on this exact board stays uncolored until a hard reload.
+      // Never true for a rehearsal (board.rehearsal set): it isn't a real
+      // tournament board, so this would just be a wasted /api/me round trip.
+      if (board && !board.rehearsal && board.boardNo === board.totalBoards) refresh();
     }
   }, [boardState]);
 
@@ -421,6 +447,7 @@ export default function Board() {
     setShowReceipt(false);
     setClaimInfo(null);
     setClaimAnnounceOpen(false);
+    setAuctionReserve(0);
     claimSkipRef.current = null;
     sawLiveRef.current = false;
     // Everything past the await belongs to the board this load was started
@@ -446,6 +473,10 @@ export default function Board() {
           setBoard(fresh);
           return;
         }
+        // fresh.auction.length is the tray this reveal is building toward —
+        // known upfront, so the tray can already be at that height before
+        // the first call lands. See AuctionGrid's reserveThrough.
+        setAuctionReserve(fresh.auction.length);
         scheduleSteps(steps[0].view, steps);
       })
       .catch((e) => {
@@ -615,16 +646,61 @@ export default function Board() {
     <div className={`board-page${board.state === 'bidding' ? ' bidding-dock' : ''}`}>
       <BoardHead board={board} vulPulse={vulPulseKey === `${tournamentId}:${board.boardNo}`} />
       {board.state === 'done' ? (
-        showReceipt ? (
-          <ScoreReceipt board={board} onContinue={() => setShowReceipt(false)} />
+        board.rehearsal ? (
+          // Never a toll receipt — this was never going to be tolled. Also
+          // never the ordinary Result: matchpoints() gives a placeholder
+          // pct against a field of exactly one (nobody else ever plays a
+          // rehearsal tournament), which would be a meaningless number to
+          // show. Shown on live completion AND on a later reload alike —
+          // unlike showReceipt below, there is no "field view" to fall
+          // through to afterward.
+          <AdjustedReceipt
+            board={board}
+            onTryAnotherLine={() => {
+              const rr = board.rehearsal!;
+              api
+                .rehearse(rr.originTournamentId, rr.originBoardNo, rr.branchPly)
+                .then((next) => navigate(`/t/${next.tournamentId}/b/${next.boardNo}`))
+                .catch((e) => setError((e as Error).message));
+            }}
+            onBackToAnalyze={() => navigate(`/t/${board.rehearsal!.originTournamentId}/b/${board.rehearsal!.originBoardNo}/analyze`)}
+          />
+        ) : showReceipt ? (
+          <ScoreReceipt
+            board={board}
+            onContinue={() => setShowReceipt(false)}
+            analyzeHref={betaFeatures ? `/t/${tournamentId}/b/${board.boardNo}/analyze` : undefined}
+          />
         ) : (
           <Result
             board={board}
             onReceipt={() => setShowReceipt(true)}
-            onNext={() =>
-              boardNo < board.totalBoards
-                ? navigate(`/t/${tournamentId}/b/${boardNo + 1}`)
-                : navigate(`/t/${tournamentId}`)
+            actions={
+              <>
+                <Button
+                  onClick={() =>
+                    board.boardNo < board.totalBoards
+                      ? navigate(`/t/${tournamentId}/b/${board.boardNo + 1}`)
+                      : navigate(`/t/${tournamentId}`)
+                  }
+                >
+                  {board.boardNo < board.totalBoards
+                    ? `NEXT BOARD — ${board.boardNo + 1} OF ${board.totalBoards} →`
+                    : 'TOURNAMENT SUMMARY →'}
+                </Button>
+                {/* the Tournament ledger's old promise, finally kept — the
+                    review lives at its own route; the Result carries only
+                    this door (no analysis data outside the Analyze screen).
+                    Still in beta — see the betaFeatures note above. */}
+                {betaFeatures ? (
+                  <Button variant="secondary" to={`/t/${tournamentId}/b/${board.boardNo}/analyze`}>
+                    Analyze play →
+                  </Button>
+                ) : null}
+                <Button variant="secondary" to="/">
+                  Back to lobby
+                </Button>
+              </>
             }
           />
         )
@@ -647,11 +723,13 @@ export default function Board() {
           board={board}
           lastEval={bidFeedback ? lastEval : null}
           selectedCall={selectedCall}
-          onSelectCall={(c) => (selectedCall === c ? submitCall(c) : setSelectedCall(c))}
+          onSelectCall={(c) => (doubleTapBid && selectedCall === c ? submitCall(c) : setSelectedCall(c))}
           onConfirm={() => selectedCall !== null && submitCall(selectedCall)}
           busy={busy}
           inspect={inspect}
           onInspect={(e) => setInspect(e === inspect ? null : e)}
+          auctionReserve={auctionReserve}
+          doubleTapBid={doubleTapBid}
         />
       )}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
@@ -659,14 +737,26 @@ export default function Board() {
   );
 }
 
-/** Compact ticket header: mini stub, tournament context, vul chip (or SCORED stamp). */
+/**
+ * Compact ticket header: mini stub, tournament context, vul chip (or SCORED
+ * stamp). A rehearsal (board.rehearsal set) is the ONE thing that changes
+ * this screen from an ordinary live board — everything below this header,
+ * PlayPhase/BiddingPhase included, is untouched. Two swaps: the name slot
+ * reads "REHEARSAL — Board N, from Trick M" instead of the tournament name,
+ * and the right-hand slot trades the vulnerability chip for an END action
+ * (live play has nowhere to go mid-board; a rehearsal does, since leaving
+ * loses nothing — it persists, resumable from Analyze's history surfaces).
+ */
 function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean }) {
   const vul = vulLabel(board.vul).toUpperCase();
+  const r = board.rehearsal;
   return (
     <div className="board-head">
       <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
       <div className="board-head-mid">
-        <div className="board-head-name">{board.tournamentName}</div>
+        <div className="board-head-name">
+          {r ? `REHEARSAL — Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}` : board.tournamentName}
+        </div>
         <div className="board-head-sub num">
           Dealer {SEAT_SHORT[board.dealer]}
           {board.state === 'playing' && board.contractLabel ? (
@@ -680,7 +770,13 @@ function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean })
         </div>
       </div>
       {board.state === 'done' ? (
-        <InkStamp rotate={-4}>SCORED</InkStamp>
+        <InkStamp rotate={-4} color={r ? 'var(--muted)' : undefined}>
+          {r ? 'REHEARSAL' : 'SCORED'}
+        </InkStamp>
+      ) : r ? (
+        <Button variant="secondary" to={`/t/${r.originTournamentId}/b/${r.originBoardNo}/analyze`} className="board-head-end">
+          END
+        </Button>
       ) : (
         <Chip
           color={board.vul.ns ? 'var(--suit-h)' : undefined}
@@ -716,6 +812,8 @@ export function BiddingPhase({
   inspect,
   onInspect,
   hint = null,
+  auctionReserve = 0,
+  doubleTapBid = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -727,6 +825,10 @@ export function BiddingPhase({
   onInspect: (entry: AuctionEntry) => void;
   /** tour only: pulse this call in the bid box */
   hint?: number | null;
+  /** see AuctionGrid's reserveThrough — the tour's captured board never needs it (no pre-existing calls precede its human-dealt opening) */
+  auctionReserve?: number;
+  /** does a second tap on the selected call actually submit it here? Only used to pick the placeholder's copy — the caller still owns the real gating logic in onSelectCall. */
+  doubleTapBid?: boolean;
 }) {
   const meanings = board.legalCallMeanings ?? {};
   // The height-changing feedback — the selected call's meaning, the grade of your
@@ -742,7 +844,7 @@ export function BiddingPhase({
     ) : lastEval ? (
       <GradeToast evaluation={lastEval} />
     ) : (
-      <MeaningPanel placeholder />
+      <MeaningPanel placeholder doubleTapBid={doubleTapBid} />
     )
   ) : lastEval ? (
     <GradeToast evaluation={lastEval} />
@@ -751,7 +853,14 @@ export function BiddingPhase({
   return (
     <div className="bid-phase">
       <div className="bid-scroll">
-        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={Boolean(board.myTurn)} live onInspect={onInspect} />
+        <AuctionGrid
+          auction={board.auction}
+          dealer={board.dealer}
+          myTurn={Boolean(board.myTurn)}
+          live
+          onInspect={onInspect}
+          reserveThrough={auctionReserve}
+        />
         <div className="bid-decision">
           {feedback}
           <div className="board-fan">
@@ -926,7 +1035,28 @@ export function PlayPhase({
   );
 }
 
-function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => void; onReceipt: () => void }) {
+/**
+ * The completed-board Result — hero score, the field, the deal, YOUR BIDDING.
+ * Exported for the first-crossing tour, which used to mirror it class-for-
+ * class as TourResult because the actions differed (board №0 has no next
+ * board); the `actions` slot is what dissolved that copy. `fieldHeading`
+ * exists for the same reason (№0 wants its own board label).
+ *
+ * Deliberately NO analysis data here: MP costs and verdicts render only
+ * inside the Analyze screen — the Result carries the door (Analyze play →,
+ * threaded through `actions` by Board below) and nothing else.
+ */
+export function Result({
+  board,
+  onReceipt,
+  actions,
+  fieldHeading,
+}: {
+  board: BoardView;
+  onReceipt: () => void;
+  actions: ReactNode;
+  fieldHeading?: string;
+}) {
   const r = board.result!;
   const low = r.pct < 40;
   // House (benchmark AI) rows are full field members — the hero pct is
@@ -953,7 +1083,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
         </button>
       </div>
 
-      <PerforatedPanel heading={`THE FIELD — BOARD ${board.boardNo}`} className="result-field">
+      <PerforatedPanel heading={fieldHeading ?? `THE FIELD — BOARD ${board.boardNo}`} className="result-field">
         <table className="fieldtable num">
           <tbody>
             {r.field.map((f) => (
@@ -1015,16 +1145,7 @@ function Result({ board, onNext, onReceipt }: { board: BoardView; onNext: () => 
         </div>
       ) : null}
 
-      <div className="board-actions">
-        <Button onClick={onNext}>
-          {board.boardNo < board.totalBoards
-            ? `NEXT BOARD — ${board.boardNo + 1} OF ${board.totalBoards} →`
-            : 'TOURNAMENT SUMMARY →'}
-        </Button>
-        <Button variant="secondary" to="/">
-          Back to lobby
-        </Button>
-      </div>
+      <div className="board-actions">{actions}</div>
     </div>
   );
 }

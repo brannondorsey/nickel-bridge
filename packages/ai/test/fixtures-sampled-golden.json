@@ -1,0 +1,175 @@
+{
+  "capturedBy": "pre-refactor chooseCardSampled at commit 2ec3b89 (2026-08-03), via a one-off script: dealBoard(seed, boardNo), DD-optimal chooseCard prefix plays, then chooseCardSampled(deal, contract, plays, opts). Regenerate ONLY for a deliberate robot change under invariant 1.",
+  "cases": [
+    {
+      "name": "lead-argmax",
+      "seed": "golden-analyze",
+      "boardNo": 1,
+      "contract": {
+        "strain": 4,
+        "level": 3,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [],
+      "opts": {
+        "k": 4,
+        "seed": "g1",
+        "dealer": 0,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 1
+      },
+      "expected": 37
+    },
+    {
+      "name": "lead-top3",
+      "seed": "golden-analyze",
+      "boardNo": 1,
+      "contract": {
+        "strain": 4,
+        "level": 3,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [],
+      "opts": {
+        "k": 4,
+        "seed": "g1",
+        "dealer": 0,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 3
+      },
+      "expected": 45
+    },
+    {
+      "name": "mid-argmax",
+      "seed": "golden-analyze",
+      "boardNo": 2,
+      "contract": {
+        "strain": 3,
+        "level": 4,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [
+        1,
+        3,
+        0,
+        5,
+        14,
+        15
+      ],
+      "opts": {
+        "k": 3,
+        "seed": "g2",
+        "dealer": 1,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 1
+      },
+      "expected": 16
+    },
+    {
+      "name": "mid-top4",
+      "seed": "golden-analyze",
+      "boardNo": 2,
+      "contract": {
+        "strain": 3,
+        "level": 4,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [
+        1,
+        3,
+        0,
+        5,
+        14,
+        15
+      ],
+      "opts": {
+        "k": 3,
+        "seed": "g2",
+        "dealer": 1,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 4
+      },
+      "expected": 16
+    },
+    {
+      "name": "deep-argmax",
+      "seed": "golden-analyze",
+      "boardNo": 1,
+      "contract": {
+        "strain": 4,
+        "level": 3,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [
+        13,
+        21,
+        14,
+        16,
+        1,
+        8,
+        4,
+        2,
+        0,
+        7,
+        3,
+        6,
+        26,
+        27
+      ],
+      "opts": {
+        "k": 5,
+        "seed": "g3",
+        "dealer": 0,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 1
+      },
+      "expected": 29
+    },
+    {
+      "name": "deep-top2",
+      "seed": "golden-analyze",
+      "boardNo": 1,
+      "contract": {
+        "strain": 4,
+        "level": 3,
+        "declarer": 2,
+        "doubled": 0
+      },
+      "plays": [
+        13,
+        21,
+        14,
+        16,
+        1,
+        8,
+        4,
+        2,
+        0,
+        7,
+        3,
+        6,
+        26,
+        27
+      ],
+      "opts": {
+        "k": 5,
+        "seed": "g3",
+        "dealer": 0,
+        "calls": [],
+        "useAuction": false,
+        "playTopN": 2
+      },
+      "expected": 30
+    }
+  ]
+}

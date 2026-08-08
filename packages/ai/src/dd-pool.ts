@@ -2,7 +2,22 @@ import { existsSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
-import type { DealPbn, FutureTricks } from '../vendor/bridge-dds/api.js';
+import type {
+  DdTableDealPbn,
+  DdTableResults,
+  DealPbn,
+  FutureTricks,
+  ParResultsDealer,
+  PlayTracePbn,
+  SolvedPlay,
+} from '../vendor/bridge-dds/api.js';
+import type { WorkerRequest } from './dd-worker.js';
+
+/** A worker request without its queue-assigned id — what callers hand to
+ *  enqueue(). Omit must distribute over the union or it collapses to the
+ *  common keys and every kind-specific payload field is rejected. */
+type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
+type PoolRequest = DistributiveOmit<WorkerRequest, 'id'>;
 
 /**
  * A pool of worker threads, each holding its own DDS WASM instance, for
@@ -94,14 +109,14 @@ export type SolvePriority = keyof typeof PRIORITY;
 const STARVATION_PROMOTE_MS = 5_000;
 
 interface InFlight {
-  resolve: (res: FutureTricks) => void;
+  resolve: (res: unknown) => void;
   reject: (err: Error) => void;
   timer: NodeJS.Timeout;
 }
 
 interface Queued extends InFlight {
   id: number;
-  req: DealPbn;
+  msg: PoolRequest;
   priority: number;
   enqueuedAt: number;
 }
@@ -126,7 +141,7 @@ export class DdPool {
     for (let i = 0; i < size; i++) {
       const worker = new Worker(workerUrl);
       worker.unref();
-      worker.on('message', (msg: { id: number; res?: FutureTricks; error?: string }) => {
+      worker.on('message', (msg: { id: number; res?: unknown; error?: string }) => {
         const p = this.inFlight.get(msg.id);
         if (p) {
           clearTimeout(p.timer);
@@ -174,7 +189,7 @@ export class DdPool {
     const [item] = this.queue.splice(best, 1);
     this.idle[workerIndex] = false;
     this.inFlight.set(item.id, { resolve: item.resolve, reject: item.reject, timer: item.timer });
-    this.workers[workerIndex].postMessage({ id: item.id, req: item.req });
+    this.workers[workerIndex].postMessage({ ...item.msg, id: item.id });
   }
 
   /** reject everything queued or in flight and mark the pool unusable (callers fall back) */
@@ -197,16 +212,16 @@ export class DdPool {
   }
 
   /**
-   * `priority` defaults to 'interactive' — every pre-existing call site is
-   * unaffected. Pass 'background' for work that should yield the next free
-   * worker to any interactive request already waiting — for at most
-   * STARVATION_PROMOTE_MS, after which it stops yielding (see this file's
-   * PRIORITY doc comment above).
+   * Queue one worker request under the priority/starvation/timeout machinery
+   * above — the ONE path every public operation goes through, so the queueing
+   * rules cannot diverge per operation. T is trusted, not verified: each
+   * public wrapper below pairs its request kind with the result type the
+   * worker actually posts for it.
    */
-  solve(req: DealPbn, priority: SolvePriority = 'interactive'): Promise<FutureTricks> {
+  private enqueue<T>(msg: PoolRequest, priority: SolvePriority): Promise<T> {
     if (this.dead) return Promise.reject(new Error('dd pool is degraded'));
     const id = this.nextId++;
-    return new Promise<FutureTricks>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         const qi = this.queue.findIndex((q) => q.id === id);
         if (qi >= 0) this.queue.splice(qi, 1);
@@ -216,10 +231,49 @@ export class DdPool {
         reject(new Error(`dd pool solve exceeded ${SOLVE_TIMEOUT_MS}ms`));
       }, SOLVE_TIMEOUT_MS);
       timer.unref();
-      this.queue.push({ id, req, priority: PRIORITY[priority], enqueuedAt: Date.now(), resolve, reject, timer });
+      this.queue.push({
+        id,
+        msg,
+        priority: PRIORITY[priority],
+        enqueuedAt: Date.now(),
+        resolve: resolve as (res: unknown) => void,
+        reject,
+        timer,
+      });
       const idleIndex = this.idle.indexOf(true);
       if (idleIndex >= 0) this.dispatchNext(idleIndex);
     });
+  }
+
+  /**
+   * `priority` defaults to 'interactive' — every pre-existing call site is
+   * unaffected. Pass 'background' for work that should yield the next free
+   * worker to any interactive request already waiting — for at most
+   * STARVATION_PROMOTE_MS, after which it stops yielding (see this file's
+   * PRIORITY doc comment above).
+   */
+  solve(req: DealPbn, priority: SolvePriority = 'interactive'): Promise<FutureTricks> {
+    return this.enqueue<FutureTricks>({ req }, priority);
+  }
+
+  /** DD trace of a whole played board (AnalysePlayPBN) — Analyze's stage 1. */
+  analysePlay(req: DealPbn, play: PlayTracePbn, priority: SolvePriority = 'interactive'): Promise<SolvedPlay> {
+    return this.enqueue<SolvedPlay>({ kind: 'analysePlay', req, play }, priority);
+  }
+
+  /** The 20-problem DD table (CalcDDTablePBN) — Analyze's par stage. */
+  ddTable(req: DdTableDealPbn, priority: SolvePriority = 'interactive'): Promise<DdTableResults> {
+    return this.enqueue<DdTableResults>({ kind: 'ddTable', req }, priority);
+  }
+
+  /** DealerPar over a computed DD table — cheap (0.1ms) but kept on the worker for uniformity. */
+  dealerPar(
+    table: DdTableResults,
+    dealer: number,
+    vul: number,
+    priority: SolvePriority = 'interactive',
+  ): Promise<ParResultsDealer> {
+    return this.enqueue<ParResultsDealer>({ kind: 'dealerPar', table, dealer, vul }, priority);
   }
 
   async destroy(): Promise<void> {

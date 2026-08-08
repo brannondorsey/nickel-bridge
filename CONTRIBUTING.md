@@ -30,8 +30,9 @@ packages/core   game rules — no I/O, no deps. deck.ts (deterministic dealing/P
                 elo.ts (pairwise Elo, start 1200 K=24), sayc.ts (the SAYC bid explainer,
                 biggest file in core), advisor.ts (checks a hand against a meaning's
                 machine-readable `req` constraints — saycConsistent feeds bid grading,
-                saycViolation feeds the robot bidding guardrail), types.ts,
-                barrel in index.ts
+                saycViolation feeds the robot bidding guardrail), medals.ts (the loyalty
+                rail's tier math — computeMedalProgress, pure function of two counts the
+                server supplies — see "Medal progress" below), types.ts, barrel in index.ts
 packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 38 logits),
                 encode.ts (bit-for-bit port of pgx bridge_bidding observation encoding),
                 bidder.ts (chooseCall = model argmax constrained to SAYC-admissible
@@ -43,15 +44,22 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 floored at 'good' when core's advisor confirms the call is a SAYC
                 convention the hand satisfies; docs/rule-based-bidding.md maps the
                 design space), play-ai.ts (DD-optimal card
-                play via vendor/bridge-dds WASM), play-mc.ts (sampled-DD card play
+                play via vendor/bridge-dds WASM; solveVia/analysePlayVia/
+                ddTableVia/dealerParVia share ONE runVia pool-vs-main-thread
+                policy), play-mc.ts (sampled-DD card play
                 for non-expert difficulty tiers: K seeded hidden-hand layouts
                 constrained by the auction's SAYC `req`s + shown-out voids, solved
-                per layout, aggregate scores summed per legal card — then, per
+                per layout, aggregate scores summed per legal card
+                (scoreCardsSampled — the per-card score map, split out for
+                Analyze's findability verdict; test/play-mc-golden.test.ts pins
+                the split byte-identical) — then, per
                 PLAY_NOISE, either the flat argmax or a seeded weighted pick among
                 the top playTopN cards by that same score), difficulty.ts (tier
                 type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
-                (lazy worker_threads DDS pool for parallel sampled solves —
-                latency only, never outcomes), play-mc-forget.ts (EXPERIMENTAL,
+                (lazy worker_threads DDS pool — one enqueue path serving solve/
+                analysePlay/ddTable/dealerPar under shared priority+starvation+
+                timeout rules; latency only, never outcomes), play-mc-forget.ts
+                (EXPERIMENTAL,
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
@@ -60,12 +68,19 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
                 game.ts (loadBoard/submitCall/submitPlay/advanceRobots/boardView),
+                analyze.ts (the Analyze review's verdict pipeline — two engines,
+                four stages, the board_analyses cache; see "Analyze" below),
+                rehearsal.ts (createRehearsal/listRehearsals — "Play From Here,"
+                branching a finished board's real play into a live, never-scored
+                board of its own; see "Play From Here" below),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
                 function of two PlayerStats, see "Compare and the gate" below),
                 activity.ts (the TRAFFIC feed's flat, ungrouped events — see
                 "The activity feed" below),
+                medals.ts (composes stats.ts's two cheap counts into core's
+                computeMedalProgress for /api/me — see "Medal progress" below),
                 ai-players.ts (benchmark AI personas — the "house" rows ranked in
                 The Field, see "Benchmark AI players" below), bot-play.ts (the shared
                 strategy-injected bot board-play loop used by the demo seeder AND the
@@ -77,7 +92,12 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 seo.ts (SITE_ROUTES: the one table of which URLs are public and which
                 are indexed — robots.txt is derived from it, the sitemap is checked
                 against it, and web imports it too; dependency-free on purpose, see
-                "Discoverability" below)
+                "Discoverability" below),
+                security.ts (the response security headers — CSP, anti-framing,
+                nosniff, referrer + permissions policy, HSTS — with what each one
+                is for written beside it; see "Security headers" below),
+                handle.ts (handle validation + the uniqueness KEY, which folds
+                case AND cross-script lookalikes — see its doc comments)
 web             main.tsx → App.tsx (router + MeContext auth + splash gating + TabBar),
                 api.ts (typed API client), analytics.ts (the Google Analytics tag +
                 its SPA page-view hook — see "Analytics" below),
@@ -87,7 +107,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 theme.ts (nb:theme night-mode preference — see "Night mode" below),
                 suitPalette.ts (nb:suitPalette colorblind suit-color preference — its own
                 device-local axis, orthogonal to theme.ts — see "Night mode" below),
-                pages/ (Board.tsx is the gameplay UI; Settings.tsx is the settings gate,
+                pages/ (Board.tsx is the gameplay UI, exporting BiddingPhase/PlayPhase/
+                Result for the tour and Analyze; Analyze.tsx is the post-board review —
+                see "Analyze" below; Settings.tsx is the settings gate,
                 where night mode, suit colors, claim fast-forward, ladder listing and
                 sign-out live;
                 the sparklines' LOOKBACK switch (nb:lookback) stays on the Stats page —
@@ -128,12 +150,21 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 public/ (favicon.svg + og-image.png, the checked-in social share card),
                 pages/Compare.tsx (the Compare screen — draws the server's
                 verdicts, re-derives no statistics),
+                replay/ (useReplay.ts — the shared replay driver extracted from the
+                tour: staged transitions, the claim beats, cut() for jumps; and
+                replayViews.ts — synthetic per-ply BoardViews for the Analyze play lens),
                 components/ds/ (design-system pieces, incl. BeamBar — the
-                diverging centre-line bar with its dashed gates, and SignInBar — the logged-out
+                diverging centre-line bar with its dashed gates, PrefSwitch — the
+                arity-agnostic segmented lever (lifted out of Settings.tsx when the
+                Analyze lens switch needed it), and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
-                that resolves which sign-in doors a deployment has) + components/game/
+                that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
+                the Home rail and the shared suit-glyph row, see "Medal progress" below)
+                + components/game/
                 (auction, bid box,
                 fans, trick area, deal diagram, toll-receipt score breakdown,
+                AdjustedReceipt.tsx — the never-tolled twin ScoreReceipt lends its
+                ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
                 the landing page share),
@@ -176,7 +207,12 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 checked-in social share card web/public/og-image.png — offline, no
                 running instance needed)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
-docs            compare.md — why most Compare rows refuse to name a winner: the
+docs            analyze-design.md — the Analyze design record, with its concept-exploration
+                board analyze-concepts.html (three directions; the owner chose B,
+                "The Second Crossing") and the round-four par-panel board
+                analyze-cards-worth.html (four treatments; the owner chose D,
+                "The Receipt and the Rail");
+                compare.md — why most Compare rows refuse to name a winner: the
                 three error models, the Agresti-Coull requirement, and the
                 production measurement behind FULL_TILT;
                 design-brief.md — requirements spec for the visual redesign;
@@ -225,7 +261,12 @@ one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
 every newly opened PR and posts a non-blocking review comment — authenticated via the
 `CLAUDE_CODE_OAUTH_TOKEN` repo secret (a `claude setup-token` OAuth token billed against a
 Claude subscription, not per-token API pricing), so it's independent of the checks above and
-doesn't gate merges:
+doesn't gate merges. One convention in those workflows: **the four jobs that hold
+`FLY_API_TOKEN`** (the three deploys plus `pr-preview-teardown.yml`) **pin
+`superfly/flyctl-actions` to a commit SHA**, because a branch ref re-resolves on every run and
+that token can deploy arbitrary images, read the SQLite volume or destroy the app. Everything
+else stays on its major tag; the pin has no automated watcher, so bumping it — and the other
+actions' major tags — on a new upstream release is a manual, occasional chore:
 
 ```bash
 npm run build
@@ -318,6 +359,19 @@ docked but every control in it is disabled, so `e2e/smoke.spec.ts`, `scripts/ui-
 and `scripts/readme-shots.mjs` all wait on an **enabled** call button rather than on
 `.bidbox`.
 
+That empty leading tray is deliberately not zero-height, either: `AuctionGrid`'s row packing
+(N/E/S/W, front-padded to the dealer's column) is driven by `reserveThrough`
+(`Board.tsx`'s `auctionReserve`, set from `fresh.auction.length` right alongside the
+`stageOpeningBids` call), not by `auction.length` alone — so the empty first frame already
+renders however many rows the FULL pre-existing tray will need, blank, and each call fills a
+cell rather than adding a row. Left at `auction.length` (the default, correct for ordinary
+play, where the auction genuinely growing turn by turn is the point), the table would gain a
+row partway through the reveal — e.g. West opening the auction lands a call in the tray's
+already-reserved first row, but North's reply would otherwise wrap into a brand-new one — and
+because the decision cluster below hugs the dock's top edge (`margin-top: auto`), that row
+appearing mid-reveal slides the hand and feedback down the screen and back before the player
+has even acted, the same layout-shift `waiting` exists to prevent for the bid box itself.
+
 **The human's own card does not wait for that round trip.** `submitCard` used to await
 `POST /play` before rendering anything, so the whole request — p50 64ms / p90 173ms measured
 against production hardware, and worse on a woken machine — was dead time with the tapped card
@@ -400,7 +454,10 @@ Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
 either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
 and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
 a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
-untouched. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
+untouched. The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
+server-played tail card; NULL = no claim, or a pre-migration board): `GameBoard.claimed` stays
+transient per-request, but a finished board must be able to say at rest where its tail stopped
+being the human's own play — Analyze must never grade past it. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
 needed to know which side or how many tricks — see `claimAnnouncement` in `playAnim.ts`).
 `Board.tsx`'s `runClaim` plays that response back in **three beats**, and `planClaim` in
 `playAnim.ts` is the one pure place that decides which cards belong to which:
@@ -562,12 +619,13 @@ the **main-thread** `solveRequest()` — a synchronous WASM solve with no timeou
 event loop for every concurrent request, i.e. a worse freeze than the one being fixed. A
 background request that has waited the bound is promoted to interactive.
 That main-thread fallback is now a genuine last resort rather than the first thing tried:
-`play-ai.ts`'s `solveVia()` is the ONE place that chooses pool-vs-main-thread for every DD
-solve in the app, and it reaches `solveRequest()` only when there is no compiled worker at all
-(vitest on TS sources) or when a second pool has also failed. A pool that died mid-decision —
-which rejects every outstanding solve at once, so `chooseCardSampled`'s K layouts all land here
-together — is retried on the replacement `getSharedDdPool()` mints, instead of becoming K
-sequential event-loop-blocking solves.
+`play-ai.ts`'s private `runVia()` is the ONE policy that chooses pool-vs-main-thread for every
+DD call in the app — `solveVia()` plus the Analyze-era `analysePlayVia`/`ddTableVia`/
+`dealerParVia` are thin instances of it — and it reaches the main thread only when there is no
+compiled worker at all (vitest on TS sources) or when a second pool has also failed. A pool
+that died mid-decision — which rejects every outstanding solve at once, so
+`chooseCardSampled`'s K layouts all land here together — is retried on the replacement
+`getSharedDdPool()` mints, instead of becoming K sequential event-loop-blocking solves.
 Play starts when a human is placed into
 or opens a board of an `ai_field` tournament (never speculatively at boot); `index.ts`'s boot
 sweep re-enqueues only started-but-incomplete tournaments (crash recovery), and
@@ -584,6 +642,62 @@ falls back to `index.html` for non-`/api`/`/auth` routes. SQLite on a single vol
 own volume — `fly.toml` is shared across all of them, with the app name always overridden
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
+
+**Security headers are set once, in the app, for every response.** `server/src/security.ts`
+holds the table — Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` — with a paragraph
+beside each saying what it is for, because a header nobody understands is a header the next
+person deletes. `app.ts` applies them in one `onSend` hook registered **before any route**, so
+the API, `/auth`, the prerendered pages, the SPA shell, the 404 handler and the error handler
+are all covered; a header set per-route is a header the next route forgets. Three things about
+it are decisions rather than defaults:
+
+- **App-level, not an edge rule.** Production, the demo app and every PR preview run the same
+  `buildApp()`, so this is true of all of them the moment it ships. A Cloudflare Response
+  Header Transform Rule would have covered only the two fronted hosts, only after `--apply`
+  ran, and only until someone replaced the ruleset — and a phase entrypoint deploy is a
+  zone-wide PUT (see "The edge" above). Cloudflare passes origin response headers through
+  untouched, so the fronted hosts serve exactly these. The one wrinkle is that a response
+  already in the edge cache carries the headers it was filled with: a deploy that changes
+  only headers changes no origin bytes, so `--purge`'s comparison correctly finds nothing to
+  drop and cached HTML keeps the old set until its TTL, the next content change, or
+  `edge-upkeep.yml`'s weekly `--purge --force`.
+- **The CSP deliberately carries no resource allowlist.** It shipped once with the full
+  thing — `default-src 'self'` plus per-type allowlists naming gtag.js, Google's avatar hosts
+  and GA's collectors, with the shell's two pre-paint inline scripts admitted by SHA-256 hash
+  — and that half was taken back out. An allowlist is a second, invisible copy of every
+  external thing the app loads, enforced in the one place a developer never looks: a
+  production browser. `npm run dev -w web` serves through Vite, which sends no such header,
+  and jsdom ignores one, so adding a font host or an embedded widget would pass every check
+  in this repo and fail silently for real visitors. What it bought was containment of an XSS
+  this app has no known sink for (React escapes by default; no `dangerouslySetInnerHTML`
+  anywhere in web/src). What remains is only the rules that forbid what the app never does —
+  `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `form-action 'self'` —
+  none of which can block a script, style, image, font or fetch, i.e. none of which can break
+  a page by being out of date. `server/test/security.test.ts` asserts that limit rather than
+  just the contents, so re-adding a `script-src` is a deliberate act with a red test attached.
+  If it does come back: put it behind `Content-Security-Policy-Report-Only` with somewhere for
+  the reports to land, and enforce only what has been observed to be quiet.
+- **HSTS is conditional, has no `includeSubDomains`, and is deliberately not preloaded.** It is
+  sent only when `COOKIES_SECURE` says this deployment's origin is https (config.ts's single
+  `BASE_URL` parse) — it is the one header a browser *remembers*, and `http://localhost:3000` is
+  an origin contributors share across projects. `includeSubDomains` is left off even though
+  browsers scope it to the sending host (never to a sibling on the shared zone): nothing lives
+  under either app's own name today, so it would be a no-op rather than a real decision — add it
+  back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
+  preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
+  and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
+
+Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
+screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
+route creates the row before it deals, so a fraction used to persist junk rows past the
+four-board cap (SQLite stores the REAL as-is — `INTEGER` is an affinity, not a constraint, on
+a non-STRICT table) and then 500 on the malformed deal it derived. The `boards` DDL now also
+refuses the storage class, though only on databases created from it. And `handle.ts`'s
+uniqueness key folds cross-script lookalikes (Cyrillic `а`, Greek `Ο`, fullwidth and
+mathematical letters) onto their Latin twin *for the key only*, so a handle nobody can
+visually distinguish from another player's collides on the unique index instead of joining
+them on the ladder. Its doc comment says what the curated map does not claim to catch.
 
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
@@ -830,6 +944,194 @@ And SSL mode must be **Full (strict)**: Flexible against `fly.toml`'s `force_htt
 an infinite redirect loop. Note also that once proxied, `Fly-Client-IP` becomes Cloudflare's
 edge address, which is why `logging.ts` prefers `CF-Connecting-IP`.
 
+**Analyze (the post-board review) is two engines, because double dummy alone would lie to a
+beginner.** `server/src/analyze.ts` + `GET /api/tournaments/:id/boards/:no/analysis` (+`?par=1`)
+serve verdicts for a FINISHED board — the client only draws them (the Compare precedent). Per
+human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for the whole play)
+converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
+(`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
+insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
+would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
+just because an omniscient trace prefers something else, and a well-played board comes back
+with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
+when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
+sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
+counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
+Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
+`version` = `ANALYZE_VERSION` and the par payload nullable; every solve dispatches
+`priority: 'background'` — a live card-play solve beats a report loading, and
+`STARVATION_PROMOTE_MS` bounds the wait. The cache stores ENGINE facts only: the
+matchpoint layer (`refreshMatchpointLayer` — actualPct, per-ply costs, bid mpGains) is
+recomputed against the LIVE field on every serve, so the whole response shares one field
+with the Result's own table and a refresh sees late finishers; the one as-of-compute
+residue is stage 3's floor selection, and a drifted unjudged ply is captioned honestly
+via the served `momentFloor`. The grading boundary is `boards.claimed_at_ply`
+(re-derived by replaying the claim gate for pre-migration NULLs): cards past it were played by
+the server for both sides and are never graded. Only the human's own cards are graded
+(`humanControls`, both flip orientations — robot partner North never), forced cards are
+skipped, and a one-player field refuses costs (`singleField`) rather than inventing them.
+**MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
+board carry the entry action and nothing else. `docs/analyze-design.md` is the design record.
+On the web side (`pages/Analyze.tsx`): TWO lenses on a `?lens=` search param (a reading
+position, not a stored preference) via the ds `PrefSwitch` — THE OVERVIEW (default) and
+THE PLAY; the original three-lens shape's `crossing`/`auction` param values map to the
+overview so early shared links keep working. The overview LEADS with THE CARDS WERE
+WORTH — "The Receipt and the Rail", proposal D of the panel's four-concept redesign
+board (owner-chosen): par and your table as paired receipts (the par stub sealed/dashed,
+its DDS "3D*-EW-1" contract string parsed into the app's own vocabulary by
+`parContractLabel`), over the field as dots on one rail with par as the dashed gate.
+The rail's geometry is the pure, unit-tested `pages/analyzeRail.ts` (the activityFeed.ts
+precedent): positions are LINEAR in the score with an order-preserving minimum-gap
+relaxation — measured against a symlog axis, which flattens exactly the ±420–660 game
+clusters bridge fields produce — with ties merged into counted dots, label bands
+alternated, and the gate left at par's un-relaxed position; a field past `MAX_RAIL_DOTS`
+is SAMPLED (YOU + both extremes always, then the modes) with the omitted tables counted
+under the rail, never silently dropped. The WHERE IT TURNED moments
+ledger follows. The ledger is the overview's ONLY bidding surface: bid moments carry
+their counterfactual auction in the aside and are static findings (no link — the auction
+has no replay to open), while the call-by-call YOUR BIDDING recap stays on the Result
+alone. MP figures are framed as OPPORTUNITY, owner decision: `+38 MP` in the
+`--positive` ink (matchpoints that were there for the taking), never a red −penalty. The play lens is a full
+replay over the real board components driven by `replay/useReplay.ts` (extracted verbatim
+from the tour, which is now a second consumer): forward steps stage one card at a time
+through `stagePlaySteps` (its ≤1-trick-boundary assumption is why), BACK A CARD and the
+trick pips `cut()` with no animation, and the audit ribbon
+(the tollkeeper ribbon's shape, unvoiced) narrates the view the replay is actually showing
+— the tour's lagging-caption move, with its caption slot height RESERVED (the bid-box dock
+rule: a shorter caption must not scoot the board). A moment jump (`?ply=`, the ledger, the
+PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immediately
+stages the played card's glide, so the card that was played (in the trick) and the
+engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
+rank in the suit-line rails) are on screen together — the pager anchors on the moment
+being read, not the replay position, which sits one card past it. A moment on a trick's
+LAST card lands on a synthetic held view (trick complete on the table, un-collected —
+`momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
+always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so
+South-declared and flipped boards show every hand exactly once. Only JUDGED-AND-CHARGED
+decisions (`sampled` non-null — which, since the server drops the excused case before this
+ever arrives, now always means genuinely chargeable) are moments to the pager and the
+collapse; the sub-floor stage-1 candidates stay in `plies` for the ribbon's honest "a trick
+slipped, but the matchpoints barely noticed" annotation and are never charged or landed on.
+The open-hand rails
+wear the dummy rail's kerning (thin-space rank separation + `.dummy-rail-ranks`'s
+letter-spacing), and a centred PLAYED rail under them accumulates every card off the
+hands, its two wrapped lines reserved up front (the dock rule again). Reduced motion (or no WAAPI — jsdom) renders the lens as a static annotated
+trick-by-trick list instead, a legitimate reading rather than a fallback. Every moment shown
+is charged and keeps `StarGrade` (✗ at 0) — a costly-but-unfindable candidate never reaches
+either lens; the server drops it before the response leaves `computeCore`, so there is
+nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
+gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
+path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
+dissolved the tour's class-for-class `TourResult` copy).
+
+**Play From Here lets a player take the cards from any point in a finished board's real
+play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
+the overview: a `PLAY FROM HERE →` action beside WHERE IT TURNED's existing `WATCH IT`
+(re-deciding that exact flagged card; `MomentRow` split from one whole-row `<button>` into
+a wrapper holding both, since two actions can't nest — the accessible name on `WATCH IT`
+is unchanged, so existing `getByRole('button', {name: ...})` assertions kept passing), and
+a standing action in THE PLAY lens's replay dock, usable at whatever ply the reader has
+scrubbed to, disabled past `analysis.claimedAtPly` (a UX courtesy — the server enforces the
+same boundary). Neither confirms first; both `POST .../rehearse {ply}` and navigate straight
+into the result. Never scored (no Elo/matchpoints/leaderboard/stats), never re-Analyzable
+(one level deep only — `GET .../analysis` 404s a rehearsal tournament).
+
+A rehearsal is its own **single-board `tournaments.kind = 'rehearsal'` row**
+(`server/src/rehearsal.ts`'s `createRehearsal`), the same move demo mode's `kind = 'exhibit'`
+tournaments already make — every placement/lobby/Elo-replay/leaderboard/stats/activity-feed
+query in this codebase is an ALLOWLIST on `kind = 'standard'`, so a new kind value is excluded
+from all of them for free. `origin_tournament_id`/`origin_board_no`/`branch_ply` (new
+`tournaments` columns, NULL on every other kind) record what it branched from. It reuses the
+**origin's own seed** and **origin board's own `board_no`** — `dealBoard(seed, boardNo)`
+depends on exactly that pair, so the deal comes out byte-identical for free, and
+`mcDecisionSeed`/`bidDecisionSeed` depend only on `(seed, boardNo, decisionIndex)`, never
+tournament id, so reusing the seed is desirable rather than a collision risk: redeciding
+nothing differently reproduces the real game byte-for-byte, diverging still applies the same
+seed to a genuinely different position. The board itself is **raw-seeded** — `calls`/
+`bidEvals`/`contract` copied verbatim from the origin (the auction never branches) and
+`plays` truncated to `plays.slice(0, branchPly)` — then handed to the ordinary
+`advanceRobots`/`submitPlay`/`boardView` machinery completely unmodified (nothing in them
+checks provenance, only the row's own columns), followed by one `ensureAdvanced()` call to
+fast-forward any robot turn sitting right at the branch point. This is new territory for the
+codebase (every other "synthesize a board" path — demo exhibits, the AI personas, the
+onboarding capture — replays through real `submitCall`/`submitPlay` instead), but mechanically
+safe by the same argument.
+
+**The rehearsal screen reuses `Board.tsx`'s existing route and default component completely
+unmodified in its state machine** — optimistic card play, staged robot bursts, claim
+handling, resync-on-reject, auto-play all come for free, which is what makes "identical to
+the ordinary live play screen" (the one hard requirement here) close to free too:
+`PlayPhase`/`BiddingPhase` need zero changes. `boardView()` adds a `rehearsal` field
+(`{originTournamentId, originBoardNo, branchPly}`) whenever `t.kind === 'rehearsal'`, which
+`BoardHead` reads to relabel the header (`"REHEARSAL — Board N, from Trick M"` in the
+tournament-name slot) and swap the vulnerability chip for an `END` link back to
+`/t/:originTournamentId/b/:originBoardNo/analyze` — the only two things that differ during
+play. Leaving mid-rehearsal loses nothing (it persists, resumable — reload survival, mid-play
+or after finishing, is just the same plain `GET` re-fetch any live board already relies on),
+which is why `END` asks no confirmation either. At `state === 'done'`, a rehearsal renders
+`AdjustedReceipt` instead of `ScoreReceipt`/`Result` — never `Result`: `matchpoints()` returns
+a placeholder `pct: 50` against a rehearsal's own field of exactly one (nobody else ever plays
+it), which would be a meaningless number to show. `AdjustedReceipt` itemizes the rehearsal's
+own score the same way `ScoreReceipt` does (its `ReceiptRow`/`caption` exported for reuse), no
+postmark (this never counted), then compares against `board.originResult` — the origin
+board's own already-computed result, sent inline on a finished rehearsal's `boardView` (one
+extra `boardResult()` call server-side) so no second client fetch is needed — as a plain
+signed delta, framed bidirectionally (`--positive`/`--negative`, unlike the moments ledger's
+opportunity-only `+N`) since a rehearsal's outcome genuinely can be worse, not only better.
+Two exits: `TRY ANOTHER LINE` re-invokes `api.rehearse` at the exact same
+`(originTournamentId, originBoardNo, branchPly)` and navigates straight into a fresh attempt
+— the literal "try this decision again," no detour through Analyze — and `Back to Analyze`
+returns to the origin board's overview, where the just-finished attempt already shows up in
+both history surfaces below.
+
+Two history surfaces, both fed by one `api.rehearsals(tid, no)` fetch (`listRehearsals`,
+ordered `created_at DESC, id DESC` — `created_at` is unix-seconds resolution, so `id` breaks
+ties between attempts created inside the same second): a **per-moment rail** of small ticket
+stubs under each `MomentRow`, filtered to that moment's own `branchPly`, and a board-wide
+**YOUR REHEARSALS** panel listing every attempt regardless of branch point, uncapped ("no
+cap, just scroll" — no truncation, no dedicated UI limit). In-progress attempts show up
+too, as resumable links — otherwise reload survival would have nothing to be discoverable
+*from* once a player has navigated away. Once at least one rehearsal is `done`, THE CARDS
+WERE WORTH's `.worth-stubs` panel grows a third stub for the best one (highest `scoreNS` —
+unambiguous since the human is always N–S) as a full-width row beneath the PAR/YOUR TABLE
+pair rather than forcing a cramped 3-up grid at the 390px smoke-test breakpoint, opting out
+of that pair's subgrid row-alignment rather than fighting it (a different shape: no sealed
+treatment, one aside line).
+
+**Repeat taps resume rather than pile up, and an explicit ✕ discards.** Both entry points fire
+with no confirmation, so a player idly re-tapping PLAY FROM HERE at the same moment (or
+scrubbing back to the same ply in THE PLAY lens) would otherwise mint a fresh, functionally
+duplicate rehearsal every time — "no cap, just scroll" on the history surfaces makes that
+clutter visible rather than hidden, which is what surfaced the problem. `createRehearsal`
+checks for a still-`'playing'` rehearsal at the exact same `(originTournamentId,
+originBoardNo, branchPly, userId)` first (`stmtInProgressAtPly`) and returns ITS
+`{tournamentId, boardNo}` instead of creating another — a repeat tap reopens the one attempt
+already in flight there, exactly like clicking its own rail stub would. `'done'` rows are
+deliberately excluded from that check: once an attempt finishes, the same ply is open again
+for a genuinely new line, which is the point of PLAY FROM HERE existing at all. This is
+dedupe-by-resume, not dedupe-by-refusal, so it needed its own explicit escape hatch for a line
+the player actually wants gone: `discardRehearsal` (`DELETE
+.../rehearsals/:rehearsalId`) deletes the rehearsal's `boards` row then its `tournaments` row
+in one transaction (this codebase runs with no `PRAGMA foreign_keys = ON` — see `db.ts` — so
+FK constraints are declarative only and the child row has to go first, by hand). Ownership is
+re-verified against the CALLER's own `(originTournamentId, originBoardNo, userId)` rather than
+trusted from the target row alone, the same discipline `listRehearsals`' join already uses.
+Both `RehearsalRail` and `YourRehearsals` grow a small ✕ beside every stub/row; since a
+`<button>` cannot nest inside the `<a>` a react-router `Link` renders, the two are siblings in
+a small wrapper rather than one interactive element holding the other. The discard is
+optimistic (the stub disappears on tap) and reconciles from a fresh `api.rehearsals()` fetch
+only if the delete itself failed, so a genuine failure doesn't leave the screen silently out
+of sync with the server.
+
+One incidental fix that came out of building this: `submitCall`/`submitPlay`/`ensureAdvanced`'s
+`recomputeElo()` trigger had no tournament-kind guard at all (`boardDone(b.row) &&
+!isAiUser(...)`), so a demo exhibit finishing already triggered a wasted full Elo replay-sweep
+today — harmless (the replay's own source query filters `kind = 'standard'`) but expensive.
+Now gated on `b.tournament.kind === 'standard'` too, closing it for exhibits as well as
+rehearsals — worth doing here specifically because rehearsals are explicitly uncapped.
+
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
 haven't played, in two tiers: a **grace window** force-joins young (< 48h), under-filled
@@ -1015,6 +1317,30 @@ about it are load-bearing, and [docs/compare.md](docs/compare.md) has the full r
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
 everyone — so don't "optimize" it into an incremental update without redesigning the model.
 
+**Replay order is not play order, and every surface that draws a timeline has to convert.**
+Tournaments never close, so a player can be placed into a months-old tournament or resume one
+they abandoned in the spring; its id is low but they finished it today. Two consequences, and
+both have bitten:
+
+- **Order by `finishedAt`, never by tournament id.** `finishedAt` is this player's last
+  completed board of that tournament, and it is the ordering key for all three of `stats.ts`'s
+  chart series (see `StatPoint`'s doc comment) as well as `activity.ts`'s `byFinish`. Ordered by
+  id, a crossing finished today draws to the left of one finished weeks earlier and the charts'
+  x axis stops being time — a rise between two points would mean nothing but the numbering.
+- **Re-sorting rows is not enough for a RATING, because `after` is a running total over the id
+  order.** The last row by date carries a rating that omits every higher-id crossing, so the
+  line would end somewhere the player hasn't been since June. `eloProgression()` (`stats.ts`)
+  therefore moves the per-crossing *deltas* (`after - before`) and re-accumulates them from
+  `ELO_INITIAL` in play order: the line starts at 1200 and, since a sum ignores order, ends at
+  exactly `users.elo`. `totals.peakElo` is read off that same reconstruction rather than off
+  `elo_history` — the two maxima can differ and neither dominates, so taking the chain's would
+  sometimes print a PEAK the drawn line visibly rises above. `activity.ts`'s `peak-rating`
+  milestone makes the identical reconstruction so the two screens can't disagree about a peak.
+  It is a reconstruction either way, which the chart already discloses; this one reconstructs
+  the player's history rather than the replay's bookkeeping, and for a player whose play order
+  matches id order (most of them — placement serves recent tournaments) it returns the raw chain
+  unchanged.
+
 **The activity feed ("TRAFFIC")** answers the one question the ladder and the profiles don't:
 who else has been on the bridge lately. `GET /api/activity` (`server/src/activity.ts`) is a
 seven-day, signed-in-only read — gated where `/leaderboard` is public, because a bounded list
@@ -1069,6 +1395,130 @@ still reads taller than a three-tournament one — a linear scale either flatten
 evenings or pegs the ceiling by the third crossing. A mark is one *run*, not one crossing, so
 five tournaments in a single evening is a single tall mark.
 
+**Medal progress (the loyalty rail):** a Home-screen widget that rewards continuous play
+with a suit medal at the 4th, 25th, 100th and 500th completed tournament — ♣, ♦, ♥, ♠, in
+that order. The tier math itself (`packages/core/src/medals.ts`'s `computeMedalProgress`)
+is pure and dependency-free like the rest of core; it takes two counts and the
+boards-per-tournament constant as plain arguments rather than reading anything, so neither
+core nor its tests know about SQL, `/api/me`, or `BOARDS_PER_TOURNAMENT`'s home in
+`db.ts`.
+
+Two counts feed it, kept deliberately separate — this is the same trap the activity
+feed's milestones and the leaderboard's `rated_tournaments` already navigate, so medals
+reuse the same discipline rather than inventing a third meaning for "how many
+tournaments":
+
+- **`tournamentsCompleted`** (`server/src/stats.ts`'s `completedTournamentCount`, modeled
+  on `activity.ts`'s `stmtAllCrossings` — group by tournament, keep only groups where
+  every board is `done`) is the **authoritative** count. It alone decides which medals are
+  colored in and exactly how many tournaments remain, and it is deliberately **not**
+  `playerStats().totals.tournamentsCompleted` (that one only falls out of a full
+  `standings()` sweep — too expensive for something `/api/me` computes on every load) and
+  **not** `rated_tournaments` (gated on ≥2 human finishers posting to `elo_history` — a
+  stricter, different set that exists only for ladder eligibility).
+- **`totalBoardsCompleted`** (the existing `completedBoardCount()`, already public via
+  `/api/me`'s `user.boards`) only ever smooths the **bar**: a player mid-way through their
+  4th tournament sees it climb board by board, even though the club medal itself doesn't
+  color in until that 4th tournament actually finishes. `computeMedalProgress`'s `pct` is
+  measured from **zero tournaments**, not from the previously-earned tier, so crossing a
+  threshold never resets the bar — the moment club is earned (4 tournaments = 16 boards),
+  the bar already reads 16/100 = 16% toward diamond (25 tournaments = 100 boards), not
+  0%. Because the two counts can drift apart (many tournaments left half-finished at once
+  inflate boards without completing any of them), `pct` is capped at 99 while the tier
+  isn't actually earned — the one defensive rule in the whole function, there because a
+  full bar next to a still-grey medal would read as a bug.
+
+`tournamentsRemaining` is likewise **exact**, off `tournamentsCompleted` alone
+(`threshold − tournamentsCompleted`) — never derived from boards, so the widget's own
+copy ("Complete 2 more tournaments to join the rankings") can't drift from what the medal
+itself is actually waiting on. That first medal's copy is deliberately not generic: on a
+deployment where 4 completed tournaments is also the leaderboard threshold
+(`tournaments.ts`'s `provisionalMin()`, production default `PROVISIONAL_MIN_TOURNAMENTS`),
+"join the rankings" is literally true rather than flavor text, and `MedalBar.tsx`'s copy
+says so. But `DEMO=1` relaxes that quota to `DEMO_PROVISIONAL_MIN_TOURNAMENTS` (1) — the
+identical trap the activity feed's `entered-rankings` milestone was built to avoid — so by
+the club tier a demo player is typically already ranked, and the sentence would be making
+a false claim in exactly the environment used for click-testing it. `/api/me` therefore
+sends `provisionalMin` (alongside `compareMinBoards`, the same "send it rather than
+hardcode it" pattern) and `MedalBar.tsx` only uses the rankings phrasing when it equals
+the club tier's own 4-tournament threshold, falling back to the ordinary glyph phrasing
+otherwise. Every other tier just names its glyph ("earn the ♦ medal") rather than
+spelling out "Diamond"/"Heart"/"Spade" — the colored mark beside the sentence already
+says which one.
+
+**Human-only**, the same gate Elo and placement already use: `server/src/medals.ts`'s
+`medalProgressFor` returns `null` for `kind !== 'human'`, and `stats.ts`'s `playerStats()`
+zeroes `totals.earnedMedals` the same way for a house profile — the benchmark AI personas
+can churn through hundreds of tournaments and never show a medal.
+
+**No new persisted column.** Like `tournamentsCompleted`/`completedBoardCount`
+themselves, a medal tier is derived fresh on every read rather than diaried — the
+evergreen, recompute-on-read discipline the rest of this codebase already follows for
+Elo and placement. There is no "you just earned a medal" toast or celebration moment in
+this first pass; a medal simply appears colored the next time the rail or the profile
+loads, the same way a new `elo_history` row silently updates the RATING chart. "Next
+load" has to mean within the same session, not just after a hard reload: `Board.tsx`
+otherwise never touches `MeContext` (it reads `fastForward`/`bidFeedback` off it but never
+writes), so without an explicit trigger the Home rail would show a stale bar/medal for the
+rest of the visit — including at the exact moment a medal is earned, the one moment this
+widget most wants to be right. So the same effect that flips on the toll receipt
+(`Board.tsx`'s `showReceipt` effect, keyed on the board's `state` going live → `'done'`)
+also calls `refresh()` when the board that just finished was the tournament's **last**
+one (`board.boardNo === board.totalBoards`) — an ordinary mid-tournament board finishing
+doesn't touch account state and skips it.
+
+**Two call sites, two shapes.** `/api/me`'s `medals` field
+(`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,
+the current target, the bar's `pct`, `tournamentsRemaining` — because Home's `MedalBar`
+needs all of it. `playerStats()`'s `totals.earnedMedals` is just the earned list, computed
+inline from the `tournamentsCompleted`/`boardsCompleted` that function already has in
+hand for whichever profile is being viewed (self or someone else's) — no second query —
+because the profile (`Player.tsx`'s `MedalGlyphs earned={...} mode="earnedOnly"`) is
+deliberately a trophy case: only what's been won, no bar, no bounding box, no caption.
+`MedalGlyphs`' other mode, `mode="all"`, is what `MedalBar` uses for Home's rail — all
+four suits always render, close together, colored once earned via the app's existing
+`.suit-s/.suit-h/.suit-d/.suit-c` classes, unearned ones muted via `.medal-glyph-locked`
+(`var(--line)`) — the exact "earned in real color, rest muted" idiom `StarGrade.tsx`
+already established, reused rather than reinvented. Suit coloring goes only through the
+existing `--suit-*` tokens, so night mode and the colorblind palette need no extra work.
+
+**The bar's outline is a deliberate borrow from `TrickArea.tsx`'s trick-meter** — the bar
+in the middle of the card-play screen — rather than `PctBar`'s borderless track:
+`.medal-bar-track` takes the same `1px solid var(--ink)` structural border. The unfilled
+remainder is a flat `--chart-track` fill rather than the trick-meter's diagonal hatch,
+though — `PctBar`'s plainer "nothing here yet" convention, not the trick-meter's. The
+fill's growing edge is capped with the same `1px solid var(--ink)` line trick-meter uses
+to keep its own hatched fill's leading edge crisp against the track
+(`.medal-bar-fill.capped`, gated on `fillPct > 0` — the same `tricks > 0` gate
+trick-meter's own cap uses — so a brand-new 0% bar shows no stray line at the left edge).
+The percentage itself is rendered in plain body weight next to the bar, never as a bolded
+standalone figure — `.num`'s doc comment explains why: Besley's tabular-figure feature is
+broken in every published build (a font bug, not a design choice), and bolding a raw
+number invites exactly the "why does one digit look heavier" problem that comment warns
+about.
+
+**The widget itself is unboxed** — no panel background or border, just page-level
+padding (`.medal-bar`) — and it sits on Home between the "play" block (the OPEN NOW/KEEP
+GOING card) and TOLLS PAID, reading as the bridge between what a player is doing now and
+what they've already finished. A dashed "TOURNEY ?" hint used to sit in that gap,
+sealed shut ("Opens when you finish #N — one crossing at a time") since placement is
+scored, not sequential, and the next tournament's number is unknowable in advance. Cut:
+it said nothing actionable on any of the dozens of times a returning player would see it,
+its dashed "?" risked reading as an unfinished placeholder rather than a deliberate seal,
+and the "one crossing at a time" argument it was making is already made once, elsewhere
+(the landing page, the first-crossing tour) — the same reasoning that cut the old
+onboarding pamphlet for being redundant by the time anyone read it twice.
+
+**Held back until the first board is on the books.** `Lobby.tsx` gates the whole widget on
+`me.user.boards > 0` (`completedBoardCount`, the same count `/api/me` already sends for
+Compare's entry-point gate) alongside the existing `medals` null-check, rather than
+rendering a 0%-toward-club bar the instant an account exists. A brand-new player hasn't
+earned anything and hasn't even seen a deal yet, so a progress rail at that point has
+nothing to show and reads as clutter ahead of the first crossing rather than as an
+incentive during it — the same instinct that cut the old "TOURNEY ?" hint above. The gate
+is on boards, not tournaments, so the widget appears as soon as the player's first board
+finishes rather than waiting for their whole first tournament (four boards) to close.
+
 **Hand-flip subtlety:** the human sits South, but when North (the robot partner) declares,
 the human plays the North hand — see `humanControls` and the `flipped` handling in
 `game.ts`/`boardView` and the Board page. Touching seat/turn logic? Test both orientations.
@@ -1096,9 +1546,10 @@ attribute set; the settings gate's Day/Night/Adaptive/System switch (`theme.ts`,
 in localStorage) sets `data-theme` explicitly to override it, or clears it for "System".
 "Adaptive" is also an explicit override (there's no media query for time-of-day): it
 resolves to night on a fixed local-time window, `ADAPTIVE_NIGHT_START_HOUR`–
-`ADAPTIVE_NIGHT_END_HOUR` in `theme.ts` (9 PM–7 AM, the industry-standard fixed
-dark-mode schedule — e.g. Windows Night Light's default "set hours" — rather than a
-sunset/sunrise calculation, since that needs geolocation this app doesn't request); a
+`ADAPTIVE_NIGHT_END_HOUR` in `theme.ts` (7 PM–8 AM, close to but wider than the
+industry-standard fixed dark-mode schedule — e.g. Windows Night Light's default "set
+hours" of 9 PM–7 AM — rather than a sunset/sunrise calculation, since that needs
+geolocation this app doesn't request); a
 60s timer in `App.tsx` re-applies it so a tab left open across the boundary still flips
 live, the same problem `system`'s `matchMedia` listener solves for OS changes. A
 blocking inline script in `web/index.html` applies the persisted choice before first
@@ -1142,7 +1593,8 @@ deficiency and no time-of-day concept for it.
 
 **The settings gate** (`web/src/pages/Settings.tsx`, the sixth tab) is one perforated panel
 of identical rows — tracked-caps label, the italic aside that says what the setting does,
-then a full-width `.pref-switch` segmented lever. Four segments for appearance, two for a
+then a full-width `.pref-switch` segmented lever (`ds/PrefSwitch.tsx` — Analyze's lens
+switch uses it at three). Four segments for appearance, two for a
 switch: the SAME component at different arities, deliberately, which is why the design
 system still has no on/off toggle. Night mode and sign-out moved here off the Stats page,
 which is the ledger and now holds nothing that isn't a record of play.
@@ -1198,6 +1650,41 @@ newer settings has one thing worth knowing:
   unaffected: it carries its own scripted `lastEval` and never reads this preference, since
   the tour's pedagogical point is teaching the grading loop regardless of the visitor's (or
   signed-in tester's) own setting.
+- **Beta features** (`users.beta_features`) is the odd one out: every switch above describes
+  how an already-shipped feature behaves for this person, while this one GRANTS access to
+  features still being tried out — today, just Analyze (the post-board review screen,
+  `pages/Analyze.tsx`). Its default is environment-dependent rather than a fixed literal: the
+  `beta_features` migration in `db.ts` computes it once, from `DEV_AUTH`/`DEMO`, and bakes
+  that into the column's SQL `DEFAULT` — so it's simultaneously the backfill for existing
+  rows on whatever deployment runs the migration AND, because SQLite reuses an `ADD COLUMN`
+  default for every future `INSERT` that omits the column, the default for every signup after
+  it with no second code path. Off in production (nobody has asked for early access), on
+  wherever `DEV_AUTH` or `DEMO` is set — PR previews and the permanent demo app share that
+  exact shape (`ci.yml`'s `deploy-preview`/`deploy-demo`), so testers and click-testers see
+  new work without hunting for a switch, and a shipped-but-gated feature like Analyze's demo
+  exhibit (`analyze-play`, see "Demo mode" below) just works. A production account reaches a
+  beta feature only by deliberately flipping this switch — the intended path for a named
+  handful of early testers, not a general release. Both the door (`Board.tsx`'s ANALYZE PLAY
+  button, `Tournament.tsx`'s ledger hint, `Analyze.tsx`'s own route) and the data
+  (`GET .../analysis` in `app.ts`) check it independently: the client hiding the door is a
+  courtesy, the route's `403` is the actual gate, since a beta feature that only the UI
+  refuses is one curl command away from everyone.
+- **Double-tap to bid** (`users.double_tap_bid`, **default OFF**) is the one switch on this
+  panel that does not preserve prior behavior — every other row above defaults to whatever the
+  app already did, so it reads as a way OUT rather than a change. This one exists because it
+  IS the change: player reports of accidentally submitting a bid on the bid box's tap-again
+  shortcut are what shipping it off by default fixes. `BidBox.tsx` itself has never
+  distinguished select from submit — every tap just calls `onSelect`, and the caller decides
+  what a repeat tap on the already-selected call means. `Board.tsx` reads the preference
+  (`me?.user?.doubleTapBid === true`, fail-CLOSED unlike the `!== false` reads above) and only
+  submits on a second tap when it's on; the confirm CTA ("BID X →") is unconditionally the
+  other, always-available path to the same `submitCall`, so turning this off never removes the
+  ability to bid, only the shortcut. Scoped to bidding only — card play's own tap-again-to-play
+  gesture (`HandFan`/`onSelectCard`) is a separate code path and is untouched. `Tour.tsx` does
+  not read this preference either: its own `onSelectCall`/`attemptCall` only "submits" the one
+  scripted correct call per decision point regardless of tap count, so a signed-out visitor
+  walking the practice deal is not exposed to the mistap this setting guards against in the
+  first place.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,
@@ -1426,7 +1913,10 @@ the sitemap and `robots.txt` follow on their own.
    `packages/ai/src/difficulty.ts`) is the same kind of deliberate robot change scoped to
    non-perfect tournaments: it breaks comparability for in-flight ones, so calibrate
    (`tools/calibrate_k.mjs`, `tools/calibrate_stats.mjs`, `tools/calibrate_stack.mjs`) first,
-   or accept the break knowingly. Laydown claims are a legitimate, *expected* source of fixture diffs even without
+   or accept the break knowingly. Any such deliberate robot change — and any change to
+   `ANALYZE_K`/`MOMENT_FLOOR`/`gradeFromDeficit` or stage-3 scoring in `server/src/analyze.ts`
+   — must also bump `ANALYZE_VERSION` there: a cached analysis computed against different
+   robots is a stale accusation, and the version is what forces the recompute. Laydown claims are a legitimate, *expected* source of fixture diffs even without
    touching robot behavior: once a board becomes DD-determined, its tail switches from the
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that

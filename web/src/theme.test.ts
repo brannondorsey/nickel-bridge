@@ -81,17 +81,17 @@ describe('resolvesToNight', () => {
     expect(resolvesToNight('system')).toBe(false);
   });
 
-  it('follows the fixed 9 PM-7 AM local-time window under adaptive, regardless of OS', () => {
+  it('follows the fixed 7 PM-8 AM local-time window under adaptive, regardless of OS', () => {
     mockMatchMedia(false);
     mockHour(22); // 10 PM
     expect(resolvesToNight('adaptive')).toBe(true);
     mockHour(3); // 3 AM
     expect(resolvesToNight('adaptive')).toBe(true);
-    mockHour(21); // exactly 9 PM
+    mockHour(19); // exactly 7 PM
     expect(resolvesToNight('adaptive')).toBe(true);
-    mockHour(20); // 8 PM
+    mockHour(18); // 6 PM
     expect(resolvesToNight('adaptive')).toBe(false);
-    mockHour(7); // exactly 7 AM
+    mockHour(8); // exactly 8 AM
     expect(resolvesToNight('adaptive')).toBe(false);
     mockHour(13); // 1 PM
     expect(resolvesToNight('adaptive')).toBe(false);

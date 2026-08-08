@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BoardView, TrickCard } from '../api';
+import type { BoardView, Me, TrickCard } from '../api';
 import {
   AUTO_PLAY_DELAY_MS,
   BID_GAP_MS,
@@ -20,10 +20,12 @@ import {
   boardBiddingRobots,
   boardDone,
   boardDoneLow,
+  boardDoneRehearsal,
   boardPlaying,
   boardPlayingDummyTurn,
   boardPlayingEastDummy,
   boardPlayingFlipped,
+  boardPlayingRehearsal,
   boardPlayingWestDummy,
   meFixture,
 } from '../test/fixtures';
@@ -37,12 +39,12 @@ vi.mock('../api', async (importOriginal) => ({
   },
 }));
 
-const renderBoard = () =>
+const renderBoard = (me: Me = meFixture) =>
   renderWithMe(
     <Routes>
       <Route path="/t/:tid/b/:no" element={<Board />} />
     </Routes>,
-    { me: meFixture, route: '/t/12/b/2' },
+    { me, route: '/t/12/b/2' },
   );
 
 const inAuction = () => within(document.querySelector('.auction') as HTMLElement);
@@ -137,14 +139,44 @@ describe('Board — bidding', () => {
     expect(screen.getByText('Robots are thinking…')).toBeInTheDocument();
   });
 
-  it('tap-to-bid: the placeholder teaches it, and a second tap on the selected call submits — no confirm needed', async () => {
+  // "Double-tap to bid" (settings gate) defaults OFF for every account, so by
+  // default a second tap on the already-selected call must NOT submit — only
+  // the confirm CTA does. See the doubleTapBid-on variant below for the
+  // opt-in path.
+  it('placeholder points at the confirm CTA, and a second tap on the selected call does not submit by default', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
       evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
       board: boardBiddingRobots,
     });
     renderBoard();
-    // the placeholder signposts the gesture up front
+    // the placeholder points at the confirm CTA, not a repeat-tap gesture
+    expect(await screen.findByText(/tap bid to make the call/i)).toBeInTheDocument();
+    // first tap selects and previews it — no submit yet
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(document.querySelector('.mtitle')).toHaveTextContent('Rebid, invitational');
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // second tap on the same call is a no-op by default — still no submit
+    await userEvent.click(screen.getByRole('button', { name: '2♥' }));
+    expect(apiMock.call).not.toHaveBeenCalled();
+    // only the confirm CTA submits
+    await userEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(apiMock.call).toHaveBeenCalledWith(12, 2, bid2H);
+  });
+
+  it('tap-to-bid: with "Double-tap to bid" on, a second tap on the selected call submits — no confirm needed', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardBiddingRobots,
+    });
+    renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: { ...meFixture, user: { ...meFixture.user!, doubleTapBid: true } }, route: '/t/12/b/2' },
+    );
+    // the placeholder teaches the repeat-tap gesture, not the confirm CTA, now that it's live
     expect(await screen.findByText(/tap again to make the call/i)).toBeInTheDocument();
     // first tap selects and previews it — no submit yet
     await userEvent.click(screen.getByRole('button', { name: '2♥' }));
@@ -1163,6 +1195,25 @@ describe('Board — result', () => {
     expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
   });
 
+  it('offers the ANALYZE PLAY door for a beta account', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    expect(await screen.findByRole('link', { name: /analyze play/i })).toHaveAttribute(
+      'href',
+      '/t/12/b/2/analyze',
+    );
+  });
+
+  it('hides the ANALYZE PLAY door for an account without beta features — Analyze is still in beta', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    await screen.findByText('SCORED');
+    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
+    // the rest of the receipt's actions are unaffected
+    expect(screen.getByRole('button', { name: /NEXT BOARD — 3 OF 4/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
+  });
+
   it('marks a poor board in the low treatment', async () => {
     apiMock.board.mockResolvedValue(boardDoneLow);
     renderBoard();
@@ -1220,6 +1271,22 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('Toll collected')).toBeInTheDocument();
   });
 
+  it('carries the same ANALYZE PLAY door as the field view, beta-gated the same way', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /analyze play/i })).toHaveAttribute('href', '/t/12/b/2/analyze');
+  });
+
+  it('hides ANALYZE PLAY on the toll receipt for an account without beta features', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
+  });
+
   it('itemizes a set contract as Toll refused with the penalty in red', async () => {
     apiMock.board.mockResolvedValue(boardDoneLow);
     renderBoard();
@@ -1228,5 +1295,106 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('100, vulnerable')).toBeInTheDocument();
     expect(screen.getByText('Toll refused')).toBeInTheDocument();
     expect(screen.getAllByText('−100').length).toBe(2); // penalty line + total
+  });
+
+  // A tournament (not just a board) completing can change account state Board
+  // never otherwise touches — most notably Home's medal rail, whose bar/copy
+  // is fed by MeContext and would otherwise go stale for the rest of the
+  // session (see App.tsx's refresh()). So the LAST board of a tournament
+  // completing live has to poke MeContext; an ordinary board completing (with
+  // more boards left in the tournament) should not.
+  it('refreshes account state when the LAST board of a tournament completes live', async () => {
+    const lastBoardPlaying = { ...boardPlaying, boardNo: 4 };
+    const lastBoardDone = { ...boardDone, boardNo: 4 };
+    apiMock.board.mockResolvedValue(lastBoardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: lastBoardDone });
+    const { refresh } = renderWithMe(
+      <Routes>
+        <Route path="/t/:tid/b/:no" element={<Board />} />
+      </Routes>,
+      { me: meFixture, route: '/t/12/b/4' },
+    );
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 4')).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('does not refresh account state when a non-final board completes live', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: boardDone });
+    const { refresh } = renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('Board — rehearsal', () => {
+  it('relabels the header and shows END instead of the vul chip, mid-play', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingRehearsal);
+    renderBoard();
+    // branchPly 24 -> trick floor(24/4)+1 = 7
+    expect(await screen.findByText('REHEARSAL — Board 2, from Trick 7')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'END' })).toHaveAttribute('href', '/t/20/b/2/analyze');
+    // the ordinary vulnerability chip is gone — this is the one thing that swaps
+    expect(screen.queryByText('NS VUL')).not.toBeInTheDocument();
+    // everything below the header is the untouched live PlayPhase — the hand fan renders as usual
+    expect(screen.getByRole('button', { name: 'A of ♠' })).toBeInTheDocument();
+  });
+
+  it('shows the adjusted receipt instead of the toll receipt or the field, once the rehearsal finishes', async () => {
+    apiMock.board.mockResolvedValue(boardDoneRehearsal);
+    renderBoard();
+    // the REHEARSAL stamp replaces SCORED
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument();
+    expect(screen.queryByText('SCORED')).not.toBeInTheDocument();
+
+    // itemized like a real toll receipt, but never one — no TOLL PAID/REFUSED postmark
+    expect(screen.getAllByText('THIS LINE').length).toBe(2); // the panel heading and the stub label
+    expect(document.querySelector('.result-contract')!.textContent).toBe('4♠+1 by S');
+    expect(screen.queryByText(/TOLL PAID/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/TOLL REFUSED/)).not.toBeInTheDocument();
+
+    // the comparison against the real table, framed as a genuine delta (not
+    // the moments ledger's opportunity-only +N)
+    expect(screen.getByText('VS YOUR REAL TABLE')).toBeInTheDocument();
+    expect(screen.getByText('YOUR REAL TABLE')).toBeInTheDocument();
+    expect(screen.getByText('This line does +30 better than your real table — +12 MP.')).toBeInTheDocument();
+
+    // the old (real table) and new (this line, substituted into that same
+    // real field) matchpoint pcts, beside each stub's score
+    expect(screen.getByText("58% of the field's matchpoints")).toBeInTheDocument();
+    expect(screen.getByText("70% of the field's matchpoints")).toBeInTheDocument();
+
+    // never the matchpoint field view — pct is meaningless for a rehearsal's own field of one
+    expect(screen.queryByText(/MATCHPOINTS · VS/)).not.toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /TRY ANOTHER LINE/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to analyze/i })).toBeInTheDocument();
+  });
+
+  it("falls back to a plain caption, no MP delta sentence, when the origin field was too small to matchpoint (lineMatchpoints null)", async () => {
+    apiMock.board.mockResolvedValue({ ...boardDoneRehearsal, lineMatchpoints: null });
+    renderBoard();
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument();
+    expect(screen.getByText('matchpoints not available')).toBeInTheDocument();
+    expect(screen.getByText('This line does +30 better than your real table.')).toBeInTheDocument();
+  });
+
+  it('does not refresh account state when a rehearsal branched from the last board finishes live — it is not a real tournament board', async () => {
+    const lastBoardPlaying = { ...boardPlayingRehearsal, boardNo: 4 };
+    const lastBoardDone = { ...boardDoneRehearsal, boardNo: 4 };
+    apiMock.board.mockResolvedValue(lastBoardPlaying);
+    apiMock.playCard.mockResolvedValue({ board: lastBoardDone });
+    const { refresh } = renderBoard();
+    const queen = await screen.findByRole('button', { name: 'Q of ♠' });
+    await userEvent.click(queen);
+    await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument(); // reached the adjusted receipt
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

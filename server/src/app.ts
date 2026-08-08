@@ -9,23 +9,25 @@ import { recentActivity } from './activity.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { buildCompare, compareMin } from './compare.js';
 import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
-import { PUBLIC_ORIGIN } from './config.js';
-import { db } from './db.js';
+import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
+import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
+import { getBoardAnalysis } from './analyze.js';
 import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
 import { serializeRequestLog } from './logging.js';
+import { createRehearsal, discardRehearsal, listRehearsals } from './rehearsal.js';
+import { securityHeaders } from './security.js';
 import { robotsTxt } from './seo.js';
 import { playerStats, profileKind } from './stats.js';
 import {
   boardDifficulty,
-  DEMO_PROVISIONAL_MIN_TOURNAMENTS,
   getTournament,
   leaderboardMovement,
   myBoardSummaries,
   myEloDelta,
   myTournaments,
   placeUser,
-  PROVISIONAL_MIN_TOURNAMENTS,
+  provisionalMin,
   visibleStandings,
 } from './tournaments.js';
 
@@ -37,19 +39,27 @@ import {
 const ACTIVITY_WINDOW_S = 8 * 86400;
 
 /**
- * The provisional rating quota in force for this deployment.
+ * The board a URL names, or null if it doesn't name one.
  *
- * DEMO=1 (previews + the permanent demo app) relaxes it, because the boot
- * seeder plays each bot through at most 2 tournaments — well under the
- * production quota — see DEMO_PROVISIONAL_MIN_TOURNAMENTS's doc comment.
- * Both the ladder and the activity feed's 'entered-rankings' milestone hang off
- * this one number, so it lives here once rather than as a ternary per route:
- * the feed originally hardcoded the production constant and the milestone was
- * silently unreachable in demo as a result.
+ * `Number.isInteger` is the load-bearing half, and it is easy to leave out
+ * because the range check reads like it covers everything. It doesn't: `2.5` is
+ * between 1 and 4, and the board it reaches is malformed all the way down —
+ * boardConditions() derives `dealer = 0.5` and an undefined vulnerability from
+ * it. The GET route creates a row before any of that is computed, so a fraction
+ * used to persist junk under UNIQUE(tournament_id, user_id, board_no) — a
+ * distinct row per distinct fraction, sailing past the four-board cap — and
+ * then 500 on the malformed deal. SQLite stores it as a REAL, because `INTEGER`
+ * is an affinity rather than a constraint on a non-STRICT table (see the
+ * boards DDL in db.ts, which now refuses the storage class too).
+ *
+ * The sibling routes (/api/users/:id/stats, /api/compare/:id) already screen
+ * their ids this way; this is the same discipline, in the one place all three
+ * board routes can share it.
  */
-const provisionalMin = () =>
-  process.env.DEMO === '1' ? DEMO_PROVISIONAL_MIN_TOURNAMENTS : PROVISIONAL_MIN_TOURNAMENTS;
-
+function boardNoParam(raw: string): number | null {
+  const no = Number(raw);
+  return Number.isInteger(no) && no >= 1 && no <= BOARDS_PER_TOURNAMENT ? no : null;
+}
 
 /** Build the fully-wired Fastify app (no listen — tests use app.inject()). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -63,6 +73,24 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(fastifyCookie);
+
+  const here = dirname(fileURLToPath(import.meta.url));
+  const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');
+
+  // Browser-enforced hardening on every response — anti-framing, nosniff,
+  // referrer policy, permissions policy, HSTS on https deployments, and a
+  // deliberately narrow CSP that carries no resource allowlist. What each header
+  // is for, and why the CSP stops where it does, is written down in security.ts
+  // rather than here.
+  //
+  // Registered before any route so it covers all of them: the API, /auth, the
+  // prerendered pages, the SPA shell, the 404 handler and the error handler
+  // alike. A header set per-route is a header the next route forgets.
+  const headers = securityHeaders({ hsts: COOKIES_SECURE });
+  app.addHook('onSend', (_req, reply, payload, done) => {
+    for (const [name, value] of Object.entries(headers)) reply.header(name, value);
+    done(null, payload);
+  });
 
   // Tear down the sampled-play DDS worker pool (if one ever spawned) so the
   // process exits promptly on close; a no-op on expert-only instances.
@@ -144,8 +172,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!user) return;
     const { id, no } = req.params as { id: string; no: string };
     const t = getTournament(Number(id));
-    const boardNo = Number(no);
-    if (!t || boardNo < 1 || boardNo > 4) return reply.code(404).send({ error: 'not found' });
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
     const b = loadBoard(t, user.id, boardNo, true);
     if (!b) return reply.code(404).send({ error: 'not found' });
     // A human is playing here: keep this tournament's lookahead window live,
@@ -159,14 +187,95 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send(boardView(t, b, user.elo));
   });
 
+  // Analyze — verdicts for a FINISHED board's review screen, computed on
+  // first open and cached (board_analyses). `?par=1` adds stage 4 (par + the
+  // counterfactual auctions) — the crossing/auction lenses request it, the
+  // play lens deliberately doesn't, so its open never pays for
+  // CalcDDTablePBN. Only offered on a board already 'done', whose hidden
+  // hands boardView has therefore already revealed to this player; boards
+  // are per-user rows, so there is no cross-player surface, and /api/* is in
+  // the edge bypass set.
+  //
+  // Still in beta (see the beta_features migration in db.ts): gated here as
+  // well as by the web client hiding its doors, since a client-side gate
+  // alone is only a UI courtesy — this route is the one place that can
+  // actually keep the feature (and the DDS work it costs) off an account
+  // that hasn't opted in.
+  app.get('/api/tournaments/:id/boards/:no/analysis', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const wantPar = (req.query as { par?: string }).par === '1';
+    const t = getTournament(Number(id));
+    const boardNo = Number(no);
+    if (!t || !Number.isInteger(boardNo) || boardNo < 1 || boardNo > 4) {
+      return reply.code(404).send({ error: 'not found' });
+    }
+    const b = loadBoard(t, user.id, boardNo, false);
+    if (!b || b.row.state !== 'done') return reply.code(404).send({ error: 'not analyzable' });
+    // One level deep only: a rehearsal can never itself be re-Analyzed or
+    // re-branched. Excludes 'rehearsal' specifically rather than allowlisting
+    // 'standard' — the demo gallery's analyze-play exhibit genuinely does
+    // analyze an 'exhibit'-kind tournament.
+    if (t.kind === 'rehearsal') return reply.code(404).send({ error: 'not analyzable' });
+    if (t.ai_field) noteTournamentActivity(t.id);
+    return reply.send(await getBoardAnalysis(t, b, wantPar));
+  });
+
+  // "Play From Here" — branch a finished board's real play at `ply` into a
+  // new, live, ordinary board the player plays out themselves. See
+  // rehearsal.ts's doc comment for the whole design. Gated on beta_features,
+  // matching Analyze's own gate — this is only reachable from there today.
+  app.post('/api/tournaments/:id/boards/:no/rehearse', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const { ply } = (req.body ?? {}) as { ply?: number };
+    const t = getTournament(Number(id));
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    if (typeof ply !== 'number') return reply.code(400).send({ error: 'bad ply' });
+    const created = await createRehearsal(t, user.id, boardNo, ply);
+    return reply.send(created);
+  });
+
+  // Every rehearsal attempt on this origin board — feeds both the per-moment
+  // rail and the board-wide YOUR REHEARSALS list on Analyze, uncapped.
+  app.get('/api/tournaments/:id/boards/:no/rehearsals', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no } = req.params as { id: string; no: string };
+    const t = getTournament(Number(id));
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    return reply.send({ rehearsals: listRehearsals(t.id, boardNo, user.id) });
+  });
+
+  // Explicit discard for a rehearsal attempt the player doesn't want kept —
+  // the escape hatch alongside createRehearsal's own same-ply dedupe/resume.
+  app.delete('/api/tournaments/:id/boards/:no/rehearsals/:rehearsalId', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
+    const { id, no, rehearsalId } = req.params as { id: string; no: string; rehearsalId: string };
+    const boardNo = boardNoParam(no);
+    if (boardNo === null) return reply.code(404).send({ error: 'not found' });
+    discardRehearsal(Number(id), boardNo, Number(rehearsalId), user.id);
+    return reply.send({ ok: true });
+  });
+
   app.post('/api/tournaments/:id/boards/:no/call', async (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
     const { id, no } = req.params as { id: string; no: string };
     const { call } = (req.body ?? {}) as { call?: number };
     const t = getTournament(Number(id));
-    if (!t) return reply.code(404).send({ error: 'not found' });
-    const b = loadBoard(t, user.id, Number(no), false);
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    const b = loadBoard(t, user.id, boardNo, false);
     if (!b) return reply.code(404).send({ error: 'board not started' });
     if (typeof call !== 'number' || call < 0 || call > 37) return reply.code(400).send({ error: 'bad call' });
     if (t.ai_field) noteTournamentActivity(t.id);
@@ -180,8 +289,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     const { id, no } = req.params as { id: string; no: string };
     const { card } = (req.body ?? {}) as { card?: number };
     const t = getTournament(Number(id));
-    if (!t) return reply.code(404).send({ error: 'not found' });
-    const b = loadBoard(t, user.id, Number(no), false);
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    const b = loadBoard(t, user.id, boardNo, false);
     if (!b) return reply.code(404).send({ error: 'board not started' });
     if (typeof card !== 'number' || card < 0 || card > 51) return reply.code(400).send({ error: 'bad card' });
     if (t.ai_field) noteTournamentActivity(t.id);
@@ -336,8 +446,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   );
 
   // ---- static SPA ----
-  const here = dirname(fileURLToPath(import.meta.url));
-  const webDist = process.env.WEB_DIST ?? join(here, '../../web/dist');
   if (existsSync(webDist)) {
     // Prerendered glossary pages (web/dist/glossary-static, built by
     // web/scripts/prerender.mjs) shadow the SPA fallback for the two public

@@ -408,20 +408,28 @@ export interface SampledChooseOpts {
 }
 
 /**
- * Choose the acting robot's card by sampled double-dummy. Receives the true
- * deal (the server has it) but reads it only through deriveKnowledge — see
- * its docstring for the exact non-leak audit surface.
+ * The sampled-DD scoring that chooseCardSampled decides from, exposed on its
+ * own because Analyze's findability verdict (server/src/analyze.ts) wants the
+ * whole per-card score map — "what would a careful player with YOUR
+ * information have played" — not just the argmax card. Receives the true deal
+ * (the server has it) but reads it only through deriveKnowledge — see its
+ * docstring for the exact non-leak audit surface.
+ *
+ * Returns the seeded rng alongside the scores so the wrapper's playTopN draw
+ * continues the SAME stream the sampler consumed — one stream per decision,
+ * exactly as mcDecisionSeed's doc comment promises. Splitting the stream here
+ * would silently change every noisy-tier robot card (invariant 1); the golden
+ * test in test/play-mc-golden.test.ts pins the join.
  */
-export async function chooseCardSampled(
+export async function scoreCardsSampled(
   deal: Deal,
   contract: Contract,
   plays: Card[],
   opts: SampledChooseOpts,
-): Promise<Card> {
+): Promise<{ legal: Card[]; totals: Map<Card, number>; rng: () => number }> {
   const state = playState(deal, contract, plays);
   const legal = legalCards(deal, state);
   if (legal.length === 0) throw new Error('no legal cards');
-  if (legal.length === 1) return legal[0]; // forced — free at every difficulty, no rng consumed
 
   const know = deriveKnowledge(deal, contract, plays, opts.dealer, opts.calls);
   const constraints =
@@ -452,6 +460,31 @@ export async function chooseCardSampled(
       totals.set(c, (totals.get(c) ?? 0) + layout.weight * (solve.cardScores.get(c) ?? 0));
     }
   });
+
+  return { legal, totals, rng };
+}
+
+/**
+ * Choose the acting robot's card by sampled double-dummy: scoreCardsSampled's
+ * totals, then either the flat argmax or the PLAY_NOISE weighted draw. A thin
+ * wrapper — byte-identical to the pre-split behavior for every caller (the
+ * forced-node early return still consumes no rng, and the noisy draw
+ * continues the sampler's own stream).
+ */
+export async function chooseCardSampled(
+  deal: Deal,
+  contract: Contract,
+  plays: Card[],
+  opts: SampledChooseOpts,
+): Promise<Card> {
+  {
+    const state = playState(deal, contract, plays);
+    const legal = legalCards(deal, state);
+    if (legal.length === 0) throw new Error('no legal cards');
+    if (legal.length === 1) return legal[0]; // forced — free at every difficulty, no rng consumed
+  }
+
+  const { legal, totals, rng } = await scoreCardsSampled(deal, contract, plays, opts);
 
   const playTopN = opts.playTopN ?? 1;
   if (playTopN <= 1) {

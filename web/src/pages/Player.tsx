@@ -7,6 +7,7 @@ import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
 import { FlipDigits } from '../components/ds/FlipDigits';
 import { Loading } from '../components/ds/Loading';
+import { MedalGlyphs } from '../components/ds/MedalGlyphs';
 import { PctBar } from '../components/ds/PctBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { Sparkline } from '../components/ds/Sparkline';
@@ -333,7 +334,22 @@ export default function Player() {
     caption: p.finishedAt ? shortDate(p.finishedAt) : undefined,
     value: p.accuracy!,
   }));
-  const ago = (n: number) => (n > 1 ? `${n} tournaments ago` : '');
+  /**
+   * The left-hand axis caption: where the line starts, as a DATE.
+   *
+   * It used to read "39 tournaments ago" — an ordinal, which described the axis
+   * honestly back when the server handed these series over in tournament-id
+   * order. They arrive in play order now (stats.ts's StatPoint), so the axis is
+   * time and the caption should say so; the panel headings and the LOOKBACK
+   * switch already carry the count. Same "Apr 5" … "this week" shape DayGrid
+   * uses at the top of this page, so the two date axes read alike.
+   *
+   * Falls back to the old ordinal when the first point has no finish time —
+   * possible only for a rated crossing with no completed board, which
+   * eloParticipants makes unreachable, but a caption is not worth a crash.
+   */
+  const axisStart = (points: { caption?: string }[]) =>
+    points.length > 1 ? (points[0].caption ?? `${points.length} tournaments ago`) : '';
 
   const declaring = t.declarer.boards ? Math.round((t.declarer.made / t.declarer.boards) * 100) : null;
   const defending = t.defense.boards ? Math.round((t.defense.beat / t.defense.boards) * 100) : null;
@@ -363,6 +379,11 @@ export default function Player() {
       <AppHeader context="STATS" />
 
       <div className="player-hero stats-hero">
+        {/* Unconditional (not nested in the !isMe avatar block below, which
+            your own profile doesn't render) — earned medals show the same
+            way whether you're looking at your own record or someone else's.
+            Renders nothing at all if nothing's been earned yet. */}
+        <MedalGlyphs earned={t.earnedMedals} mode="earnedOnly" className="profile-medals" />
         {!isMe ? (
           <div className="stats-who">
             {stats.user.picture ? (
@@ -480,7 +501,7 @@ export default function Player() {
               label="Matchpoints by tournament"
               refValue={50}
               refLabel="field average 50%"
-              leftCaption={ago(pctPoints.length)}
+              leftCaption={axisStart(pctPoints)}
               format={(v) => `${Math.round(v)}%`}
             />
           </ChartPanel>
@@ -492,7 +513,7 @@ export default function Player() {
                 label="Rating by tournament"
                 refValue={1200}
                 refLabel="start 1200"
-                leftCaption={ago(eloPoints.length)}
+                leftCaption={axisStart(eloPoints)}
               />
               {/* Elo is wiped and replayed from every crossing on each scored board
                   (server/src/tournaments.ts), so this line is today's reconstruction
@@ -516,7 +537,7 @@ export default function Player() {
               points={accPoints}
               label="Bid accuracy by tournament"
               trendWindow={trendWindow(accPoints.length)}
-              leftCaption={ago(accPoints.length)}
+              leftCaption={axisStart(accPoints)}
               rightCaption="latest · - - trend"
               format={(v) => `${Math.round(v)}%`}
             />
@@ -686,12 +707,12 @@ export default function Player() {
             <Tile
               label="DECLARING"
               value={declaring !== null ? `${declaring}%` : '—'}
-              sub={`${t.declarer.boards} boards`}
+              sub={`${t.declarer.made} of ${t.declarer.boards} made`}
             />
             <Tile
               label="DEFENDING"
               value={defending !== null ? `${defending}%` : '—'}
-              sub={`${t.defense.boards} boards`}
+              sub={`${t.defense.beat} of ${t.defense.boards} set`}
             />
             <Tile label="TOURNAMENTS" value={String(t.tournamentsPlayed)} sub={`${t.tournamentsCompleted} completed`} />
             <Tile label="BOARDS" value={String(t.boardsCompleted)} sub={`${t.passedOut} passed out`} />
