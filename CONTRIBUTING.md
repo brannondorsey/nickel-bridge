@@ -916,6 +916,39 @@ purpose — a refused apply means the zone holds a rule this script does not own
 human, and is no reason to also strand the HTML this deploy just changed behind a 30-day edge
 TTL. `--host` scoping matters because the two apps deploy independently and purging the other's
 pages would discard good cache entries.
+
+**The purge also runs when the `flyctl deploy` step itself FAILED**, for the same reason one
+step further out, and it is worth knowing what taught us that. On 2026-08-08 a flyctl 408
+mid-rolling-update failed `deploy-production` *after* the machine had already been replaced:
+the origin served the new build, the purge step never ran, and the edge went on serving HTML
+whose `/assets/index-<hash>.js` no longer existed at origin — a missing asset answers as the
+SPA fallback with `Content-Type: text/html`, which a browser refuses to execute as a module, so
+the front page could not boot at all. A broken production front door, held for up to the 30-day
+TTL, from a job whose only real fault was reporting an outcome Fly got wrong.
+
+The deploy's exit code was never the right guard, because the purge does not trust it anyway:
+`--purge --since` compares what the ORIGIN served before against what it serves now, so a
+deploy that died before changing any bytes finds nothing and purges nothing, while one that
+died after changing them is repaired. The job still fails either way — a Fly deploy that 408s
+wants a human — it just no longer takes the edge down with it. Two deliberate limits: the step
+is gated on the *snapshot* having succeeded rather than merely on the token (without a snapshot
+the give-up rule purges everything, right when a deploy really happened and wasteful when an
+earlier step like the `DEV_AUTH`/`DEMO` refusal meant there was never a deploy at all), and it
+uses `!cancelled()` rather than `always()` — GitHub documents that exact swap as the recommended
+one, since a step that keeps running through cancellation can hang the job.
+
+What `!cancelled()` leaves uncovered is **not symmetric between the two jobs**, which is worth
+knowing before trusting it. `deploy-production` has no concurrency group, so it is never
+superseded and a cancelled run means a human clicked cancel — genuinely rare. `deploy-demo` sets
+`cancel-in-progress: true`, so a second push to main supersedes the first routinely, and that
+run's purge is skipped. Usually harmless, since the superseding run deploys and purges right
+behind it — but its `--since` compares against an origin the cancelled run may ALREADY have
+updated, so a commit whose web output is byte-identical (a server-only change) purges nothing
+while the edge still holds the build from before the cancelled one. That residue is a stale demo
+page until `edge-upkeep.yml`'s weekly `--purge --force`, and demo is the surface that can afford
+it. `--apply` deliberately does NOT get the same treatment: its
+rules are derived from the repo checkout rather than from what the origin serves, so applying
+them after a failed deploy would point the edge at routes that deploy never shipped.
 `.github/workflows/edge-upkeep.yml` runs `--check` (drift), `--audit` (cert + cache health,
 per host) and a full `--purge --force` weekly — all three fold into the job's pass/fail, since a
 repair pass that silently stopped running is the same as not having one. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:

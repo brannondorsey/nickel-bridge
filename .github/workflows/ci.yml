@@ -155,6 +155,7 @@ jobs:
       # tell what this deploy actually changed. Costs at most one wake, and usually not even
       # that — the deploy immediately after would have woken the machine anyway.
       - name: Snapshot origin before deploy
+        id: cf_snapshot
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: node scripts/cloudflare.mjs --snapshot --host=demo-bridge.brannon.online --out=/tmp/cf-before.json
       - name: Deploy demo
@@ -163,8 +164,26 @@ jobs:
       # may write it, and deploy-production owns it now that production is fronted too. This
       # job purges only its own host, because the two apps deploy independently and dropping
       # the other one's pages would discard good cache entries.
+      #
+      # Runs even if the deploy above FAILED — see the same step in deploy-production for the
+      # full reasoning. Demo redeploys ~3x/day and is the debugging surface, so a stale page
+      # here is cheaper than on production; it gets the same treatment anyway, because the
+      # two jobs differing on when the edge is repaired is the kind of asymmetry nobody
+      # remembers when reading one of them.
+      #
+      # One thing IS different here, and it is this job's `cancel-in-progress: true` above.
+      # Production has no concurrency group, so a cancelled run there means a human clicked
+      # cancel; here a second push to main supersedes the first routinely, and `!cancelled()`
+      # skips that run's purge. Usually harmless — the superseding run deploys and purges
+      # right behind it — but not always: its own --since compares against an origin the
+      # cancelled run may ALREADY have updated, so a commit whose web output is byte-identical
+      # (a server-only change) purges nothing while the edge still holds the build from before
+      # the cancelled one. Left as is deliberately rather than reaching for always(), which
+      # GitHub's own docs warn can hang a job during cancellation; the residue is a stale demo
+      # page until edge-upkeep.yml's weekly --purge --force, and demo is the surface that can
+      # afford it. On production this path does not arise.
       - name: Purge the demo app's cached pages
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: ${{ !cancelled() && env.CLOUDFLARE_API_TOKEN != '' && steps.cf_snapshot.outcome == 'success' }}
         run: node scripts/cloudflare.mjs --purge --host=demo-bridge.brannon.online --since=/tmp/cf-before.json
 
   # Auto-deploys every merge to main. Assumes the production Fly app/volume/secrets already
@@ -200,6 +219,7 @@ jobs:
           node-version: 24
       # Must run BEFORE the deploy — see the same step in deploy-demo for why.
       - name: Snapshot origin before deploy
+        id: cf_snapshot
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: node scripts/cloudflare.mjs --snapshot --host=bridge.brannon.online --out=/tmp/cf-before.json
       - run: flyctl deploy --app nickel-bridge --config fly.toml --remote-only --ha=false
@@ -207,6 +227,12 @@ jobs:
       # and production is the natural owner now that it is fronted too. deploy-demo keeps
       # only its own scoped purge. Purging is `--host`-scoped because the two apps deploy
       # independently, and dropping the other one's pages would discard good cache entries.
+      #
+      # Unlike the purge below, this stays gated on the deploy having SUCCEEDED, and the
+      # difference is not an oversight: the rules are derived from the repo checkout rather
+      # than from what the origin serves, so applying them after a failed deploy would point
+      # the edge at routes this deploy never actually shipped. The purge has no such problem
+      # — it reads the live origin — which is exactly why only it is safe to run regardless.
       - name: Reconcile Cloudflare edge config
         id: cf_apply
         if: env.CLOUDFLARE_API_TOKEN != ''
@@ -215,8 +241,36 @@ jobs:
       # Purge even when --apply refused: that case means the zone holds a rule this script
       # does not own, which needs a human — not a reason to also strand the HTML this deploy
       # just changed behind a 30-day edge TTL. The two concerns are independent.
+      #
+      # And purge even when the DEPLOY ITSELF failed, which is the same argument one step
+      # further out. On 2026-08-08 a flyctl 408 mid-rolling-update failed this job *after*
+      # the machine had already been replaced: the origin served the new build, this step
+      # never ran, and the edge went on serving HTML whose module bundle no longer existed
+      # at origin — a missing /assets/index-<hash>.js answers as the SPA fallback with
+      # Content-Type text/html, which a browser refuses to execute as a module, so the front
+      # page could not boot at all. That is a broken production front door, held for up to
+      # the 30-day TTL by a job whose only real fault was reporting an outcome Fly got wrong.
+      #
+      # The deploy's exit code was never the right guard, because the purge does not trust it
+      # anyway: `--purge --since` compares what the ORIGIN served before against what it
+      # serves now, so it drops exactly what actually changed. A deploy that died before
+      # changing any bytes finds nothing and purges nothing; one that died after changing
+      # them is repaired. Note the job still fails — a Fly deploy that 408s wants a human
+      # either way — it just no longer takes the edge down with it.
+      #
+      # Two deliberate limits. It is gated on the snapshot having SUCCEEDED, not merely on
+      # the token: without a snapshot the script's give-up rule purges everything (correct
+      # when a deploy really happened, wasteful when an earlier step like the DEV_AUTH/DEMO
+      # refusal meant there was never a deploy at all). And it is `!cancelled()` rather than
+      # `always()` — GitHub documents that exact swap as the recommended one, since a step
+      # that keeps running through cancellation can hang the job. What that leaves uncovered
+      # is narrow HERE specifically: this job has no concurrency group, so it is never
+      # superseded, and a cancelled run means a human clicked cancel. (deploy-demo DOES cancel
+      # in progress — see the note on its own purge step, where the same choice costs more.)
+      # A cancelled run or a dead runner is still covered only by edge-upkeep.yml's weekly
+      # `--purge --force`, which remains the sole repair for a purge that never ran at all.
       - name: Purge production's cached pages
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: ${{ !cancelled() && env.CLOUDFLARE_API_TOKEN != '' && steps.cf_snapshot.outcome == 'success' }}
         run: node scripts/cloudflare.mjs --purge --host=bridge.brannon.online --since=/tmp/cf-before.json
       - name: Fail the deploy if the edge config could not be reconciled
         if: env.CLOUDFLARE_API_TOKEN != '' && steps.cf_apply.outcome == 'failure'
