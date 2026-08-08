@@ -170,6 +170,18 @@ jobs:
       # here is cheaper than on production; it gets the same treatment anyway, because the
       # two jobs differing on when the edge is repaired is the kind of asymmetry nobody
       # remembers when reading one of them.
+      #
+      # One thing IS different here, and it is this job's `cancel-in-progress: true` above.
+      # Production has no concurrency group, so a cancelled run there means a human clicked
+      # cancel; here a second push to main supersedes the first routinely, and `!cancelled()`
+      # skips that run's purge. Usually harmless — the superseding run deploys and purges
+      # right behind it — but not always: its own --since compares against an origin the
+      # cancelled run may ALREADY have updated, so a commit whose web output is byte-identical
+      # (a server-only change) purges nothing while the edge still holds the build from before
+      # the cancelled one. Left as is deliberately rather than reaching for always(), which
+      # GitHub's own docs warn can hang a job during cancellation; the residue is a stale demo
+      # page until edge-upkeep.yml's weekly --purge --force, and demo is the surface that can
+      # afford it. On production this path does not arise.
       - name: Purge the demo app's cached pages
         if: ${{ !cancelled() && env.CLOUDFLARE_API_TOKEN != '' && steps.cf_snapshot.outcome == 'success' }}
         run: node scripts/cloudflare.mjs --purge --host=demo-bridge.brannon.online --since=/tmp/cf-before.json
@@ -250,10 +262,13 @@ jobs:
       # the token: without a snapshot the script's give-up rule purges everything (correct
       # when a deploy really happened, wasteful when an earlier step like the DEV_AUTH/DEMO
       # refusal meant there was never a deploy at all). And it is `!cancelled()` rather than
-      # `always()`, per GitHub's own guidance that a step running through cancellation can
-      # hang the job — so a cancelled run, or a runner that dies outright, is still covered
-      # only by edge-upkeep.yml's weekly `--purge --force`, which remains the sole repair for
-      # a purge that never ran at all.
+      # `always()` — GitHub documents that exact swap as the recommended one, since a step
+      # that keeps running through cancellation can hang the job. What that leaves uncovered
+      # is narrow HERE specifically: this job has no concurrency group, so it is never
+      # superseded, and a cancelled run means a human clicked cancel. (deploy-demo DOES cancel
+      # in progress — see the note on its own purge step, where the same choice costs more.)
+      # A cancelled run or a dead runner is still covered only by edge-upkeep.yml's weekly
+      # `--purge --force`, which remains the sole repair for a purge that never ran at all.
       - name: Purge production's cached pages
         if: ${{ !cancelled() && env.CLOUDFLARE_API_TOKEN != '' && steps.cf_snapshot.outcome == 'success' }}
         run: node scripts/cloudflare.mjs --purge --host=bridge.brannon.online --since=/tmp/cf-before.json
