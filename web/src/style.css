@@ -329,10 +329,33 @@ input {
   position: relative;
   max-width: 430px;
   margin: 0 auto;
-  min-height: 100dvh;
+  /* svh, NOT dvh — same reasoning as .splash below. Every action button
+   * pinned to the foot of a page (.board-actions, .tourney-actions, the
+   * TabBar/SignInBar, …) gets there via `margin-top: auto` inside a flex
+   * column whose height traces back to THIS min-height. dvh tracks the
+   * *current* mobile browser viewport, which is smaller than the full
+   * screen while the URL bar is shown and grows as it retracts — so a
+   * page that measured "fits exactly" against a shown URL bar can still
+   * render, for a frame (or for the session, on browsers that don't retract
+   * the bar until a real scroll gesture fires), against a shell sized for
+   * the LARGER retracted-bar viewport. The button is then positioned below
+   * whatever is actually painted on screen, and the only way to reach it is
+   * to scroll — despite there being no content actually pushing it down.
+   * svh is the *small* viewport (URL bar shown), a fixed floor that's
+   * always <= whatever is currently visible, so anything that fits inside
+   * it is guaranteed on-screen without scrolling. See .splash for the
+   * mirror-image bug this same swap already fixed there. */
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   background: var(--paper);
+}
+/* The fallback for browsers with neither svh nor dvh — see the identical
+ * rule beside .splash for why this has to be its own @supports block. */
+@supports not (min-height: 100svh) {
+  .shell {
+    min-height: 100vh;
+  }
 }
 
 @media (min-width: 640px) {
@@ -641,15 +664,24 @@ input {
 }
 
 /* ---- auth interstitial (create handle) ---- */
+/* svh, not dvh — see .shell's own min-height for the full reasoning: this
+   screen is the sole child of .shell on its route, so it needs its own
+   definite height the same way .shell does, and the same growing-viewport
+   bug would otherwise push Continue out from under a short viewport. */
 .auth-screen {
   flex: 1;
-  min-height: 100dvh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 24px;
+}
+@supports not (min-height: 100svh) {
+  .auth-screen {
+    min-height: 100vh;
+  }
 }
 .auth-title {
   font-family: var(--font-body);
@@ -674,9 +706,10 @@ input {
 }
 
 /* ---- NotFound: the router catch-all ---- */
+/* svh, not dvh — see .shell's own min-height for the full reasoning. */
 .notfound-page {
   flex: 1;
-  min-height: 100dvh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -684,6 +717,11 @@ input {
   text-align: center;
   gap: 18px;
   padding: 24px;
+}
+@supports not (min-height: 100svh) {
+  .notfound-page {
+    min-height: 100vh;
+  }
 }
 .notfound-title {
   font-family: var(--font-body);
@@ -4610,16 +4648,22 @@ a.stat-tile:hover {
 
 /* ---- The first crossing (pages/Tour.tsx + web/src/onboarding) ---- */
 
-/* The postmark interstitial, in the auth-screen posture */
+/* The postmark interstitial, in the auth-screen posture. svh, not dvh —
+   see .shell's own min-height for the full reasoning. */
 .tour-postmark {
   flex: 1;
-  min-height: 100dvh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 24px;
+}
+@supports not (min-height: 100svh) {
+  .tour-postmark {
+    min-height: 100vh;
+  }
 }
 .tour-title {
   font-family: var(--font-body);
