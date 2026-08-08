@@ -422,8 +422,9 @@ hit — but this round is distinguishable in a way the fronting-only round wasn'
 sides, which is why it was called "no effect detected." Fronting *plus* tiering (64, 69) sits
 entirely below that range, on both days — a real shift, not just a mean moving. It still falls
 short of what this section named as success above: "a drop from ~85 episodes to ~40," and the
-6–8 h/day named as the expected landing place. 66.5 episodes and 11.36 h are roughly two-thirds
-and 90% of pre-fronting, not the ~50% the stated target implies.
+6–8 h/day named as the expected landing place. 66.5 episodes and 11.36 h are roughly **82%** and
+**87%** of pre-fronting — consistent with the −17.9%/−13.0% in the table above, not the ~50% the
+stated target implies.
 
 **Demo**, mean of the two clean days: **0.91 h/day, 7.5 episodes/day** — down from the 1.31 h /
 11 episodes read on 08-01 (the one "steady", non-self-inflicted post-fronting demo day on
