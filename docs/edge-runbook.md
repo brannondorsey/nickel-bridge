@@ -371,6 +371,78 @@ Roughly 6–8 h/day on production would be the expected landing place. If hours 
 all, the question to ask is not "is the cache working" but "what is still waking it" — answer
 it from the user agents and paths in the log, not from `cf-cache-status` on a hand-picked URL.
 
+### Tiered Cache result, recorded 2026-08-08
+
+Tiered Cache went on 2026-08-05 (previous section). Read on 2026-08-08 per the recipe above —
+but only **two** of the four rows came back at matching 15s resolution, not three:
+
+```
+app=nickel-bridge
+day          up_h  episodes  mean_min  step
+2026-08-04   8.84        52      10.2   30s
+2026-08-05   6.38        39       9.8   30s
+2026-08-06  11.69        64      11.0   15s
+2026-08-07  11.02        69       9.6   15s
+
+app=nickel-bridge-demo
+day          up_h  episodes  mean_min  step
+2026-08-04   1.47        12       7.3   30s
+2026-08-05   1.52        11       8.3   30s
+2026-08-06   1.06         9       7.1   15s
+2026-08-07   0.75         6       7.5   15s
+```
+
+`2026-08-05` is the day the toggle flipped mid-day, so it's excluded from either side rather than
+folded in as if it were clean pre- or post-tiering data — the same treatment `07-30` (the day
+fronting itself went orange) got in the section above. `2026-08-08` itself isn't a complete UTC
+day yet as of this read (`--recent`'s 24h window, ending 19:01Z, shows 11.63 h / 64 episodes at
+15s — consistent with the two clean days below, for what it's worth, but not a full day and not
+in the table). That leaves **2026-08-06 and 2026-08-07** as the only full days that are both
+entirely post-tiering and at matching resolution — two, not the three the recipe above asks for,
+and waiting longer would not have fixed it: `2026-08-05` is already 30s at only 3 days old, so a
+later read would have pushed `2026-08-06` into 30s territory before `2026-08-08` ever became
+usable, trading one non-comparable day for another rather than gaining a clean third. That also
+sharpens the resolution-decay bound from the previous round, which only showed 15s holding at ≤2
+days old and 30s by ≥4: this round pins the cutover to somewhere inside **2–3 days**. Worth
+remembering for the next measurement: reading promptly at whatever cadence keeps accumulating
+clean days beats waiting for one larger batch, since the resolution clock doesn't pause for a day
+already in the past.
+
+**Production**, mean of the two clean days: **11.36 h/day, 66.5 episodes/day** (11.0/9.6 min mean
+episode). Against both priors on record:
+
+| Comparison | Hours | Episodes |
+| --- | --- | --- |
+| vs. pre-fronting baseline (13.05 h, 81 ep) | −13.0% | −17.9% |
+| vs. post-fronting/pre-tiering (11.93 h, 75.5 ep) | −4.8% | −11.9% |
+
+Two days still can't resolve a small difference on their own — the limit every round here has
+hit — but this round is distinguishable in a way the fronting-only round wasn't: fronting alone
+(61, 90 episodes) straddled the pre-fronting baseline's own day-to-day range (77–85) on both
+sides, which is why it was called "no effect detected." Fronting *plus* tiering (64, 69) sits
+entirely below that range, on both days — a real shift, not just a mean moving. It still falls
+short of what this section named as success above: "a drop from ~85 episodes to ~40," and the
+6–8 h/day named as the expected landing place. 66.5 episodes and 11.36 h are roughly two-thirds
+and 90% of pre-fronting, not the ~50% the stated target implies.
+
+**Demo**, mean of the two clean days: **0.91 h/day, 7.5 episodes/day** — down from the 1.31 h /
+11 episodes read on 08-01 (the one "steady", non-self-inflicted post-fronting demo day on
+record) and from the 1.275 h pre-fronting mean: roughly **−30%** on both hours and episodes
+against either comparison. That's larger than this doc's own prediction that demo "earns maybe
+10–20%" — but demo's whole sample here is two days on a ~43-request/day app with a history of
+large self-inflicted swings (the 5.68 h spike two rounds ago), so treat it as suggestive, not
+confirmed.
+
+**What's still open.** The mechanism this cache targets — glossary term pages, each a first-visit
+MISS per PoP — hasn't been re-sampled this round the way the original diagnosis did
+(`cf-cache-status` on a sample of live term pages, and the request-log identity check this
+section recommends above). Production landing at 66.5 episodes rather than the ~40 named as the
+target suggests either the topology hasn't fully consolidated yet, the region hint needs more
+than 2–3 days to take full effect, or something besides glossary crawling is now the larger
+remaining source — worth checking before concluding tiering has done all it's going to. Recorded
+as **a real but partial improvement, not yet at the stated target**, with that question left open
+rather than assumed away.
+
 ## If something looks wrong
 
 | Symptom | First thing to check |
