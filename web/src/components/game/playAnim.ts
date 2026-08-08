@@ -25,7 +25,7 @@ import { cardRank, cardSuit } from '../../api';
 // table before the collect sweep.
 export const GLIDE_MS = 260;
 export const ROBOT_GAP_MS = 450;
-export const HOLD_MS = 300;
+export const HOLD_MS = 375;
 export const COLLECT_MS = 260;
 export const STAMP_MS = 420;
 
