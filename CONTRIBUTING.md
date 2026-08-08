@@ -1683,6 +1683,23 @@ newer settings has one thing worth knowing:
   scripted correct call per decision point regardless of tap count, so a signed-out visitor
   walking the practice deal is not exposed to the mistap this setting guards against in the
   first place.
+- **Trick clearing** (`users.trick_clear_mode`, TEXT `'auto'`/`'tap'`, default `'auto'`) picks
+  how a completed trick leaves the table. `'auto'` is the pre-existing behavior: playAnim.ts's
+  `stagePlaySteps` holds the four played cards for `GLIDE_MS + HOLD_MS`, then sweeps them to
+  the winner on a timer, exactly as it always has. `'tap'` holds that same step open
+  indefinitely instead of timing it out, until the player taps/clicks/Enters/Spaces on the
+  trick area (`TrickArea.tsx`'s `.trick` box — never a hand fan, which is a separate sibling
+  element). The one step this can hold is marked `holdForClear` on the `StagedStep` playAnim.ts
+  emits; `Board.tsx`'s `scheduleSteps` splits the array on that marker (only when
+  `trickClearMode === 'tap'`) rather than batch-scheduling every step's timer up front as it
+  always did — the segments before and after the mark keep that exact original batch timing,
+  so `'auto'` mode (where the split never triggers) is untouched byte-for-byte. Deliberately
+  scoped to ORDINARY play only: `stageClaimSteps` never sets `holdForClear`, so a claim's lead
+  and fast-forward tail both ignore this setting regardless of its value — gating up to 13
+  tricks nobody has a decision in on a tap would fight "Fast forward settled tricks"' entire
+  purpose, and the claim's own announcement already holds the board deliberately. Purely a
+  client pacing preference — the server never reads `trick_clear_mode` and scoring/robot
+  play/claim resolution are unaffected either way.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,

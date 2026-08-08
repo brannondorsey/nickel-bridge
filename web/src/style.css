@@ -1874,6 +1874,19 @@ a.ds-btn-secondary:hover {
      66px card */
   height: max(230px, calc(var(--card-h) * 1.6 + 110px));
 }
+/* "Trick clearing: tap" (settings gate) is holding a completed trick on the
+   table — the dashed outline is the same "held, tap to advance" vocabulary
+   --border-sealed uses elsewhere, applied to the whole box since that's the
+   tap target (see TrickArea.tsx's doc comment). */
+.trick-awaiting-clear {
+  cursor: pointer;
+  outline: var(--border-sealed);
+  outline-offset: -1px;
+}
+.trick-awaiting-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .seatpos {
   position: absolute;
   display: flex;

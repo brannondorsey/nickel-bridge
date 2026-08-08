@@ -102,6 +102,18 @@ export interface StagedStep {
   /** delay in ms after the previous step (0 = apply immediately) */
   delayBefore: number;
   view: BoardView;
+  /**
+   * This step is the one that sweeps a completed trick off the table — the
+   * only kind of pause the "Trick clearing" setting (users.trick_clear_mode)
+   * can hold open. Under 'tap' mode Board.tsx replaces `delayBefore`'s timer
+   * with an indefinite wait for a tap on the trick area; every other mode and
+   * every other step is unaffected. Only ordinary play (stagePlaySteps) sets
+   * this — a claim's fast-forward is explicitly "no choice, so pacing only"
+   * (see stageClaimSteps' doc comment), and gating up to 13 tricks on a tap
+   * would fight that setting's whole purpose, so claims never mark a step
+   * this way regardless of trickClearMode.
+   */
+  holdForClear?: boolean;
 }
 
 /** True when we can (and should) animate: WAAPI present, no reduced-motion. */
@@ -435,6 +447,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
     // can animate collect and stamp as separate beats
     steps.push({
       delayBefore: GLIDE_MS + HOLD_MS,
+      holdForClear: true,
       view: lockedView(next, {
         currentTrick: [],
         completedTricks: nextDone,

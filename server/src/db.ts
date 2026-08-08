@@ -188,6 +188,25 @@ if (!userColumns.has('bid_feedback')) {
 if (!userColumns.has('double_tap_bid')) {
   db.exec(`ALTER TABLE users ADD COLUMN double_tap_bid INTEGER NOT NULL DEFAULT 0`);
 }
+// Migration: `trick_clear_mode` — how a completed trick leaves the table:
+// 'auto' (the shipped behaviour — the trick holds for GLIDE_MS + HOLD_MS,
+// then sweeps to the winner on its own) or 'tap' (holds indefinitely until
+// the player taps the trick area, then sweeps immediately). TEXT rather than
+// the INTEGER boolean every sibling above uses: this is shipping with two
+// values, but it names a MODE ("how"), not a yes/no toggle, so a third
+// pacing choice later (a slower auto, say) extends the column instead of
+// needing a second one — the same reasoning `difficulty`/`tournaments.kind`
+// already use for their own TEXT enums. Defaults to 'auto', preserving prior
+// behaviour for every existing account, same as fast_forward/bid_feedback/
+// ladder_listed (double_tap_bid is the one sibling that deliberately does
+// NOT do this). Account state, not localStorage, for the same reason as
+// those three: it says how this PERSON wants a trick they can no longer
+// affect to leave the table, not a property of the device. Purely a CLIENT
+// pacing choice — server-side scoring, robot play and claim resolution never
+// read this column.
+if (!userColumns.has('trick_clear_mode')) {
+  db.exec(`ALTER TABLE users ADD COLUMN trick_clear_mode TEXT NOT NULL DEFAULT 'auto'`);
+}
 
 // Migration: `beta_features` — opt in to features still being tried out
 // before a general release (currently: Analyze, the post-board review
@@ -320,6 +339,8 @@ export interface UserRow {
   beta_features: number;
   /** 1 = a second tap on the selected call submits it; 0 (default) = only the confirm CTA submits */
   double_tap_bid: number;
+  /** how a completed trick leaves the table: 'auto' (default, times out on its own) or 'tap' (holds until the player taps the trick area) */
+  trick_clear_mode: 'auto' | 'tap';
   elo: number;
   created_at: number;
 }

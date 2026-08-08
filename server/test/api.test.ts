@@ -212,6 +212,8 @@ describe('handle (first-login username)', () => {
     // doubleTapBid is the one that defaults false, not true, since it is the
     // one preference this endpoint deliberately ships as a behavior change
     // rather than a preserved default (see the double_tap_bid migration in db.ts).
+    // trickClearMode defaults to 'auto', the shipped behaviour before that
+    // setting existed (see the trick_clear_mode migration in db.ts).
     let me = await pete.get('/api/me');
     expect([
       me.user.ladderListed,
@@ -219,7 +221,8 @@ describe('handle (first-login username)', () => {
       me.user.bidFeedback,
       me.user.betaFeatures,
       me.user.doubleTapBid,
-    ]).toEqual([true, true, true, true, false]);
+      me.user.trickClearMode,
+    ]).toEqual([true, true, true, true, false, 'auto']);
 
     // a partial patch leaves the untouched keys alone
     expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
@@ -228,6 +231,7 @@ describe('handle (first-login username)', () => {
       bidFeedback: true,
       betaFeatures: true,
       doubleTapBid: false,
+      trickClearMode: 'auto',
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
@@ -237,7 +241,8 @@ describe('handle (first-login username)', () => {
       me.user.bidFeedback,
       me.user.betaFeatures,
       me.user.doubleTapBid,
-    ]).toEqual([false, false, true, true, false]);
+      me.user.trickClearMode,
+    ]).toEqual([false, false, true, true, false, 'auto']);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
@@ -247,6 +252,7 @@ describe('handle (first-login username)', () => {
       bidFeedback: true,
       betaFeatures: true,
       doubleTapBid: false,
+      trickClearMode: 'auto',
     });
     expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -259,6 +265,7 @@ describe('handle (first-login username)', () => {
       bidFeedback: false,
       betaFeatures: true,
       doubleTapBid: false,
+      trickClearMode: 'auto',
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
@@ -271,6 +278,7 @@ describe('handle (first-login username)', () => {
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: false,
+      trickClearMode: 'auto',
     });
     expect((await pete.get('/api/me')).user.betaFeatures).toBe(false);
 
@@ -281,8 +289,24 @@ describe('handle (first-login username)', () => {
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: true,
+      trickClearMode: 'auto',
     });
     expect((await pete.get('/api/me')).user.doubleTapBid).toBe(true);
+
+    // trickClearMode is the one string-valued preference — it patches and
+    // reads back the same way, and a value outside 'auto'/'tap' is a 400
+    // exactly like a non-boolean is for every switch above.
+    expect(await pete.post('/api/me/prefs', { trickClearMode: 'tap' })).toEqual({
+      ladderListed: false,
+      fastForward: false,
+      bidFeedback: false,
+      betaFeatures: false,
+      doubleTapBid: true,
+      trickClearMode: 'tap',
+    });
+    expect((await pete.get('/api/me')).user.trickClearMode).toBe('tap');
+    expect((await pete.raw('POST', '/api/me/prefs', { trickClearMode: 'fast' })).statusCode).toBe(400);
+    expect((await pete.get('/api/me')).user.trickClearMode).toBe('tap');
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

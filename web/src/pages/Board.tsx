@@ -117,6 +117,11 @@ export default function Board() {
   // by default fixes; the confirm CTA is always the other, unaffected path.
   // See the double_tap_bid migration in db.ts.
   const doubleTapBid = me?.user?.doubleTapBid === true;
+  // "Trick clearing" (settings gate) — 'auto' (default) sweeps a completed
+  // trick off the table on its own timer; 'tap' holds it until the player
+  // taps the trick area. See scheduleSteps below for where this is read, and
+  // the trick_clear_mode migration in db.ts for why claims are excluded.
+  const trickClearMode = me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto';
 
   const [board, setBoard] = useState<BoardView | null>(null);
   // The auction length stageOpeningBids' reveal is building toward — see
@@ -218,12 +223,18 @@ export default function Board() {
 
   // Staged application of server responses: one card at a time on timers so
   // TrickArea can animate each play (see playAnim.ts). Bumping `gen`
-  // invalidates any staging still in flight.
-  const stagingRef = useRef({ gen: 0, timers: [] as number[] });
+  // invalidates any staging still in flight. `resumeStep`, when set, is the
+  // one pending action "Trick clearing: tap" is holding open — see
+  // scheduleSteps below — and is always cleared alongside `gen` so a stale
+  // tap can never resume a sequence that's since been superseded.
+  const stagingRef = useRef({ gen: 0, timers: [] as number[], resumeStep: null as (() => void) | null });
+  const [awaitingTrickClear, setAwaitingTrickClear] = useState(false);
   const cancelStaging = useCallback(() => {
     stagingRef.current.gen++;
     stagingRef.current.timers.forEach(clearTimeout);
     stagingRef.current.timers = [];
+    stagingRef.current.resumeStep = null;
+    setAwaitingTrickClear(false);
   }, []);
   useEffect(() => cancelStaging, [cancelStaging]);
 
@@ -233,38 +244,95 @@ export default function Board() {
   // total duration — computing it twice risked the two copies disagreeing
   // (e.g. after a future edit to one call site) about how long the
   // fast-forward actually takes.
+  //
+  // "Trick clearing: tap" (trickClearMode) turns exactly one step's timer
+  // into an indefinite wait: the step playAnim.ts marks `holdForClear` (the
+  // completed trick sweeping away) is held until clearHeldTrick fires,
+  // instead of firing after its own delayBefore. Everything before and after
+  // that one step keeps the ORIGINAL batch-scheduled timing (every timer set
+  // up front from a shared zero point) — runSegment below is byte-for-byte
+  // what this function always did, just runnable on a slice of the array —
+  // so 'auto' mode (holdIndex always -1) and any steps array with no held
+  // trick (bidding, claims — see holdForClear's doc comment) are completely
+  // untouched by this split.
   const scheduleSteps = useCallback(
     (prev: BoardView, steps: StagedStep[]) => {
       cancelStaging();
       const gen = stagingRef.current.gen;
-      let at = 0;
       let priorTrick = prev.currentTrick ?? [];
-      for (const step of steps) {
-        const curTrick = step.view.currentTrick ?? [];
-        // the one new card this step adds to the trick in progress, if any
-        // (a trick boundary resets currentTrick to [], not a new play)
-        const newPlay = curTrick.length > priorTrick.length ? curTrick[curTrick.length - 1] : null;
-        priorTrick = curTrick;
-        const apply = () => {
-          // fills in the flight origin for a card that was never tapped
-          // (auto-play, or any card in a claim) but is still sitting in a
-          // visible fan — see captureFanOriginIfVisible's docstring
-          if (newPlay) captureFanOriginIfVisible(step.view, newPlay);
-          setBoard(step.view);
-        };
-        at += step.delayBefore;
-        if (at === 0) {
-          apply();
-          continue;
+
+      const runSegment = (segment: StagedStep[], onSegmentDone: () => void) => {
+        if (!segment.length) {
+          onSegmentDone();
+          return;
         }
-        const id = window.setTimeout(() => {
-          if (stagingRef.current.gen === gen) apply();
-        }, at);
-        stagingRef.current.timers.push(id);
-      }
+        let at = 0;
+        segment.forEach((step, i) => {
+          const curTrick = step.view.currentTrick ?? [];
+          // the one new card this step adds to the trick in progress, if any
+          // (a trick boundary resets currentTrick to [], not a new play)
+          const newPlay = curTrick.length > priorTrick.length ? curTrick[curTrick.length - 1] : null;
+          priorTrick = curTrick;
+          const apply = () => {
+            if (stagingRef.current.gen !== gen) return;
+            // fills in the flight origin for a card that was never tapped
+            // (auto-play, or any card in a claim) but is still sitting in a
+            // visible fan — see captureFanOriginIfVisible's docstring
+            if (newPlay) captureFanOriginIfVisible(step.view, newPlay);
+            setBoard(step.view);
+            if (i === segment.length - 1) onSegmentDone();
+          };
+          at += step.delayBefore;
+          if (at === 0) {
+            apply();
+            return;
+          }
+          const id = window.setTimeout(() => {
+            if (stagingRef.current.gen === gen) apply();
+          }, at);
+          stagingRef.current.timers.push(id);
+        });
+      };
+
+      const runFrom = (rest: StagedStep[]) => {
+        if (!rest.length || stagingRef.current.gen !== gen) return;
+        const holdIndex = trickClearMode === 'tap' ? rest.findIndex((s) => s.holdForClear) : -1;
+        if (holdIndex === -1) {
+          runSegment(rest, () => {});
+          return;
+        }
+        const before = rest.slice(0, holdIndex);
+        const holdStep = rest[holdIndex];
+        const after = rest.slice(holdIndex + 1);
+        runSegment(before, () => {
+          const curTrick = holdStep.view.currentTrick ?? [];
+          const newPlay = curTrick.length > priorTrick.length ? curTrick[curTrick.length - 1] : null;
+          priorTrick = curTrick;
+          stagingRef.current.resumeStep = () => {
+            if (stagingRef.current.gen !== gen) return;
+            if (newPlay) captureFanOriginIfVisible(holdStep.view, newPlay);
+            setBoard(holdStep.view);
+            setAwaitingTrickClear(false);
+            runFrom(after);
+          };
+          setAwaitingTrickClear(true);
+        });
+      };
+
+      runFrom(steps);
     },
-    [cancelStaging],
+    [cancelStaging, trickClearMode],
   );
+
+  // The trick area's tap target while "Trick clearing: tap" is holding a
+  // completed trick open — see scheduleSteps above. A no-op the rest of the
+  // time (resumeStep is null under 'auto' mode, and between tricks).
+  const clearHeldTrick = useCallback(() => {
+    const resume = stagingRef.current.resumeStep;
+    if (!resume) return;
+    stagingRef.current.resumeStep = null;
+    resume();
+  }, []);
 
   // `shown` is the optimistic view submitCard already put on screen (see
   // there), with the timestamp it went up. `prev` stays the PRE-TAP view
@@ -717,6 +785,8 @@ export default function Board() {
           claimInfo={claimInfo}
           claimAnnounceOpen={claimAnnounceOpen}
           onSkipClaim={skipClaimAnnouncement}
+          awaitingTrickClear={awaitingTrickClear}
+          onClearTrick={clearHeldTrick}
         />
       ) : (
         <BiddingPhase
@@ -908,6 +978,8 @@ export function PlayPhase({
   playNotice = null,
   onReloadBoard,
   hint = null,
+  awaitingTrickClear = false,
+  onClearTrick = () => {},
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -923,6 +995,12 @@ export function PlayPhase({
   onReloadBoard?: () => void;
   /** tour only: pulse this card in whichever fan holds it */
   hint?: number | null;
+  /** "Trick clearing: tap" is holding a completed trick on the table — see
+   * Board.tsx's scheduleSteps. Always false for the tour, which never plays
+   * this setting. */
+  awaitingTrickClear?: boolean;
+  /** tap anywhere on the trick area to sweep the held trick — a no-op unless awaitingTrickClear */
+  onClearTrick?: () => void;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -974,13 +1052,13 @@ export function PlayPhase({
           {board.dummy === 3 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
           ) : null}
-          <TrickArea board={board} />
+          <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
           {board.dummy === 1 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
           ) : null}
         </div>
       ) : (
-        <TrickArea board={board} />
+        <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
       )}
       <div className="board-fan">
         <HandFan
@@ -1013,6 +1091,8 @@ export function PlayPhase({
             </div>
           ) : null}
         </div>
+      ) : awaitingTrickClear ? (
+        <div className="board-hint">Tap the trick to continue</div>
       ) : selectedCard !== null ? (
         <div className="board-hint num">
           {RANK_CHARS[cardRank(selectedCard)]}

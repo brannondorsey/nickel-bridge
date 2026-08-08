@@ -47,6 +47,11 @@ const OFF_ON = [
   { value: true, label: 'ON' },
 ];
 
+const TRICK_CLEAR_OPTIONS: { value: 'auto' | 'tap'; label: string }[] = [
+  { value: 'auto', label: 'AUTO' },
+  { value: 'tap', label: 'TAP' },
+];
+
 function SettingRow({ label, note, children }: { label: string; note: string; children: ReactNode }) {
   return (
     <div className="setting-row">
@@ -63,6 +68,7 @@ type AccountPrefs = {
   bidFeedback: boolean;
   betaFeatures: boolean;
   doubleTapBid: boolean;
+  trickClearMode: 'auto' | 'tap';
 };
 
 export default function Settings() {
@@ -77,12 +83,22 @@ export default function Settings() {
     // Fail CLOSED, unlike the three switches above — this preference defaults
     // off, so an absent/undefined value must read as off, not on.
     doubleTapBid: me?.user?.doubleTapBid === true,
+    // Fail to 'auto' — the shipped behaviour before this setting existed —
+    // rather than assuming the field is always present.
+    trickClearMode: me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto',
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
   const change = async (patch: Partial<AccountPrefs>) => {
     const revert: Partial<AccountPrefs> = {};
-    for (const key of Object.keys(patch) as (keyof AccountPrefs)[]) revert[key] = prefs[key];
+    // AccountPrefs mixes booleans with the trickClearMode enum, so a plain
+    // `revert[key] = prefs[key]` can no longer be verified sound for a key
+    // typed as the whole `keyof AccountPrefs` union — the write is narrowed
+    // through Record<string, unknown> rather than widening every value here
+    // to `unknown` on read.
+    for (const key of Object.keys(patch) as (keyof AccountPrefs)[]) {
+      (revert as Record<string, unknown>)[key] = prefs[key];
+    }
     setPrefs((p) => ({ ...p, ...patch }));
     setPrefError(null);
     try {
@@ -150,6 +166,18 @@ export default function Settings() {
               value={prefs.fastForward}
               options={OFF_ON}
               onChange={(fastForward) => change({ fastForward })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Trick clearing"
+            note="Auto sweeps a completed trick off the table on its own. Tap holds all four cards in place until you tap the trick area, so you can take your time reading it before it clears."
+          >
+            <PrefSwitch
+              label="Trick clearing"
+              value={prefs.trickClearMode}
+              options={TRICK_CLEAR_OPTIONS}
+              onChange={(trickClearMode) => change({ trickClearMode })}
             />
           </SettingRow>
 

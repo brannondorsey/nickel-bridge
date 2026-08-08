@@ -37,6 +37,7 @@ export const meFixture: Me = {
     bidFeedback: true,
     betaFeatures: true,
     doubleTapBid: false,
+    trickClearMode: 'auto',
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,

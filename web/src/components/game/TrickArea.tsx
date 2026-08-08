@@ -15,8 +15,23 @@ import { PlayingCard } from './PlayingCard';
  * the tapped fan card when HandFan recorded an origin, otherwise from
  * off-table on that seat's side. A trick that just cleared sweeps to the
  * winner, and a tally cell that just changed gets the stamp pop.
+ *
+ * `awaitingClear`/`onClearTap` are "Trick clearing: tap" (settings gate):
+ * while true, Board.tsx has paused a completed trick on the table instead of
+ * sweeping it away on a timer, and a tap/click/Enter/Space anywhere on this
+ * box (never on a hand fan — those are separate elements) resumes it. Both
+ * default to inert so every other caller (the tour, 'auto' mode) is
+ * unaffected.
  */
-export function TrickArea({ board }: { board: BoardView }) {
+export function TrickArea({
+  board,
+  awaitingClear = false,
+  onClearTap,
+}: {
+  board: BoardView;
+  awaitingClear?: boolean;
+  onClearTap?: () => void;
+}) {
   const seats: { pos: string; seat: number }[] = board.flipped
     ? [
         { pos: 's', seat: 0 },
@@ -109,7 +124,24 @@ export function TrickArea({ board }: { board: BoardView }) {
     mine ? `mine${crossed ? ' made' : ''}` : `theirs${crossed ? ' failed' : ''}${tricks > 0 ? ' capped' : ''}`;
 
   return (
-    <div className="trick" ref={boxRef}>
+    <div
+      className={`trick${awaitingClear ? ' trick-awaiting-clear' : ''}`}
+      ref={boxRef}
+      role={awaitingClear ? 'button' : undefined}
+      tabIndex={awaitingClear ? 0 : undefined}
+      aria-label={awaitingClear ? 'Tap to clear the trick' : undefined}
+      onClick={awaitingClear ? onClearTap : undefined}
+      onKeyDown={
+        awaitingClear
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClearTap?.();
+              }
+            }
+          : undefined
+      }
+    >
       {seats.map(({ pos, seat }) => {
         const played = trick.find((t) => t.seat === seat);
         const awaited = !played && board.handToPlay === seat;
