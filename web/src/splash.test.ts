@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LAST_VISIT_KEY, shouldShowSplash, splashOnReturn, stampVisit } from './splash';
+import { LAST_VISIT_KEY, clearVisitStamp, shouldShowSplash, splashOnReturn, stampVisit } from './splash';
 
 const now = new Date('2026-07-14T12:00:00Z');
 const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000).toISOString();
@@ -56,5 +56,19 @@ describe('localStorage wrappers', () => {
     });
     expect(splashOnReturn(now)).toBe(false);
     expect(() => stampVisit(now)).not.toThrow();
+  });
+
+  it('clearVisitStamp removes the stamp, so a signed-out browser reads as first-time again', () => {
+    stampVisit(now);
+    expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
+    clearVisitStamp();
+    expect(localStorage.getItem(LAST_VISIT_KEY)).toBeNull();
+  });
+
+  it('clearVisitStamp never throws on broken storage', () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(() => clearVisitStamp()).not.toThrow();
   });
 });

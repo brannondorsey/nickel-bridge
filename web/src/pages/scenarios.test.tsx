@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LAST_VISIT_KEY, stampVisit } from '../splash';
 import { meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Scenarios from './Scenarios';
@@ -124,23 +125,27 @@ describe('Scenarios (the Exhibit Hall)', () => {
       Object.defineProperty(window, 'location', { value: { assign }, writable: true });
     });
 
-    it('drops the session, then hard-loads the target', async () => {
+    it('drops the session, clears the returning-player stamp, then hard-loads the target', async () => {
       apiMock.demoScenarios.mockResolvedValue(catalog);
       apiMock.logout.mockResolvedValue({ ok: true });
+      stampVisit();
       renderWithMe(<Scenarios />, { me: meDemo });
       const row = (await screen.findByText('The practice deal, no account')).closest('.exhibit-row') as HTMLElement;
       await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
       expect(apiMock.logout).toHaveBeenCalled();
       await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/tour'));
+      expect(localStorage.getItem(LAST_VISIT_KEY)).toBeNull();
     });
 
-    it('leaves anyway when the session was already gone', async () => {
+    it('leaves anyway when the session was already gone, and still clears the stamp', async () => {
       apiMock.demoScenarios.mockResolvedValue(catalog);
       apiMock.logout.mockRejectedValue(new Error('no session'));
+      stampVisit();
       renderWithMe(<Scenarios />, { me: meDemo });
       const row = (await screen.findByText('The front door, as a stranger')).closest('.exhibit-row') as HTMLElement;
       await userEvent.click(within(row).getByRole('button', { name: /enter/i }));
       await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
+      expect(localStorage.getItem(LAST_VISIT_KEY)).toBeNull();
     });
 
     // This one needs a seeded player to refuse, so it stays disabled until the

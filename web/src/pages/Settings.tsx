@@ -5,6 +5,7 @@ import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { PrefSwitch } from '../components/ds/PrefSwitch';
+import { clearVisitStamp } from '../splash';
 import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
 
@@ -208,6 +209,7 @@ export default function Settings() {
             variant="secondary"
             onClick={async () => {
               await api.logout();
+              clearVisitStamp();
               refresh();
             }}
           >

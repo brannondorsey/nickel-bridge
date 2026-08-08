@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LAST_VISIT_KEY, stampVisit } from '../splash';
 import { meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import { SUIT_PALETTE_KEY } from '../suitPalette';
@@ -115,11 +116,14 @@ describe('Settings', () => {
     expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
   });
 
-  it('signs out', async () => {
+  it('signs out and drops the returning-player stamp', async () => {
     apiMock.logout.mockResolvedValue({ ok: true });
+    stampVisit();
+    expect(localStorage.getItem(LAST_VISIT_KEY)).not.toBeNull();
     const { refresh } = renderSettings();
     await userEvent.click(screen.getByRole('button', { name: /sign out/i }));
     expect(apiMock.logout).toHaveBeenCalled();
+    expect(localStorage.getItem(LAST_VISIT_KEY)).toBeNull();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });
