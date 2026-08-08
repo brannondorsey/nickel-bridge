@@ -143,20 +143,27 @@
       sharing one <style> block. The same flash is there (the static prose, then
       the app's own term sheet), and the stamp is the only signal available
       before paint. So the honest statement of the trade is not "search arrivals
-      keep the fast static paint": it is that a browser which has signed in
-      loses it everywhere, including on a glossary page reached from search, and
-      a browser which never has keeps it everywhere. That falls the right way
-      round, because the blank is already what that browser sees on every other
-      route in the app, while the static paint exists for the first-time arrival
-      — who carries no stamp and is untouched. Splitting it per page is one
-      STYLE block away if that ever stops being the right call.
+      keep the fast static paint": it is that a browser currently (or recently)
+      signed in loses it everywhere, including on a glossary page reached from
+      search, and a browser that has never signed in — or has since signed out
+      — keeps it everywhere. That falls the right way round, because the blank
+      is already what a signed-in browser sees on every other route in the app,
+      while the static paint exists for the first-time (or signed-out) arrival,
+      who carries no stamp. Splitting it per page is one STYLE block away if
+      that ever stops being the right call.
 
       Deliberately decided on the client. The server knows exactly who is signed
       in, but varying GET / on the session cookie would put a per-visitor answer
       behind an edge cache keyed without it (scripts/cloudflare.mjs) — a
       heuristic that costs one plain paint when it guesses wrong beats a cached
-      page that is wrong for everyone. Nothing clears the stamp on sign-out for
-      the same reason: a false positive costs that paint and nothing else.
+      page that is wrong for everyone. Signing out clears the stamp rather than
+      leaving a stale claim in place (splash.ts's clearVisitStamp, called from
+      both Settings' real sign-out and the demo Exhibit Hall's "leave
+      anonymously" flow) — an anonymous visitor on a now-signed-out browser gets
+      the fast static paint back rather than being told forever that this
+      browser once held a session. A missed clear (a storage failure, or some
+      future sign-out path that forgets to call it) still only costs one plain
+      paint, same as any other wrong guess here.
 
       Plain, blocking JS with its own try/catch, like the two scripts above.
     -->

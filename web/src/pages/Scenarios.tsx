@@ -8,6 +8,7 @@ import { Button } from '../components/ds/Button';
 import { Loading } from '../components/ds/Loading';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { SuitText } from '../components/game/SuitText';
+import { clearVisitStamp } from '../splash';
 import CreateHandle from './CreateHandle';
 import Login from './Login';
 
@@ -167,6 +168,7 @@ export default function Scenarios() {
     } catch {
       /* already signed out, or the session was gone — either way, carry on */
     }
+    clearVisitStamp();
     window.location.assign(to);
   };
 
