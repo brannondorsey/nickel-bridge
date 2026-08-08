@@ -916,6 +916,28 @@ purpose — a refused apply means the zone holds a rule this script does not own
 human, and is no reason to also strand the HTML this deploy just changed behind a 30-day edge
 TTL. `--host` scoping matters because the two apps deploy independently and purging the other's
 pages would discard good cache entries.
+
+**The purge also runs when the `flyctl deploy` step itself FAILED**, for the same reason one
+step further out, and it is worth knowing what taught us that. On 2026-08-08 a flyctl 408
+mid-rolling-update failed `deploy-production` *after* the machine had already been replaced:
+the origin served the new build, the purge step never ran, and the edge went on serving HTML
+whose `/assets/index-<hash>.js` no longer existed at origin — a missing asset answers as the
+SPA fallback with `Content-Type: text/html`, which a browser refuses to execute as a module, so
+the front page could not boot at all. A broken production front door, held for up to the 30-day
+TTL, from a job whose only real fault was reporting an outcome Fly got wrong.
+
+The deploy's exit code was never the right guard, because the purge does not trust it anyway:
+`--purge --since` compares what the ORIGIN served before against what it serves now, so a
+deploy that died before changing any bytes finds nothing and purges nothing, while one that
+died after changing them is repaired. The job still fails either way — a Fly deploy that 408s
+wants a human — it just no longer takes the edge down with it. Two deliberate limits: the step
+is gated on the *snapshot* having succeeded rather than merely on the token (without a snapshot
+the give-up rule purges everything, right when a deploy really happened and wasteful when an
+earlier step like the `DEV_AUTH`/`DEMO` refusal meant there was never a deploy at all), and it
+uses `!cancelled()` rather than `always()`, per GitHub's guidance that a step running through
+cancellation can hang the job. `--apply` deliberately does NOT get the same treatment: its
+rules are derived from the repo checkout rather than from what the origin serves, so applying
+them after a failed deploy would point the edge at routes that deploy never shipped.
 `.github/workflows/edge-upkeep.yml` runs `--check` (drift), `--audit` (cert + cache health,
 per host) and a full `--purge --force` weekly — all three fold into the job's pass/fail, since a
 repair pass that silently stopped running is the same as not having one. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
