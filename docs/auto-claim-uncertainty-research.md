@@ -1,5 +1,13 @@
 # Auto-claim and difficulty: research notes
 
+> **Status: the human-agency half is fixed.** `game.ts`'s `planClaimTail` now refuses to
+> claim whenever the human (declarer or dummy) has an untied legal card anywhere in the
+> guaranteed line — see the "Where a fix would go" section below, now implemented as
+> option 2, and `CONTRIBUTING.md`'s invariant 1 for the shipped writeup. The *other* half —
+> the OPPOSING (weak-tier) robots being silently upgraded to true-DD play once a claim does
+> fire — is a separate, still-open issue; everything below documents both as originally
+> researched, before either was addressed.
+
 ## How auto-claim works today
 
 `advanceRobots` (`server/src/game.ts:266-311`) runs a true double-dummy solve

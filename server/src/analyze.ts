@@ -1,11 +1,4 @@
-import {
-  ddTableTricks,
-  analysePlayTricks,
-  calcDdTable,
-  dealerParFor,
-  scoreCardsSampled,
-  solveFutureTricks,
-} from '@bridge/ai';
+import { ddTableTricks, analysePlayTricks, calcDdTable, dealerParFor, scoreCardsSampled } from '@bridge/ai';
 import {
   Call,
   Card,
@@ -21,7 +14,16 @@ import {
   playState,
 } from '@bridge/core';
 import { TournamentRow, db } from './db.js';
-import { GameBoard, HUMAN_SEAT, bidder, boardFieldRows, humanControls } from './game.js';
+import {
+  ClaimSolveCache,
+  GameBoard,
+  HUMAN_SEAT,
+  bidder,
+  boardFieldRows,
+  humanControls,
+  memoSolveFutureTricks,
+  planClaimTail,
+} from './game.js';
 
 /**
  * Analyze — the post-board review's verdict pipeline ("walking a finished
@@ -236,24 +238,40 @@ function humanSideDeclares(contract: Contract): boolean {
 /**
  * The claim boundary for a board whose row predates the claimed_at_ply
  * column: replay the exact gate advanceRobots runs — at every non-forced
- * node, does either side have 100% of the remaining tricks double-dummy? DDS
- * is deterministic, so this finds precisely the ply where the live game
- * claimed (or none). Costs one solve per decision node once, then cached.
+ * node, does either side have 100% of the remaining tricks double-dummy
+ * AND, via planClaimTail, does reaching that outcome never require the
+ * human to choose correctly among untied legal cards? DDS is deterministic,
+ * so this finds precisely the ply where the live game claimed (or none).
+ * Reuses planClaimTail rather than re-checking bestScore alone — a laydown
+ * score isn't sufficient on its own (see planClaimTail's doc comment), and
+ * duplicating just the insufficient half of that gate here would silently
+ * drift the moment a human decision defers the real claim past where this
+ * would have stopped looking.
  *
  * Exported for rehearsal.ts: a "Play From Here" branch must never be allowed
  * past a board's claim boundary (the server already played both sides from
  * there, true-DD — there is nothing left to redecide), and this is the exact
  * same gate that boundary is defined by.
+ *
+ * One cache shared across the whole walk (see game.ts's ClaimSolveCache doc
+ * comment): without it, a board with several deferred-then-resolved human
+ * decisions pays for planClaimTail's forward walk again from scratch at
+ * every ply in between, an avoidable O(plies²) solve count.
  */
 export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
+  const cache: ClaimSolveCache = new Map();
   for (let i = 0; i < plays.length; i++) {
     const prefix = plays.slice(0, i);
     const ps = playState(deal, contract, prefix);
     if (ps.isOver) return null;
-    if (legalCards(deal, ps).length <= 1) continue;
-    const solve = await solveFutureTricks(deal, contract, prefix, 'background');
+    const legal = legalCards(deal, ps);
+    if (legal.length <= 1) continue;
+    const solve = await memoSolveFutureTricks(cache, deal, contract, prefix, 'background');
     const remaining = 13 - ps.completedTricks.length;
-    if (solve.bestScore === remaining || solve.bestScore === 0) return i;
+    if (solve.bestScore === remaining || solve.bestScore === 0) {
+      const tail = await planClaimTail(deal, contract, prefix, ps, legal, solve, 'background', cache);
+      if (tail) return i;
+    }
   }
   return null;
 }
@@ -345,7 +363,7 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   const contract = b.contract;
 
   // The grading boundary: cards from the claim on were played BY THE SERVER
-  // for both sides (resolveClaim, true-DD at every difficulty) — grading them
+  // for both sides (planClaimTail, true-DD at every difficulty) — grading them
   // against the human would be a false statement, and the robots were
   // silently upgraded there so the DD deltas aren't comparable anyway.
   const claimedAtPly = b.row.claimed_at_ply ?? (await deriveClaimBoundary(deal, contract, b.plays));

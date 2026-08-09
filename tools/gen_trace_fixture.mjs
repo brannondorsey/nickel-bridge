@@ -6,13 +6,17 @@
  * produce on a fixed seed when the human always passes and always plays their
  * first legal card — until/unless a laydown claim fires, at which point the
  * server plays out the remaining cards DD-optimally for both sides instead
- * (see `advanceRobots`/`resolveClaim` in server/src/game.ts), which can
+ * (see `advanceRobots`/`planClaimTail` in server/src/game.ts), which can
  * reorder the tail of `plays` relative to what "first legal card" alone
- * would have produced. The final contract/score are unaffected by that
- * reordering — a claim only fires once the outcome is already 100%
- * determined. server/test/game.test.ts replays this trace and fails on any
- * difference — identical robots on identical deals is the fairness invariant
- * of duplicate scoring, so a diff here must be a *deliberate* robot change.
+ * would have produced. A claim only fires once the outcome is 100%
+ * determined AND no human decision along the way would have changed it
+ * (planClaimTail's doc comment) — so unlike a pure reordering, a diff here
+ * can also be a genuine SCORE change: a decision that used to be silently
+ * force-played correctly by an early claim may now actually be left to the
+ * "first legal card" strategy, which can score worse. server/test/game.test.ts
+ * replays this trace and fails on any difference — identical robots on
+ * identical deals is the fairness invariant of duplicate scoring, so a diff
+ * here must be a *deliberate* robot change.
  *
  * Usage (from repo root, after npm run build):
  *   node tools/gen_trace_fixture.mjs

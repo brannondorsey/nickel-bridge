@@ -211,14 +211,19 @@ describe('bidding and card-play noise are actually wired through advanceRobots',
           const actor = ps.handToPlay === dummy ? contract.declarer : ps.handToPlay;
           if (actor === 0) continue; // partner (North) is never subject to PLAY_NOISE
 
-          // Replicate advanceRobots' claim gate: once the position is a 100%
-          // laydown for either side, the rest of the hand is played true-DD
-          // (chooseCard/resolveClaim), not through the sampled/noisy path —
-          // recomputing a "pure" sampled counterfactual past this point would
-          // compare against the wrong algorithm entirely, a false signal.
+          // Replicate advanceRobots' claim gate — reusing planClaimTail itself
+          // rather than just the bestScore check, since a laydown score alone
+          // isn't sufficient to claim (see its doc comment): once the tail is
+          // actually confirmed mechanical, the rest of the hand plays true-DD,
+          // not through the sampled/noisy path — recomputing a "pure" sampled
+          // counterfactual past that point would compare against the wrong
+          // algorithm entirely, a false signal.
           const solve = await solveFutureTricks(b.deal, contract, prefix);
           const remainingTricks = 13 - ps.completedTricks.length;
-          if (solve.bestScore === remainingTricks || solve.bestScore === 0) break;
+          if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
+            const tail = await game.planClaimTail(b.deal, contract, prefix, ps, legal, solve, 'interactive', new Map());
+            if (tail) break;
+          }
 
           const pure = await chooseCardSampled(b.deal, contract, prefix, {
             k: MC_SAMPLES.beginner.kOpp,

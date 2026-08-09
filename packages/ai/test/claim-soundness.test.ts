@@ -43,18 +43,21 @@ function microDeal(north: Card[], east: Card[], south: Card[], west: Card[]): De
 }
 
 /**
- * The auto-claim in server/src/game.ts's advanceRobots fires when
- * `solve.bestScore === remaining || solve.bestScore === 0` — i.e. the side
- * to move is a 100% laydown either way. That's a claim about a minimax
+ * The auto-claim in server/src/game.ts's advanceRobots fires only once
+ * `solve.bestScore === remaining || solve.bestScore === 0` (the side to move
+ * is a 100% laydown either way) AND `planClaimTail` has confirmed the winning
+ * side's own remaining decisions, if any, are all ties — see that function's
+ * doc comment for that half. This helper covers the complementary half: the
+ * LOSING side's decisions. A laydown score is a claim about a minimax
  * *value*: DDS's own search already trusts its own number. This helper
  * distrusts it and instead brute-force enumerates every *legal* line the
  * losing side could take (not just the DD-optimal one DDS would have
  * chosen), while the winning side always responds with the real production
- * `chooseCard` (exactly what `resolveClaim` does after a claim fires), and
- * fails the test the instant the losing side scores a single trick beyond
- * what it already had at the claim point. This is the actual guarantee an
- * auto-claim needs: not "the predicted line is self-consistent" but "no
- * legal deviation by the losing side changes the outcome."
+ * `chooseCard` (exactly what a fired claim plays for the rest of the hand),
+ * and fails the test the instant the losing side scores a single trick
+ * beyond what it already had at the claim point. This is the actual
+ * guarantee an auto-claim needs: not "the predicted line is self-consistent"
+ * but "no legal deviation by the losing side changes the outcome."
  */
 async function assertClaimIsUnbeatable(
   deal: Deal,
@@ -113,8 +116,8 @@ async function assertClaimIsUnbeatable(
       // just the one DDS would have picked.
       for (const c of legal) await dfs([...currentPlays, c]);
     } else {
-      // The winning side always plays exactly what production would (the
-      // deterministic DD-optimal chooseCard), same as resolveClaim.
+      // The winning side always plays exactly what production would once a
+      // claim fires (the deterministic DD-optimal chooseCard).
       const c = legal.length === 1 ? legal[0] : await chooseCard(deal, contract, currentPlays);
       await dfs([...currentPlays, c]);
     }
