@@ -450,13 +450,11 @@ the server stays a plain request/response API. When `boardView.legalCards` has e
 card, `Board.tsx` plays it automatically after a short delay (`AUTO_PLAY_DELAY_MS`) instead of
 requiring a tap — it just simulates the second tap of the normal select-then-confirm flow.
 Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
-(`solveFutureTricks` in `packages/ai/src/play-ai.ts`) at every real decision point; once
-either side is DD-confirmed to win 100% of the remaining tricks AND `planClaimTail` confirms
-the human has no untied legal card anywhere in that guaranteed line (see invariant 1 for why
-that second check exists), it marks the board `claimed` and plays out the rest via
-`chooseCard` for both sides — a claim is just "the server fast-plays a predetermined tail,"
-not a distinct completion path, so scoring/`finishBoard`/Elo are untouched. The boundary is
-persisted as `boards.claimed_at_ply` (the plays-index of the first
+(`solveFutureTricks` in `packages/ai/src/play-ai.ts`) at every real decision point; the instant
+either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
+and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
+a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
+untouched. The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
 server-played tail card; NULL = no claim, or a pre-migration board): `GameBoard.claimed` stays
 transient per-request, but a finished board must be able to say at rest where its tail stopped
 being the human's own play — Analyze must never grade past it. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
@@ -523,9 +521,7 @@ always auction-aware at `kPartner = max(kOpp, PARTNER_FLOOR=8)` and never subjec
 pre-difficulty behavior; it's the schema default (so legacy tournaments, the robot-trace
 fixture, and demo exhibits all resolve to it) and is not settable through the API. Demo
 ambient tournaments are stamped `'intermediate'` so default-preference placement joins them.
-Claim detection, and a confirmed claim's tail, stay true-DD at every tier (see
-`planClaimTail` under "Auto-play and claims" below — a claim only fires once it's also
-confirmed the human's own remaining decisions, if any, don't affect the outcome). Sampled solves run through a
+Claim detection and `resolveClaim` stay true-DD at every tier. Sampled solves run through a
 lazy `worker_threads` DDS pool (`dd-pool.ts`, one WASM instance per worker, sequential
 fallback when unavailable); DDS is deterministic, so the pool affects latency only. Nothing
 here consults env vars — difficulty flows from the tournament row.
@@ -1648,9 +1644,9 @@ per-device ideas anyway. The footer says that once rather than tagging rows. Eac
 newer settings has one thing worth knowing:
 
 - **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
-  preference and cannot be anything else. When `advanceRobots` fires a claim (`planClaimTail`,
-  `game.ts`) it has already played every remaining card — the response arrives with the board
-  finished — so nobody chooses a card in that tail under either setting. `stageClaimSteps`
+  preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
+  remaining card (`resolveClaim`, `game.ts`) — the response arrives with the board finished
+  — so nobody chooses a card in that tail under either setting. `stageClaimSteps`
   (`playAnim.ts`) takes a `fast` boolean, not a bare speed multiplier, because the two modes
   use genuinely different gap sets rather than one scaled by the other: on replays at
   `CLAIM_GAP_MS`/`CLAIM_TRICK_GAP_MS` (compressed — a claim can span up to 13 tricks, and
@@ -1994,50 +1990,17 @@ the sitemap and `robots.txt` follow on their own.
    reordering and the score is unchanged — before accepting a new fixture.
    **Claims are why "fast forward settled tricks" is a pacing setting and not a play one,
    and there is an open question underneath them.** The claim gate is a TRUE-DD judgment
-   (`solveFutureTricks` sees all four hands and assumes best play by everyone), and once it
-   fires the whole tail plays true-DD "at every difficulty" — but at beginner and
+   (`solveFutureTricks` sees all four hands and assumes best play by everyone) and
+   `resolveClaim` then plays the tail true-DD "at every difficulty" — but at beginner and
    intermediate the robots would have played that tail through `chooseCardSampled`, i.e.
    fallibly. So a position is only "settled" against a perfect opponent, and claiming
-   quietly upgrades the OPPOSING robots for the rest of the hand, deleting whatever the human
-   would have gained from an endgame mistake on their side; the tier calibration, measured
-   over full play, never saw those tails. That is uniform today — everyone's boards claim —
-   and it is exactly why a per-user "don't claim for me" toggle was NOT built: it would hand
-   two players on the identical board different robots because of a checkbox, and feed that
-   into matchpoints and Elo. Whether the gate itself should consult the tier for the
-   OPPOSING side is still unresolved and worth measuring; changing it is a deliberate robot
-   change under this invariant.
-
-   A related but distinct half of this WAS fixed: the claim gate used to also silently
-   remove the HUMAN's own remaining decisions. A laydown score only says the outcome is
-   fixed with correct play by both sides — it says nothing about whether reaching it still
-   requires the human (declarer or dummy) to choose correctly among untied legal cards
-   somewhere in the tail, and the old gate just force-played `chooseCard`'s DD-optimal pick
-   on the human's behalf the moment `bestScore` matched, with no such check. `planClaimTail`
-   (`game.ts`) closes that: before committing to a claim, it walks the whole guaranteed line
-   forward and, at every point the human is to move with more than one legal card, requires
-   ALL of them to tie for that node's own best score — nothing decided by that pick either
-   way. The instant one doesn't tie, the claim is called off entirely (not just deferred past
-   that one card) and the position plays out normally, human decision included, from wherever
-   the loop currently is; `advanceRobots` re-attempts the gate fresh at every subsequent ply.
-   This is scoped to the human's own side on purpose (declarer or dummy) — a defending side's
-   node, at either bound of `solve.bestScore`, is mathematically always "tied" (0 is already
-   the floor, nothing legal can do worse), so the check would never fire there anyway; see
-   `planClaimTail`'s own doc comment and `packages/ai/test/claim-soundness.test.ts` for the
-   complementary guarantee about the LOSING side. `analyze.ts`'s `deriveClaimBoundary` (the
-   fallback for a board whose `claimed_at_ply` wasn't persisted) reuses `planClaimTail`
-   directly rather than re-checking `bestScore` alone, specifically so it can't silently drift
-   from what this gate actually decided. One real cost: deferring a claim means `advanceRobots`
-   can re-attempt `planClaimTail`'s forward walk on several consecutive plies before the
-   blocking decision is actually reached, which without care is an O(remaining plies²) solve
-   count instead of O(remaining plies) — `ClaimSolveCache`, a plain `Map` keyed on the exact
-   plays-prefix and shared across one `advanceRobots` call (or one `deriveClaimBoundary`
-   walk), collapses the repeat-prefix part of that back down; the residual cost from a
-   non-`'perfect'` tier's actual sampled play genuinely diverging from the hypothetical
-   DD-optimal line is real work, not an artifact, and is the direct, expected price of the
-   fix — more of a beginner/intermediate hand's tail now goes through the same
-   `chooseCardSampled` cost ordinary mid-hand play already pays, instead of being shortcut
-   early by a claim that used to fire (and quietly overrule the human) before that cost was
-   incurred.
+   quietly upgrades the robots for the rest of the hand, deleting whatever the human would
+   have gained from an endgame mistake; the tier calibration, measured over full play, never
+   saw those tails. That is uniform today — everyone's boards claim — and it is exactly why
+   a per-user "don't claim for me" toggle was NOT built: it would hand two players on the
+   identical board different robots because of a checkbox, and feed that into matchpoints
+   and Elo. Whether the gate itself should consult the tier is unresolved and worth
+   measuring; changing it is a deliberate robot change under this invariant.
    The demo-mode
    scenario recipes in `server/src/scenarios.ts` are replay-sensitive the same way: a
    deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive

@@ -68,12 +68,7 @@ describe('declarer scenarios (pinned seeds)', () => {
     expect(playViews.every((v) => v.flipped === true && v.playingSeat === 0)).toBe(true);
     const handsPlayed = new Set(playViews.filter((v) => v.myTurn).map((v) => v.handToPlay));
     expect(handsPlayed).toEqual(new Set([0, 2])); // both declarer hand and dummy
-    // Deterministic outcome for this seed — worse than before planClaimTail
-    // (game.ts) started deferring claims with a real remaining human
-    // decision: this board's "always play first legal card" strategy now
-    // actually faces one instead of being silently corrected by an early
-    // claim, and gets it wrong.
-    expect(b.row.score_ns).toBe(-100);
+    expect(b.row.score_ns).toBe(170); // deterministic outcome for this seed
   });
 
   it('South declares: human plays South and dummy North, no flip', async () => {

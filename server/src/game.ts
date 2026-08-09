@@ -232,32 +232,6 @@ function finishBoard(b: GameBoard): void {
 }
 
 /**
- * Keyed on the exact plays-prefix (`Card[]` joined — the DD position is a
- * pure function of exactly which cards have been played, in order), shared
- * by a single advanceRobots call across its own bestScore checks and every
- * planClaimTail attempt they trigger. See planClaimTail's doc comment for
- * why this matters; it exists purely to avoid repeat solves of a position
- * this same call has already seen, never persisted or shared across
- * requests.
- */
-export type ClaimSolveCache = Map<string, DdSolve>;
-
-export async function memoSolveFutureTricks(
-  cache: ClaimSolveCache,
-  deal: Deal,
-  contract: Contract,
-  plays: Card[],
-  priority: SolvePriority,
-): Promise<DdSolve> {
-  const key = plays.join(',');
-  const cached = cache.get(key);
-  if (cached) return cached;
-  const solve = await solveFutureTricks(deal, contract, plays, priority);
-  cache.set(key, solve);
-  return solve;
-}
-
-/**
  * Advance all robot actions until it's the human's turn or the board is over.
  * Deterministic: model argmax bidding, double-dummy-optimal card play.
  *
@@ -268,11 +242,6 @@ export async function memoSolveFutureTricks(
  * next free DD worker — see packages/ai/src/dd-pool.ts's doc comment for why.
  */
 export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'interactive'): Promise<void> {
-  // Scoped to this one call: see planClaimTail's doc comment for why a
-  // deferred claim needs this to stay affordable, and memoSolveFutureTricks
-  // for why sharing it with advanceRobots' own bestScore check (not just
-  // planClaimTail's internal one) matters too.
-  const claimSolveCache: ClaimSolveCache = new Map();
   for (;;) {
     if (b.row.state === 'bidding') {
       const auction = auctionState(b.deal.dealer, b.calls);
@@ -305,31 +274,25 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
         // A forced (single-legal-card) node carries no new branching
         // information for a claim, so we skip the solve there — the next
         // real decision point is checked the following iteration regardless.
-        const solve = await memoSolveFutureTricks(claimSolveCache, b.deal, b.contract!, b.plays, priority);
+        const solve = await solveFutureTricks(b.deal, b.contract!, b.plays, priority);
         const remainingTricks = 13 - ps.completedTricks.length;
         if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
           // Either the side to move (bestScore === remaining) or the
-          // defense (bestScore === 0) is a 100% laydown from here — but that
-          // alone isn't sufficient to claim. planClaimTail additionally
-          // confirms no human decision along the way actually matters; see
-          // its doc comment for why.
-          const tail = await planClaimTail(b.deal, b.contract!, b.plays, ps, legal, solve, priority, claimSolveCache);
-          if (tail) {
-            b.claimed = true;
-            // Persist the boundary: everything from this plays-index on is
-            // the server fast-playing the settled tail for both sides —
-            // including, when the claim fires on the human's own turn,
-            // cards from the human's hand. Analyze must never grade past it
-            // (see the claimed_at_ply migration comment in db.ts). At most
-            // one claim per board: this loop reaches state 'done' next.
-            b.row.claimed_at_ply = b.plays.length;
-            b.plays.push(...tail);
-            continue;
-          }
-          // A human decision with real stakes remains somewhere before the
-          // hand ends — don't claim yet. Fall through and play this one ply
-          // normally; the position is re-solved and re-checked fresh next
-          // ply, once that decision (or a nearer forced node) is behind us.
+          // defense (bestScore === 0) is a 100% laydown from here. Play out
+          // the whole rest of the hand DD-optimally for both sides — this is
+          // the only way the claim's outcome is guaranteed identical to what
+          // continued play would have produced.
+          b.claimed = true;
+          // Persist the boundary: everything from this plays-index on is the
+          // server fast-playing the settled tail for both sides — including,
+          // when the claim fires on the human's own turn, cards from the
+          // human's hand. Analyze must never grade past it (see the
+          // claimed_at_ply migration comment in db.ts). At most one claim per
+          // board: resolveClaim finishes it.
+          b.row.claimed_at_ply = b.plays.length;
+          b.plays.push(pickFromSolve(legal, solve));
+          await resolveClaim(b, priority);
+          continue;
         }
         if (!humanControls(ps.handToPlay, b.contract!)) {
           b.plays.push(await robotCard(b, ps, legal, solve, priority));
@@ -390,90 +353,15 @@ async function robotCard(
 }
 
 /**
- * Walks the DD-optimal line forward from a position already established as a
- * 100% laydown (solve.bestScore is remainingTricks or 0 for `plays`), and
- * returns the cards to fast-play for the rest of the hand — or null if it
- * isn't actually safe to claim.
- *
- * A laydown score alone only says the OUTCOME is fixed with correct play by
- * both sides; it says nothing about whether reaching that outcome still
- * requires the human (declarer or dummy) to choose correctly among their own
- * legal cards somewhere along the way. Auto-claim used to assume it never
- * did and just played `chooseCard`'s DD-optimal pick on the human's behalf —
- * fine for the score (the pick genuinely is optimal), but it silently
- * resolves a real decision the human never got to make. So this walks the
- * whole guaranteed line node by node and, at every point the human is to
- * move with more than one legal card, checks whether EVERY legal card there
- * ties for that node's own best score. If they all tie, nothing was actually
- * decided by that node's card choice (any legal card gets the same result)
- * and the walk continues; the moment one doesn't, a real decision exists and
- * the whole claim is called off — null, so the caller leaves this ply to
- * play out normally and re-checks fresh next time. (On the flip side, a
- * losing side's node always trivially "ties": 0 is already the floor, so no
- * legal card there can do worse — see packages/ai/test/claim-soundness.test.ts
- * for the complementary guarantee, that no legal deviation by the LOSING
- * side can do better either.)
- *
- * Pure — takes `plays` rather than a `GameBoard`, and returns a fresh array
- * rather than mutating anything, so a null result discards the whole
- * hypothetical line at no cost. That also makes it reusable by
- * analyze.ts's `deriveClaimBoundary`, which needs the identical rule to
- * reconstruct where THIS gate would have fired for a board whose
- * `claimed_at_ply` wasn't persisted — replaying only the raw bestScore
- * check there (as this used to, inline) would silently disagree with
- * production the moment a human decision defers the actual claim. Still
- * true-DD throughout (pickFromSolve), so a confirmed claim keeps the exact
- * fast-forwarded score this always had.
- *
- * `cache` (see ClaimSolveCache below) is what keeps this affordable: a
- * deferred claim (a laydown score with a real human decision somewhere
- * ahead) makes advanceRobots retry this same walk-forward on every
- * subsequent ply until that decision is actually reached, and each retry's
- * mechanical prefix — the forced nodes and tied-for-best robot/dummy picks
- * leading up to the same blocking node — is otherwise IDENTICAL work
- * repeated from scratch, an O(remaining plies²) solve count instead of
- * O(remaining plies). Sharing one cache across every attempt within a
- * single advanceRobots call collapses that back down: solveFutureTricks is
- * a pure function of the exact prefix played, so a prefix seen by an
- * earlier attempt (or by advanceRobots' own bestScore check) is a cache
- * hit, whatever attempt is asking. A non-'perfect' tier's actual sampled
- * play can still diverge from the hypothetical DD-optimal prefix this
- * walks — that genuinely is new information and costs a real solve, same
- * as it would with no cache at all.
+ * Play out every remaining card DD-optimally for both sides once a claim
+ * fires. Deliberately true-DD at every difficulty: a claim only fires on a
+ * position whose outcome is 100% determined double-dummy, and resolving it
+ * with perfect play is what keeps the fast-forwarded score identical to what
+ * continued play would have produced.
  */
-export async function planClaimTail(
-  deal: Deal,
-  contract: Contract,
-  plays: Card[],
-  ps: PlayState,
-  firstLegal: Card[],
-  firstSolve: DdSolve,
-  priority: SolvePriority,
-  cache: ClaimSolveCache,
-): Promise<Card[] | null> {
-  const tail: Card[] = [];
-  let cur = plays;
-  let state = ps;
-  let legal = firstLegal;
-  let solve: DdSolve | null = firstSolve;
-  for (;;) {
-    let card: Card;
-    if (legal.length > 1) {
-      if (!solve) solve = await memoSolveFutureTricks(cache, deal, contract, cur, priority);
-      if (humanControls(state.handToPlay, contract)) {
-        const tiedForBest = legal.filter((c) => (solve!.cardScores.get(c) ?? -1) === solve!.bestScore);
-        if (tiedForBest.length !== legal.length) return null;
-      }
-      card = pickFromSolve(legal, solve);
-    } else {
-      card = legal[0];
-    }
-    tail.push(card);
-    cur = [...cur, card];
-    state = playState(deal, contract, cur);
-    if (state.isOver) return tail;
-    legal = legalCards(deal, state);
-    solve = null;
+async function resolveClaim(b: GameBoard, priority: SolvePriority): Promise<void> {
+  while (!playState(b.deal, b.contract!, b.plays).isOver) {
+    b.plays.push(await chooseCard(b.deal, b.contract!, b.plays, priority));
   }
 }
 
