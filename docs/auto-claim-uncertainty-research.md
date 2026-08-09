@@ -64,7 +64,52 @@ matchpoints/Elo). It has not been fixed or measured.
   deficit the human "should" have accrued from a weak-tier robot's plausible defensive error
   never has the chance to happen — there's nothing to grade because DD already foreclosed it.
 
-## Where a fix would go
+## A second, distinct issue: the human's own decisions
+
+Separate from tier-blindness above, the gate is also blind to the HUMAN's own remaining
+decisions. A laydown score (`bestScore === remainingTricks`) only says the outcome is fixed
+with *correct* play by both sides — it says nothing about whether reaching it still requires
+the human (declarer or dummy) to choose correctly among untied legal cards somewhere in the
+tail. Today `resolveClaim` just force-plays `chooseCard`'s DD-optimal pick on the human's
+behalf the instant `bestScore` matches, with no check that the human's own upcoming choices
+were actually forced.
+
+**Proposed criterion:** don't claim if the human (declarer or dummy) has a legal card, at any
+point in the guaranteed line before the hand ends, that is not tied for that node's own best
+score — i.e. a point where playing something other than the DD-optimal card would actually
+cost tricks. Concretely, before committing to a claim, walk the DD-optimal continuation
+forward node by node; at every point the human is to move with more than one legal card,
+require ALL of them to tie for that node's best score (`solve.cardScores`). The moment one
+doesn't, call the whole claim off and let the position play out normally — the human keeps
+that decision instead of having it silently resolved for them.
+
+This is scoped to the human's *declaring* side on purpose: a defending side's node, at either
+bound of `solve.bestScore`, is mathematically always "tied" (0 is already the floor, nothing
+legal can do worse), so the check only ever fires for a declarer/dummy decision. It's also
+orthogonal to the tier-fallibility issue above — even at `'perfect'`, where every robot
+decision genuinely is DD-optimal, the human's own remaining choices deserve to stay real
+decisions rather than being auto-corrected.
+
+Two implementation notes worth flagging for whoever picks this up:
+
+- **Consistency with `analyze.ts`'s `deriveClaimBoundary`** (the fallback used when a board's
+  `claimed_at_ply` wasn't persisted, e.g. for rehearsal branch-point validation). It currently
+  re-derives the boundary from the same raw `bestScore` check inline — that duplicate would
+  need to apply the identical human-decision check, or a rehearsal/Analyze could disagree with
+  what `advanceRobots` actually did.
+- **Performance.** Deferring a claim means `advanceRobots` would re-attempt this forward walk
+  on every subsequent ply until the blocking decision is reached — naively that's an
+  O(remaining plies²) solve count instead of O(remaining plies). A solve cache keyed on the
+  exact plays-prefix, shared across attempts within one `advanceRobots` call, would be needed
+  to keep it affordable; even so, a non-`'perfect'` tier's actual sampled play can diverge from
+  the hypothetical DD-optimal line the walk assumes, so some of that added cost is inherent
+  (more of a beginner/intermediate hand's tail goes through the same `chooseCardSampled` cost
+  ordinary mid-hand play already pays, instead of being shortcut early by an over-eager claim).
+
+This fix and the tier-fallibility fix below are independent and could ship separately or
+together.
+
+## Where a fix for the tier-fallibility issue would go
 
 Both `advanceRobots`'s claim gate (`game.ts:277-296`) and `resolveClaim` (`game.ts:362-366`)
 would need to become difficulty-aware to be consistent with `robotCard`. Two independent
