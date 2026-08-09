@@ -1,6 +1,6 @@
 {
  "seed": "robot-trace-v1",
- "claimRule": "pessimistic",
+ "claimRule": "optimistic",
  "strategy": "human passes; plays first legal card (until a laydown claim plays the tail DD-optimally)",
  "boards": [
   {
@@ -236,7 +236,7 @@
     "redoubled": false
    },
    "scoreNS": -620,
-   "claimedAtPly": 47
+   "claimedAtPly": 28
   },
   {
    "boardNo": 4,

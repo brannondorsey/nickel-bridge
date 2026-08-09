@@ -3,6 +3,7 @@ import {
   analysePlayTricks,
   calcDdTable,
   dealerParFor,
+  isOutcomeInvariant,
   scoreCardsSampled,
   solveFutureTricks,
 } from '@bridge/ai';
@@ -20,8 +21,9 @@ import {
   matchpoints,
   playState,
 } from '@bridge/core';
-import { TournamentRow, db } from './db.js';
+import { ClaimRule, TournamentRow, db } from './db.js';
 import { GameBoard, HUMAN_SEAT, bidder, boardFieldRows, humanControls } from './game.js';
+import { claimRule } from './tournaments.js';
 
 /**
  * Analyze — the post-board review's verdict pipeline ("walking a finished
@@ -81,6 +83,21 @@ export const MAX_MOMENTS = 5;
  * Cache key epoch. Bump on ANY deliberate robot change (invariant 1's list),
  * any constant above, a grade-band change, or a stage-3 scoring change — a
  * cached analysis computed against different robots is a stale accusation.
+ *
+ * Deliberately NOT bumped for the pessimistic claim gate, which is the one
+ * documented exemption so far and worth stating so the next reader doesn't
+ * think the rule was simply overlooked. The version exists to throw away
+ * analyses that have become WRONG. A board's claim rule is stamped on its
+ * tournament at creation and never changes (see db.ts's claim_rule migration),
+ * and the migration stamped every tournament that already existed
+ * 'optimistic' — so every cache row in existence describes a board whose gate
+ * is bit-for-bit the one it was computed under, and deriveClaimBoundary
+ * returns exactly what it returned before for all of them. Bumping would force
+ * a full stage-1-to-3 recompute of every cached board — the expensive path, on
+ * one vCPU — to arrive at byte-identical output.
+ *
+ * The precondition is that immutability. Anything that ever flips claim_rule
+ * on an existing tournament must delete that tournament's board_analyses rows.
  */
 export const ANALYZE_VERSION = 3; // 3: stage 3 drops excused candidates instead of flagging them (never a moment)
 
@@ -236,16 +253,27 @@ function humanSideDeclares(contract: Contract): boolean {
 /**
  * The claim boundary for a board whose row predates the claimed_at_ply
  * column: replay the exact gate advanceRobots runs — at every non-forced
- * node, does either side have 100% of the remaining tricks double-dummy? DDS
- * is deterministic, so this finds precisely the ply where the live game
+ * node, does either side have 100% of the remaining tricks double-dummy, and
+ * (under 'pessimistic') is the position outcome-invariant besides? Both halves
+ * are deterministic, so this finds precisely the ply where the live game
  * claimed (or none). Costs one solve per decision node once, then cached.
+ *
+ * `rule` is required rather than defaulted on purpose: it is the tournament's
+ * own claim_rule, and a caller that silently re-derived a legacy board under
+ * today's gate would answer a different question than the one the live game
+ * asked — the exact drift this whole change is built to prevent.
  *
  * Exported for rehearsal.ts: a "Play From Here" branch must never be allowed
  * past a board's claim boundary (the server already played both sides from
  * there, true-DD — there is nothing left to redecide), and this is the exact
  * same gate that boundary is defined by.
  */
-export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays: Card[]): Promise<number | null> {
+export async function deriveClaimBoundary(
+  deal: Deal,
+  contract: Contract,
+  plays: Card[],
+  rule: ClaimRule,
+): Promise<number | null> {
   for (let i = 0; i < plays.length; i++) {
     const prefix = plays.slice(0, i);
     const ps = playState(deal, contract, prefix);
@@ -253,7 +281,10 @@ export async function deriveClaimBoundary(deal: Deal, contract: Contract, plays:
     if (legalCards(deal, ps).length <= 1) continue;
     const solve = await solveFutureTricks(deal, contract, prefix, 'background');
     const remaining = 13 - ps.completedTricks.length;
-    if (solve.bestScore === remaining || solve.bestScore === 0) return i;
+    if (solve.bestScore !== remaining && solve.bestScore !== 0) continue;
+    if (rule === 'optimistic') return i;
+    const claimingSide = (solve.bestScore === remaining ? ps.handToPlay % 2 : (ps.handToPlay + 1) % 2) as 0 | 1;
+    if (isOutcomeInvariant(deal, contract, prefix, claimingSide).invariant) return i;
   }
   return null;
 }
@@ -348,7 +379,7 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   // for both sides (resolveClaim, true-DD at every difficulty) — grading them
   // against the human would be a false statement, and the robots were
   // silently upgraded there so the DD deltas aren't comparable anyway.
-  const claimedAtPly = b.row.claimed_at_ply ?? (await deriveClaimBoundary(deal, contract, b.plays));
+  const claimedAtPly = b.row.claimed_at_ply ?? (await deriveClaimBoundary(deal, contract, b.plays, claimRule(t)));
   const boundary = claimedAtPly ?? b.plays.length;
 
   // Stage 1 — the DD trace: one AnalysePlayPBN call for the whole play.

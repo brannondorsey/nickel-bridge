@@ -2,7 +2,7 @@ import { Contract, contractLabel } from '@bridge/core';
 import { cachedClaimBoundary, deriveClaimBoundary } from './analyze.js';
 import { TournamentRow, db } from './db.js';
 import { GameBoard, ensureAdvanced, httpError, loadBoard } from './game.js';
-import { getTournament } from './tournaments.js';
+import { claimRule, getTournament } from './tournaments.js';
 
 /**
  * "Play From Here" — branching a FINISHED board's real play at `branchPly`
@@ -23,8 +23,8 @@ import { getTournament } from './tournaments.js';
  */
 
 const stmtCreateRehearsalTournament = db.prepare(`
-  INSERT INTO tournaments (name, seed, kind, difficulty, board_difficulties, origin_tournament_id, origin_board_no, branch_ply)
-  VALUES (?, ?, 'rehearsal', ?, ?, ?, ?, ?) RETURNING *
+  INSERT INTO tournaments (name, seed, kind, difficulty, board_difficulties, claim_rule, origin_tournament_id, origin_board_no, branch_ply)
+  VALUES (?, ?, 'rehearsal', ?, ?, ?, ?, ?, ?) RETURNING *
 `);
 const stmtInsertRehearsalBoard = db.prepare(`
   INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, bid_evals, contract)
@@ -75,6 +75,11 @@ const createRehearsalTx = db.transaction(
       origin.seed,
       origin.difficulty,
       origin.board_difficulties,
+      // The one creation site that must NOT take claim_rule's schema default
+      // (see db.ts's migration comment): a rehearsal of a legacy board has to
+      // claim where that board claimed, or replaying the origin's own cards
+      // stops reproducing the origin.
+      origin.claim_rule,
       origin.id,
       originBoardNo,
       branchPly,
@@ -113,6 +118,12 @@ const createRehearsalTx = db.transaction(
  *   still applies to a genuinely different position (a different calls/plays
  *   prefix), producing a different but still fully deterministic outcome. Do
  *   not "fix" this into a fresh random seed.
+ * - `claim_rule` is copied verbatim from the origin for the same reason, and
+ *   is the ONE column where taking the schema default would be wrong (see
+ *   db.ts's migration comment): a rehearsal of a pre-migration board has to
+ *   claim exactly where that board claimed, or replaying the origin's own
+ *   cards stops reproducing the origin. `difficulty`/`board_difficulties` are
+ *   copied on the same argument.
  *
  * Deliberately NOT one-attempt-per-ply forever: it's one IN-PROGRESS attempt
  * per ply. A repeat tap at a spot already being rehearsed resumes it instead
@@ -148,7 +159,9 @@ export async function createRehearsal(
   const cached = cachedClaimBoundary(originBoard.row.id);
   const boundary =
     originBoard.row.claimed_at_ply ??
-    (cached !== undefined ? cached : await deriveClaimBoundary(originBoard.deal, originBoard.contract, originBoard.plays));
+    (cached !== undefined
+      ? cached
+      : await deriveClaimBoundary(originBoard.deal, originBoard.contract, originBoard.plays, claimRule(origin)));
   if (boundary !== null && branchPly >= boundary) {
     throw httpError(400, 'cannot branch past the claim boundary — the server played both sides from there');
   }

@@ -8,6 +8,7 @@ import {
   bidDecisionSeed,
   chooseCard,
   chooseCardSampled,
+  isOutcomeInvariant,
   loadPolicyModel,
   mcDecisionSeed,
   pickFromSolve,
@@ -37,7 +38,7 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
-import { boardDifficulty, getTournament, recomputeElo } from './tournaments.js';
+import { boardDifficulty, claimRule, getTournament, recomputeElo } from './tournaments.js';
 
 export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
@@ -274,14 +275,37 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
         // A forced (single-legal-card) node carries no new branching
         // information for a claim, so we skip the solve there — the next
         // real decision point is checked the following iteration regardless.
+        // Under the pessimistic gate that also means a position can BECOME
+        // settled at a forced node and the claim wait for the next unforced
+        // one, or never fire at all if every remaining node is forced. Both
+        // are harmless: a settled position plays out to the identical score,
+        // so all that is deferred is the fast-forward. Deferral is safe in
+        // general, in fact — settledness is hereditary, so a position that is
+        // settled here is still settled at every node below it.
         const solve = await solveFutureTricks(b.deal, b.contract!, b.plays, priority);
         const remainingTricks = 13 - ps.completedTricks.length;
-        if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
-          // Either the side to move (bestScore === remaining) or the
-          // defense (bestScore === 0) is a 100% laydown from here. Play out
-          // the whole rest of the hand DD-optimally for both sides — this is
-          // the only way the claim's outcome is guaranteed identical to what
-          // continued play would have produced.
+        // Either the side to move (bestScore === remaining) or the defense
+        // (bestScore === 0) takes 100% of the remaining tricks double dummy.
+        const ddLaydown = solve.bestScore === remainingTricks || solve.bestScore === 0;
+        const claimingSide = (
+          solve.bestScore === remainingTricks ? ps.handToPlay % 2 : (ps.handToPlay + 1) % 2
+        ) as 0 | 1;
+        // The DD solve is the cheap NECESSARY condition, and we have already
+        // paid for it at this node. It is not a SUFFICIENT one: a double-dummy
+        // laydown is only settled while everybody keeps playing correctly, and
+        // fast-forwarding it means the server quietly making whatever choices
+        // remain — including the human's own, and including the endgame slips
+        // a weak-tier robot would really have made. So on tournaments carrying
+        // 'pessimistic' the position must also be OUTCOME-INVARIANT: no legal
+        // card by any of the four seats, in any continuation, can change the
+        // result (packages/ai/src/claim.ts). Legacy tournaments keep the old
+        // gate — re-gating a board already played would change its replay, and
+        // invariant 1 forbids that. See claimRule()/db.ts's migration comment.
+        const mayClaim =
+          ddLaydown &&
+          (claimRule(b.tournament) === 'optimistic' ||
+            isOutcomeInvariant(b.deal, b.contract!, b.plays, claimingSide).invariant);
+        if (mayClaim) {
           b.claimed = true;
           // Persist the boundary: everything from this plays-index on is the
           // server fast-playing the settled tail for both sides — including,
@@ -353,11 +377,24 @@ async function robotCard(
 }
 
 /**
- * Play out every remaining card DD-optimally for both sides once a claim
- * fires. Deliberately true-DD at every difficulty: a claim only fires on a
- * position whose outcome is 100% determined double-dummy, and resolving it
- * with perfect play is what keeps the fast-forwarded score identical to what
- * continued play would have produced.
+ * Play out every remaining card once a claim fires — true-DD for both sides,
+ * at every difficulty.
+ *
+ * Under the legacy 'optimistic' gate this was the load-bearing half of the
+ * guarantee: the position is 100% determined only against best play, so only
+ * best play reproduces the score, which is also exactly the complaint against
+ * that gate (invariant 1's open question — the tail silently plays the human's
+ * remaining decisions, and silently promotes a beginner-tier robot to perfect
+ * for the rest of the hand).
+ *
+ * Under 'pessimistic' the same code needs no such defence, because the gate has
+ * already PROVEN that no legal card by any seat can change the result. Every
+ * possible tail scores the same, so this one is simply an arbitrary member of a
+ * set of provably equivalent tails, kept because it is the cheapest
+ * deterministic way to fill in `plays` and because it leaves legacy boards
+ * byte-identical. That is what closes the open question for new tournaments —
+ * not by teaching the gate about tiers, but by making the tail's contents
+ * irrelevant, so a weaker robot has nothing left to be fallible about.
  */
 async function resolveClaim(b: GameBoard, priority: SolvePriority): Promise<void> {
   while (!playState(b.deal, b.contract!, b.plays).isOver) {

@@ -88,7 +88,7 @@ export const COPY = {
   receiptSay:
     'Scored and itemized — every crossing prints a receipt like this. Read where the toll came from, then see who else was on the bridge.',
   fieldSay:
-    'You didn’t cross alone: the house played this very deal before you — same cards, same robots. The Shark and The Regular both landed your exact line, so the three of you split the matchpoints. The Novice held your cards too, and went two down. That’s duplicate: the deal is never the difference.',
+    'You didn’t cross alone: the house played this very deal before you — same cards, same robots. The Shark and The Regular both landed your exact line, so the three of you split the matchpoints. The Novice held your cards too, and went three down. That’s duplicate: the deal is never the difference.',
 
   doneTitle: 'That’s the whole game.',
   doneBody:

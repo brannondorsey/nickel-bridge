@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { boardScoreNS, legalCards, playState } from '@bridge/core';
+import { isOutcomeInvariant } from '@bridge/ai';
+import { boardScoreNS, legalCards, playState, trickWinner } from '@bridge/core';
 import { freshDbEnv } from './helpers.js';
 
 freshDbEnv('game');
@@ -21,12 +22,22 @@ beforeAll(() => {
   ).id;
 });
 
-function makeTournament(seed: string) {
-  return db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', ?) RETURNING *`).get(seed) as any;
+/**
+ * `claimRule` omitted means "whatever a tournament created today gets", i.e.
+ * the shipped gate — the same thing placeUser and the demo seeder take from
+ * the column default. Pass 'optimistic' explicitly where a test is pinning the
+ * LEGACY behaviour that pre-migration tournaments still play under.
+ */
+function makeTournament(seed: string, claimRule?: 'optimistic' | 'pessimistic') {
+  return claimRule
+    ? (db
+        .prepare(`INSERT INTO tournaments (name, seed, claim_rule) VALUES ('t', ?, ?) RETURNING *`)
+        .get(seed, claimRule) as any)
+    : (db.prepare(`INSERT INTO tournaments (name, seed) VALUES ('t', ?) RETURNING *`).get(seed) as any);
 }
 
-async function loadBoardFor(seed: string, boardNo: number) {
-  const t = makeTournament(seed);
+async function loadBoardFor(seed: string, boardNo: number, claimRule?: 'optimistic' | 'pessimistic') {
+  const t = makeTournament(seed, claimRule);
   const b = game.loadBoard(t, userId, boardNo, true)!;
   await game.ensureAdvanced(b);
   return { t, b };
@@ -68,7 +79,15 @@ describe('declarer scenarios (pinned seeds)', () => {
     expect(playViews.every((v) => v.flipped === true && v.playingSeat === 0)).toBe(true);
     const handsPlayed = new Set(playViews.filter((v) => v.myTurn).map((v) => v.handToPlay));
     expect(handsPlayed).toEqual(new Set([0, 2])); // both declarer hand and dummy
-    expect(b.row.score_ns).toBe(170); // deterministic outcome for this seed
+    // Deterministic outcome for this seed, and the clearest demonstration in
+    // the suite of what the pessimistic gate changed. The legacy gate claimed
+    // this board at ply 12 — trick FOUR — and fast-played the remaining 23
+    // cards double-dummy on the declarer's behalf, banking 2♥+2 for 170. The
+    // position was only settled against correct play, though, and driveBoard's
+    // "human" always plays its first legal card, so once the board is actually
+    // played out it goes one down instead. A worse score, honestly earned: the
+    // 170 was the server playing declarer's hand, not this player.
+    expect(b.row.score_ns).toBe(-100);
   });
 
   it('South declares: human plays South and dummy North, no flip', async () => {
@@ -100,10 +119,12 @@ describe('declarer scenarios (pinned seeds)', () => {
 });
 
 describe('automatic laydown claims', () => {
-  // Known (via the robot-trace fixture) to hit a claim partway through play —
-  // see tools/gen_trace_fixture.mjs and the fixture's tail-reordering diff.
-  it('short-circuits a determined board in one request instead of one per remaining card', async () => {
-    const { t, b } = await loadBoardFor('robot-trace-v1', 2);
+  // Known (via the robot-trace fixtures) to hit a claim partway through play —
+  // see tools/gen_trace_fixture.mjs. Pinned to the LEGACY gate: this is the
+  // behaviour every tournament created before the claim_rule migration still
+  // plays under, and it has to keep working exactly as it did.
+  it('a legacy tournament still claims exactly where it always did', async () => {
+    const { t, b } = await loadBoardFor('robot-trace-v1', 2, 'optimistic');
     const views = await driveBoard(t, b);
     expect(b.row.state).toBe('done');
     expect(b.claimed).toBe(true);
@@ -112,9 +133,7 @@ describe('automatic laydown claims', () => {
     // the claim boundary is persisted (claimed_at_ply — see db.ts's migration
     // comment): a valid plays[] index strictly inside the hand, and it
     // survives a fresh read of the row
-    expect(b.row.claimed_at_ply).not.toBeNull();
-    expect(b.row.claimed_at_ply!).toBeGreaterThan(0);
-    expect(b.row.claimed_at_ply!).toBeLessThan(52);
+    expect(b.row.claimed_at_ply).toBe(40); // the exact ply the legacy gate has always fired on here
     const persisted = db
       .prepare(`SELECT claimed_at_ply FROM boards WHERE id = ?`)
       .get(b.row.id) as { claimed_at_ply: number | null };
@@ -160,6 +179,30 @@ describe('automatic laydown claims', () => {
     expect(b.claimed).toBeUndefined();
     // no claim ⇒ the persisted boundary stays NULL
     expect(b.row.claimed_at_ply).toBeNull();
+  });
+
+  it('waits for the position to be settled whatever anybody plays, on a new tournament', async () => {
+    // Board 3 of this seed is the paired case: double dummy calls it 100%
+    // determined at ply 28, but a legal deviation could still have spoiled it,
+    // so the shipped gate plays on and claims at 47 — the same score either
+    // way, with 19 more cards actually played by the people holding them.
+    const legacy = await loadBoardFor('robot-trace-v1', 3, 'optimistic');
+    await driveBoard(legacy.t, legacy.b);
+    const shipped = await loadBoardFor('robot-trace-v1', 3, 'pessimistic');
+    await driveBoard(shipped.t, shipped.b);
+
+    expect(legacy.b.row.claimed_at_ply).toBe(28);
+    expect(shipped.b.row.claimed_at_ply).toBe(47);
+    expect(shipped.b.row.score_ns).toBe(legacy.b.row.score_ns);
+    expect(shipped.b.claimed).toBe(true);
+  }, 30000);
+
+  it('omitting claim_rule at creation gets the shipped gate, not the legacy one', () => {
+    // The whole backward-compatibility scheme rests on the column default, so
+    // pin it: a tournament created without naming a rule must come out
+    // 'pessimistic' (see db.ts's claim_rule migration for why the default is
+    // the new value and only pre-existing rows were stamped 'optimistic').
+    expect(makeTournament('default-rule-check').claim_rule).toBe('pessimistic');
   });
 });
 
@@ -395,23 +438,68 @@ describe('board completion side effects', () => {
 });
 
 describe('robot determinism golden trace', () => {
-  const fixture = JSON.parse(readFileSync(join(here, 'fixtures/robot-trace.json'), 'utf8'));
+  // One fixture per claim rule. The optimistic one is not redundant history:
+  // every tournament that existed when the claim_rule migration ran still
+  // plays under that gate forever (invariant 1 — re-gating a board already
+  // played changes its replay), so it needs a guard of its own rather than a
+  // promise in a comment. See tools/gen_trace_fixture.mjs on reading a diff.
+  const fixtures = ['robot-trace.json', 'robot-trace-optimistic.json'].map((f) =>
+    JSON.parse(readFileSync(join(here, 'fixtures', f), 'utf8')),
+  );
 
-  it('replays byte-identically (fairness invariant of duplicate scoring)', async () => {
-    for (const expected of fixture.boards) {
-      const { t, b } = await loadBoardFor(fixture.seed, expected.boardNo);
+  it.each(fixtures.map((f) => [f.claimRule, f] as const))(
+    'replays byte-identically under claim_rule=%s (fairness invariant of duplicate scoring)',
+    async (_rule, fixture) => {
+      for (const expected of fixture.boards) {
+        const { t, b } = await loadBoardFor(fixture.seed, expected.boardNo, fixture.claimRule);
+        await driveBoard(t, b);
+        expect(b.calls, `board ${expected.boardNo} auction`).toEqual(expected.calls);
+        expect(b.plays, `board ${expected.boardNo} play`).toEqual(expected.plays);
+        expect(b.contract).toEqual(expected.contract);
+        expect(b.row.score_ns).toBe(expected.scoreNS);
+        expect(b.row.claimed_at_ply, `board ${expected.boardNo} claim boundary`).toBe(expected.claimedAtPly);
+      }
+    },
+    90000,
+  );
+
+  it('hands more of the hand back to the players than the legacy gate did', async () => {
+    // The point of the change, stated as a property rather than left implicit
+    // in two fixture files: on the same seed the pessimistic gate never claims
+    // EARLIER than the optimistic one, and on at least one board it claims
+    // strictly later (or not at all).
+    const [pess, opt] = fixtures;
+    const boundary = (b: { claimedAtPly: number | null }) => b.claimedAtPly ?? 52;
+    expect(pess.boards.map(boundary).every((p: number, i: number) => p >= boundary(opt.boards[i]))).toBe(true);
+    expect(pess.boards.some((b, i) => boundary(b) > boundary(opt.boards[i]))).toBe(true);
+  });
+
+  it('never claims a position a legal deviation could still have spoiled', async () => {
+    // The end-to-end soundness guard: whatever the shipped gate persisted as a
+    // claim boundary must be provably settled, checked against the search from
+    // the outside rather than trusting the gate that wrote it.
+    const [pess] = fixtures;
+    for (const expected of pess.boards) {
+      if (expected.claimedAtPly === null) continue;
+      const { t, b } = await loadBoardFor(pess.seed, expected.boardNo, 'pessimistic');
       await driveBoard(t, b);
-      expect(b.calls, `board ${expected.boardNo} auction`).toEqual(expected.calls);
-      expect(b.plays, `board ${expected.boardNo} play`).toEqual(expected.plays);
-      expect(b.contract).toEqual(expected.contract);
-      expect(b.row.score_ns).toBe(expected.scoreNS);
+      const prefix = b.plays.slice(0, b.row.claimed_at_ply!);
+      const ps = playState(b.deal, b.contract!, prefix);
+      // The claiming side is whoever WINS the trick the boundary card falls in
+      // (not whoever led it — the two differ on most tricks).
+      const tail = playState(b.deal, b.contract!, b.plays).completedTricks;
+      const claimingSide = (trickWinner(tail[ps.completedTricks.length], b.contract!.strain) % 2) as 0 | 1;
+      expect(
+        isOutcomeInvariant(b.deal, b.contract!, prefix, claimingSide).invariant,
+        `board ${expected.boardNo} claimed at ply ${b.row.claimed_at_ply} for ${claimingSide === 0 ? 'N/S' : 'E/W'}`,
+      ).toBe(true);
     }
-  }, 30000);
+  }, 90000);
 
   it('is reproducible within the same process (same seed → same trace)', async () => {
-    const first = await loadBoardFor(fixture.seed, 1);
+    const first = await loadBoardFor(fixtures[0].seed, 1);
     await driveBoard(first.t, first.b);
-    const second = await loadBoardFor(fixture.seed, 1);
+    const second = await loadBoardFor(fixtures[0].seed, 1);
     await driveBoard(second.t, second.b);
     expect(second.b.calls).toEqual(first.b.calls);
     expect(second.b.plays).toEqual(first.b.plays);

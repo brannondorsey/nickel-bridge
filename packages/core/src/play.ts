@@ -21,7 +21,13 @@ export interface PlayState {
   dummyVisible: boolean;
 }
 
-function trumpSuit(strain: Strain): number | null {
+/**
+ * The suit that trumps, or null at notrump. Exported for packages/ai's
+ * claim search (claim.ts), which walks positions card by card without
+ * building a PlayState and would otherwise need its own copy of this
+ * mapping — one place for strain↔suit, so the two can never disagree.
+ */
+export function trumpSuit(strain: Strain): number | null {
   // strain 0=♣ 1=♦ 2=♥ 3=♠ 4=NT; our suits 0=♠ 1=♥ 2=♦ 3=♣
   return strain === 4 ? null : 3 - strain;
 }
