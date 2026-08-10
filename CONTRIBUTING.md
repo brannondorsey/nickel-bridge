@@ -261,9 +261,19 @@ watches until the app *stays* destroyed, because `deploy-preview` sits behind
 `needs: [test, e2e, docker]` and would otherwise re-create the app minutes after teardown
 had already run and found nothing; `deploy-preview` re-checks the PR state immediately
 before creating anything for the same reason), and every push to `main` deploys to production
-*and* redeploys the permanent demo app (`nickel-bridge-demo`, demo-bridge.brannon.online — a
-stable DEMO=1 instance for automation and click-testing) — see README.md "Deployment" for the
-one-time Fly setup and how preview auth (`DEV_AUTH`) works. Separately,
+*and*, while enabled, redeploys the permanent demo app (`nickel-bridge-demo`,
+demo-bridge.brannon.online — a stable DEMO=1 instance for automation and click-testing) — see
+README.md "Deployment" for the one-time Fly setup and how preview auth (`DEV_AUTH`) works.
+**`deploy-demo` is gated behind a literal `false &&` on its own `if:`** (flip it to `true` to
+re-enable): it sees no real users day to day, so its whole cost is idle Fly machine/volume time
+— measured at ~$1.50-2/mo via `node scripts/fly-uptime.mjs nickel-bridge-demo --recent`, which
+is real but small money for something that mostly proves its own uptime. Disabling it stopped
+short of deleting the Fly app: only its machine and 1GB volume were torn down (`flyctl machine
+destroy` / `flyctl volumes destroy`), leaving the app shell, hostname, TLS cert and Cloudflare
+edge config (see "The edge" below) untouched, so re-enabling is exactly the one-line flag flip
+— the job's own "Ensure demo app + volume exist" step already recreates the volume and machine
+from scratch on the next push to main, since it was self-provisioning/idempotent before this
+flag existed. Separately,
 `.github/workflows/claude-pr-review.yml` runs Claude (via `anthropics/claude-code-action`) on
 every newly opened PR and posts a non-blocking review comment — authenticated via the
 `CLAUDE_CODE_OAUTH_TOKEN` repo secret (a `claude setup-token` OAuth token billed against a
