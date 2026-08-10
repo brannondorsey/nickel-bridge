@@ -73,6 +73,7 @@ The fix is not simply to invert it. Measured over the real 279-demand trace:
 | oldest-first (was) | 10 | 3.78 | 41.3 h |
 | fullest-first | 15 | 4.05 | 31.4 h |
 | emptiest-first | 5 | 3.72 | 25.2 h |
+| rescue oldest-stranded first | 3 | 3.64 | 40.1 h |
 | **rescue, then fill (is)** | **7** | **3.87** | **22.6 h** |
 
 Pure fullest-first buys the deepest fields and the *worst* loneliness — there is always
@@ -87,6 +88,14 @@ That freshness tie-break is deliberately last. It never pulls a player off a res
 field; it only chooses among otherwise-equal boards, which is where most of the 41.3 h → 22.6 h
 comes from. The gap it closes is the one that decides whether a shared board is worth talking
 about: the people you are compared against played it the same day rather than two days later.
+
+Row four is the refinement most people propose next, and it is the reason the tie-break is
+freshness rather than urgency: rescuing the stranded board *closest to aging out* saves four
+more crossings, but drags co-presence back to 40.1 h — nearly the old rule's. It trades a
+handful of lonely boards for making almost every shared board a two-day-stale comparison. The
+knowing cost of choosing freshness instead is that a stranded board with hours left on its grace
+window can still lose to one created minutes ago, and expire alone. Both are defensible; this
+one is chosen because a field you can still talk about is the point of having a field.
 
 Two numbers this table does **not** claim. Mean humans per tournament is unchanged and cannot
 be improved — see [Measuring a change](#measuring-a-change). And "field at the average
