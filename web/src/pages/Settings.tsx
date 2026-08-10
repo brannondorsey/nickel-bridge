@@ -168,7 +168,7 @@ export default function Settings() {
 
           <SettingRow
             label="Settled tricks"
-            note="Once no card either side plays can change the result, fast forward runs the rest of the board out for you. Play them out hands them back — the score is identical either way, so this is only about whether you'd rather finish the hand. Older tournaments always fast forward."
+            note="Once nothing either side plays can change the result, fast forward finishes the board for you. Play them out hands the cards back — the score is the same either way. Older tournaments always fast forward."
           >
             <PrefSwitch
               label="Settled tricks"

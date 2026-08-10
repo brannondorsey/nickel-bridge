@@ -202,7 +202,7 @@ export const TERMS: GlossaryTerm[] = [
   {
     slug: 'claim',
     term: 'Claim',
-    def: 'Stating that the rest of the tricks are yours (or conceding some), ending the play early. Nickel Bridge auto-claims decided boards.',
+    def: 'Stating that the rest of the tricks are yours (or conceding some), ending the play early. Nickel Bridge claims for you once no card anyone plays could change the result — or hands them back, if you ask it to.',
     example: '‘Drawing trumps; the rest are mine.’',
     themes: ['cardplay'],
     related: ['winner', 'drawing-trumps'],
