@@ -5233,6 +5233,19 @@ a.stat-tile:hover {
   font-weight: 800;
   font-size: 13px;
 }
+/* A finished attempt's score, inked against the table you actually sat:
+   green beat it, red fell short, an exact tie (or an attempt still in
+   progress) stays the ordinary ink. The same comparison and the same two
+   tokens the field rail's .worth-rehearsal-dot already uses — see its doc
+   comment; --positive/--negative sit outside the colourblind suit-palette
+   swap on purpose, and the stub's accessible name states the verdict in
+   words, so no reading here rests on colour alone. */
+.rehearsal-stub-score.positive {
+  color: var(--positive);
+}
+.rehearsal-stub-score.negative {
+  color: var(--negative);
+}
 .rehearsal-stub-discard {
   appearance: none;
   background: var(--panel);
