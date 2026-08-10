@@ -1704,13 +1704,22 @@ newer settings has one thing worth knowing:
   actually choose is whether the tail is taken off them at all. `stageClaimSteps`' `fast`
   argument survives as an internal pacing knob rather than a preference — `planClaim`'s tail
   passes `true`, its **lead** deliberately passes `false` (that trick is ordinary play, not
-  the claim), and `Board.tsx`'s `applyBoard` fallback takes the `false` default. That last
-  one is a latent inconsistency rather than a decision: it is the path a claimed response
-  takes when it did NOT arrive through `submitCard`/`runClaim` — an auction whose very first
-  position is already settled — and it both replays at table pace and skips the
-  `ClaimOverlay`. Rare enough (post-gate, a claim at the opening lead needs a total laydown)
-  that it predates this work and is left alone; routing it through `runClaim` is the fix if
-  it ever shows up in front of a player.
+  the claim), and `Board.tsx`'s `applyBoard` branch takes the `false` default but only ever
+  runs as `runClaim`'s own fallback, where it emits nothing.
+
+**A claim can arrive on a CALL, not just a card play**, and that path needed its own wiring.
+The auction ends, the robots play on, and if the position is settled from the first card the
+response comes back already `claimed` — no card was ever tapped. `submitCall` therefore
+dispatches to `runClaim` exactly as `submitCard` does. That alone is not enough: `runClaim`
+holds `prev` on screen until its last beat, so during the announcement the board is still the
+BIDDING view, and `ClaimOverlay` renders inside `PlayPhase`. The overlay cannot simply move up
+to `Board` — `PlayPhase` is exported, and Tour/Analyze mount it through `useReplay` — so
+`Board` renders a second one, guarded on `board.state !== 'playing'` so the two can never both
+appear. Before this, such a board jumped from the auction straight to the toll receipt with no
+announcement at all (it did NOT mis-pace a replay, despite appearances: `stageClaimSteps`
+returns `[]` outright when `prev.state !== 'playing'`). Rare — post-gate it needs a position
+already settled inside the first trick — which is exactly why it went unnoticed, and why
+`board.test.tsx` now pins it.
   **The setting only exists because the claim gate is pessimistic.** Under the old gate a
   claim genuinely changed the outcome — it played the human's remaining decisions correctly
   on their behalf — so letting one player opt out would have handed two players on the

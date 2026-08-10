@@ -1208,6 +1208,44 @@ describe('Board — claims', () => {
     }
   });
 
+  // A CALL can land on a claim too. The auction ends, the robots play on,
+  // and if the very first position is settled the response comes back
+  // already claimed — no card was ever tapped. submitCall used to hand that
+  // straight to applyBoard, which replays the tail at ordinary table pace
+  // and never shows the ClaimOverlay at all: the player watched eight tricks
+  // resolve with no explanation of why they had stopped being asked. Rare
+  // (post-gate it needs a total laydown) and silent, which is exactly why it
+  // survived — the claim tests above all go through a card play.
+  it('announces a claim that arrives on a CALL, not just on a card play', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      // The same claimed board the card-play tests use. Its `prev` here is a
+      // bidding view, so claimAnnouncement counts every trick in playHistory
+      // as new — priorTricks is 0 and the announcement pops immediately.
+      board: buildClaimed(),
+    });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard();
+      await vi.waitFor(() => expect(screen.getByRole('button', { name: '2♥' })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: '2♥' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(screen.getByRole('dialog')).toHaveTextContent('CLAIM');
+
+      fireEvent.click(screen.getByRole('dialog'));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(screen.getByText('SCORED')).toBeInTheDocument());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // The trick already in progress when the request went out goes to the
   // DEFENSE: West leads ♥Q, dummy follows ♥2, East wins with ♥A and South's
   // ♥9 can't touch it. Only the eight tricks after that are N/S's guaranteed

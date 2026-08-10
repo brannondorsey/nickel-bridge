@@ -361,7 +361,14 @@ export default function Board() {
       const staged =
         prev && (motionOK() || holdsOnTapWithoutMotion)
           ? next.claimed
-            ? stageClaimSteps(prev, next)
+            ? // Both entry points that can receive a claimed response
+              // (submitCall, submitCard) hand it to runClaim, so this branch
+              // is only runClaim's OWN fallback for when planClaim couldn't
+              // read the response. Those are the same conditions
+              // stageClaimSteps guards on, so it emits nothing and the board
+              // jumps — which is the intent. It keeps the table-pace default
+              // deliberately: there is no announcement to pace against here.
+              stageClaimSteps(prev, next)
             : prev.state === 'bidding'
               ? stageBidSteps(prev, next)
               : stagePlaySteps(prev, next)
@@ -580,13 +587,24 @@ export default function Board() {
       setLastEval(evaluation);
       setSelectedCall(null);
       setInspect(null);
-      // stages the robots' replies one at a time, and the opening lead if the
-      // auction just ended
-      applyBoard(board, next);
+      // A call can end the auction on a position that is settled from the
+      // very first card — a total laydown — in which case the response comes
+      // back already claimed, exactly as a card play's can. Dispatch it the
+      // same way submitCard does: runClaim owns the three beats (pay the
+      // trick, announce, fast-forward), and routing it through applyBoard
+      // instead would replay the tail at table pace with no ClaimOverlay at
+      // all, which is the bug this clause exists to close. Otherwise: stage
+      // the robots' replies one at a time, and the opening lead if the
+      // auction just ended.
+      if (next.claimed && board) await runClaim(board, next);
+      else applyBoard(board, next);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      // Deliberately NOT awaited past the scheduling, unlike runClaim. The
+      // Awaiting runClaim above holds `busy` for the whole claim sequence,
+      // which is what submitCard already does and is right here too: the
+      // board is finished, so there is nothing left to keep unlocked.
+      // Otherwise deliberately NOT awaited past the scheduling. The
       // bid box is still ON SCREEN through the reveal — that is the whole
       // point of the `waiting` treatment — so what makes releasing `busy`
       // safe here is that every staged snapshot carries myTurn: false, which
@@ -821,6 +839,21 @@ export default function Board() {
           doubleTapBid={doubleTapBid}
         />
       )}
+      {/*
+        PlayPhase renders the ClaimOverlay for the ordinary case, and keeps
+        doing so — it is exported and Tour/Analyze mount it through useReplay,
+        so the overlay cannot simply move up here. This is the case PlayPhase
+        cannot cover: a claim announced while the board is NOT in the play
+        phase. That happens when the response to a CALL comes back already
+        claimed — the auction ends on a position settled from the first card —
+        because runClaim holds `prev` (a bidding view) on screen until the very
+        end. Without this the announcement had nowhere to render and the board
+        jumped from the auction straight to the toll receipt, with nothing to
+        say why the player had stopped being asked for cards.
+      */}
+      {board.state !== 'playing' && claimAnnounceOpen && claimInfo ? (
+        <ClaimOverlay info={claimInfo} onDismiss={skipClaimAnnouncement} />
+      ) : null}
       {inspect ? <CallInspector entry={inspect} onClose={() => setInspect(null)} /> : null}
     </div>
   );
