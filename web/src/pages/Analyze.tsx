@@ -705,7 +705,7 @@ function ReplayLens({
   initialPly: number;
   onRehearse: (ply: number) => void;
 }) {
-  const replay = useReplay({ fastForward: true });
+  const replay = useReplay();
   const totalPlies = views.length - 1;
   const flat = useMemo(() => board.playHistory?.flat() ?? [], [board]);
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));

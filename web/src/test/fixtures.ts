@@ -33,7 +33,7 @@ export const meFixture: Me = {
     elo: 1487,
     onboardedAt: 1700000000,
     ladderListed: true,
-    fastForward: true,
+    autoClaim: true,
     bidFeedback: true,
     betaFeatures: true,
     doubleTapBid: false,

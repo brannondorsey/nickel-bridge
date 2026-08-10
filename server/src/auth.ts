@@ -32,7 +32,7 @@ const stmtSetHandle = db.prepare(`UPDATE users SET handle = ?, handle_key = ? WH
 const stmtSetDifficulty = db.prepare(`UPDATE users SET difficulty = ? WHERE id = ?`);
 const stmtSetOnboarded = db.prepare(`UPDATE users SET onboarded_at = unixepoch() WHERE id = ? AND onboarded_at IS NULL`);
 const stmtSetLadderListed = db.prepare(`UPDATE users SET ladder_listed = ? WHERE id = ?`);
-const stmtSetFastForward = db.prepare(`UPDATE users SET fast_forward = ? WHERE id = ?`);
+const stmtSetAutoClaim = db.prepare(`UPDATE users SET auto_claim = ? WHERE id = ?`);
 const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE id = ?`);
 const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE id = ?`);
 const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
@@ -213,7 +213,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             difficulty: user.difficulty,
             onboardedAt: user.onboarded_at,
             ladderListed: user.ladder_listed !== 0,
-            fastForward: user.fast_forward !== 0,
+            autoClaim: user.auto_claim !== 0,
             bidFeedback: user.bid_feedback !== 0,
             betaFeatures: user.beta_features !== 0,
             doubleTapBid: user.double_tap_bid !== 0,
@@ -281,9 +281,13 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   refuse an anonymous caller for every human, the activity feed is
    *   gated), and it never applies to a signed-in caller — the field you are
    *   matchpointed against can always see who is in it.
-   * - fastForward — pacing of the claim replay. On the account and not in
-   *   localStorage because it describes the person, not the browser; see the
-   *   fast_forward migration in db.ts.
+   * - autoClaim — may the server fast-play a settled tail, or does the player
+   *   play it out themselves? On the account and not in localStorage because
+   *   it describes the person, not the browser. Only meaningful because the
+   *   claim gate is pessimistic: opting out cannot change a score, since a
+   *   claim now only fires on a position no legal card can change. It is
+   *   ignored on 'optimistic' tournaments, where that guarantee does not
+   *   hold — see the auto_claim migration in db.ts.
    * - bidFeedback — whether the post-call grading toast renders. Grading
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
@@ -312,7 +316,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const fields: [key: string, apply: (on: boolean) => void][] = [
       ['ladderListed', (on) => stmtSetLadderListed.run(on ? 1 : 0, user.id)],
-      ['fastForward', (on) => stmtSetFastForward.run(on ? 1 : 0, user.id)],
+      ['autoClaim', (on) => stmtSetAutoClaim.run(on ? 1 : 0, user.id)],
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
       ['betaFeatures', (on) => stmtSetBetaFeatures.run(on ? 1 : 0, user.id)],
       ['doubleTapBid', (on) => stmtSetDoubleTapBid.run(on ? 1 : 0, user.id)],
@@ -335,7 +339,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const row = stmtUserById.get(user.id) as UserRow;
     return reply.send({
       ladderListed: row.ladder_listed !== 0,
-      fastForward: row.fast_forward !== 0,
+      autoClaim: row.auto_claim !== 0,
       bidFeedback: row.bid_feedback !== 0,
       betaFeatures: row.beta_features !== 0,
       doubleTapBid: row.double_tap_bid !== 0,

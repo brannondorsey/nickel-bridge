@@ -637,8 +637,16 @@ export function claimAnnouncement(prev: BoardView, next: BoardView): ClaimAnnoun
  * beforehand, since those are plain timed UI state, not board-view
  * snapshots.
  *
- * `fast` (the settings tab's "Fast forward settled tricks", default false so
- * every call site opts in explicitly) picks which gap set every step uses:
+ * `fast` picks which gap set every step uses. It used to be the settings
+ * tab's "Fast forward settled tricks"; that setting is retired (the player
+ * now chooses whether a settled tail is fast-forwarded AT ALL — see
+ * users.auto_claim), so what remains is an internal pacing argument with
+ * three call sites: planClaim's tail passes true, planClaim's LEAD passes
+ * false deliberately (that trick is ordinary play, not the claim — see
+ * ClaimPlan.lead), and Board.tsx's applyBoard fallback takes the default.
+ * The default stays false rather than following the tail, because the lead
+ * is the case that must not accidentally speed up.
+ *
  * false replays at the SAME per-card/per-trick pacing (GLIDE_MS/ROBOT_GAP_MS/
  * HOLD_MS/COLLECT_MS/STAMP_MS) stagePlaySteps uses for ordinary play — this
  * really is table speed, not merely "the claim pacing without the extra
@@ -777,8 +785,8 @@ export interface ClaimPlan {
   /**
    * The newly-completed tricks that are NOT part of the guaranteed run — the
    * trick that was already in progress when the request went out, which
-   * either side can still win. Always at ordinary table pace: the
-   * fast-forward setting paces the CLAIM, and this is not the claim. Empty
+   * either side can still win. Always at ordinary table pace: `fast` paces
+   * the CLAIM, and this is not the claim. Empty
    * when the claim begins at the first new trick, which is the common case
    * (and byte-for-byte the behaviour that shipped before the split).
    */

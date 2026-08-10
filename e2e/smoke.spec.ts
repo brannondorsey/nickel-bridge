@@ -335,12 +335,13 @@ test('settings apply a night-mode choice that survives a reload', async ({ page 
 
   // the other rows are account state, so they round-trip through the server
   await page.getByRole('group', { name: 'Name on the ladder' }).getByRole('button', { name: 'OFF' }).click();
-  await page.getByRole('group', { name: 'Fast forward settled tricks' }).getByRole('button', { name: 'OFF' }).click();
+  // "Settled tricks" names both ends rather than OFF/ON — neither is an absence.
+  await page.getByRole('group', { name: 'Settled tricks' }).getByRole('button', { name: 'PLAY THEM OUT' }).click();
   await page.getByRole('group', { name: 'Bid feedback' }).getByRole('button', { name: 'OFF' }).click();
   await expect
     .poll(async () => {
       const { user } = await (await page.request.get('/api/me')).json();
-      return [user.ladderListed, user.fastForward, user.bidFeedback];
+      return [user.ladderListed, user.autoClaim, user.bidFeedback];
     })
     .toEqual([false, false, false]);
 });

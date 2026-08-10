@@ -48,6 +48,14 @@ const OFF_ON = [
   { value: true, label: 'ON' },
 ];
 
+// Two segments rather than the OFF/ON above, because neither end of this one
+// is an absence: both are a way to be shown a hand you have no decisions left
+// in. Naming them tells the player what happens instead of what is disabled.
+const SETTLED_TRICK_OPTIONS = [
+  { value: true, label: 'FAST FORWARD' },
+  { value: false, label: 'PLAY THEM OUT' },
+];
+
 const TRICK_CLEAR_OPTIONS: { value: 'auto' | 'tap'; label: string }[] = [
   { value: 'auto', label: 'AUTO' },
   { value: 'tap', label: 'TAP' },
@@ -65,7 +73,7 @@ function SettingRow({ label, note, children }: { label: string; note: string; ch
 
 type AccountPrefs = {
   ladderListed: boolean;
-  fastForward: boolean;
+  autoClaim: boolean;
   bidFeedback: boolean;
   betaFeatures: boolean;
   doubleTapBid: boolean;
@@ -78,7 +86,7 @@ export default function Settings() {
   const [suitPalette, setSuitPalette] = useState<SuitPalette>(() => readSuitPalette());
   const [prefs, setPrefs] = useState<AccountPrefs>({
     ladderListed: me?.user?.ladderListed !== false,
-    fastForward: me?.user?.fastForward !== false,
+    autoClaim: me?.user?.autoClaim !== false,
     bidFeedback: me?.user?.bidFeedback !== false,
     betaFeatures: me?.user?.betaFeatures === true,
     // Fail CLOSED, unlike the three switches above — this preference defaults
@@ -159,14 +167,14 @@ export default function Settings() {
           </SettingRow>
 
           <SettingRow
-            label="Fast forward settled tricks"
-            note="Once the cards can no longer change the result, the rest of the board is played out for you. On, it runs quickly; off, it plays at table speed."
+            label="Settled tricks"
+            note="Once nothing either side plays can change the result, fast forward finishes the board for you. Play them out hands the cards back — the score is the same either way. Older tournaments always fast forward."
           >
             <PrefSwitch
-              label="Fast forward settled tricks"
-              value={prefs.fastForward}
-              options={OFF_ON}
-              onChange={(fastForward) => change({ fastForward })}
+              label="Settled tricks"
+              value={prefs.autoClaim}
+              options={SETTLED_TRICK_OPTIONS}
+              onChange={(autoClaim) => change({ autoClaim })}
             />
           </SettingRow>
 

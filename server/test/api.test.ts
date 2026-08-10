@@ -217,7 +217,7 @@ describe('handle (first-login username)', () => {
     let me = await pete.get('/api/me');
     expect([
       me.user.ladderListed,
-      me.user.fastForward,
+      me.user.autoClaim,
       me.user.bidFeedback,
       me.user.betaFeatures,
       me.user.doubleTapBid,
@@ -225,9 +225,9 @@ describe('handle (first-login username)', () => {
     ]).toEqual([true, true, true, true, false, 'auto']);
 
     // a partial patch leaves the untouched keys alone
-    expect(await pete.post('/api/me/prefs', { fastForward: false })).toEqual({
+    expect(await pete.post('/api/me/prefs', { autoClaim: false })).toEqual({
       ladderListed: true,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: true,
       betaFeatures: true,
       doubleTapBid: false,
@@ -237,7 +237,7 @@ describe('handle (first-login username)', () => {
     me = await pete.get('/api/me');
     expect([
       me.user.ladderListed,
-      me.user.fastForward,
+      me.user.autoClaim,
       me.user.bidFeedback,
       me.user.betaFeatures,
       me.user.doubleTapBid,
@@ -248,20 +248,20 @@ describe('handle (first-login username)', () => {
     // so a typo can't look like a successful write
     expect(await pete.post('/api/me/prefs', {})).toEqual({
       ladderListed: false,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: true,
       betaFeatures: true,
       doubleTapBid: false,
       trickClearMode: 'auto',
     });
-    expect((await pete.raw('POST', '/api/me/prefs', { fastForward: 'yes' })).statusCode).toBe(400);
+    expect((await pete.raw('POST', '/api/me/prefs', { autoClaim: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
-    expect((await pete.get('/api/me')).user.fastForward).toBe(false);
+    expect((await pete.get('/api/me')).user.autoClaim).toBe(false);
 
     // bidFeedback patches the same way as the other two switches
     expect(await pete.post('/api/me/prefs', { bidFeedback: false })).toEqual({
       ladderListed: false,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: false,
       betaFeatures: true,
       doubleTapBid: false,
@@ -274,7 +274,7 @@ describe('handle (first-login username)', () => {
     // measured against
     expect(await pete.post('/api/me/prefs', { betaFeatures: false })).toEqual({
       ladderListed: false,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: false,
@@ -285,7 +285,7 @@ describe('handle (first-login username)', () => {
     // doubleTapBid patches — and reads back — the same way, opting in from its false default
     expect(await pete.post('/api/me/prefs', { doubleTapBid: true })).toEqual({
       ladderListed: false,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: true,
@@ -298,7 +298,7 @@ describe('handle (first-login username)', () => {
     // exactly like a non-boolean is for every switch above.
     expect(await pete.post('/api/me/prefs', { trickClearMode: 'tap' })).toEqual({
       ladderListed: false,
-      fastForward: false,
+      autoClaim: false,
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: true,

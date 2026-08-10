@@ -1543,7 +1543,7 @@ Elo and placement. There is no "you just earned a medal" toast or celebration mo
 this first pass; a medal simply appears colored the next time the rail or the profile
 loads, the same way a new `elo_history` row silently updates the RATING chart. "Next
 load" has to mean within the same session, not just after a hard reload: `Board.tsx`
-otherwise never touches `MeContext` (it reads `fastForward`/`bidFeedback` off it but never
+otherwise never touches `MeContext` (it reads `bidFeedback`/`doubleTapBid` off it but never
 writes), so without an explicit trigger the Home rail would show a stale bar/medal for the
 rest of the visit — including at the exact moment a medal is earned, the one moment this
 widget most wants to be right. So the same effect that flips on the toll receipt
@@ -1685,7 +1685,7 @@ system still has no on/off toggle. Night mode and sign-out moved here off the St
 which is the ledger and now holds nothing that isn't a record of play.
 
 **Where a preference lives is a decision, not an accident.** The account rows are columns on
-`users` (`fast_forward`, `ladder_listed`, `bid_feedback`), written through one partial-update
+`users` (`auto_claim`, `ladder_listed`, `bid_feedback`), written through one partial-update
 endpoint, `POST /api/me/prefs` — a route per switch doesn't pay for itself when the list is
 plain per-user booleans and still growing (`difficulty` is already a column waiting for a
 UI). Absent keys are left alone; an unknown key or a non-boolean is a 400, so a typo can't
@@ -1695,25 +1695,40 @@ only because they have to be applied before first paint by an inline script in `
 per-device ideas anyway. The footer says that once rather than tagging rows. Each of the
 newer settings has one thing worth knowing:
 
-- **Fast forward settled tricks** (`users.fast_forward`, default on) is a *pacing*
-  preference and cannot be anything else. When `advanceRobots` resolves a claim it has already played every
-  remaining card (`resolveClaim`, `game.ts`) — the response arrives with the board finished
-  — so nobody chooses a card in that tail under either setting. `stageClaimSteps`
-  (`playAnim.ts`) takes a `fast` boolean, not a bare speed multiplier, because the two modes
-  use genuinely different gap sets rather than one scaled by the other: on replays at
-  `CLAIM_GAP_MS`/`CLAIM_TRICK_GAP_MS` (compressed — a claim can span up to 13 tricks, and
-  nobody wants to sit through that many at table speed) scaled further by
-  `CLAIM_SPEEDUP_FACTOR`; off reuses `stagePlaySteps`' own ordinary-play gaps
-  (`GLIDE_MS`/`ROBOT_GAP_MS`/`HOLD_MS`/`COLLECT_MS`/`STAMP_MS`), so it's genuinely table
-  speed rather than merely the claim pacing with the extra multiplier removed — an earlier
-  version conflated the two, so off still looked like a fast-forward. It paces only the
-  *guaranteed run*: the tricks before it (`priorTricks`, the lead beat above) are ordinary
-  play and always replay at table speed whatever this is set to. Under
-  `prefers-reduced-motion` there is no replay to pace, so the setting is inert. `Board.tsx`
-  reads it off `MeContext` (so does `Tour.tsx`, defaulting to on for the signed-out visitor
-  walking the practice deal). Letting a player actually *play* the settled tail would mean
-  not claiming for that user, which is a server change with a real fairness cost — see the
-  note under invariant 1.
+- **Settled tricks** (`users.auto_claim`, default FAST FORWARD) decides whether the server
+  fast-plays a tail the player has no decisions left in, or hands it back to them
+  (PLAY THEM OUT). It is a **server** preference, unlike every other row here: it is read in
+  `advanceRobots`, where a claim is decided, not by anything on the client.
+  This row replaced "Fast forward settled tricks", which chose between a compressed replay
+  and one at table speed. That question stopped being the interesting one: what a player can
+  actually choose is whether the tail is taken off them at all. `stageClaimSteps`' `fast`
+  argument survives as an internal pacing knob rather than a preference — `planClaim`'s tail
+  passes `true`, its **lead** deliberately passes `false` (that trick is ordinary play, not
+  the claim), and `Board.tsx`'s `applyBoard` fallback takes the `false` default. That last
+  one is a latent inconsistency rather than a decision: it is the path a claimed response
+  takes when it did NOT arrive through `submitCard`/`runClaim` — an auction whose very first
+  position is already settled — and it both replays at table pace and skips the
+  `ClaimOverlay`. Rare enough (post-gate, a claim at the opening lead needs a total laydown)
+  that it predates this work and is left alone; routing it through `runClaim` is the fix if
+  it ever shows up in front of a player.
+  **The setting only exists because the claim gate is pessimistic.** Under the old gate a
+  claim genuinely changed the outcome — it played the human's remaining decisions correctly
+  on their behalf — so letting one player opt out would have handed two players on the
+  identical board different games because of a checkbox, and fed that into matchpoints and
+  Elo. Invariant 1 records that toggle as rejected for exactly this reason, and the reasoning
+  was right. Once a claim requires the position to be settled under EVERY legal card, opting
+  out cannot move a score: every tail scores the same. Measured cost to a player who opts
+  out: about 2 extra taps per claimed board (p90 4, max 7) — most of a settled tail is robot
+  cards or single-legal-card turns that auto-play.
+  **It is ignored on `'optimistic'` tournaments**, which claim for everyone regardless. There
+  the old reasoning still holds in full, so honouring the checkbox would reintroduce the
+  precise unfairness it was rejected for. `advanceRobots` checks the rule first and the
+  preference second, which also means a player who has opted out never pays for the
+  invariance search. One knock-on worth knowing: a board played out this way finishes with
+  `claimed_at_ply` NULL, so Analyze and "Play From Here" fall back to `deriveClaimBoundary`
+  and find the same ply anyway — it looks for where the position became SETTLED, not for who
+  played it. Both then treat the tail the same as a claimed one, which is right (nothing
+  there can change the result); `rehearsal.ts`'s refusal is worded for both cases.
 - **Name on the ladder** (`users.ladder_listed`, default on) governs whether `/api/leaderboard` includes this
   player for an **anonymous** caller. That is the whole of it because the ladder is the
   whole anonymous surface: profiles already refuse a signed-out caller for every human and
@@ -1783,7 +1798,7 @@ newer settings has one thing worth knowing:
   so `'auto'` mode (where the split never triggers) is untouched byte-for-byte. Deliberately
   scoped to ORDINARY play only: `stageClaimSteps` never sets `holdForClear`, so a claim's lead
   and fast-forward tail both ignore this setting regardless of its value — gating up to 13
-  tricks nobody has a decision in on a tap would fight "Fast forward settled tricks"' entire
+  tricks nobody has a decision in on a tap would fight "Settled tricks"' entire
   purpose, and the claim's own announcement already holds the board deliberately. Purely a
   client pacing preference — the server never reads `trick_clear_mode` and scoring/robot
   play/claim resolution are unaffected either way.
@@ -1791,7 +1806,7 @@ newer settings has one thing worth knowing:
   `prefers-reduced-motion`/no-WAAPI** — it is a reading pause on a real tap, not an animation,
   the same argument `CLAIM_ANNOUNCE_HOLD_MS`/`CLAIM_LEAD_SETTLE_MS` already make for the claim
   announcement. `Board.tsx`'s `applyBoard` normally only computes a staged sequence at all when
-  `motionOK()` is true (every other setting on this page — `fastForward` included — genuinely
+  `motionOK()` is true (every other setting on this page genuinely
   has "no replay to pace" without motion); an explicit `holdsOnTapWithoutMotion` clause computes
   `stagePlaySteps` for an ordinary-play transition regardless, so its `holdForClear` step still
   exists to hold on. Every OTHER step's `delayBefore` is then collapsed to 0 when `!motionOK()`
@@ -2040,9 +2055,9 @@ the sitemap and `robots.txt` follow on their own.
    fixture's "first legal card" human strategy to `chooseCard`'s DD-optimal play, which can
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that
    reordering and the score is unchanged — before accepting a new fixture.
-   **Claims are why "fast forward settled tricks" is a pacing setting and not a play one,
-   and the open question that used to sit underneath them is now closed for new
-   tournaments.** The DD half of the gate is a TRUE-DD judgment (`solveFutureTricks` sees all
+   **The open question that used to sit under claims is now closed for new tournaments —
+   and closing it is what made "Settled tricks" a settable preference.** The DD half of the
+   gate is a TRUE-DD judgment (`solveFutureTricks` sees all
    four hands and assumes best play by everyone) and `resolveClaim` plays the tail true-DD at
    every difficulty — but at beginner and intermediate the robots would have played that tail
    through `chooseCardSampled`, i.e. fallibly. So a DD-settled position is only settled
@@ -2051,13 +2066,19 @@ the sitemap and `robots.txt` follow on their own.
    the tier calibration, measured over full play, never saw those tails. A per-user "don't
    claim for me" toggle was rejected as the fix — it would hand two players on the identical
    board different robots because of a checkbox, and feed that into matchpoints and Elo — and
-   the fix that shipped keeps that property: the rule is per TOURNAMENT
+   the fix that shipped is not that: the rule is per TOURNAMENT
    (`tournaments.claim_rule`), so everyone on a board still faces the same gate.
    `'pessimistic'` requires the position be outcome-invariant under every legal card by all
    four seats, which dissolves the question rather than answering it — if no tail can change
    the score, the tier of whoever plays that tail cannot matter either. `'optimistic'`
    tournaments (every one that predates the migration) keep the old gate and the old caveat,
-   permanently and by design. Changing any of this — the rule resolution, `CLAIM_NODE_BUDGET`,
+   permanently and by design.
+   The per-user toggle then became safe, and shipped as "Settled tricks"
+   (`users.auto_claim`) — but ONLY on `'pessimistic'` tournaments, where opting out provably
+   cannot move a score. On `'optimistic'` ones the original objection is still live word for
+   word, so those boards claim for everyone and the preference is ignored. If you ever find
+   yourself relaxing that, re-read this paragraph: it is the same checkbox, and it would
+   have the same effect. Changing any of this — the rule resolution, `CLAIM_NODE_BUDGET`,
    the fast paths or the move ordering in `packages/ai/src/claim.ts` — is a deliberate robot
    change under this invariant. Both golden traces
    (`server/test/fixtures/robot-trace.json` and `robot-trace-optimistic.json`, one per rule)

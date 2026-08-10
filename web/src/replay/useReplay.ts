@@ -40,7 +40,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  *    reads correctly — stepping back is consulting the record, not replaying
  *    time in reverse.
  */
-export function useReplay({ fastForward }: { fastForward: boolean }) {
+export function useReplay() {
   const [view, setView] = useState<BoardView | null>(null);
 
   const timersRef = useRef<number[]>([]);
@@ -109,7 +109,7 @@ export function useReplay({ fastForward }: { fastForward: boolean }) {
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
       const motion = motionOK();
-      const plan = planClaim(prev, next, { fast: fastForward, motion });
+      const plan = planClaim(prev, next, { fast: true, motion });
       if (!plan) {
         applyTransition(prev, next, 0.35); // data didn't line up — fall back to a plain cut
         return;
@@ -151,7 +151,7 @@ export function useReplay({ fastForward }: { fastForward: boolean }) {
       clearTimers();
       setView(next);
     },
-    [applyTransition, scheduleSteps, clearTimers, fastForward],
+    [applyTransition, scheduleSteps, clearTimers],
   );
 
   /** One decision forward: the claim sequence when `next` lands a claim, the

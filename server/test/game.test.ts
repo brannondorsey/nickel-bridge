@@ -14,6 +14,7 @@ const game = await import('../src/game.js');
 const here = dirname(fileURLToPath(import.meta.url));
 
 let userId = 0;
+let nextId = 0;
 beforeAll(() => {
   userId = (
     db.prepare(`INSERT INTO users (google_id, name) VALUES ('dev:tester','Tester') RETURNING id`).get() as {
@@ -196,6 +197,52 @@ describe('automatic laydown claims', () => {
     expect(shipped.b.row.score_ns).toBe(legacy.b.row.score_ns);
     expect(shipped.b.claimed).toBe(true);
   }, 30000);
+
+  describe('the "Settled tricks" setting (users.auto_claim)', () => {
+    /** A second account, so flipping its preference can't disturb the shared one. */
+    function playerWhoPlaysTailsOut(): number {
+      const id = (
+        db.prepare(`INSERT INTO users (google_id, name) VALUES (?, 'Tails') RETURNING id`).get(`dev:tails-${nextId++}`) as {
+          id: number;
+        }
+      ).id;
+      db.prepare(`UPDATE users SET auto_claim = 0 WHERE id = ?`).run(id);
+      return id;
+    }
+
+    async function drive(t: any, uid: number, boardNo: number) {
+      const b = game.loadBoard(t, uid, boardNo, true)!;
+      await game.ensureAdvanced(b);
+      await driveBoard(t, b);
+      return b;
+    }
+
+    it('opting out means no claim, and the same score the claim would have given', async () => {
+      // Board 3 of this seed claims at ply 47 for a default account. The whole
+      // premise of letting anyone opt out is that the score cannot move.
+      const t = makeTournament('robot-trace-v1', 'pessimistic');
+      const claimed = await drive(t, userId, 3);
+      const playedOut = await drive(t, playerWhoPlaysTailsOut(), 3);
+
+      expect(claimed.row.claimed_at_ply).toBe(47);
+      expect(claimed.claimed).toBe(true);
+      expect(playedOut.row.claimed_at_ply).toBeNull();
+      expect(playedOut.claimed).toBeUndefined();
+      expect(playedOut.row.score_ns).toBe(claimed.row.score_ns);
+      expect(playedOut.row.tricks_declarer).toBe(claimed.row.tricks_declarer);
+    }, 30000);
+
+    it('is ignored on a legacy tournament, which claims for everyone', async () => {
+      // There a claim DOES change the outcome — it plays the human's remaining
+      // decisions correctly for them — so honouring the checkbox would hand two
+      // players on the identical board different games. Invariant 1's original
+      // objection, still live for these boards.
+      const t = makeTournament('robot-trace-v1', 'optimistic');
+      const b = await drive(t, playerWhoPlaysTailsOut(), 2);
+      expect(b.claimed).toBe(true);
+      expect(b.row.claimed_at_ply).toBe(40); // exactly where it always fired
+    }, 30000);
+  });
 
   it('omitting claim_rule at creation gets the shipped gate, not the legacy one', () => {
     // The whole backward-compatibility scheme rests on the column default, so

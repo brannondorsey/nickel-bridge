@@ -25,8 +25,8 @@ export interface Me {
     onboardedAt: number | null;
     /** shown on /leaderboard to visitors without an account (settings: "Name on the ladder") */
     ladderListed: boolean;
-    /** replay a claim's settled tricks compressed (settings: "Fast forward settled tricks") */
-    fastForward: boolean;
+    /** let the server fast-play a settled tail, rather than playing it out yourself (settings: "Settled tricks"); ignored on legacy tournaments, which always claim */
+    autoClaim: boolean;
     /** show the post-call grading toast (settings: "Bid feedback") */
     bidFeedback: boolean;
     /** submit a bid on a second tap of the selected call, without pressing Bid (settings: "Double-tap to bid"); default false */
@@ -575,7 +575,7 @@ export const api = {
   /** Partial update of the account-backed settings; absent keys are left alone. */
   setPrefs: (prefs: {
     ladderListed?: boolean;
-    fastForward?: boolean;
+    autoClaim?: boolean;
     bidFeedback?: boolean;
     betaFeatures?: boolean;
     doubleTapBid?: boolean;
@@ -583,7 +583,7 @@ export const api = {
   }) =>
     request<{
       ladderListed: boolean;
-      fastForward: boolean;
+      autoClaim: boolean;
       bidFeedback: boolean;
       betaFeatures: boolean;
       doubleTapBid: boolean;

@@ -49,12 +49,11 @@ describe('Settings', () => {
   // The account switches send a PARTIAL patch: sending the whole object
   // would let a stale render clobber another setting.
   it.each([
-    ['Fast forward settled tricks', 'fastForward'],
     ['Name on the ladder', 'ladderListed'],
     ['Bid feedback', 'bidFeedback'],
     ['Beta features', 'betaFeatures'],
   ])('writes %s to the account and refreshes the session', async (group, key) => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, betaFeatures: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, bidFeedback: true, betaFeatures: true });
     const { refresh } = renderSettings();
     expect(segment(group, 'ON')).toHaveClass('active');
     await userEvent.click(segment(group, 'OFF')!);
@@ -62,10 +61,21 @@ describe('Settings', () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('reflects an account that is already unlisted and playing tails at table speed', () => {
-    renderSettings({ ...meFixture, user: { ...meFixture.user!, ladderListed: false, fastForward: false } });
+  it('reflects an account that is already unlisted and plays its own settled tails', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, ladderListed: false, autoClaim: false } });
     expect(segment('Name on the ladder', 'OFF')).toHaveClass('active');
-    expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
+    expect(segment('Settled tricks', 'PLAY THEM OUT')).toHaveClass('active');
+  });
+
+  // "Settled tricks" names both ends rather than OFF/ON (neither is an
+  // absence), so it can't join the it.each above.
+  it('writes "Settled tricks" to the account, defaulting to fast forward', async () => {
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: false, bidFeedback: true, betaFeatures: true });
+    const { refresh } = renderSettings();
+    expect(segment('Settled tricks', 'FAST FORWARD')).toHaveClass('active');
+    await userEvent.click(segment('Settled tricks', 'PLAY THEM OUT')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ autoClaim: false });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   it('reflects an account that has not opted into beta features', () => {
@@ -76,7 +86,7 @@ describe('Settings', () => {
   // Unlike the three switches in the it.each above, "Double-tap to bid" defaults
   // OFF — so it gets its own test rather than joining that block, which assumes ON.
   it('defaults "Double-tap to bid" off, and writes it to the account like the other switches', async () => {
-    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, fastForward: true, bidFeedback: true, doubleTapBid: true });
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, bidFeedback: true, doubleTapBid: true });
     const { refresh } = renderSettings();
     expect(segment('Double-tap to bid', 'OFF')).toHaveClass('active');
     await userEvent.click(segment('Double-tap to bid', 'ON')!);
@@ -102,18 +112,18 @@ describe('Settings', () => {
     let rejectLadder!: (e: unknown) => void;
     apiMock.setPrefs.mockImplementation((patch: Record<string, unknown>) => {
       if ('ladderListed' in patch) return new Promise((_, reject) => (rejectLadder = reject));
-      return Promise.resolve({ ladderListed: true, fastForward: true });
+      return Promise.resolve({ ladderListed: true, autoClaim: true });
     });
     renderSettings();
 
     await userEvent.click(segment('Name on the ladder', 'OFF')!);
-    await userEvent.click(segment('Fast forward settled tricks', 'OFF')!);
-    await vi.waitFor(() => expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active'));
+    await userEvent.click(segment('Settled tricks', 'PLAY THEM OUT')!);
+    await vi.waitFor(() => expect(segment('Settled tricks', 'PLAY THEM OUT')).toHaveClass('active'));
 
     rejectLadder(new Error('nope'));
     expect(await screen.findByText(/didn't save/i)).toBeInTheDocument();
     expect(segment('Name on the ladder', 'ON')).toHaveClass('active');
-    expect(segment('Fast forward settled tricks', 'OFF')).toHaveClass('active');
+    expect(segment('Settled tricks', 'PLAY THEM OUT')).toHaveClass('active');
   });
 
   it('signs out and drops the returning-player stamp', async () => {

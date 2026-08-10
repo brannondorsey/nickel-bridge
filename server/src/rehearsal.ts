@@ -163,7 +163,15 @@ export async function createRehearsal(
       ? cached
       : await deriveClaimBoundary(originBoard.deal, originBoard.contract, originBoard.plays, claimRule(origin)));
   if (boundary !== null && branchPly >= boundary) {
-    throw httpError(400, 'cannot branch past the claim boundary — the server played both sides from there');
+    // Deliberately says SETTLED rather than "the server played both sides
+    // from there", which was true only while a claim was the sole way to
+    // reach this state. `claimed_at_ply` is NULL for a player who has
+    // "Settled tricks" set to play them out, so the derivation below is what
+    // answers for those boards — and it finds the same ply, because it is
+    // looking for where the position became settled, not for who played it.
+    // Refusing is still right either way: past that ply no legal card can
+    // change the result, so there is nothing to rehearse.
+    throw httpError(400, 'cannot branch past the point the outcome was settled — no card from there can change it');
   }
   const result = createRehearsalTx(origin, userId, originBoardNo, originBoard, branchPly);
   // result.created is false only when a concurrent request (e.g. a double
