@@ -66,22 +66,26 @@ is invisible while play is evenly spread, and severe the moment one player out-p
 everyone else: production's heaviest player creates a tournament almost every time they play,
 and those were the boards permanently at the back of the queue.
 
-The fix is not simply to invert it. Measured over the real 279-demand trace:
+The fix is not simply to invert it. Measured over the real 279-demand trace, varying **only**
+the grace ordering with every other knob at its production value —
+`node tools/calibrate_placement.mjs --trace … --sweep frontier` reproduces this table:
 
-| grace ordering | orphaned crossings | field at the average crossing | first→last arrival (median) |
-| --- | --- | --- | --- |
-| oldest-first (was) | 10 | 3.78 | 41.3 h |
-| fullest-first | 15 | 4.05 | 31.4 h |
-| emptiest-first | 5 | 3.72 | 25.2 h |
-| rescue oldest-stranded first | 3 | 3.64 | 40.1 h |
-| **rescue, then fill (is)** | **7** | **3.87** | **22.6 h** |
+| grace ordering | orphaned crossings | field at the average crossing | crossings with 4+ humans | first→last arrival (median) |
+| --- | --- | --- | --- | --- |
+| oldest-first (was) | 10 | 3.78 | 58.4% | 41.3 h |
+| fullest-first | 15 | 3.96 | 62.7% | 33.6 h |
+| emptiest-first | 8 | 3.82 | 50.5% | 22.6 h |
+| rescue oldest-stranded first | 4 | 3.73 | 46.6% | 39.4 h |
+| **rescue, then fill (is)** | **7** | **3.87** | **57.7%** | **22.6 h** |
 
 Pure fullest-first buys the deepest fields and the *worst* loneliness — there is always
-something fuller to prefer over a board at one player. Pure emptiest-first inverts both,
-spreading demand so thin that few boards ever get deep. Neither wins because **the two goals
-only compete once every board has a second player**: below that line rescuing is nearly free
-(turning a 4-way field into a 5-way is worth much less than turning a 1-way into a 2-way), and
-above it, filling is unopposed. So the comparator does the cheap thing first and the good thing
+something fuller to prefer over a board at one player, and it is the only ordering here that
+also creates tournaments beyond the floor (92 against 90). Pure emptiest-first inverts both,
+spreading demand so thin that the share of crossings reaching four humans falls to 50.5%.
+
+Neither wins because **the two goals only compete once every board has a second player**:
+below that line rescuing is nearly free (turning a 4-way field into a 5-way is worth much less
+than turning a 1-way into a 2-way), and above it, filling is unopposed. So the comparator does the cheap thing first and the good thing
 second, and only breaks remaining ties on freshness.
 
 That freshness tie-break is deliberately last. It never pulls a player off a rescue or a deeper
@@ -90,11 +94,12 @@ comes from. The gap it closes is the one that decides whether a shared board is 
 about: the people you are compared against played it the same day rather than two days later.
 
 Row four is the refinement most people propose next, and it is the reason the tie-break is
-freshness rather than urgency: rescuing the stranded board *closest to aging out* saves four
-more crossings, but drags co-presence back to 40.1 h — nearly the old rule's. It trades a
-handful of lonely boards for making almost every shared board a two-day-stale comparison. The
-knowing cost of choosing freshness instead is that a stranded board with hours left on its grace
-window can still lose to one created minutes ago, and expire alone. Both are defensible; this
+freshness rather than urgency: rescuing the stranded board *closest to aging out* saves three
+more crossings, but drags co-presence back to 39.4 h — nearly the old rule's — and gives up
+the most field depth of any row here (46.6% of crossings reaching four humans, against 57.7%).
+It trades a handful of lonely boards for making almost every shared board a two-day-stale
+comparison. The knowing cost of choosing freshness instead is that a stranded board with hours
+left on its grace window can still lose to one created minutes ago, and expire alone. Both are defensible; this
 one is chosen because a field you can still talk about is the point of having a field.
 
 Two numbers this table does **not** claim. Mean humans per tournament is unchanged and cannot

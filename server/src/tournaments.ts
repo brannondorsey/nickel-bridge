@@ -455,12 +455,14 @@ export function tournamentScore(donePlayers: number, ageSec: number): number {
  *
  * The obvious refinement — among stranded boards, rescue the one closest to
  * aging out of the window rather than the freshest — was measured and
- * rejected. It does cut orphans further (3 vs 7) because it saves boards that
+ * rejected. It does cut orphans further (4 vs 7) because it saves boards that
  * are about to expire, but it collapses the co-presence win: median first-to-
- * last arrival goes back to 40.1h, against 22.6h here and 41.3h under the old
- * rule. It buys four crossings a human opponent at the cost of making almost
- * every shared board a two-day-stale comparison, which is the wrong trade for
- * a game whose fields are worth talking about. The knowing cost of the
+ * last arrival goes back to 39.4h, against 22.6h here and 41.3h under the old
+ * rule, and it gives up more field depth than any other ordering tried (46.6%
+ * of crossings reaching four humans, against 57.7%). It buys three crossings a
+ * human opponent at the cost of making almost every shared board a two-day-
+ * stale comparison, which is the wrong trade for a game whose fields are worth
+ * talking about. The knowing cost of the
  * freshness tie-break is that a stranded board with hours left on its grace
  * window can still lose to one created minutes ago, and expire alone.
  *

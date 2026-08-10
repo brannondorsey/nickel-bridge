@@ -376,13 +376,29 @@ const CURRENT = { name: 'current (production)', useReal: true };
  * suggested. `emptiest` rather than `fullest` is the whole difference, and it
  * is the opposite of "concentrate players" — see ORDERINGS.
  */
-const PROPOSED = {
-  name: 'proposed',
-  graceOrder: 'emptiest',
-  score: 'deficit',
-  create: 'lastResort',
-  spread: false,
-  tauD: 3,
+/**
+ * The SHIPPED policy — production's own settings, i.e. graceOrder plus the
+ * PLACEMENT defaults everything else still runs on. Every sweep below varies
+ * one knob against this, which is the only baseline that answers "should we
+ * change X".
+ *
+ * This used to be a `PROPOSED` block carrying an exploratory combination
+ * (emptiest + deficit scoring + last-resort creation + tau=3) from before
+ * rescue-then-fill was identified as the winner, and holding it as the sweep
+ * base was a live trap rather than stale naming: every `--sweep` row silently
+ * varied its knob against three OTHER settings that never shipped, so the
+ * numbers answered a question about a policy the app does not run. It also
+ * produced a comparison table in TOURNAMENT-SELECTION.md whose rows came from
+ * two different bases and were not comparable to each other. Keep this in step
+ * with server/src/tournaments.ts, and vary knobs explicitly via --set.
+ */
+const SHIPPED = {
+  name: 'shipped',
+  graceOrder: 'rescueThenFullest',
+  score: 'popularity',
+  create: 'threshold',
+  spread: true,
+  tauD: PLACEMENT.TAU_S / DAY,
 };
 
 const COLS = [
@@ -433,7 +449,7 @@ if (has('--set')) {
   const o = parseSet(arg('--set'));
   header();
   const base = simulate(trace, CURRENT);
-  const got = simulate(trace, { ...PROPOSED, name: arg('--set').slice(0, 24), ...o });
+  const got = simulate(trace, { ...SHIPPED, name: arg('--set').slice(0, 24), ...o });
   row(base);
   row(got);
   const h = (m) => Object.entries(m.hist).sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}:${v}`).join('  ');
@@ -448,17 +464,19 @@ if (has('--set')) {
   header();
   row(simulate(trace, CURRENT));
   for (const [name, o] of [
-    ['rescue-then-fill', { graceOrder: 'rescueThenFullest', score: 'popularity', create: 'threshold', tauD: 30 }],
-    ['fullest (max depth)', { graceOrder: 'fullest', score: 'popularity', create: 'threshold', tauD: 30 }],
-    ['freshest (co-presence)', { graceOrder: 'freshest' }],
-    ['emptiest ttl=48h', { graceOrder: 'emptiest' }],
-    ['emptiest ttl=72h', { graceOrder: 'emptiest', graceTtlH: 72 }],
-    ['emptiest ttl=120h', { graceOrder: 'emptiest', graceTtlH: 120 }],
-    ['emptiestOldest ttl=48h', { graceOrder: 'emptiestOldest' }],
-    ['+ target=3 (max spread)', { graceOrder: 'emptiest', target: 3 }],
-    ['+ target=2 (zero orphan)', { graceOrder: 'emptiest', target: 2 }],
+    // Orderings, varying ONLY graceOrder against the shipped base so the rows
+    // are comparable to each other and to `current`.
+    ['oldest (the old rule)', { graceOrder: 'oldest' }],
+    ['fullest', { graceOrder: 'fullest' }],
+    ['emptiest', { graceOrder: 'emptiest' }],
+    ['emptiestOldest', { graceOrder: 'emptiestOldest' }],
+    ['freshest', { graceOrder: 'freshest' }],
+    // Scoring-tier variants, which change more than one knob and are labelled
+    // so nobody reads them as ordering comparisons.
+    ['+ deficit target=3', { score: 'deficit', create: 'lastResort', target: 3 }],
+    ['+ deficit target=2', { score: 'deficit', create: 'lastResort', target: 2 }],
   ]) {
-    row(simulate(trace, { ...PROPOSED, name, ...o }));
+    row(simulate(trace, { ...SHIPPED, name, ...o }));
   }
   console.log('\n  solo% down     = fewer players with nobody to compare against');
   console.log('  fieldSeen up   = more people to compare against at the average crossing');
@@ -470,56 +488,56 @@ if (has('--set')) {
   header();
   row(simulate(trace, CURRENT));
   for (const graceOrder of Object.keys(ORDERINGS)) {
-    row(simulate(trace, { ...PROPOSED, name: `grace: ${graceOrder}`, graceOrder }));
+    row(simulate(trace, { ...SHIPPED, name: `grace: ${graceOrder}`, graceOrder }));
   }
 } else if (sweep === 'gracecap') {
   header();
   row(simulate(trace, CURRENT));
   for (const graceCap of [2, 3, 4, 5, 6, 8, 99]) {
-    row(simulate(trace, { ...PROPOSED, name: `graceCap=${graceCap}`, graceCap }));
+    row(simulate(trace, { ...SHIPPED, name: `graceCap=${graceCap}`, graceCap }));
   }
 } else if (sweep === 'gracettl') {
   header();
   row(simulate(trace, CURRENT));
   for (const graceTtlH of [12, 24, 48, 72, 120, 240]) {
-    row(simulate(trace, { ...PROPOSED, name: `graceTTL=${graceTtlH}h`, graceTtlH }));
+    row(simulate(trace, { ...SHIPPED, name: `graceTTL=${graceTtlH}h`, graceTtlH }));
   }
 } else if (sweep === 'tau') {
   header();
   row(simulate(trace, CURRENT));
   for (const tauD of [1, 2, 3, 5, 7, 14, 30]) {
-    row(simulate(trace, { ...PROPOSED, name: `tau=${tauD}d`, tauD }));
+    row(simulate(trace, { ...SHIPPED, name: `tau=${tauD}d`, tauD }));
   }
 } else if (sweep === 'window') {
   header();
   row(simulate(trace, CURRENT));
   for (const windowD of [3, 7, 14, 30, 60]) {
-    row(simulate(trace, { ...PROPOSED, name: `window=${windowD}d`, windowD }));
+    row(simulate(trace, { ...SHIPPED, name: `window=${windowD}d`, windowD }));
   }
 } else if (sweep === 'target') {
   header();
   row(simulate(trace, CURRENT));
   for (const target of [2, 3, 4, 6, 8, 12]) {
-    row(simulate(trace, { ...PROPOSED, name: `target=${target}`, target }));
+    row(simulate(trace, { ...SHIPPED, name: `target=${target}`, target }));
   }
 } else if (sweep === 'ablate') {
   // One knob at a time reverted from the proposal, so each earns its place.
   header();
   row(simulate(trace, CURRENT));
-  row(simulate(trace, PROPOSED));
-  row(simulate(trace, { ...PROPOSED, name: '- grace ordering', graceOrder: 'oldest' }));
-  row(simulate(trace, { ...PROPOSED, name: '- deficit score', score: 'popularity' }));
-  row(simulate(trace, { ...PROPOSED, name: '- last resort', create: 'threshold' }));
-  row(simulate(trace, { ...PROPOSED, name: '- concentrate', spread: true }));
-  row(simulate(trace, { ...PROPOSED, name: '- tau (keep 30d)', tauD: 30 }));
+  row(simulate(trace, SHIPPED));
+  row(simulate(trace, { ...SHIPPED, name: '- grace ordering', graceOrder: 'oldest' }));
+  row(simulate(trace, { ...SHIPPED, name: '- deficit score', score: 'popularity' }));
+  row(simulate(trace, { ...SHIPPED, name: '- last resort', create: 'threshold' }));
+  row(simulate(trace, { ...SHIPPED, name: '- concentrate', spread: true }));
+  row(simulate(trace, { ...SHIPPED, name: '- tau (keep 30d)', tauD: 30 }));
 } else {
   header();
   row(simulate(trace, CURRENT));
-  row(simulate(trace, { ...PROPOSED, name: 'grace emptiest only', score: 'popularity', create: 'threshold', spread: true, tauD: DEFAULTS.tauD }));
-  row(simulate(trace, { ...PROPOSED, name: 'grace fullest (wrong)', graceOrder: 'fullest' }));
-  row(simulate(trace, PROPOSED));
+  row(simulate(trace, { ...SHIPPED, name: 'grace emptiest only', score: 'popularity', create: 'threshold', spread: true, tauD: DEFAULTS.tauD }));
+  row(simulate(trace, { ...SHIPPED, name: 'grace fullest (wrong)', graceOrder: 'fullest' }));
+  row(simulate(trace, SHIPPED));
   console.log('\nfield-size histogram (humans : tournaments)');
-  for (const [label, o] of [['current ', CURRENT], ['proposed', PROPOSED]]) {
+  for (const [label, o] of [['current ', CURRENT], ['shipped ', SHIPPED]]) {
     const m = simulate(trace, o);
     console.log(`  ${label}  ` + Object.entries(m.hist).sort((a,b)=>a[0]-b[0]).map(([k, v]) => `${k}:${v}`).join('  '));
   }
