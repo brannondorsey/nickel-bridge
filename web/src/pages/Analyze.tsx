@@ -608,14 +608,14 @@ function CardsWorthPanel({
 
 /**
  * The field on one rail, par as the dashed gate, your own rehearsal attempts
- * as small coloured ticks on the SAME axis just below it — geometry from
- * analyzeRail.ts. A tick is green when that line beat your real table and
- * red when it fell short (`--positive`/`--negative`, the app's one
- * bidirectional pair — see AdjustedReceipt's identical framing for a single
- * rehearsal's own delta). Ticks are their own row rather than sharing the
- * dots' label bands: the field dots already use the full 104px height for
- * alternating up/down contract labels, and a rehearsal has no field label to
- * carry — only the comparison its colour already states.
+ * plotted as small dots on that SAME line, right alongside the real players
+ * — geometry from analyzeRail.ts. A dot is green when that line beat your
+ * real table and red when it fell short (`--positive`/`--negative`, the
+ * app's one bidirectional pair — see AdjustedReceipt's identical framing for
+ * a single rehearsal's own delta). Smaller than a field dot and unlabelled
+ * (nothing here fights the field dots' alternating up/down contract-label
+ * bands) — the caption underneath is what carries the reading, the colour
+ * carries the direction.
  */
 function WorthRail({
   field,
@@ -655,6 +655,14 @@ function WorthRail({
             </span>
           </Fragment>
         ))}
+        {layout.rehearsalDots.map((d) => (
+          <span
+            key={`r${d.score}`}
+            className={`worth-rehearsal-dot${d.better === true ? ' positive' : d.better === false ? ' negative' : ''}`}
+            style={{ left: pct(d.x) }}
+            aria-hidden="true"
+          />
+        ))}
       </div>
       {layout.omittedTables > 0 ? (
         <p className="worth-rail-note">
@@ -662,21 +670,10 @@ function WorthRail({
         </p>
       ) : null}
       {layout.rehearsalDots.length > 0 ? (
-        <>
-          <div className="worth-rehearsal-track num" aria-hidden="true">
-            {layout.rehearsalDots.map((d) => (
-              <span
-                key={d.score}
-                className={`worth-rehearsal-tick${d.better === true ? ' positive' : d.better === false ? ' negative' : ''}`}
-                style={{ left: pct(d.x) }}
-              />
-            ))}
-          </div>
-          <p className="worth-rail-note worth-rehearsal-note">
-            {rehearsals.length === 1 ? 'Your rehearsal' : `Your ${rehearsals.length} rehearsals`} marked below the rail —{' '}
-            <span className="positive">green</span> beat your table, <span className="negative">red</span> fell short.
-          </p>
-        </>
+        <p className="worth-rail-note worth-rehearsal-note">
+          {rehearsals.length === 1 ? 'Your rehearsal' : `Your ${rehearsals.length} rehearsals`} marked on the rail —{' '}
+          <span className="positive">green</span> beat your table, <span className="negative">red</span> fell short.
+        </p>
       ) : null}
     </>
   );

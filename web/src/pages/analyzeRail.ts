@@ -23,14 +23,15 @@
  * reference line, and every dot label carries its true score.
  *
  * Rehearsal attempts ("Play From Here" — see server/src/rehearsal.ts) plot
- * on this SAME axis, as small ticks rather than full labelled dots: they are
- * not field results (no matchpoints, nobody else played them), so merging
- * them into the field's own dots would misrepresent what a dot means there.
- * A tick's colour carries the one comparison a rehearsal is FOR — did this
- * line beat the table you actually sat — so it is computed against the real
- * table's own score, not against par (nobody bids with the cards face up,
- * but a rehearsal is played with them face up on purpose, and the question
- * it answers is "better than what actually happened", not "better than
+ * on this SAME axis, right alongside the real players, as their own small
+ * unlabelled dots rather than being merged into the field's own dots: they
+ * are not field results (no matchpoints, nobody else played them), and
+ * merging them in would misrepresent what a field dot means there. A dot's
+ * colour carries the one comparison a rehearsal is FOR — did this line beat
+ * the table you actually sat — so it is computed against the real table's
+ * own score, not against par (nobody bids with the cards face up, but a
+ * rehearsal is played with them face up on purpose, and the question it
+ * answers is "better than what actually happened", not "better than
  * theoretical-best"). Included in the same lo/span as the field, so a
  * rehearsal that lands outside the field's own range still stretches the
  * frame to show it, exactly like the field's own outliers do.

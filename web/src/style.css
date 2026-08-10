@@ -5477,28 +5477,30 @@ a.stat-tile:hover {
   text-align: center;
   margin-top: 2px;
 }
-/* rehearsal attempts on the same axis as .worth-rail, one row below it — a
-   thin tick per distinct score rather than a full labelled dot, since a
-   rehearsal carries no field label of its own, only the comparison its
-   colour already states (green beat your table, red fell short). */
-.worth-rehearsal-track {
-  position: relative;
-  height: 14px;
-  margin-top: 6px;
-}
-.worth-rehearsal-tick {
+/* rehearsal attempts sit ON THE SAME LINE as the field's own dots — right
+   alongside the real players, not a separate row — centred on the same axis
+   (top: 48.5px + 7px = 52px, matching .worth-dot's own centring) but smaller
+   and unlabelled: nothing here fights the field dots' alternating up/down
+   contract-label bands, only the colour states the comparison (green beat
+   your table, red fell short — the worth-rehearsal-note caption underneath
+   spells that out once for the whole rail rather than per dot). */
+.worth-rehearsal-dot {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: 1.5px;
+  top: 48.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
   background: var(--muted);
   transform: translateX(-50%);
+  box-sizing: border-box;
 }
-.worth-rehearsal-tick.positive {
+.worth-rehearsal-dot.positive {
+  border-color: var(--positive);
   background: var(--positive);
 }
-.worth-rehearsal-tick.negative {
+.worth-rehearsal-dot.negative {
+  border-color: var(--negative);
   background: var(--negative);
 }
 .worth-rehearsal-note {

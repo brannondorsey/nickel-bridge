@@ -1183,11 +1183,11 @@ WERE WORTH's `.worth-stubs` panel grows a third stub for the best one (highest `
 unambiguous since the human is always N–S) as a full-width row beneath the PAR/YOUR TABLE
 pair rather than forcing a cramped 3-up grid at the 390px smoke-test breakpoint, opting out
 of that pair's subgrid row-alignment rather than fighting it (a different shape: no sealed
-treatment, one aside line). Every finished attempt also marks THE FIELD rail itself: a thin
-tick per distinct rehearsal score, on the same axis as the field's own dots but in its own
-row underneath (no label to collide with the dots' alternating contract bands), coloured
-against your real table's own score — `--positive` green when a line beat it, `--negative`
-red when it fell short, unmarked on an exact tie. `analyzeRail.ts`'s `railLayout` takes the
+treatment, one aside line). Every finished attempt also marks THE FIELD rail itself: a small
+dot per distinct rehearsal score, right on the SAME line as the real players rather than a
+separate row (unlabelled, so it never fights the field dots' alternating contract-label
+bands), coloured against your real table's own score — `--positive` green when a line beat
+it, `--negative` red when it fell short, unmarked on an exact tie. `analyzeRail.ts`'s `railLayout` takes the
 rehearsal scores as an optional third argument and folds them into the same lo/span the field
 dots are measured against, so a rehearsal outlier stretches the frame exactly like a field
 outlier would rather than clamping against a scale that never accounted for it. The rail
