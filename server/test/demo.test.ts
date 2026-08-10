@@ -183,6 +183,47 @@ describe('demo mode', () => {
     expect(exhibitIds.has(visitorPlaced.tournamentId)).toBe(false);
   }, 120_000);
 
+  it('re-gates a legacy exhibit tournament so its recipe still replays', async () => {
+    // The claim_rule migration (db.ts) stamps every tournament that already
+    // existed 'optimistic', exhibits included — correct for real tournaments,
+    // wrong forever for exhibits, whose recipes are mined against the shipped
+    // gate. On the permanent demo app, whose volume outlives a deploy, that
+    // left both claim exhibits throwing: `claim-fires` claims four tricks
+    // early and its remaining actions hit "not in play phase", `analyze-play`
+    // arrives 'done' where the recipe expects 'playing'. A fresh database
+    // never reproduces it — the column default already answers correctly — so
+    // the legacy row has to be manufactured here.
+    const { ensureExhibitTournament, runScenario } = await import('../src/demo.js');
+    const { SCENARIOS } = await import('../src/scenarios.js');
+    const claimExhibits = SCENARIOS.filter((s) => s.expectClaimOnFinalAction);
+    expect(claimExhibits.length).toBeGreaterThan(0);
+
+    const stampLegacy = db.prepare(`UPDATE tournaments SET claim_rule = 'optimistic' WHERE id = ?`);
+    const ruleOf = (id: number) =>
+      (db.prepare(`SELECT claim_rule FROM tournaments WHERE id = ?`).get(id) as { claim_rule: string }).claim_rule;
+    const user = (db.prepare(`SELECT id FROM users WHERE handle = 'Inspector'`).get() as { id: number }).id;
+
+    for (const s of claimExhibits) {
+      const t = ensureExhibitTournament(s.seed);
+      stampLegacy.run(t.id);
+      expect(ruleOf(t.id)).toBe('optimistic');
+
+      // the read path repairs the row and hands back the corrected one…
+      const repaired = ensureExhibitTournament(s.seed);
+      expect(repaired.id).toBe(t.id); // repaired in place — never a second exhibit
+      expect(repaired.claim_rule).toBe('pessimistic');
+      expect(ruleOf(t.id)).toBe('pessimistic');
+
+      // …which is what lets the recipe replay to the state its copy promises.
+      const { tournamentId, boardNo } = await runScenario(user, s, silentLog);
+      expect(tournamentId).toBe(t.id);
+      const board = db
+        .prepare(`SELECT state FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`)
+        .get(t.id, user, boardNo) as { state: string };
+      expect(board.state, `'${s.id}' replayed to the wrong state`).toBe(s.expect);
+    }
+  }, 120_000);
+
   it('reset wipes the database and keeps the requester signed in', async () => {
     // registered users, not the (now provisional-gated) leaderboard list —
     // neither Inspector nor Visitor has completed enough rated tournaments to

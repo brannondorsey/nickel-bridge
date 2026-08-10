@@ -310,11 +310,25 @@ if (!tournamentColumns.has('branch_ply')) {
 // to reproduce that board's own claim, or replaying the origin's cards
 // diverges. See createRehearsalTx.
 //
-// Immutable after creation, like `difficulty`. Analyze caches a board's claim
-// boundary (board_analyses.core.claimedAtPly) without recording which rule
-// produced it, which is safe precisely because the rule never changes under a
-// board — so anything that ever flips this column on an existing tournament
-// must delete that tournament's board_analyses rows.
+// Immutable after creation, like `difficulty`, with exactly one exception —
+// kind = 'exhibit'. The UPDATE above stamps demo exhibit tournaments
+// 'optimistic' along with everything else, and on the permanent demo app,
+// whose volume outlives a deploy, that is the wrong answer forever: a scenario
+// recipe is mined against the SHIPPED gate and stops replaying under any
+// other, so both claim exhibits break. Exhibits are safe to re-gate precisely
+// where real tournaments are not — their boards are deleted and replayed on
+// every click, and `kind` already excludes them from scoring, Elo, placement
+// and stats — so demo.ts's ensureExhibitTournament normalizes them back on
+// read. It has to be on read rather than here: this block runs once per
+// database, and the volumes needing repair are the ones that have already run
+// it. Nothing else may flip this column.
+//
+// Analyze caches a board's claim boundary (board_analyses.core.claimedAtPly)
+// without recording which rule produced it, which is safe precisely because
+// the rule never changes under a board — so anything that ever flips this
+// column on an existing tournament must delete that tournament's
+// board_analyses rows. (The exhibit case above is exempt for the same reason
+// it is safe at all: those boards are wiped and replayed, never analyzed.)
 if (!tournamentColumns.has('claim_rule')) {
   db.exec(`
     BEGIN;

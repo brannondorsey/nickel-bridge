@@ -546,7 +546,8 @@ only, no web UI yet); today's schedules are always uniform, so ramps/mixed sched
 data change. A third column, `claim_rule`, is resolved the same way (`claimRule()`, right
 beside `boardDifficulty()`) and is likewise stamped at creation and immutable — but per
 TOURNAMENT rather than per board, since it describes the server's own behaviour rather than
-robot strength and so wants no schedule; see "Auto-play and claims" above. Placement only
+robot strength and so wants no schedule; see "Auto-play and claims" above. Immutable has
+exactly one exception, `kind = 'exhibit'` — see "Demo mode" below. Placement only
 matches users into tournaments of their preferred tier (resume
 of an already-started tournament is deliberately preference-blind). The player-facing tiers
 (`MC_SAMPLES` in `difficulty.ts`) all use `chooseCardSampled` (`packages/ai/src/play-mc.ts`)
@@ -1239,7 +1240,18 @@ live. Exhibit tournaments carry `kind = 'exhibit'` (a `tournaments` column defau
 `'standard'`, see `db.ts`), which excludes them from placement and the lobby list
 (`tournaments.ts`), from the Elo replay (so they can never rate, even if fully played out by
 URL), and from stats/leaderboard sweeps (`stats.ts`, `app.ts`) — all filters inert in
-production, where every tournament is `'standard'`. A boot
+production, where every tournament is `'standard'`. That exclusion is also why an exhibit is
+the **one** tournament whose `claim_rule` may be re-gated after creation, which is otherwise
+forbidden: `ensureExhibitTournament` normalizes it back to `'pessimistic'` on read. A recipe
+is mined against the shipped gate and stops replaying under any other, and the `claim_rule`
+migration stamps pre-existing exhibits `'optimistic'` along with everything else — which on
+the permanent demo app, whose volume outlives a deploy, broke both claim exhibits until they
+were re-gated. Re-gating is safe here precisely where it is unsafe for a real tournament:
+these boards are deleted and replayed from the recipe on every click, so no history moves
+under anyone, and nothing downstream scores them. Normalize-on-READ rather than a migration
+because the volumes needing repair are the ones that have already run it, and no test on a
+fresh database can catch the breakage — the column default already answers correctly there.
+A boot
 seeder (`demo-seed.ts`, async after listen) plays bots through backdated tournaments to
 populate leaderboard/stats/placement tiers, and `POST /api/demo/reset` wipes + reseeds
 (wipes and seeds share one queue, so they never interleave). Bot-driven board play

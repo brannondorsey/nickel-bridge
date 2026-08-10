@@ -22,6 +22,7 @@ import { getTournament } from './tournaments.js';
 
 const stmtExhibitBySeed = db.prepare(`SELECT * FROM tournaments WHERE kind = 'exhibit' AND seed = ?`);
 const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES (?, ?, 'exhibit') RETURNING *`);
+const stmtRegateExhibit = db.prepare(`UPDATE tournaments SET claim_rule = 'pessimistic' WHERE id = ? RETURNING *`);
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
 // The freshAiField exhibit's tournament is a REAL standard tournament —
 // same columns placeUser stamps (intermediate = the Inspector's default
@@ -98,10 +99,38 @@ export function ensureNewCrosser(): UserRow {
  * seed) — the seed must stay the literal string the recipe was mined against
  * (deals derive from it). The kind column also keeps them out of placement,
  * the lobby, the Elo replay, and stats (see db.ts and tournaments.ts).
+ *
+ * An exhibit is also the ONE place a tournament's `claim_rule` is re-gated
+ * after creation, which db.ts's migration comment otherwise forbids outright.
+ * The reason it forbids it is that re-gating changes a board's deterministic
+ * replay, and a board somebody already played must never move under them
+ * (invariant 1). Neither half of that is true here: an exhibit's boards are
+ * deleted and replayed from the recipe on every single click (runScenarioNow
+ * below), so there is no history to preserve, and the kind column already
+ * keeps them out of scoring, Elo, placement, stats and the leaderboard, so
+ * there is nothing downstream to invalidate either. Recipes are mined against
+ * whatever gate ships, so the shipped gate is the only one that can replay
+ * them.
+ *
+ * It is a normalize-on-read rather than a migration because the rows this
+ * repairs are on a volume that outlives any one deploy. The permanent demo
+ * app keeps its database across redeploys, so its exhibit tournaments were
+ * stamped 'optimistic' by the claim_rule migration along with every other
+ * pre-existing row — and both claim exhibits stop replaying under that gate
+ * (`claim-fires` claims four tricks early and its remaining actions throw
+ * "not in play phase"; `analyze-play` arrives 'done' where the recipe expects
+ * 'playing'). A migration would have fixed exactly the volumes that had not
+ * run one yet and missed every volume that had. This runs on the path that
+ * needs the row, so it repairs whatever it finds, whenever it is found — and
+ * costs one UPDATE per exhibit, once, since the second call reads the fixed
+ * row. No test can catch the original breakage, either: server tests start
+ * from a fresh database, where the column default already answers correctly.
  */
 export function ensureExhibitTournament(seed: string): TournamentRow {
   const existing = stmtExhibitBySeed.get(seed) as TournamentRow | undefined;
-  return existing ?? (stmtCreateExhibit.get(exhibitName(seed), seed) as TournamentRow);
+  if (!existing) return stmtCreateExhibit.get(exhibitName(seed), seed) as TournamentRow;
+  if (existing.claim_rule === 'pessimistic') return existing;
+  return stmtRegateExhibit.get(existing.id) as TournamentRow;
 }
 
 /**
