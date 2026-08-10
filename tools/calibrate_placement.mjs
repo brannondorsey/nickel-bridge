@@ -12,18 +12,29 @@
  * onto one board. Changing either is a guess unless it is measured, and the
  * thing to measure it against is what people actually did.
  *
- * THE ONE NUMBER THAT IS ALREADY OPTIMAL, so nobody re-derives it and calls it
- * a win: mean humans per tournament CANNOT be improved. A player may never be
- * placed into a tournament they have already played, so the number of
- * tournaments is floored at `max demands by any single player` — and
- * production sits exactly on that floor (90 tournaments, 90 demands from the
- * heaviest player). Mean field is therefore pinned at demands/floor for every
- * policy that doesn't create MORE tournaments than necessary. What is wide
- * open is the DISTRIBUTION around that mean: production spends it as twelve
- * boards with one human and eight with six, when the same mean could be spent
- * as ninety boards with three. So the objective here is the floor of the
- * distribution — `soloCrossings`, the number of player-crossings that end up
- * with no human to compare against — not the average.
+ * WHICH NUMBER TO READ. `meanField` is NOT it, and cannot be improved: a player
+ * may never be placed into a tournament they have already played, so the
+ * tournament count is floored at `max demands by any single player`, and
+ * production sits exactly on that floor (90 of 90). Mean field is pinned for
+ * every policy that doesn't create MORE tournaments than necessary.
+ *
+ * Read `fieldSeen` and `soloCrossings` instead, which measure the two things
+ * players actually feel:
+ *
+ *   fieldSeen  sum(f^2)/sum(f) — the field size at the average CROSSING rather
+ *              than the average tournament. A 7-human board gives seven people
+ *              a big field; a solo board gives one person none. This is the
+ *              "fun to see how you did against others" number.
+ *   soloPct    share of crossings that ended with nobody to compare against.
+ *   span h     median hours between the first and last player arriving at a
+ *              board — the "did we play this around the same time" number,
+ *              which is what makes a board worth talking about.
+ *
+ * fieldSeen turns out to be nearly INELASTIC: every ordering lands between 3.6
+ * and 4.1, because the total is fixed and only its concentration can move. Solo
+ * rate and span are elastic — roughly 2x between the best and worst ordering. So
+ * the honest framing is: field depth is close to whatever you do, pick the
+ * ordering that fixes loneliness and co-presence without spending depth to do it.
  *
  * WHAT IS REPLAYED. A "demand" is one moment a player wanted a crossing and
  * had none to resume: exactly the distinct (player, tournament) pairs in the
@@ -152,13 +163,14 @@ function simulate(trace, opts = {}) {
  * decides the overwhelming majority of placements — the scoring tier below it
  * barely runs (see the `via` counters in the output).
  *
- * The intuition that "concentrate players onto one board" means `fullest` is
- * WRONG here, and the replay is what caught it. Topping up the fullest board
- * under the cap starves every board sitting at one player, because there is
- * always something fuller to prefer; it made orphans worse than production.
- * The objective is the floor of the distribution, not the peak, and 189
- * non-heavy demands spread across 90 tournaments can in principle leave zero
- * orphans — but only if each one goes where it is needed most.
+ * Two intuitions both turn out to be half right, which is why the composite
+ * `rescueThenFullest` wins. Plain `fullest` — top up the busiest board — buys
+ * the best field depth and the worst loneliness (15 orphans against
+ * production's 10), because there is always something fuller to prefer over a
+ * board sitting at one player. Plain `emptiest` inverts both: it halves
+ * loneliness and gives up the deep fields. Doing the rescue FIRST and then
+ * filling costs almost nothing, because the two goals only compete once every
+ * board already has a second player.
  */
 const ORDERINGS = {
   // Production: FIFO. Starves the tail when demand outruns supply.
@@ -172,6 +184,14 @@ const ORDERINGS = {
   emptiestOldest: (a, b) => a.joins.length - b.joins.length || a.createdAt - b.createdAt || a.id - b.id,
   // Pure LIFO: freshest board regardless of how full, i.e. maximum co-presence.
   freshest: (a, b) => b.createdAt - a.createdAt || a.id - b.id,
+  // "Nobody sits alone, then make the parties big": rescue any board stuck at
+  // one human first, and otherwise top up the fullest. This is the ordering
+  // that serves a LARGE-FIELD objective without paying for it in orphans --
+  // the two goals only conflict once every board has a second player.
+  rescueThenFullest: (a, b) => {
+    const solo = (c) => (c.joins.length === 1 ? 0 : 1);
+    return solo(a) - solo(b) || b.joins.length - a.joins.length || b.createdAt - a.createdAt || a.id - b.id;
+  },
 };
 
 /** The candidate policies, sharing chooseTournament's two-tier shape. */
@@ -201,6 +221,17 @@ function choose(eligible, now, o, rng, via) {
   const top = scored.reduce((m, x) => Math.max(m, x.score), 0);
   if (o.create === 'threshold') {
     if (top < PLACEMENT.NEW_TOURNAMENT_SCORE) return null;
+  } else if (o.create === 'never') {
+    // Answers "shouldn't a player always take an existing board over making a
+    // new solo one?" directly: create ONLY when there is nothing eligible at
+    // all. Note this is stronger than lastResort, which still declines boards
+    // scoring zero.
+    if (eligible.length) {
+      const pick = [...eligible].sort(ORDERINGS[o.graceOrder])[0];
+      via.score++;
+      return pick;
+    }
+    return null;
   } else if (top <= 0) {
     return null; // lastResort: create only when nothing joinable is left
   }
@@ -253,6 +284,13 @@ function metrics(trace, tournaments, o, via) {
   }
   const hist = {};
   for (const f of fields) hist[f] = (hist[f] || 0) + 1;
+  // Field size WEIGHTED BY CROSSING, not by tournament: a 7-human board gives
+  // seven people a big field, a solo board gives one person none. This is the
+  // number to read for "how many others can I compare against", and it is NOT
+  // the same as meanField -- sum(f^2)/sum(f) rewards depth, mean does not.
+  const seenAvg = fields.reduce((s2, f) => s2 + f * f, 0) / demands;
+  let fourPlus = 0;
+  for (const f of fields) if (f >= 4) fourPlus += f;
 
   return {
     name: o.name ?? 'custom',
@@ -265,6 +303,8 @@ function metrics(trace, tournaments, o, via) {
     soloPct: +((100 * solo) / demands).toFixed(1),
     pct2plus: +((100 * pairPlus) / demands).toFixed(1),
     pct3plus: +((100 * triPlus) / demands).toFixed(1),
+    seenAvg: +seenAvg.toFixed(2),
+    pct4plus: +((100 * fourPlus) / demands).toFixed(1),
     medJoinAgeH: +median(ages).toFixed(1),
     medSpanH: +median(spans).toFixed(1),
     viaGrace: via.grace,
@@ -319,6 +359,8 @@ const COLS = [
   ['solo%', 'soloPct', 7],
   ['>=2 hum%', 'pct2plus', 9],
   ['>=3 hum%', 'pct3plus', 9],
+  ['>=4 hum%', 'pct4plus', 9],
+  ['fieldSeen', 'seenAvg', 10],
   ['joinAge h', 'medJoinAgeH', 10],
   ['span h', 'medSpanH', 7],
   ['grace', 'viaGrace', 6],
@@ -372,6 +414,8 @@ if (has('--set')) {
   header();
   row(simulate(trace, CURRENT));
   for (const [name, o] of [
+    ['rescue-then-fill', { graceOrder: 'rescueThenFullest', score: 'popularity', create: 'threshold', tauD: 30 }],
+    ['fullest (max depth)', { graceOrder: 'fullest', score: 'popularity', create: 'threshold', tauD: 30 }],
     ['freshest (co-presence)', { graceOrder: 'freshest' }],
     ['emptiest ttl=48h', { graceOrder: 'emptiest' }],
     ['emptiest ttl=72h', { graceOrder: 'emptiest', graceTtlH: 72 }],
@@ -382,9 +426,10 @@ if (has('--set')) {
   ]) {
     row(simulate(trace, { ...PROPOSED, name, ...o }));
   }
-  console.log('\n  orphan/solo% down = fewer players with nobody to compare against');
-  console.log('  >=3 hum% down     = thinner fields for everyone else');
-  console.log('  span h down       = players met closer together in time');
+  console.log('\n  solo% down     = fewer players with nobody to compare against');
+  console.log('  fieldSeen up   = more people to compare against at the average crossing');
+  console.log('  span h down    = players met closer together in time (worth talking about)');
+  console.log('  fieldSeen is nearly inelastic (3.6-4.1); solo% and span are the real levers.');
 } else if (sweep === 'grace') {
   // The grace tier decides nearly every placement, so its ordering is the
   // lever. Everything else held at the proposal.

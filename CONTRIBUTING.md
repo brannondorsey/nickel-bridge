@@ -1348,13 +1348,18 @@ easy to get wrong from first principles:
 - **The grace tier decides ~50% of placements and the scoring tier ~11%**, so the popularity
   score, `SAMPLE_RATIO` and `TAU_S` are near-inert at this scale — ablation moves them by
   0.0-0.2pp. Tune the grace tier first; it is where the leverage is.
-- **Grace ordering is the lever, and "concentrate players onto one board" gets its direction
-  BACKWARDS.** Filling the fullest board under the cap starves every board sitting at one
-  human, because there is always something fuller to prefer — measured *worse* than
-  production (12 orphans vs 10). Ordering by EMPTIEST-first is what cuts them.
-- **Orphan elimination and field depth pull against each other**, so there is no free
-  setting: every demand sent to a one-human board is a demand not deepening a three-human
-  one. `--sweep frontier` prints that trade-off rather than pretending a winner exists.
+- **Grace ordering is the lever**, and the two obvious orderings are each half right.
+  Filling the FULLEST board buys the best field depth and the worst loneliness (15 orphans
+  vs production's 10) — there is always something fuller to prefer over a board sitting at
+  one human. EMPTIEST-first inverts both. `rescueThenFullest` — rescue any board stuck at one
+  player, otherwise top up the fullest, freshest as a light tiebreak — gets both, because the
+  goals only compete once every board has a second player.
+- **Read `fieldSeen`, not `meanField`.** `sum(f²)/sum(f)` is the field at the average
+  CROSSING rather than the average tournament, which is what a player actually experiences.
+  It is nearly INELASTIC (3.6–4.1 across every ordering) since only its concentration can
+  move; solo rate and co-presence span are elastic, roughly 2× best to worst. So pick the
+  ordering that fixes loneliness and co-presence without spending depth — `--sweep frontier`
+  prints them together.
 
 **Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo-bridge.brannon.online):**
 the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the
