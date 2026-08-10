@@ -56,7 +56,26 @@
  *   node tools/calibrate_placement.mjs --trace trace.json            # compare policies
  *   node tools/calibrate_placement.mjs --trace trace.json --sweep tau
  *   node tools/calibrate_placement.mjs --trace trace.json --policy fullest,deficit,lastResort
- *   node tools/calibrate_placement.mjs --synthetic                   # no trace needed
+ *   node tools/calibrate_placement.mjs --synthetic --days 90         # no trace needed
+ *
+ * WHAT THIS TOOL CANNOT ANSWER: anything about BACKLOG_WINDOW_S. The captured
+ * trace is ~21 days long and production's oldest tournament is younger than
+ * the 30-day window, so no replay of real demand ever reaches it — `--sweep
+ * window` returns identical rows for 30d and 60d for that reason, not because
+ * the knob is harmless. `--synthetic --days 90` reaches it and still shows
+ * nothing, because the window only constrains the SCORING tier (grace already
+ * requires under-48h) and that tier decides ~11% of real placements.
+ *
+ * The window is better reasoned about than simulated, and the arithmetic says
+ * it is nearly redundant: TAU_S is also 30 days, so a candidate's score
+ * log(1+finishers)·e^(-age/TAU) crosses the ln 2 join threshold at
+ * TAU·ln(ln(1+finishers)/ln 2) — 13.8 days at 2 finishers, 20.8 at 3, 25.3 at
+ * 4, 28.5 at 5. The decay expires everything below SIX finishers before the
+ * window ever sees it, so the hard cutoff bites only the most popular
+ * tournaments, i.e. exactly the ones worth joining for field size. One soft
+ * slope and one hard cliff at the same distance is a duplicated knob; if these
+ * are ever retuned, let TAU express the recency preference and make the window
+ * a loose sanity bound rather than a second, blunter copy of it.
  */
 import { mkdtempSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
@@ -333,7 +352,7 @@ function syntheticTrace(days = 21, heavy = 90, others = 12) {
 // ---------------------------------------------------------------- run
 
 const trace = has('--synthetic')
-  ? syntheticTrace()
+  ? syntheticTrace(Number(arg('--days', 21)))
   : JSON.parse(readFileSync(arg('--trace', 'trace.json'), 'utf8'));
 
 const CURRENT = { name: 'current (production)', useReal: true };
