@@ -346,6 +346,42 @@ if (!tournamentColumns.has('claim_rule')) {
   `);
 }
 
+// Migration: renumber crossing display names off their ORDINAL among standard
+// tournaments rather than off the raw row id — see crossingName() below for
+// why the two must differ and why the ordinal is stable.
+//
+// This is the file's first DATA-only migration, so it cannot use the
+// column-existence guard every migration above it uses: there is no new column
+// to test for, and the UPDATE is O(n²) (a correlated COUNT per row), which is
+// nothing at today's ~88 rows but is not something to re-run on every boot
+// forever. PRAGMA user_version is SQLite's built-in slot for exactly this.
+//
+// Note the guard tests this migration's OWN number rather than a shared
+// "current version" constant. The next data migration is its own
+// `if (user_version < 2)` block setting 2, so that a database already past
+// this one is never dragged back through it by a later bump.
+//
+// The subquery is deliberately the same `kind = 'standard' AND id <= x`
+// expression crossingName() prepares, so a future edit to one is visibly an
+// edit to the other rather than a silent divergence between what existing rows
+// were named and what new ones get.
+//
+// Renaming rows players have already seen is intentional: this morning's
+// "Tournament #100" becomes "#88". A gap-free sequence that is restated once
+// beats one that is correct only from today on, which would leave a permanent
+// discontinuity mid-history with no explanation attached to it.
+if ((db.pragma('user_version', { simple: true }) as number) < 1) {
+  db.exec(`
+    BEGIN;
+    UPDATE tournaments
+       SET name = 'Tournament #' || (SELECT COUNT(*) FROM tournaments t2
+                                      WHERE t2.kind = 'standard' AND t2.id <= tournaments.id)
+     WHERE kind = 'standard';
+    PRAGMA user_version = 1;
+    COMMIT;
+  `);
+}
+
 // Migration: `claimed_at_ply` — the plays[] index of the first card the
 // server played as part of resolving a laydown claim (advanceRobots'
 // claim gate in game.ts), NULL when the board finished without claiming.
@@ -445,6 +481,46 @@ export interface TournamentRow {
 }
 
 export const BOARDS_PER_TOURNAMENT = 4;
+
+/**
+ * A crossing's DISPLAY number — its position among standard tournaments in id
+ * order, which is what `tournaments.name` ("Tournament #12") carries and what
+ * web/src/format.ts's tournamentNo() parses back out.
+ *
+ * Deliberately NOT the row id, and the distinction is the whole point: `id` is
+ * a single sequence shared by every kind, so each rehearsal (and, on DEMO=1,
+ * each exhibit) consumes a number that no tournament ever wears. Production
+ * had drifted to "Tournament #100" with only 88 tournaments in existence — a
+ * count inflated by 13 Play-From-Here branches, which are not crossings and
+ * which a player has no way to know about.
+ *
+ * The id stays the ADDRESS — `/t/:id/b/:no`, boards.tournament_id,
+ * elo_history.tournament_id, origin_tournament_id — and this is only ever
+ * presentation. Keeping the two apart is what lets rehearsals reuse the board
+ * route for free (Analyze.tsx navigates a fresh branch straight to /t/:id) and
+ * keeps every link ever shared valid. Putting the ordinal in the URL instead
+ * would be actively unsafe: ordinals 1..N overlap the id space, so an old
+ * link would resolve to a DIFFERENT tournament rather than 404.
+ *
+ * The ordinal is stable forever, which is what makes it safe to bake into a
+ * stored name. It can only change if a standard row with a lower id is
+ * deleted, and nothing deletes one: the only DELETE FROM tournaments in the
+ * app is discardRehearsal (rehearsal rows only), and demo-seed's full wipe
+ * runs on DEMO=1 databases that are recreated from scratch anyway. Creating
+ * or discarding a rehearsal never moves a crossing's number.
+ *
+ * `id <= ?` rather than a bare COUNT(*) so this reads the same for a row
+ * inserted out of created_at order (demo-seed backdates ambient tournaments;
+ * ids still ascend), and so the runtime and the backfill migration below are
+ * literally the same expression rather than two statements that agree today.
+ */
+const stmtCrossingOrdinal = db.prepare(
+  `SELECT COUNT(*) AS n FROM tournaments WHERE kind = 'standard' AND id <= ?`,
+);
+
+export function crossingName(id: number): string {
+  return `Tournament #${(stmtCrossingOrdinal.get(id) as { n: number }).n}`;
+}
 
 /**
  * Display order for the benchmark AI personas when scores tie: strongest

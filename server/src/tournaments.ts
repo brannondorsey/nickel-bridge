@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
-import { BOARDS_PER_TOURNAMENT, BoardRow, ClaimRule, TournamentRow, aiTieRank, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, ClaimRule, TournamentRow, aiTieRank, crossingName, db } from './db.js';
 
 /**
  * The effective robot difficulty of one board — difficulty is a PER-BOARD
@@ -504,8 +504,10 @@ export function placeUser(
       difficulty,
       schedule,
     ) as TournamentRow;
-    stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
-    t.name = `Tournament #${t.id}`;
+    // Named off the crossing ordinal, not the row id — rehearsals share the id
+    // sequence and would otherwise show up as gaps in the numbering (db.ts).
+    t.name = crossingName(t.id);
+    stmtRenameTournament.run(t.name, t.id);
   }
   const done = (stmtMyBoardCount.get(t.id, userId) as { n: number }).n;
   return { tournament: t, nextBoard: Math.min(done + 1, BOARDS_PER_TOURNAMENT) };

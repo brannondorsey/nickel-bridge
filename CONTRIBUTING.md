@@ -1246,6 +1246,37 @@ today — harmless (the replay's own source query filters `kind = 'standard'`) b
 Now gated on `b.tournament.kind === 'standard'` too, closing it for exhibits as well as
 rehearsals — worth doing here specifically because rehearsals are explicitly uncapped.
 
+**A crossing's number is its ordinal, not its row id.** `tournaments.id` is one sequence
+shared by every `kind`, so each rehearsal — and, on `DEMO=1`, each exhibit — consumes a
+number no tournament ever wears. Production had drifted to "Tournament #100" with 88
+tournaments in existence, inflated by 13 Play-From-Here branches a player has no way to know
+about. `db.ts`'s `crossingName(id)` is the one place the rule lives (`COUNT(*) WHERE
+kind = 'standard' AND id <= ?`), called by all four creation sites — `placeUser`,
+`demo-seed.ts`'s ambient tournaments, and both halves of `demo.ts`'s `freshAiField`. The
+ordinal is stable forever, which is what makes it safe to bake into the stored `name`: it
+could only move if a standard row with a lower id were deleted, and the only
+`DELETE FROM tournaments` in the app is `discardRehearsal` (rehearsal rows only).
+`web/src/format.ts`'s `tournamentNo()` parses it back out of the name and needed no change.
+
+**The id stays the ADDRESS, and that separation is deliberate.** `/t/:id/b/:no`,
+`boards.tournament_id`, `elo_history.tournament_id` and `origin_tournament_id` are all raw
+ids. Two things depend on it: rehearsals reuse the board route for free (`Analyze.tsx`
+navigates a fresh branch straight to `/t/:id`, and a rehearsal has no ordinal to put there),
+and every link ever shared stays valid. Putting the ordinal in the URL instead would be
+actively unsafe rather than merely churn — ordinals `1..N` overlap the id space, so an old
+`/t/50` would resolve to a *different* tournament rather than 404. If it is ever wanted, the
+only safe route is a new path prefix alongside the old one, since the two value spaces
+cannot be told apart within one segment. It would also want a materialized `number` column
+with its own index: you cannot index the `COUNT` derivation, and `id` is already the rowid,
+i.e. the fastest lookup SQLite has — so that swap costs performance rather than buying it.
+
+The backfill that renamed the existing rows is the schema's first DATA-only migration, so it
+is guarded by `PRAGMA user_version` rather than by the column-existence test every migration
+above it uses — there is no new column to probe for, and the correlated `COUNT` per row is
+not something to re-run on every boot forever. Each data migration guards on its own number
+(`< 1`, setting 1) rather than on a shared "current version" constant, so a later bump can
+never drag a database already past this one back through it.
+
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
 haven't played, in two tiers: a **grace window** force-joins young (< 48h), under-filled

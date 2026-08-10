@@ -146,9 +146,45 @@ describe('placeUser over the database', () => {
   it('creates and names a tournament when the backlog is empty', () => {
     const u = addUser('creator');
     const { tournament, nextBoard } = placeUser(u, 'expert', { nowSec: NOW, rng: rng0 });
-    expect(tournament.name).toBe(`Tournament #${tournament.id}`);
+    // The display number is the crossing ORDINAL, not the row id (db.ts's
+    // crossingName) — equal here only because nothing has consumed an id out
+    // of the standard sequence yet. The rehearsal test below is the one that
+    // tells the two apart.
+    const ordinal = (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM tournaments WHERE kind = 'standard' AND id <= ?`)
+        .get(tournament.id) as { n: number }
+    ).n;
+    expect(tournament.name).toBe(`Tournament #${ordinal}`);
     expect(nextBoard).toBe(1);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournament.id); // keep later backlogs clean
+  });
+
+  it('numbers crossings past a rehearsal that consumed an id', () => {
+    // The bug this guards: `tournaments.id` is one sequence shared by every
+    // kind, so each Play-From-Here branch used to push the next tournament's
+    // DISPLAYED number up by one. Production reached "Tournament #100" with 88
+    // tournaments in existence. The id is still the address — only the name
+    // skips the rehearsal.
+    const [a, b] = ['numbering-a', 'numbering-b'].map(addUser);
+    const first = placeUser(a, 'beginner', { nowSec: NOW, rng: rng0 }).tournament;
+
+    // A rehearsal lands between the two placements and eats an id.
+    const branch = db
+      .prepare(
+        `INSERT INTO tournaments (name, seed, kind, difficulty, origin_tournament_id, origin_board_no, branch_ply)
+         VALUES ('rehearsal', 'seed', 'rehearsal', 'beginner', ?, 1, 12) RETURNING id`,
+      )
+      .get(first.id) as { id: number };
+
+    // b must not be graced into `first` (that would resume, not create), so
+    // give it a starter apiece up to the cap and age it past the grace TTL.
+    db.prepare(`UPDATE tournaments SET created_at = ? WHERE id = ?`).run(NOW - days(5), first.id);
+    const second = placeUser(b, 'beginner', { nowSec: NOW, rng: rng0 }).tournament;
+
+    expect(second.id).toBeGreaterThan(branch.id); // the id sequence did advance
+    const no = (t: { name: string }) => Number(t.name.match(/#(\d+)/)![1]);
+    expect(no(second)).toBe(no(first) + 1); // ...but the crossing number did not skip
   });
 
   it('counts distinct finishers, not total plays', () => {

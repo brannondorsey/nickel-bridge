@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { withAiPlayersSuspended } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, crossingName, db } from './db.js';
 import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament, ensureNewCrosser } from './demo.js';
 import { ensureAdvanced, loadBoard } from './game.js';
 import { SCENARIOS } from './scenarios.js';
@@ -131,7 +131,7 @@ function ensureAmbientTournament(seed: string, createdAt: number): TournamentRow
   const t = stmtInsertBackdated.get(seed, createdAt) as TournamentRow;
   // Same rename as placeUser — ambient tournaments are indistinguishable
   // from real ones on purpose (they SHOULD participate in placement).
-  const name = `Tournament #${t.id}`;
+  const name = crossingName(t.id);
   stmtRename.run(name, t.id);
   return { ...t, name };
 }

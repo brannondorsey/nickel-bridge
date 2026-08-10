@@ -3,7 +3,7 @@ import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { aiPlayersEnabled, ensureAiPlayers, enqueueAiField, noteTournamentActivity } from './ai-players.js';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, crossingName, db } from './db.js';
 import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 import { getTournament } from './tournaments.js';
@@ -162,12 +162,13 @@ async function runScenarioNow(
     const seed = `${s.seed}:${randomBytes(8).toString('hex')}`;
     const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill('intermediate'));
     const t = stmtCreateFreshAiTournament.get(seed, schedule) as TournamentRow;
-    stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
+    const name = crossingName(t.id);
+    stmtRenameTournament.run(name, t.id);
     if (aiPlayersEnabled()) {
       noteTournamentActivity(t.id);
       enqueueAiField(t.id, log ?? (console as unknown as FastifyBaseLogger));
     }
-    const fresh = loadBoard({ ...t, name: `Tournament #${t.id}` }, userId, s.boardNo, true)!;
+    const fresh = loadBoard({ ...t, name }, userId, s.boardNo, true)!;
     await ensureAdvanced(fresh);
     if (fresh.row.state !== s.expect) {
       throw httpError(500, `scenario ${s.id} drifted: expected ${s.expect}, got ${fresh.row.state}`);
