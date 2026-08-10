@@ -588,7 +588,7 @@ function CardsWorthPanel({
               </div>
             ) : null}
           </div>
-          {field.length > 1 ? <WorthRail field={field} parScore={par.parScore} /> : null}
+          {field.length > 1 || done.length > 0 ? <WorthRail field={field} parScore={par.parScore} rehearsals={done} /> : null}
           <p className="analyze-finding">
             <GlossaryProse
               text={
@@ -606,13 +606,40 @@ function CardsWorthPanel({
   );
 }
 
-/** the field on one rail, par as the dashed gate — geometry from analyzeRail.ts */
-function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']>['field']; parScore: number }) {
+/**
+ * The field on one rail, par as the dashed gate, your own rehearsal attempts
+ * plotted as small dots on that SAME line, right alongside the real players
+ * — geometry from analyzeRail.ts. A dot is green when that line beat your
+ * real table and red when it fell short (`--positive`/`--negative`, the
+ * app's one bidirectional pair — see AdjustedReceipt's identical framing for
+ * a single rehearsal's own delta). Smaller than a field dot and unlabelled
+ * (nothing here fights the field dots' alternating up/down contract-label
+ * bands) — the caption underneath is what carries the reading, the colour
+ * carries the direction. The caption names only the colours actually on
+ * screen (and disappears entirely if every attempt tied your table), rather
+ * than explaining a red or green dot that isn't there.
+ */
+function WorthRail({
+  field,
+  parScore,
+  rehearsals,
+}: {
+  field: NonNullable<BoardView['result']>['field'];
+  parScore: number;
+  rehearsals: RehearsalSummary[];
+}) {
   const layout = railLayout(
     field.map((f) => ({ score: f.scoreNS, contract: f.contract, you: f.isMe })),
     parScore,
+    rehearsals.map((rh) => rh.scoreNS!),
   );
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  // The legend names only the colours actually on screen — a board where
+  // every rehearsal tied your table has no green or red dot to explain, and
+  // one where every attempt landed on the same side of it has no reason to
+  // mention the other.
+  const hasBetter = layout.rehearsalDots.some((d) => d.better === true);
+  const hasWorse = layout.rehearsalDots.some((d) => d.better === false);
   return (
     <>
       <span className="worth-rail-label">
@@ -636,10 +663,35 @@ function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']
             </span>
           </Fragment>
         ))}
+        {layout.rehearsalDots.map((d) => (
+          <span
+            key={`r${d.score}`}
+            className={`worth-rehearsal-dot${d.better === true ? ' positive' : d.better === false ? ' negative' : ''}`}
+            style={{ left: pct(d.x) }}
+            aria-hidden="true"
+          />
+        ))}
       </div>
       {layout.omittedTables > 0 ? (
         <p className="worth-rail-note">
           {layout.omittedTables} more {layout.omittedTables === 1 ? 'table' : 'tables'} between the results shown.
+        </p>
+      ) : null}
+      {hasBetter || hasWorse ? (
+        <p className="worth-rail-note worth-rehearsal-note">
+          {rehearsals.length === 1 ? 'Your rehearsal' : `Your ${rehearsals.length} rehearsals`} marked on the rail —{' '}
+          {hasBetter ? (
+            <>
+              <span className="positive">green</span> beat your table
+            </>
+          ) : null}
+          {hasBetter && hasWorse ? ', ' : null}
+          {hasWorse ? (
+            <>
+              <span className="negative">red</span> fell short
+            </>
+          ) : null}
+          .
         </p>
       ) : null}
     </>

@@ -821,6 +821,56 @@ describe('Play From Here', () => {
     expect(bestStub.textContent).toContain('+650');
   });
 
+  it('plots finished rehearsals on THE FIELD rail, coloured against your real table, and names only the colours present', async () => {
+    apiMock.board.mockResolvedValue(donePlayed); // your table's own field row (isMe) scores 620
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠+1 by S', scoreNS: 700 },
+        { tournamentId: 56, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 101, contractLabel: '4♠-2X by S', scoreNS: 400 },
+        { tournamentId: 57, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 102, contractLabel: '4♠ by S', scoreNS: 620 },
+        { tournamentId: 58, boardNo: 2, branchPly: chargedPly, state: 'playing', createdAt: 103, contractLabel: null, scoreNS: null },
+      ],
+    });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    // one dot per distinct FINISHED score — the still-'playing' attempt has
+    // no score yet and contributes none
+    const dots = document.querySelectorAll('.worth-rehearsal-dot');
+    expect(dots).toHaveLength(3);
+    const bySign = [...dots].reduce((m, d) => {
+      m[d.className.includes('positive') ? 'positive' : d.className.includes('negative') ? 'negative' : 'tie'] =
+        (m[d.className.includes('positive') ? 'positive' : d.className.includes('negative') ? 'negative' : 'tie'] ?? 0) + 1;
+      return m;
+    }, {} as Record<string, number>);
+    expect(bySign).toEqual({ positive: 1, negative: 1, tie: 1 }); // 700 beats 620, 400 falls short, 620 ties
+
+    // both colours are on screen, so the legend names both
+    expect(screen.getByText(/marked on the rail/)).toBeInTheDocument();
+    const note = document.querySelector('.worth-rehearsal-note')!;
+    expect(note.textContent).toContain('green beat your table');
+    expect(note.textContent).toContain('red fell short');
+  });
+
+  it('omits the rail legend entirely when every rehearsal tied the real table', async () => {
+    apiMock.board.mockResolvedValue(donePlayed); // your table's own field row scores 620
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠ by S', scoreNS: 620 },
+      ],
+    });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    const dots = document.querySelectorAll('.worth-rehearsal-dot');
+    expect(dots).toHaveLength(1);
+    expect(dots[0].className).not.toMatch(/positive|negative/);
+    expect(document.querySelector('.worth-rehearsal-note')).toBeNull();
+    expect(screen.queryByText(/marked on the rail/)).not.toBeInTheDocument();
+  });
+
   it('renders neither history surface when no rehearsal exists yet', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
     apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
