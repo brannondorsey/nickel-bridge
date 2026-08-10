@@ -106,42 +106,36 @@ describe('first-crossing script ↔ capture drift guard', () => {
       expect(row(tied).scoreNS, `${tied} shares your score`).toBe(me.scoreNS);
       expect(row(tied).pct, `${tied} splits the matchpoints with you`).toBe(me.pct);
     }
-    expect(row('The Novice').contract, 'the Novice goes two down').toMatch(/−2$/);
+    expect(row('The Novice').contract, 'the Novice goes three down').toMatch(/−3$/);
     expect(COPY.fieldSay).toContain('The Shark and The Regular');
-    expect(COPY.fieldSay).toContain('went two down');
+    expect(COPY.fieldSay).toContain('went three down');
   });
 
-  it('the captured tail is a genuine claim the tour can animate, not a flat cut to the ledger', () => {
-    // Regression guard for the bug this capture fixed: gen_tour_board.mjs
-    // used to reload the board fresh from the DB before recapturing `final`
-    // (to pick up the persona field rows), which silently lost the
-    // in-memory-only `claimed` flag (server/src/game.ts's b.claimed has no
-    // persisted column) — Tour.tsx's stagePlaySteps can't stage a
-    // multi-trick jump, so it fell back to an unanimated cut straight to
-    // the ledger instead of the claim announcement + fast-forward.
-    expect(data.final.claimed).toBe(true);
+  it('the captured tail plays out to the ledger, with no claim to animate', () => {
+    // This capture USED to end in a claim: under the old optimistic gate the
+    // board was 100% determined double dummy with six tricks to go, so the
+    // server fast-played them and the tour got a free demonstration of the
+    // claim beat (lead → announcement → fast-forward). The pessimistic gate
+    // (packages/ai/src/claim.ts) plays that position out instead — a legal
+    // deviation could still have spoiled it — so the deal now runs to the
+    // last card and the tour's tail is ten more self-playing decisions.
+    //
+    // The capture is a strict EXTENSION of the old one: steps 0–18 are
+    // byte-identical, which is why script.ts's six curated steps needed no
+    // re-curation. What is gone is the claim demonstration; a newcomer now
+    // meets their first claim in a real game. Restoring it means mining a
+    // seed that is both teachable AND still claims under the new gate, and
+    // re-curating the narration for a different deal — a deliberate content
+    // job, not a side effect of a gate change.
+    expect(data.final.claimed).toBeFalsy();
     const last = data.steps[data.steps.length - 1];
     expect(last.view.state).toBe('playing');
-    // the exact two inputs Tour.tsx's runClaim needs to actually animate it
-    const info = claimAnnouncement(last.view, data.final);
-    expect(info).not.toBeNull();
-    expect(stageClaimSteps(last.view, data.final).length).toBeGreaterThan(0);
-
-    // ...and this capture happens to be the mixed case: of the six tricks
-    // the last decision resolves, the FIRST goes to the other side and only
-    // the five after it are N/S's laydown. So the tour is a live exercise of
-    // the lead beat (pay that trick, then announce), not just the fast
-    // -forward. A regenerated board0.json landing on a different line may
-    // legitimately flip this — re-curate rather than delete it, and check
-    // COPY still reads right against whichever shape the new capture has.
-    const plan = planClaim(last.view, data.final, { fast: true, motion: true })!;
-    expect(plan.info.priorTricks).toBe(1);
-    expect(plan.info.tricks).toBe(5);
-    expect(plan.info.priorTricks + plan.info.tricks).toBe(
-      data.final.playHistory!.length - (last.view.completedTricks ?? 0),
-    );
-    expect(plan.lead.length).toBeGreaterThan(0);
-    expect(plan.tail.length).toBeGreaterThan(0);
+    // The last decision resolves exactly the rest of the hand, so Tour.tsx's
+    // ordinary stagePlaySteps path (one trick boundary at most) is enough and
+    // runClaim is never entered.
+    expect(claimAnnouncement(last.view, data.final)).toBeNull();
+    expect(planClaim(last.view, data.final, { fast: true, motion: true })).toBeNull();
+    expect(data.final.playHistory!.length - (last.view.completedTricks ?? 0)).toBe(1);
   });
 });
 
@@ -277,12 +271,10 @@ describe('the first crossing (Tour)', () => {
       await user.click(spade2());
       await user.click(spade2());
 
-      // the tail self-plays through ordinary tricks, then hits this deal's
-      // genuine claim — the same ClaimOverlay the live board uses (tap to
-      // dismiss early), not a silent cut straight to the ledger
-      const claimOverlay = await screen.findByRole('dialog', { name: /claim/i }, { timeout: 15000 });
-      expect(claimOverlay).toHaveTextContent(/CLAIM/);
-      await user.click(claimOverlay);
+      // The tail self-plays every remaining trick to the end of the hand.
+      // It used to stop short and claim — see the capture guard above for why
+      // it no longer does, and what that costs the tour.
+      expect(screen.queryByRole('dialog', { name: /claim/i })).not.toBeInTheDocument();
 
       // the tail finishes to the real receipt…
       await screen.findByRole('button', { name: /see the field/i }, { timeout: 15000 });

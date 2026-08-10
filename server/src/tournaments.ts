@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
-import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, ClaimRule, TournamentRow, aiTieRank, db } from './db.js';
 
 /**
  * The effective robot difficulty of one board — difficulty is a PER-BOARD
@@ -19,6 +19,21 @@ export function boardDifficulty(t: TournamentRow, boardNo: number): Difficulty {
     if (d) return d;
   }
   return t.difficulty;
+}
+
+/**
+ * Which auto-claim gate this tournament's boards play under (see the
+ * claim_rule migration in db.ts). Deliberately alongside boardDifficulty():
+ * both answer "what policy applies to this board", both are stamped at
+ * creation and immutable, and both are the reason a board's replay is a pure
+ * function of its tournament row.
+ *
+ * Anything unrecognised resolves to 'pessimistic', which is the fail-safe
+ * direction: the worst it can do is decline to fast-forward a settled
+ * position, never claim an unsettled one.
+ */
+export function claimRule(t: TournamentRow): ClaimRule {
+  return t.claim_rule === 'optimistic' ? 'optimistic' : 'pessimistic';
 }
 
 const stmtTournament = db.prepare(`SELECT * FROM tournaments WHERE id = ?`);

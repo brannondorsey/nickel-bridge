@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { Bidder, MC_SAMPLES, chooseCardSampled, loadPolicyModel, mcDecisionSeed, solveFutureTricks } from '@bridge/ai';
+import {
+  Bidder,
+  MC_SAMPLES,
+  chooseCardSampled,
+  isOutcomeInvariant,
+  loadPolicyModel,
+  mcDecisionSeed,
+  solveFutureTricks,
+} from '@bridge/ai';
 import { Contract, Seat, legalCards, partnerOf, playState } from '@bridge/core';
 import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
@@ -211,14 +219,24 @@ describe('bidding and card-play noise are actually wired through advanceRobots',
           const actor = ps.handToPlay === dummy ? contract.declarer : ps.handToPlay;
           if (actor === 0) continue; // partner (North) is never subject to PLAY_NOISE
 
-          // Replicate advanceRobots' claim gate: once the position is a 100%
-          // laydown for either side, the rest of the hand is played true-DD
-          // (chooseCard/resolveClaim), not through the sampled/noisy path —
-          // recomputing a "pure" sampled counterfactual past this point would
-          // compare against the wrong algorithm entirely, a false signal.
+          // Replicate advanceRobots' claim gate: once it fires, the rest of
+          // the hand is played true-DD (chooseCard/resolveClaim), not through
+          // the sampled/noisy path — recomputing a "pure" sampled
+          // counterfactual past this point would compare against the wrong
+          // algorithm entirely, a false signal. BOTH halves of the gate have
+          // to be replicated, not just the double-dummy one: these tournaments
+          // are raw-inserted and so carry the shipped 'pessimistic' rule, and
+          // stopping at the DD laydown alone would give up on plies the real
+          // game went on playing sampled — weakening the test rather than
+          // breaking it, which is exactly the kind of drift that goes unnoticed.
           const solve = await solveFutureTricks(b.deal, contract, prefix);
           const remainingTricks = 13 - ps.completedTricks.length;
-          if (solve.bestScore === remainingTricks || solve.bestScore === 0) break;
+          if (solve.bestScore === remainingTricks || solve.bestScore === 0) {
+            const claimingSide = (solve.bestScore === remainingTricks ? ps.handToPlay % 2 : (ps.handToPlay + 1) % 2) as
+              | 0
+              | 1;
+            if (isOutcomeInvariant(b.deal, contract, prefix, claimingSide).invariant) break;
+          }
 
           const pure = await chooseCardSampled(b.deal, contract, prefix, {
             k: MC_SAMPLES.beginner.kOpp,

@@ -55,7 +55,11 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 the split byte-identical) — then, per
                 PLAY_NOISE, either the flat argmax or a seeded weighted pick among
                 the top playTopN cards by that same score), difficulty.ts (tier
-                type + K/BID_NOISE/PLAY_NOISE constants), dd-pool.ts/dd-worker.ts
+                type + K/BID_NOISE/PLAY_NOISE constants), claim.ts (isOutcomeInvariant —
+                the auto-claim gate's second condition: an exact, deterministic,
+                node-budgeted search for "no legal card by ANY of the four seats can
+                change the result". Pure and SYNCHRONOUS, no DDS and no model, unlike
+                everything else here), dd-pool.ts/dd-worker.ts
                 (lazy worker_threads DDS pool — one enqueue path serving solve/
                 analysePlay/ddTable/dealerPar under shared priority+starvation+
                 timeout rules; latency only, never outcomes), play-mc-forget.ts
@@ -220,6 +224,9 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 shelved full rule-engine design; difficulty-tuning-guide.md — how to reason
                 about/measure/tune the difficulty dials in packages/ai/src/difficulty.ts;
                 difficulty-calibration-research.md — the research log behind today's values;
+                auto-claim-uncertainty-research.md — why the auto-claim gate stopped trusting
+                a double-dummy laydown, with the measured effect and a Resolution section
+                correcting two claims in its own earlier analysis;
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
@@ -450,11 +457,42 @@ the server stays a plain request/response API. When `boardView.legalCards` has e
 card, `Board.tsx` plays it automatically after a short delay (`AUTO_PLAY_DELAY_MS`) instead of
 requiring a tap — it just simulates the second tap of the normal select-then-confirm flow.
 Separately, `advanceRobots` (`server/src/game.ts`) runs a double-dummy solve
-(`solveFutureTricks` in `packages/ai/src/play-ai.ts`) at every real decision point; the instant
-either side is DD-confirmed to win 100% of the remaining tricks, it marks the board `claimed`
-and plays out the rest via `chooseCard` for both sides — a claim is just "the server fast-plays
-a predetermined tail," not a distinct completion path, so scoring/`finishBoard`/Elo are
-untouched. The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
+(`solveFutureTricks` in `packages/ai/src/play-ai.ts`) at every real decision point; when the
+gate below is satisfied it marks the board `claimed` and plays out the rest via `chooseCard`
+for both sides — a claim is just "the server fast-plays a predetermined tail," not a distinct
+completion path, so scoring/`finishBoard`/Elo are untouched.
+
+**The gate is two conditions, and which apply is a property of the tournament**
+(`tournaments.claim_rule`, resolved by `claimRule()` in `tournaments.ts` — see db.ts's
+migration comment). The first is double dummy's: either side is DD-confirmed to win 100% of
+the remaining tricks. That was the whole gate until the pessimistic rule shipped, and it is
+still the whole gate on `'optimistic'` tournaments — every tournament that existed when the
+migration ran, kept that way because re-gating a board already played would change its replay
+(invariant 1). It is a claim about a minimax *value*, though: true only while everybody keeps
+playing correctly. Fast-forwarding on it means the server quietly making whatever decisions
+remain, including the player's own — measured on the golden trace's `hunt-1` board 2, the old
+gate claimed at **trick four** and banked two overtricks the player had not yet earned.
+
+So `'pessimistic'` — the default for every tournament created from now on — adds a second
+condition: the position must be **outcome-invariant**, i.e. no legal card, by any of the four
+seats, at any point in any continuation, can change the result.
+`isOutcomeInvariant` in `packages/ai/src/claim.ts` decides it — an exact, deterministic,
+node-budgeted search, pure and synchronous, no DDS. It leans on the framing to keep the
+question cheap: "side C takes every remaining trick, always" is the same as "side D never
+wins one, ever", so the search fails at the first trick D steals and only exhausts the tree
+to succeed. Note what "any of the four seats" costs — C's own partner is an adversary too, so
+a laydown that needs the right cashing order, or where one C hand can win and then be stuck
+on lead, no longer claims. Measured over 116 boards: claims still fire on 66% of them (vs 78%
+before), averaging 3.0 tricks fast-forwarded instead of 5.7, at ~0.6 ms of search per board.
+Running out of budget just means no claim, which is why the budget is a pacing knob and never
+a scoring one: a settled position plays out to the same score either way.
+
+That also closes invariant 1's old open question ("claiming quietly upgrades the robots")
+for new tournaments, and not by either route that had been proposed. The tail is still
+true-DD at every tier — but once invariance is proven, every possible tail scores the same,
+so there is nothing left for a weaker robot to be fallible *about*.
+
+The boundary is persisted as `boards.claimed_at_ply` (the plays-index of the first
 server-played tail card; NULL = no claim, or a pre-migration board): `GameBoard.claimed` stays
 transient per-request, but a finished board must be able to say at rest where its tail stopped
 being the human's own play — Analyze must never grade past it. The client detects a claim from `boardView.claimed` + `playHistory` (no extra fields
@@ -505,7 +543,11 @@ tier, resolved by `boardDifficulty()` in `tournaments.ts` from two tournament co
 = uniform at the label). `placeUser` stamps both from the creating user's preference
 (`users.difficulty`, default `'intermediate'`, set via `POST /api/me/difficulty` — backend
 only, no web UI yet); today's schedules are always uniform, so ramps/mixed schedules are a
-data change. Placement only matches users into tournaments of their preferred tier (resume
+data change. A third column, `claim_rule`, is resolved the same way (`claimRule()`, right
+beside `boardDifficulty()`) and is likewise stamped at creation and immutable — but per
+TOURNAMENT rather than per board, since it describes the server's own behaviour rather than
+robot strength and so wants no schedule; see "Auto-play and claims" above. Placement only
+matches users into tournaments of their preferred tier (resume
 of an already-started tournament is deliberately preference-blind). The player-facing tiers
 (`MC_SAMPLES` in `difficulty.ts`) all use `chooseCardSampled` (`packages/ai/src/play-mc.ts`)
 — K seeded layouts of the cards the acting player can't see, constrained by shown-out voids
@@ -1001,8 +1043,15 @@ recomputed against the LIVE field on every serve, so the whole response shares o
 with the Result's own table and a refresh sees late finishers; the one as-of-compute
 residue is stage 3's floor selection, and a drifted unjudged ply is captioned honestly
 via the served `momentFloor`. The grading boundary is `boards.claimed_at_ply`
-(re-derived by replaying the claim gate for pre-migration NULLs): cards past it were played by
-the server for both sides and are never graded. Only the human's own cards are graded
+(re-derived by `deriveClaimBoundary` replaying the claim gate for pre-migration NULLs — under
+the board's OWN tournament's `claim_rule`, which is a required argument precisely so a legacy
+board can't be re-derived under today's gate): cards past it were played by
+the server for both sides and are never graded. Note the pessimistic gate deliberately does
+NOT bump `ANALYZE_VERSION`: a board's claim rule is immutable, and every cache row that
+existed at migration time belongs to an `'optimistic'` tournament whose derivation is
+byte-identical to before — so nothing cached became wrong, and a bump would buy a full
+recompute of identical output. The precondition is that immutability; see the note beside
+`ANALYZE_VERSION`. Only the human's own cards are graded
 (`humanControls`, both flip orientations — robot partner North never), forced cards are
 skipped, and a one-player field refuses costs (`singleField`) rather than inventing them.
 **MP figures render only inside the Analyze screen** — the Result, Tournament ledger and live
@@ -1082,7 +1131,10 @@ depends on exactly that pair, so the deal comes out byte-identical for free, and
 `mcDecisionSeed`/`bidDecisionSeed` depend only on `(seed, boardNo, decisionIndex)`, never
 tournament id, so reusing the seed is desirable rather than a collision risk: redeciding
 nothing differently reproduces the real game byte-for-byte, diverging still applies the same
-seed to a genuinely different position. The board itself is **raw-seeded** — `calls`/
+seed to a genuinely different position. `claim_rule` is copied from the origin for the same
+reason, and is the ONE column where taking the schema default would be a bug: a rehearsal of a
+pre-migration board has to claim exactly where that board claimed, or replaying the origin's
+own cards stops reproducing the origin. The board itself is **raw-seeded** — `calls`/
 `bidEvals`/`contract` copied verbatim from the origin (the auction never branches) and
 `plays` truncated to `plays.slice(0, branchPly)` — then handed to the ordinary
 `advanceRobots`/`submitPlay`/`boardView` machinery completely unmodified (nothing in them
@@ -1989,18 +2041,30 @@ the sitemap and `robots.txt` follow on their own.
    reorder (not rescore) the end of `plays`. Still eyeball the diff — confirm it's exactly that
    reordering and the score is unchanged — before accepting a new fixture.
    **Claims are why "fast forward settled tricks" is a pacing setting and not a play one,
-   and there is an open question underneath them.** The claim gate is a TRUE-DD judgment
-   (`solveFutureTricks` sees all four hands and assumes best play by everyone) and
-   `resolveClaim` then plays the tail true-DD "at every difficulty" — but at beginner and
-   intermediate the robots would have played that tail through `chooseCardSampled`, i.e.
-   fallibly. So a position is only "settled" against a perfect opponent, and claiming
-   quietly upgrades the robots for the rest of the hand, deleting whatever the human would
-   have gained from an endgame mistake; the tier calibration, measured over full play, never
-   saw those tails. That is uniform today — everyone's boards claim — and it is exactly why
-   a per-user "don't claim for me" toggle was NOT built: it would hand two players on the
-   identical board different robots because of a checkbox, and feed that into matchpoints
-   and Elo. Whether the gate itself should consult the tier is unresolved and worth
-   measuring; changing it is a deliberate robot change under this invariant.
+   and the open question that used to sit underneath them is now closed for new
+   tournaments.** The DD half of the gate is a TRUE-DD judgment (`solveFutureTricks` sees all
+   four hands and assumes best play by everyone) and `resolveClaim` plays the tail true-DD at
+   every difficulty — but at beginner and intermediate the robots would have played that tail
+   through `chooseCardSampled`, i.e. fallibly. So a DD-settled position is only settled
+   against a perfect opponent, and claiming on that alone quietly upgraded the robots for the
+   rest of the hand, deleting whatever the human would have gained from an endgame mistake;
+   the tier calibration, measured over full play, never saw those tails. A per-user "don't
+   claim for me" toggle was rejected as the fix — it would hand two players on the identical
+   board different robots because of a checkbox, and feed that into matchpoints and Elo — and
+   the fix that shipped keeps that property: the rule is per TOURNAMENT
+   (`tournaments.claim_rule`), so everyone on a board still faces the same gate.
+   `'pessimistic'` requires the position be outcome-invariant under every legal card by all
+   four seats, which dissolves the question rather than answering it — if no tail can change
+   the score, the tier of whoever plays that tail cannot matter either. `'optimistic'`
+   tournaments (every one that predates the migration) keep the old gate and the old caveat,
+   permanently and by design. Changing any of this — the rule resolution, `CLAIM_NODE_BUDGET`,
+   the fast paths or the move ordering in `packages/ai/src/claim.ts` — is a deliberate robot
+   change under this invariant. Both golden traces
+   (`server/test/fixtures/robot-trace.json` and `robot-trace-optimistic.json`, one per rule)
+   guard it; regenerate with `node tools/gen_trace_fixture.mjs`. Note the asymmetry when you
+   read that diff: the optimistic fixture should never move, while the pessimistic one can
+   legitimately change SCORE and not just tail ordering, since it hands decisions back to a
+   "human" that always plays its first legal card.
    The demo-mode
    scenario recipes in `server/src/scenarios.ts` are replay-sensitive the same way: a
    deliberate robot change breaks them and `server/test/scenarios.test.ts` fails — re-derive

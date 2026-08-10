@@ -45,6 +45,25 @@ export interface Scenario {
   /** seeder pre-plays this many bots through the SAME board, so completing it live shows a real matchpoint field */
   fieldBots?: number;
   /**
+   * This exhibit PROMISES a claim on the tester's next action — the ticket, the
+   * announcement hold, the fast-forward. `expect` can't express that: it
+   * describes the board one action BEFORE the payoff, so a recipe that still
+   * arrives in the right state while no longer claiming passes the drift guard
+   * in silence. It is not a hypothetical failure — the pessimistic claim gate
+   * (db.ts's claim_rule migration) broke exactly these two exhibits without
+   * reddening a single test. Set it wherever the description says "claim" and
+   * scenarios.test.ts will play out that final action, on its own replay, for
+   * every legal card.
+   *
+   * Which value matters, because under the pessimistic gate whether a claim
+   * fires can depend on WHICH card the tester picks:
+   *   'all' — every legal final card claims, so the copy may safely invite
+   *           them to play any of them.
+   *   'any' — at least one does. The copy MUST then name the card, or a tester
+   *           following it lands on a board that just keeps playing.
+   */
+  expectClaimOnFinalAction?: 'any' | 'all';
+  /**
    * This is the tournament's last board, and finishing it live should reveal
    * a genuine tournament-summary screen — not just this one board's receipt.
    * The executor pre-completes the acting user's boards 1..(boardNo - 1)
@@ -195,7 +214,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'claim-fires',
     label: 'The defense claims the rest',
     description:
-      'Your doubled 1NT is going down and the robots can prove it. One forced ♣Q left — it takes the trick, and only once that trick is paid does the claim ticket go up over the seven the defense can prove are theirs, then the fast-forward runs to the score.',
+      'Your doubled 1NT is five light and the defense can prove the rest. Play the ♣9 — the claim ticket goes up over the last three tricks, then the fast-forward runs the board out to a very expensive score. (Take the ♣K instead and there is no ticket: that line is still live, which is the point of the gate.)',
     category: 'claims',
     seed: 'hunt-6',
     boardNo: 1,
@@ -213,8 +232,18 @@ export const SCENARIOS: Scenario[] = [
       card(17),
       card(14),
       card(45),
+      card(49),
+      card(6),
+      card(16),
+      card(18),
+      card(19),
+      card(29),
+      card(8),
+      card(11),
+      card(30),
     ],
     expect: 'playing',
+    expectClaimOnFinalAction: 'any', // only the ♣9; the ♣K plays on
   },
 
   // ---- scoring ----
@@ -276,7 +305,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'analyze-play',
     label: 'The audit of a crossing',
     description:
-      'One card left, and the position is already settled — play it and the claim fast-forwards the rest onto the receipt. Then take ANALYZE PLAY on the result: this line leaked real matchpoints, and WHERE IT TURNED shows exactly which cards were findable from your seat and missed — a card only double dummy would have found makes no appearance at all. (Mined so the audit has something to say — several moments clear the floor here.)',
+      'Four diamonds left, and the position is already settled — play any of them and the claim fast-forwards the last four tricks onto the receipt. Then take ANALYZE PLAY on the result: this line leaked real matchpoints, and WHERE IT TURNED shows exactly which cards were findable from your seat and missed — a card only double dummy would have found makes no appearance at all. (Mined so the audit has something to say — several moments clear the floor here.)',
     category: 'results',
     seed: 'analyze-demo-b',
     boardNo: 1,
@@ -292,8 +321,10 @@ export const SCENARIOS: Scenario[] = [
       card(19),
       card(21),
       card(23),
+      card(50),
     ],
     expect: 'playing',
+    expectClaimOnFinalAction: 'all',
     fieldBots: 3,
   },
 

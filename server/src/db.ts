@@ -281,6 +281,49 @@ if (!tournamentColumns.has('branch_ply')) {
   db.exec(`ALTER TABLE tournaments ADD COLUMN branch_ply INTEGER`);
 }
 
+// Migration: `claim_rule` — which auto-claim gate this tournament's boards
+// play under, resolved by claimRule() in tournaments.ts. 'optimistic' is the
+// legacy gate: claim the moment double dummy says one side takes 100% of the
+// remaining tricks, which only holds while everyone keeps playing correctly —
+// so the server was silently making the rest of the player's decisions (and
+// upgrading weak-tier robots) to get there. 'pessimistic' additionally
+// requires the position be OUTCOME-INVARIANT: no legal card by any of the four
+// seats, in any continuation, can change the result (packages/ai/src/claim.ts).
+//
+// Note the ALTER/UPDATE pair, and that the default is the NEW value rather
+// than the legacy one. Both halves are deliberate. Re-gating a board changes
+// its deterministic replay, which invariant 1 forbids for boards already
+// played, so every tournament that exists when this runs is stamped
+// 'optimistic' and keeps the old gate forever; the ALTER's own default only
+// backfills, and the UPDATE immediately corrects it. Which leaves the default
+// free to be the rule we actually ship — and SQLite reuses an ADD COLUMN
+// default for every future INSERT that omits the column, so this is what makes
+// all five creation sites (placeUser, demo-seed, the two in demo.ts, and the
+// tools' raw inserts) pick up the new gate with no per-site edit. The
+// alternative — DEFAULT 'optimistic', stamp 'pessimistic' at each site — fails
+// in the worse direction: a creation site added later by someone who never
+// read this comment would silently keep over-claiming forever, which is the
+// bug being fixed. This way a missed site merely claims less often.
+//
+// The one site that must NOT take the default is rehearsal.ts, which copies
+// its origin's rule verbatim — a "Play From Here" branch of a legacy board has
+// to reproduce that board's own claim, or replaying the origin's cards
+// diverges. See createRehearsalTx.
+//
+// Immutable after creation, like `difficulty`. Analyze caches a board's claim
+// boundary (board_analyses.core.claimedAtPly) without recording which rule
+// produced it, which is safe precisely because the rule never changes under a
+// board — so anything that ever flips this column on an existing tournament
+// must delete that tournament's board_analyses rows.
+if (!tournamentColumns.has('claim_rule')) {
+  db.exec(`
+    BEGIN;
+    ALTER TABLE tournaments ADD COLUMN claim_rule TEXT NOT NULL DEFAULT 'pessimistic';
+    UPDATE tournaments SET claim_rule = 'optimistic';
+    COMMIT;
+  `);
+}
+
 // Migration: `claimed_at_ply` — the plays[] index of the first card the
 // server played as part of resolving a laydown claim (advanceRobots'
 // claim gate in game.ts), NULL when the board finished without claiming.
@@ -345,6 +388,17 @@ export interface UserRow {
   created_at: number;
 }
 
+/**
+ * 'optimistic' = the legacy gate (double dummy says one side takes every
+ * remaining trick); 'pessimistic' = that, AND no legal card by any of the four
+ * seats can change the result. Per tournament rather than per board: duplicate
+ * fairness only needs the rule identical for everyone on a board, which
+ * tournament scope trivially gives, and unlike `difficulty` this is a property
+ * of the server's own behaviour rather than of robot strength — so it wants no
+ * per-board schedule to go with it.
+ */
+export type ClaimRule = 'optimistic' | 'pessimistic';
+
 /** Tournaments never close: they stay joinable forever to maximize the field. */
 export interface TournamentRow {
   id: number;
@@ -358,6 +412,8 @@ export interface TournamentRow {
   board_difficulties: string | null;
   /** 1 = the benchmark AI personas play this tournament (stamped at creation, never backfilled) */
   ai_field: number;
+  /** which auto-claim gate this tournament's boards play under; immutable after creation, resolved by claimRule() — see the migration comment above */
+  claim_rule: ClaimRule;
   /** rehearsal only: the real tournament/board this branched from, and the plays[] index of the first redecided card. NULL on every other kind. */
   origin_tournament_id: number | null;
   origin_board_no: number | null;
