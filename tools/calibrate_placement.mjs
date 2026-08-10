@@ -4,13 +4,20 @@
  * placement policies and score the outcomes.
  *
  * WHY THIS EXISTS. The placement knobs in server/src/tournaments.ts (PLACEMENT,
- * chooseTournament) were set for a population that does not exist yet, and at
- * today's scale two of them are actively harmful: the grace tier drains
- * oldest-first, which starves the freshest tournaments when one player
- * out-produces everyone else, and SAMPLE_RATIO deliberately SPREADS
- * simultaneous arrivals when what a five-player site needs is for them to pile
- * onto one board. Changing either is a guess unless it is measured, and the
- * thing to measure it against is what people actually did.
+ * chooseTournament) were set for a population that does not exist yet, and
+ * reasoning about them from first principles produces confident wrong answers
+ * -- this tool exists because it caught two of them. Changing a knob is a guess
+ * unless it is measured, and the thing to measure against is what people
+ * actually did.
+ *
+ * It has already paid for itself once: the grace tier drained OLDEST-first,
+ * which reads neutral but behaves like fullest-first (older candidates have had
+ * the most time to fill), starving boards stuck at one player whenever a single
+ * player out-produces everyone else. The replay also killed the obvious fix --
+ * explicit fullest-first measured WORSE than the rule it would have replaced.
+ * `graceOrder` (rescue, then fill, then freshness) shipped instead, so the
+ * `current` row below is now that policy rather than the one described here.
+ * See TOURNAMENT-SELECTION.md's "Grace ordering" for the full record.
  *
  * WHICH NUMBER TO READ. `meanField` is NOT it, and cannot be improved: a player
  * may never be placed into a tournament they have already played, so the
@@ -192,7 +199,8 @@ function simulate(trace, opts = {}) {
  * board already has a second player.
  */
 const ORDERINGS = {
-  // Production: FIFO. Starves the tail when demand outruns supply.
+  // The pre-graceOrder rule. FIFO: starves the tail when demand outruns
+  // supply. Kept so the change that replaced it stays reproducible.
   oldest: (a, b) => a.createdAt - b.createdAt || a.id - b.id,
   // Best-fit bin packing. Intuitive, and measurably wrong — see above.
   fullest: (a, b) => b.joins.length - a.joins.length || b.createdAt - a.createdAt || a.id - b.id,
@@ -207,6 +215,13 @@ const ORDERINGS = {
   // one human first, and otherwise top up the fullest. This is the ordering
   // that serves a LARGE-FIELD objective without paying for it in orphans --
   // the two goals only conflict once every board has a second player.
+  //
+  // THIS IS WHAT SHIPPED — server/src/tournaments.ts's graceOrder. Modelling
+  // it here as well is deliberate redundancy rather than duplication: `current`
+  // already exercises the real function, so running both is a live check that
+  // the model and production still agree (they do, to the digit). Keep them in
+  // step, or the sweeps below start comparing candidates against a baseline
+  // production no longer has.
   rescueThenFullest: (a, b) => {
     const solo = (c) => (c.joins.length === 1 ? 0 : 1);
     return solo(a) - solo(b) || b.joins.length - a.joins.length || b.createdAt - a.createdAt || a.id - b.id;

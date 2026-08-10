@@ -1326,7 +1326,9 @@ migration, and then the whole process, runs inside that abandoned write transact
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
 haven't played, in two tiers: a **grace window** force-joins young (< 48h), under-filled
-(< 4 starters) tournaments so fresh ones collect a field instead of orphaning; then
+(< 4 starters) tournaments so fresh ones collect a field instead of orphaning — ordered
+**rescue, then fill, then freshness** by `graceOrder`, which is where nearly all the leverage
+in placement sits (see "Tuning placement" below and its doc comment); then
 candidates are scored `log(1 + distinct finishers) · e^(−age/τ)` and one is weighted-random
 sampled from those near the top score. If nothing beats what a brand-new tournament would
 score (`ln 2`), a new one is created — which the grace window then fills. All knobs live in
@@ -1348,12 +1350,16 @@ easy to get wrong from first principles:
 - **The grace tier decides ~50% of placements and the scoring tier ~11%**, so the popularity
   score, `SAMPLE_RATIO` and `TAU_S` are near-inert at this scale — ablation moves them by
   0.0-0.2pp. Tune the grace tier first; it is where the leverage is.
-- **Grace ordering is the lever**, and the two obvious orderings are each half right.
-  Filling the FULLEST board buys the best field depth and the worst loneliness (15 orphans
-  vs production's 10) — there is always something fuller to prefer over a board sitting at
-  one human. EMPTIEST-first inverts both. `rescueThenFullest` — rescue any board stuck at one
-  player, otherwise top up the fullest, freshest as a light tiebreak — gets both, because the
-  goals only compete once every board has a second player.
+- **Grace ordering is the lever, and it is SHIPPED** as `graceOrder` — rescue any board
+  stuck at one player, otherwise top up the fullest, freshest only as a tiebreak. The two
+  obvious orderings are each half right: FULLEST-first buys the best field depth and the
+  worst loneliness (15 orphans vs the old rule's 10), since there is always something fuller
+  to prefer over a board at one human; EMPTIEST-first inverts both. The composite wins
+  because the goals only compete once every board has a second player. Measured against the
+  real trace: orphans 10 → 7, fieldSeen 3.78 → 3.87, co-presence 41.3h → 22.6h. Note the old
+  rule was OLDEST-first, which reads neutral but behaves like fullest-first — older boards
+  have had the most time to fill. Full record in
+  [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md#grace-ordering-rescue-then-fill).
 - **Read `fieldSeen`, not `meanField`.** `sum(f²)/sum(f)` is the field at the average
   CROSSING rather than the average tournament, which is what a player actually experiences.
   It is nearly INELASTIC (3.6–4.1 across every ordering) since only its concentration can

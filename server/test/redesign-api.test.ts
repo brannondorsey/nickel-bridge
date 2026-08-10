@@ -66,15 +66,27 @@ describe('leaderboard movement', () => {
   });
 
   it('gives a late joiner of an old tournament numeric movement (retroactive re-rank)', async () => {
-    // JIT placement grace-serves Carol the oldest young under-filled
-    // tournament, which is older than the latest rated one — the recompute
-    // inserts her into history retroactively, so she exists in both snapshots.
+    // Carol joins the OLDEST rated tournament, which is older than the latest
+    // one — the recompute inserts her into history retroactively, so she
+    // exists in both snapshots and gets numeric movement.
+    //
+    // Deliberately NOT via POST /api/play: which tournament placement serves
+    // is a property of graceOrder, not of the movement math under test, and
+    // this test used to depend on that ordering serving the oldest candidate.
+    // It broke the day the tier switched to rescue-then-fill, which now hands
+    // a newcomer the FRESHEST equivalent board — a fine placement decision
+    // that happened to make Carol debut at the latest rated tournament, i.e.
+    // the sibling case below. Boards deal lazily on GET, so joining an
+    // explicit tournament by id is exactly what a late joiner does anyway.
     const { leaderboardMovement } = await import('../src/tournaments.js');
+    const { db } = await import('../src/db.js');
     const carol = new TestClient(app, 'Carol');
     await carol.login();
     const carolId = (await carol.get('/api/me')).user.id;
-    const { tournamentId } = await carol.post('/api/play');
-    for (let no = 1; no <= 4; no++) await playBoard(carol, tournamentId, no);
+    const { oldest } = db.prepare(`SELECT MIN(tournament_id) AS oldest FROM elo_history`).get() as {
+      oldest: number;
+    };
+    for (let no = 1; no <= 4; no++) await playBoard(carol, oldest, no);
     const movement = leaderboardMovement();
     expect(typeof movement.get(carolId)).toBe('number');
   });
