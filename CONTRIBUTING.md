@@ -1700,9 +1700,17 @@ newer settings has one thing worth knowing:
   (PLAY THEM OUT). It is a **server** preference, unlike every other row here: it is read in
   `advanceRobots`, where a claim is decided, not by anything on the client.
   This row replaced "Fast forward settled tricks", which chose between a compressed replay
-  and one at table speed. That question stopped being the interesting one: the compressed
-  replay is now the only one (`stageClaimSteps`' `fast` argument is `true` at every call
-  site), and what a player can actually choose is whether the tail is taken off them at all.
+  and one at table speed. That question stopped being the interesting one: what a player can
+  actually choose is whether the tail is taken off them at all. `stageClaimSteps`' `fast`
+  argument survives as an internal pacing knob rather than a preference — `planClaim`'s tail
+  passes `true`, its **lead** deliberately passes `false` (that trick is ordinary play, not
+  the claim), and `Board.tsx`'s `applyBoard` fallback takes the `false` default. That last
+  one is a latent inconsistency rather than a decision: it is the path a claimed response
+  takes when it did NOT arrive through `submitCard`/`runClaim` — an auction whose very first
+  position is already settled — and it both replays at table pace and skips the
+  `ClaimOverlay`. Rare enough (post-gate, a claim at the opening lead needs a total laydown)
+  that it predates this work and is left alone; routing it through `runClaim` is the fix if
+  it ever shows up in front of a player.
   **The setting only exists because the claim gate is pessimistic.** Under the old gate a
   claim genuinely changed the outcome — it played the human's remaining decisions correctly
   on their behalf — so letting one player opt out would have handed two players on the
