@@ -194,9 +194,9 @@ const stmtRehearsalForDiscard = db.prepare(`
 const stmtDeleteRehearsalBoards = db.prepare(`DELETE FROM boards WHERE tournament_id = ?`);
 const stmtDeleteRehearsalTournament = db.prepare(`DELETE FROM tournaments WHERE id = ?`);
 
-// No PRAGMA foreign_keys=ON anywhere in this codebase (see db.ts) — FK
-// constraints here are declarative only, so the board row has to be deleted
-// before its tournament explicitly, inside one transaction.
+// db.ts sets PRAGMA foreign_keys = ON, so boards.tournament_id is enforced:
+// the board row has to be deleted before its tournament, or the parent delete
+// fails with FOREIGN KEY constraint failed. Both go in one transaction.
 const discardRehearsalTx = db.transaction((rehearsalTournamentId: number) => {
   stmtDeleteRehearsalBoards.run(rehearsalTournamentId);
   stmtDeleteRehearsalTournament.run(rehearsalTournamentId);

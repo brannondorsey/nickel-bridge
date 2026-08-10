@@ -146,16 +146,16 @@ describe('placeUser over the database', () => {
   it('creates and names a tournament when the backlog is empty', () => {
     const u = addUser('creator');
     const { tournament, nextBoard } = placeUser(u, 'expert', { nowSec: NOW, rng: rng0 });
-    // The display number is the crossing ORDINAL, not the row id (db.ts's
-    // crossingName) — equal here only because nothing has consumed an id out
-    // of the standard sequence yet. The rehearsal test below is the one that
-    // tells the two apart.
-    const ordinal = (
-      db
-        .prepare(`SELECT COUNT(*) AS n FROM tournaments WHERE kind = 'standard' AND id <= ?`)
-        .get(tournament.id) as { n: number }
-    ).n;
-    expect(tournament.name).toBe(`Tournament #${ordinal}`);
+    // The display number comes off the `number` sequence, not the row id
+    // (db.ts's assignCrossingNumber). Asserted against the STORED column rather
+    // than re-derived here: re-deriving it would restate the implementation
+    // and pass no matter what either side did. The rehearsal test below is
+    // what tells the number and the id apart.
+    const stored = db.prepare(`SELECT number FROM tournaments WHERE id = ?`).get(tournament.id) as {
+      number: number | null;
+    };
+    expect(stored.number).not.toBeNull();
+    expect(tournament.name).toBe(`Tournament #${stored.number}`);
     expect(nextBoard).toBe(1);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournament.id); // keep later backlogs clean
   });
@@ -185,6 +185,7 @@ describe('placeUser over the database', () => {
     expect(second.id).toBeGreaterThan(branch.id); // the id sequence did advance
     const no = (t: { name: string }) => Number(t.name.match(/#(\d+)/)![1]);
     expect(no(second)).toBe(no(first) + 1); // ...but the crossing number did not skip
+    expect(second.number).toBe(no(second)); // and the name renders the stored column
   });
 
   it('counts distinct finishers, not total plays', () => {

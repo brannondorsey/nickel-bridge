@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The crossing-number backfill (db.ts's PRAGMA user_version migration).
+ * Crossing display numbers — db.ts's `number` column, its backfill migration,
+ * and assignCrossingNumber().
  *
  * Tested against a replica of production's actual shape rather than a toy
  * table, because the bug it fixes only appears when rehearsals are INTERLEAVED
@@ -54,12 +55,27 @@ seed.close();
 
 // Importing db.ts is what runs the migration under test.
 process.env.DB_PATH = DB_PATH;
-const { db, crossingName } = await import('../src/db.js');
+const { db, assignCrossingNumber } = await import('../src/db.js');
 
-const nameOf = (id: number) =>
-  (db.prepare(`SELECT name FROM tournaments WHERE id = ?`).get(id) as { name: string }).name;
+const rowOf = (id: number) =>
+  db.prepare(`SELECT name, number FROM tournaments WHERE id = ?`).get(id) as {
+    name: string;
+    number: number | null;
+  };
+const nameOf = (id: number) => rowOf(id).name;
+/** every display number worn by more than one row — the thing that must always be empty */
+const duplicates = () =>
+  db
+    .prepare(
+      `SELECT number FROM tournaments WHERE number IS NOT NULL GROUP BY number HAVING COUNT(*) > 1`,
+    )
+    .all();
+const newStandardRow = () =>
+  (db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES ('T', 's', 'standard') RETURNING id`).get() as {
+    id: number;
+  }).id;
 
-describe('crossing display numbers', () => {
+describe('the backfill', () => {
   it('renumbers standard tournaments 1..N with no gaps', () => {
     expect(standardIds.length).toBe(88);
     const names = standardIds.map((id) => nameOf(id));
@@ -74,21 +90,81 @@ describe('crossing display numbers', () => {
   });
 
   it('leaves rehearsals out of the sequence entirely', () => {
-    for (const id of REHEARSAL_IDS) expect(nameOf(id)).toBe(`Tournament #${id}`); // untouched
+    for (const id of REHEARSAL_IDS) {
+      expect(rowOf(id)).toEqual({ name: `Tournament #${id}`, number: null }); // name untouched
+    }
   });
 
-  it('crossingName() agrees with what the backfill wrote', () => {
-    // The runtime helper and the migration are the same expression; this is
-    // the assertion that keeps them that way, since a new tournament named by
-    // one has to continue the sequence written by the other.
-    for (const id of [1, 74, 80, 100]) expect(crossingName(id)).toBe(nameOf(id));
+  it('stores the number alongside the name it renders into', () => {
+    for (const id of [1, 74, 80, 100]) {
+      const { name, number } = rowOf(id);
+      expect(name).toBe(`Tournament #${number}`);
+    }
   });
 
-  it('does not re-run once user_version is stamped', () => {
-    expect(db.pragma('user_version', { simple: true })).toBe(1);
-    // A name deliberately corrupted after the migration stays corrupted: proof
-    // the guard is what gates the UPDATE, not the UPDATE being idempotent.
-    db.prepare(`UPDATE tournaments SET name = 'sentinel' WHERE id = 1`).run();
-    expect(nameOf(1)).toBe('sentinel');
+  it('leaves the structure its own guard keys on, so a second boot skips it', () => {
+    // Deliberately NOT a sentinel-corruption check: db.ts runs once per
+    // process, so nothing in this file can actually re-enter the migration.
+    // What CAN be asserted is the post-state the `!tournamentColumns.has(...)`
+    // guard reads on the next boot — the same structural test every other
+    // migration in that file uses, and the reason this one needs no
+    // PRAGMA user_version stamp.
+    const columns = (db.prepare(`PRAGMA table_info(tournaments)`).all() as { name: string }[]).map((c) => c.name);
+    expect(columns).toContain('number');
+    const index = (db.prepare(`PRAGMA index_list(tournaments)`).all() as { name: string; unique: number }[]).find(
+      (i) => i.name === 'idx_tournaments_number',
+    );
+    expect(index?.unique).toBe(1);
+  });
+});
+
+describe('assignCrossingNumber', () => {
+  it('continues the sequence the backfill wrote, and returns the stamped row', () => {
+    const id = newStandardRow();
+    const stamped = assignCrossingNumber(id);
+    // The returned row is the post-UPDATE one, so a caller cannot go on
+    // holding the `number: null` row its INSERT ... RETURNING * handed back.
+    expect({ name: stamped.name, number: stamped.number }).toEqual({ name: 'Tournament #89', number: 89 });
+    expect(rowOf(id)).toEqual({ name: 'Tournament #89', number: 89 });
+  });
+
+  it('skips to a gap rather than reusing a number when a standard row is deleted', () => {
+    // THE reason this is a MAX+1 sequence and not a COUNT of the rows before
+    // it. Nothing in the app deletes a standard tournament today, so a count
+    // would be correct today — but it is correct only for as long as that
+    // holds, and it fails by handing the next crossing a number another one is
+    // already displaying, silently and with nothing to catch it. Deleting the
+    // row here stands in for whatever eventually does it: a retention job, an
+    // account deletion, a hand-edit on the Fly volume.
+    const before = db.prepare(`SELECT MAX(number) AS n FROM tournaments`).get() as { n: number };
+    db.prepare(`DELETE FROM tournaments WHERE number = 40`).run();
+
+    const id = newStandardRow();
+    expect(assignCrossingNumber(id).number).toBe(before.n + 1); // a gap where #40 was, never a reissue
+    expect(duplicates()).toEqual([]);
+  });
+
+  it('refuses to hand the same number out twice', () => {
+    // The unique index is what makes the paragraph above a guarantee rather
+    // than a promise: anything that would duplicate a number — a second
+    // writer, a restored backup, a bad hand-edit — raises here instead of
+    // shipping two crossings wearing it.
+    const id = newStandardRow();
+    expect(() => db.prepare(`UPDATE tournaments SET number = 88 WHERE id = ?`).run(id)).toThrow(
+      /UNIQUE constraint failed/,
+    );
+  });
+
+  it('never numbers a rehearsal, so discarding one cannot move a crossing', () => {
+    const before = duplicates();
+    const reh = (db.prepare(
+      `INSERT INTO tournaments (name, seed, kind) VALUES ('rehearsal', 's', 'rehearsal') RETURNING id`,
+    ).get() as { id: number }).id;
+    const max = (db.prepare(`SELECT MAX(number) AS n FROM tournaments`).get() as { n: number }).n;
+    db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(reh);
+
+    const id = newStandardRow();
+    expect(assignCrossingNumber(id).number).toBe(max + 1);
+    expect(duplicates()).toEqual(before);
   });
 });

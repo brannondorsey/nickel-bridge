@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { withAiPlayersSuspended } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, crossingName, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, assignCrossingNumber, db } from './db.js';
 import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament, ensureNewCrosser } from './demo.js';
 import { ensureAdvanced, loadBoard } from './game.js';
 import { SCENARIOS } from './scenarios.js';
@@ -87,7 +87,6 @@ const stmtTournamentBySeed = db.prepare(`SELECT * FROM tournaments WHERE seed = 
 const stmtInsertBackdated = db.prepare(
   `INSERT INTO tournaments (name, seed, difficulty, created_at, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
 );
-const stmtRename = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtBoardExists = db.prepare(
   `SELECT 1 FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`,
 );
@@ -129,11 +128,10 @@ function ensureAmbientTournament(seed: string, createdAt: number): TournamentRow
   const existing = stmtTournamentBySeed.get(seed) as TournamentRow | undefined;
   if (existing) return existing;
   const t = stmtInsertBackdated.get(seed, createdAt) as TournamentRow;
-  // Same rename as placeUser — ambient tournaments are indistinguishable
-  // from real ones on purpose (they SHOULD participate in placement).
-  const name = crossingName(t.id);
-  stmtRename.run(name, t.id);
-  return { ...t, name };
+  // Numbered exactly as placeUser numbers a real one — ambient tournaments
+  // are indistinguishable from real ones on purpose (they SHOULD participate
+  // in placement), so they take a number from the same sequence.
+  return assignCrossingNumber(t.id);
 }
 
 async function seedTournament(

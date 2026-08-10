@@ -3,7 +3,7 @@ import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { aiPlayersEnabled, ensureAiPlayers, enqueueAiField, noteTournamentActivity } from './ai-players.js';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, crossingName, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, assignCrossingNumber, db } from './db.js';
 import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 import { getTournament } from './tournaments.js';
@@ -33,7 +33,6 @@ const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? A
 const stmtCreateFreshAiTournament = db.prepare(
   `INSERT INTO tournaments (name, seed, difficulty, board_difficulties, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
 );
-const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 
 const DEMO_HANDLE = 'Inspector';
 const NEW_CROSSER_HANDLE = 'New Crosser';
@@ -161,14 +160,13 @@ async function runScenarioNow(
     // house rows ranking in The Field, house scores in the receipt's field.
     const seed = `${s.seed}:${randomBytes(8).toString('hex')}`;
     const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill('intermediate'));
-    const t = stmtCreateFreshAiTournament.get(seed, schedule) as TournamentRow;
-    const name = crossingName(t.id);
-    stmtRenameTournament.run(name, t.id);
+    const created = stmtCreateFreshAiTournament.get(seed, schedule) as TournamentRow;
+    const t = assignCrossingNumber(created.id);
     if (aiPlayersEnabled()) {
       noteTournamentActivity(t.id);
       enqueueAiField(t.id, log ?? (console as unknown as FastifyBaseLogger));
     }
-    const fresh = loadBoard({ ...t, name }, userId, s.boardNo, true)!;
+    const fresh = loadBoard(t, userId, s.boardNo, true)!;
     await ensureAdvanced(fresh);
     if (fresh.row.state !== s.expect) {
       throw httpError(500, `scenario ${s.id} drifted: expected ${s.expect}, got ${fresh.row.state}`);

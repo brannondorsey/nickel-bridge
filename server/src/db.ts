@@ -346,40 +346,62 @@ if (!tournamentColumns.has('claim_rule')) {
   `);
 }
 
-// Migration: renumber crossing display names off their ORDINAL among standard
-// tournaments rather than off the raw row id — see crossingName() below for
-// why the two must differ and why the ordinal is stable.
+// Migration: `number` — the crossing's DISPLAY number, i.e. the sequence
+// behind `tournaments.name` ("Tournament #12"). NULL on every non-standard
+// kind, which never wears one. See assignCrossingNumber() below for why this
+// cannot simply be the row id.
 //
-// This is the file's first DATA-only migration, so it cannot use the
-// column-existence guard every migration above it uses: there is no new column
-// to test for, and the UPDATE is O(n²) (a correlated COUNT per row), which is
-// nothing at today's ~88 rows but is not something to re-run on every boot
-// forever. PRAGMA user_version is SQLite's built-in slot for exactly this.
+// The column exists so a number is ASSIGNED ONCE and then owned by the row,
+// rather than re-derived from a COUNT of the rows before it on every read.
+// The difference only shows up when a standard row disappears, but then it
+// decides between two very different failures: a COUNT hands the next
+// tournament a number an existing one is already wearing, silently, while
+// `MAX(number) + 1` skips to a GAP. Nothing in the app deletes a standard
+// tournament today, so both are correct today — but a gap in an identifier is
+// harmless where a duplicate is a lie, and this way the numbering does not
+// depend on that staying true. The UNIQUE index is what turns it from a
+// promise into a guarantee: anything that ever tries to hand the same number
+// out twice fails loudly here rather than shipping two crossings wearing it.
+// NULLs are distinct in a SQLite unique index, so every rehearsal and exhibit
+// row coexists under it freely.
 //
-// Note the guard tests this migration's OWN number rather than a shared
-// "current version" constant. The next data migration is its own
-// `if (user_version < 2)` block setting 2, so that a database already past
-// this one is never dragged back through it by a later bump.
+// The one-time backfill IS the count, because at that one instant it is
+// provably right: it runs against a table nothing has deleted a standard row
+// from, and it is the only place the two derivations ever have to agree.
 //
-// The subquery is deliberately the same `kind = 'standard' AND id <= x`
-// expression crossingName() prepares, so a future edit to one is visibly an
-// edit to the other rather than a silent divergence between what existing rows
-// were named and what new ones get.
+// Adding a column is also what gives this otherwise DATA-only migration
+// something structural to guard on — the same `!tournamentColumns.has(...)`
+// test every migration above it uses — so it needs no PRAGMA user_version
+// stamp. That matters beyond tidiness: a version stamp is a one-way door.
+// It cannot repair a database it has already run against, and it makes a
+// rollback lossy, since rows created while the older code was live would be
+// named by the old rule and then skipped forever by the bumped counter. This
+// guard re-runs against exactly the databases that still need it and no
+// others, and a rollback simply leaves the column sitting unread.
+//
+// ALTER + backfill + index go through db.transaction() rather than a
+// db.exec('BEGIN; ... COMMIT;') string. SQLite's DDL is transactional, so a
+// throw anywhere in here rolls all of it back and leaves the connection
+// clean; a raw exec that throws mid-script leaves the BEGIN uncommitted, and
+// every later migration — and then the whole process — runs inside that
+// abandoned write transaction.
 //
 // Renaming rows players have already seen is intentional: this morning's
 // "Tournament #100" becomes "#88". A gap-free sequence that is restated once
 // beats one that is correct only from today on, which would leave a permanent
 // discontinuity mid-history with no explanation attached to it.
-if ((db.pragma('user_version', { simple: true }) as number) < 1) {
-  db.exec(`
-    BEGIN;
-    UPDATE tournaments
-       SET name = 'Tournament #' || (SELECT COUNT(*) FROM tournaments t2
-                                      WHERE t2.kind = 'standard' AND t2.id <= tournaments.id)
-     WHERE kind = 'standard';
-    PRAGMA user_version = 1;
-    COMMIT;
-  `);
+if (!tournamentColumns.has('number')) {
+  db.transaction(() => {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN number INTEGER`);
+    db.exec(`
+      UPDATE tournaments
+         SET number = (SELECT COUNT(*) FROM tournaments t2
+                        WHERE t2.kind = 'standard' AND t2.id <= tournaments.id)
+       WHERE kind = 'standard'
+    `);
+    db.exec(`UPDATE tournaments SET name = 'Tournament #' || number WHERE number IS NOT NULL`);
+    db.exec(`CREATE UNIQUE INDEX idx_tournaments_number ON tournaments(number)`);
+  })();
 }
 
 // Migration: `claimed_at_ply` — the plays[] index of the first card the
@@ -477,50 +499,72 @@ export interface TournamentRow {
   origin_tournament_id: number | null;
   origin_board_no: number | null;
   branch_ply: number | null;
+  /** the crossing DISPLAY number behind `name`; NULL on every non-standard kind — see assignCrossingNumber() */
+  number: number | null;
   created_at: number;
 }
 
 export const BOARDS_PER_TOURNAMENT = 4;
 
 /**
- * A crossing's DISPLAY number — its position among standard tournaments in id
- * order, which is what `tournaments.name` ("Tournament #12") carries and what
- * web/src/format.ts's tournamentNo() parses back out.
+ * Stamp a freshly-created standard tournament with the next crossing number,
+ * write the display name that renders it, and return the UPDATED row. The one
+ * place a crossing is ever numbered — call it immediately after the INSERT,
+ * from every site that creates a standard tournament (placeUser, demo-seed's
+ * ambient tournaments, demo's freshAiField).
  *
- * Deliberately NOT the row id, and the distinction is the whole point: `id` is
- * a single sequence shared by every kind, so each rehearsal (and, on DEMO=1,
- * each exhibit) consumes a number that no tournament ever wears. Production
- * had drifted to "Tournament #100" with only 88 tournaments in existence — a
- * count inflated by 13 Play-From-Here branches, which are not crossings and
- * which a player has no way to know about.
+ * It returns the row rather than just the name so a caller cannot keep holding
+ * the pre-stamp one it got from `INSERT ... RETURNING *`, which still carries
+ * `number: null` and the placeholder name. Patching `name` back onto that by
+ * hand is how the two drift: the object says one thing, the row another.
+ *
+ * The number is deliberately NOT the row id, and the distinction is the whole
+ * point: `id` is a single sequence shared by every kind, so each rehearsal
+ * (and, on DEMO=1, each exhibit) consumes a number no tournament ever wears.
+ * Production had drifted to "Tournament #100" with only 88 tournaments in
+ * existence — inflated by 13 Play-From-Here branches, which are not crossings
+ * and which a player has no way to know about. Rehearsals are uncapped by
+ * design ("no cap, just scroll"), so that drift has no ceiling.
  *
  * The id stays the ADDRESS — `/t/:id/b/:no`, boards.tournament_id,
- * elo_history.tournament_id, origin_tournament_id — and this is only ever
- * presentation. Keeping the two apart is what lets rehearsals reuse the board
- * route for free (Analyze.tsx navigates a fresh branch straight to /t/:id) and
- * keeps every link ever shared valid. Putting the ordinal in the URL instead
- * would be actively unsafe: ordinals 1..N overlap the id space, so an old
- * link would resolve to a DIFFERENT tournament rather than 404.
+ * elo_history.tournament_id, origin_tournament_id — and the number is only
+ * ever presentation. Keeping the two apart is what lets rehearsals reuse the
+ * board route for free (Analyze.tsx navigates a fresh branch straight to
+ * /t/:id) and keeps shared links working. Putting the number in the URL
+ * instead would be actively unsafe rather than merely churn: numbers 1..N
+ * overlap the id space, so an old `/t/50` would resolve to a DIFFERENT
+ * tournament rather than 404.
  *
- * The ordinal is stable forever, which is what makes it safe to bake into a
- * stored name. It can only change if a standard row with a lower id is
- * deleted, and nothing deletes one: the only DELETE FROM tournaments in the
- * app is discardRehearsal (rehearsal rows only), and demo-seed's full wipe
- * runs on DEMO=1 databases that are recreated from scratch anyway. Creating
- * or discarding a rehearsal never moves a crossing's number.
+ * MAX + 1 rather than a COUNT of the rows before it, and that is the load-
+ * bearing choice here. A count is a re-derivation, so it is only stable while
+ * no earlier standard row ever disappears; the moment one does, it hands the
+ * next tournament a number that an existing row is already displaying. MAX + 1
+ * is a sequence: it can only ever skip. Nothing in the app deletes a standard
+ * tournament today — the only DELETE FROM tournaments is discardRehearsal,
+ * and demo-seed's wipe runs on DEMO=1 databases that restart from scratch —
+ * so both rules agree today. This one keeps agreeing without needing that to
+ * hold, which matters for a rule enforced across a whole codebase by nothing
+ * but a doc comment. The UNIQUE index on `number` is the backstop: a second
+ * writer, a restored backup, a hand-edit on the volume — anything that would
+ * duplicate a number raises here instead of quietly shipping it.
  *
- * `id <= ?` rather than a bare COUNT(*) so this reads the same for a row
- * inserted out of created_at order (demo-seed backdates ambient tournaments;
- * ids still ascend), and so the runtime and the backfill migration below are
- * literally the same expression rather than two statements that agree today.
+ * The read and the write are one transaction so the pair cannot interleave.
+ * That is belt-and-braces today (better-sqlite3 is synchronous and there is
+ * exactly one machine, so nothing runs between the two statements), but it is
+ * what makes the failure mode under any future concurrency a rollback rather
+ * than a duplicate.
  */
-const stmtCrossingOrdinal = db.prepare(
-  `SELECT COUNT(*) AS n FROM tournaments WHERE kind = 'standard' AND id <= ?`,
+const stmtNextCrossingNumber = db.prepare(
+  `SELECT COALESCE(MAX(number), 0) + 1 AS n FROM tournaments`,
+);
+const stmtStampCrossing = db.prepare(
+  `UPDATE tournaments SET number = ?, name = ? WHERE id = ? RETURNING *`,
 );
 
-export function crossingName(id: number): string {
-  return `Tournament #${(stmtCrossingOrdinal.get(id) as { n: number }).n}`;
-}
+export const assignCrossingNumber = db.transaction((id: number): TournamentRow => {
+  const { n } = stmtNextCrossingNumber.get() as { n: number };
+  return stmtStampCrossing.get(n, `Tournament #${n}`, id) as TournamentRow;
+});
 
 /**
  * Display order for the benchmark AI personas when scores tie: strongest
