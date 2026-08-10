@@ -241,7 +241,10 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 see "Unattended outreach permissions" below); skills/nickel-bridge-design/,
                 the design-system skill — see "Design system" below; and
                 skills/player-outreach/, the operator skill that reads the production
-                roster and drafts the weekly player emails — see "Player outreach" below
+                roster and drafts the weekly player emails — see "Player outreach" below;
+                and skills/own-the-fix/, the workflow skill that carries a described
+                change through PR, review and CI to merge-ready — see "Owning a change
+                end to end" below
 ```
 
 ## Development workflow
@@ -2230,6 +2233,24 @@ Two things this file does **not** grant, on purpose: sending mail (impossible vi
 today — if that ever changes, adding a send tool to `allow` must be a deliberate, separately
 reviewed decision, not an oversight), and any other production exec. `autoMode.allow` starts
 with `"$defaults"` so the built-in classifier rules still apply underneath.
+
+## Owning a change end to end
+
+`.claude/skills/own-the-fix/` is the workflow skill behind `/own-the-fix`: describe a small
+change once, and it implements it, opens the PR, waits for `claude-pr-review.yml`'s
+automated review, triages and applies what's worth applying, runs a second independent pass
+with the `code-review` skill, pushes the result, and drives CI to green — reporting back
+exactly once, either "ready for merge" or "blocked on you". It deliberately never merges and
+never enables auto-merge; that stays a human step.
+
+Two repo facts it leans on, so change them together. **The automated review fires once, on
+`opened`/`reopened`** (see the long comment in `claude-pr-review.yml` about why there is no
+`workflow_dispatch`), which is why the skill insists on `npm run build && npm run typecheck
+&& npm test` passing *before* the PR is opened — a PR opened broken spends its single review
+on code about to be rewritten. And the same workflow's run #136 note is the skill's stated
+worst case: an agent that says it will report back later and then ends its turn with nothing
+scheduled. The skill's governing rule — never end a turn without either a wake-up armed or a
+final report — exists for exactly that.
 
 ## Code style
 
