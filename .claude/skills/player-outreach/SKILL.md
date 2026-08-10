@@ -156,27 +156,14 @@ What makes these work:
   85 boards in a single day is a different email from 18 boards across 3 weeks; one board and
   gone is different again. If a player's row has nothing striking, plain and honest beats
   manufactured enthusiasm.
-- **One question.** Plus the domain question in the `friction` and `retained` mails, where it's
-  small enough to ride along. It stays out of `abandoned_first` — see that template.
+- **One question.** Every extra ask lowers the odds any of them gets answered.
 - **A cheap out.** "One line is plenty" gets more replies than an open-ended ask.
 - **No tracking, no images, no unsubscribe boilerplate.** It's a personal email, so let it be one.
 - **No `http://`/`https://` links, anywhere in the body.** Gmail treats a link in a cold,
   unsolicited plain-text email as a spam/phishing signal — it can trigger warning banners or
   hurt deliverability, which defeats the whole point of these emails. Mention the site as bare
-  text (`bridge.brannon.online`, `nickelbridge.com`) with no scheme prefix and don't wrap it in
-  markdown link syntax; a reader can still copy-paste it into a browser.
-
-### Asking the domain question without poisoning it
-
-The user wants to know whether a dedicated domain (default: **nickelbridge.com** — confirm the
-exact spelling with them before drafting, it's been written as "nickebridge.com") would beat
-`bridge.brannon.online` for discoverability or retention.
-
-Phrase it so a "no" is as easy to give as a "yes". "Would a real domain help?" invites everyone
-to agree agreeably and produces worthless data; ending with **"or does the address not matter to
-you?"** gives explicit permission to dismiss it, and the dismissals are the useful signal here.
-Ask about their actual behaviour — remembering it, typing it, sending it to someone — not their
-opinion of domains in the abstract.
+  text (`bridge.brannon.online`) with no scheme prefix and don't wrap it in markdown link
+  syntax; a reader can still copy-paste it into a browser.
 
 ### Templates
 
@@ -197,10 +184,6 @@ I noticed that you played {n} boards and then didn't come back, and I'd love to 
 There's no wrong answer: too confusing, too slow, awkward on your phone, robots too
 strong, or just not your thing. Whatever made you close the tab is the most useful
 thing you could tell me.
-
-One other thing I'm weighing: the app currently lives at bridge.brannon.online. Would a
-real domain like nickelbridge.com have made any difference — easier to remember or
-to trust — or does the address not matter to you?
 
 Just hit reply, one line is plenty.
 
@@ -223,10 +206,6 @@ I'd love to know what has kept you playing — the duplicate scoring, the bid
 grading, beating the house robots, the fact it's free, or something I'd never guess? 
 
 I'm also curious if there is anything you'd like to see changed?
-
-Also a small one: it lives at bridge.brannon.online today. If you wanted to tell a
-bridge-playing friend about it, would a real domain like nickelbridge.com make that
-easier — or is the address irrelevant?
 
 Whatever you've got, even one line.
 
@@ -266,8 +245,6 @@ a conversation, where a list of options to pick from makes a stranger feel proce
 fatal for people who owe you nothing and gave you ninety seconds. **The fault is claimed
 up front**, because the reason people don't answer "what went wrong?" is that they suspect the
 answer is that they were too slow to understand it; saying it's your fault first removes that.
-**And there's no domain question** — asking someone who never completed a bid whether a
-different URL would have helped is absurd, since finding the site plainly wasn't their problem.
 Keep it to five lines. The brevity is doing work: it signals that a reply can be short too.
 
 ## Step 5 — Hand off for review
