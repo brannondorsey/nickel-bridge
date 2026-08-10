@@ -64,6 +64,14 @@ export interface Scenario {
    */
   expectClaimOnFinalAction?: 'any' | 'all';
   /**
+   * Override the exhibit tournament's claim_rule (default: the column's, i.e.
+   * the shipped 'pessimistic' gate). Exactly one exhibit sets this, and only
+   * because the state it demonstrates is unreachable without it — see
+   * 'claim-on-call'. Everything else takes the default, the same way exhibits
+   * take difficulty='perfect'.
+   */
+  claimRule?: 'optimistic' | 'pessimistic';
+  /**
    * This is the tournament's last board, and finishing it live should reveal
    * a genuine tournament-summary screen — not just this one board's receipt.
    * The executor pre-completes the acting user's boards 1..(boardNo - 1)
@@ -244,6 +252,27 @@ export const SCENARIOS: Scenario[] = [
     ],
     expect: 'playing',
     expectClaimOnFinalAction: 'any', // only the ♣9; the ♣K plays on
+  },
+
+  {
+    id: 'claim-on-call',
+    label: 'A claim before you play a card',
+    description:
+      'Your last pass ends the auction — and that is the whole board. West holds 3NT cold from the first card, so the claim ticket goes up before you have played anything, and the fast-forward runs all thirteen tricks onto the receipt. (A LEGACY tournament: today’s gate only claims once no card anyone plays could change the result, and that is almost never true this early. Older tournaments still use the gate that claimed on double dummy alone, and this is what that looks like.)',
+    category: 'claims',
+    seed: 'callclaim-38',
+    boardNo: 1,
+    // Two passes in; the tester's third ends the auction and triggers it.
+    actions: [call(0), call(0)],
+    expect: 'bidding',
+    expectClaimOnFinalAction: 'all',
+    // The one exhibit that overrides the rule, and it has to: a scan of 522
+    // call actions found a claim arriving on a CALL three times under
+    // 'optimistic' and NEVER under 'pessimistic'. The client path it
+    // exercises (submitCall → runClaim → the announcement) is identical
+    // either way, and legacy tournaments are still live and resumable, so
+    // this is a real production state rather than a staged one.
+    claimRule: 'optimistic',
   },
 
   // ---- scoring ----

@@ -1253,6 +1253,16 @@ live reveals a genuine tournament-summary screen instead of just one board's rec
 `richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
 (the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
 error is guaranteed to fire on the first submit.
+One exhibit overrides its tournament's claim rule, and it is the only one: `claim-on-call`
+(`claimRule: 'optimistic'`) shows the claim ticket going up on a CALL, before a card is
+played. That state is effectively unreachable under the shipped gate — a scan of 522 call
+actions found it three times at `'optimistic'` and never at `'pessimistic'`, since it needs
+the position settled inside the first trick. Legacy tournaments still use that gate and are
+still resumable, so this is a real production state rather than a staged one, and the client
+path it exercises (`submitCall` → `runClaim` → the announcement, rendered by `Board`'s own
+`ClaimOverlay` because the board is still in the bidding view) is identical under both rules.
+`ensureExhibitTournament` takes the rule as an optional argument for exactly this one case.
+
 One gallery entry is not a replay recipe: `fresh-house-crossing` (`freshAiField`) mints a
 brand-new STANDARD `ai_field = 1` tournament per click and lands the tester on board 1, so
 the benchmark AI personas can be click-tested exactly as production behaves (exhibit-kind
