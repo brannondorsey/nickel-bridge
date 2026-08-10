@@ -3,7 +3,7 @@ import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { aiPlayersEnabled, ensureAiPlayers, enqueueAiField, noteTournamentActivity } from './ai-players.js';
 import { claimHandle, requireUserWithHandle, startSession, upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, db } from './db.js';
 import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
 import { getTournament } from './tournaments.js';
@@ -22,6 +22,9 @@ import { getTournament } from './tournaments.js';
 
 const stmtExhibitBySeed = db.prepare(`SELECT * FROM tournaments WHERE kind = 'exhibit' AND seed = ?`);
 const stmtCreateExhibit = db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES (?, ?, 'exhibit') RETURNING *`);
+const stmtCreateExhibitWithRule = db.prepare(
+  `INSERT INTO tournaments (name, seed, kind, claim_rule) VALUES (?, ?, 'exhibit', ?) RETURNING *`,
+);
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
 // The freshAiField exhibit's tournament is a REAL standard tournament —
 // same columns placeUser stamps (intermediate = the Inspector's default
@@ -99,9 +102,20 @@ export function ensureNewCrosser(): UserRow {
  * (deals derive from it). The kind column also keeps them out of placement,
  * the lobby, the Elo replay, and stats (see db.ts and tournaments.ts).
  */
-export function ensureExhibitTournament(seed: string): TournamentRow {
+export function ensureExhibitTournament(seed: string, claimRule?: ClaimRule): TournamentRow {
   const existing = stmtExhibitBySeed.get(seed) as TournamentRow | undefined;
-  return existing ?? (stmtCreateExhibit.get(exhibitName(seed), seed) as TournamentRow);
+  if (existing) return existing;
+  // Exhibits normally take every column default, the same way they take
+  // difficulty='perfect' — their recipes were mined against it. `claimRule`
+  // is the one a scenario may override, because the state one exhibit needs
+  // (a claim announced on a CALL) is reachable only under the legacy gate:
+  // a scan of 522 call actions found it 3 times at 'optimistic' and never at
+  // 'pessimistic'. See that scenario's own comment.
+  return (
+    claimRule
+      ? stmtCreateExhibitWithRule.get(exhibitName(seed), seed, claimRule)
+      : stmtCreateExhibit.get(exhibitName(seed), seed)
+  ) as TournamentRow;
 }
 
 /**
@@ -160,7 +174,7 @@ async function runScenarioNow(
     }
     return { tournamentId: t.id, boardNo: s.boardNo };
   }
-  const t = ensureExhibitTournament(s.seed);
+  const t = ensureExhibitTournament(s.seed, s.claimRule);
   if (s.completesTournament) {
     // The "TOURNAMENT SUMMARY →" reveal only shows a real result if the
     // other boards are actually complete — bot-play the acting user through
