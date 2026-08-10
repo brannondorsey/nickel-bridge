@@ -582,8 +582,22 @@ export default function Board() {
   const submitCall = async (call: number) => {
     if (busy) return;
     setBusy(true);
+    // The same staleness guard load() and submitCard already use, and for the
+    // same reason: Board.tsx stays MOUNTED across a board change, so a
+    // response landing after the player has moved on must not paint this
+    // board over the one now on screen. submitCall never had it, which stayed
+    // cheap only while everything past the await was synchronous — load()'s
+    // own fresh GET normally overwrote the stale write within a round trip.
+    // Awaiting runClaim below breaks that: the announcement hold plus the
+    // fast-forward hold the screen for seconds, long enough to land well
+    // AFTER the new board has finished loading and clobber it. claimGenRef
+    // cannot cover this — runClaim bumps it on entry, so it only guards
+    // against a navigation DURING a claim, never one that already happened.
+    const gen = stagingRef.current.gen;
+    const stillMyBoard = () => stagingRef.current.gen === gen;
     try {
       const { evaluation, board: next } = await api.call(tournamentId, boardNo, call);
+      if (!stillMyBoard()) return;
       setLastEval(evaluation);
       setSelectedCall(null);
       setInspect(null);

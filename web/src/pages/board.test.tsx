@@ -50,6 +50,17 @@ const renderBoard = (me: Me = meFixture) =>
 
 const inAuction = () => within(document.querySelector('.auction') as HTMLElement);
 
+/** A real router navigation, for the tests that need Board.tsx to re-load
+ *  into the same mounted component the way a board change does. */
+function NavButton({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(to)}>
+      go
+    </button>
+  );
+}
+
 // Safety net: if a fake-timer test below throws or times out mid-await, its
 // own try/finally may not unwind before the next test starts — never leave
 // fake timers active for a test that didn't ask for them.
@@ -1244,6 +1255,56 @@ describe('Board — claims', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Board.tsx stays MOUNTED across a board change (see load()'s comment), so
+  // a response that lands after the player has moved on must not paint the
+  // board they left over the one now on screen. submitCard has always guarded
+  // that with the staging generation; submitCall never did, which stayed
+  // cheap only while everything past its await was synchronous — load()'s own
+  // fresh GET normally overwrote the stale write within a round trip.
+  // Awaiting runClaim broke that: the announcement hold alone is seconds, long
+  // enough to land well after the new board finished loading. claimGenRef is
+  // no help — runClaim bumps it on entry, so it only guards a navigation
+  // DURING a claim, never one that already happened.
+  it('drops a claimed call response for a board the player has already left', async () => {
+    let releaseCall!: (v: { evaluation: unknown; board: BoardView }) => void;
+    apiMock.call.mockReturnValue(new Promise((resolve) => (releaseCall = resolve as typeof releaseCall)));
+    const boardThree: BoardView = { ...boardPlaying, boardNo: 3 };
+    apiMock.board.mockImplementation((_tid: number, no: number) =>
+      Promise.resolve(no === 3 ? boardThree : boardBidding),
+    );
+
+    renderWithMe(
+      <>
+        <Routes>
+          <Route path="/t/:tid/b/:no" element={<Board />} />
+        </Routes>
+        <NavButton to="/t/12/b/3" />
+      </>,
+      { me: meFixture, route: '/t/12/b/2' },
+    );
+
+    await screen.findByRole('button', { name: '2♥' });
+    fireEvent.click(screen.getByRole('button', { name: '2♥' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+    expect(apiMock.call).toHaveBeenCalled();
+
+    // …the player moves to board 3 while that call is still in flight
+    fireEvent.click(screen.getByRole('button', { name: 'go' }));
+    await waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+
+    // …and only now does board 2's response come back, already claimed
+    releaseCall({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: buildClaimed(),
+    });
+    await waitFor(() => expect(apiMock.board).toHaveBeenCalledTimes(2));
+
+    // no announcement for a board nobody is looking at, and board 3 survives
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('SCORED')).not.toBeInTheDocument();
+    expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument();
   });
 
   // The trick already in progress when the request went out goes to the
