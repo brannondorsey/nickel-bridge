@@ -3,6 +3,10 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+// Type-only, so it is erased at runtime and does NOT run db.ts's migrations
+// before the fixture below is written — the dynamic import further down is
+// what does that, deliberately.
+import type { TournamentRow } from '../src/db.js';
 
 /**
  * Crossing display numbers — db.ts's `number` column, its backfill migration,
@@ -55,7 +59,7 @@ seed.close();
 
 // Importing db.ts is what runs the migration under test.
 process.env.DB_PATH = DB_PATH;
-const { db, assignCrossingNumber } = await import('../src/db.js');
+const { db, createCrossing } = await import('../src/db.js');
 
 const rowOf = (id: number) =>
   db.prepare(`SELECT name, number FROM tournaments WHERE id = ?`).get(id) as {
@@ -70,10 +74,17 @@ const duplicates = () =>
       `SELECT number FROM tournaments WHERE number IS NOT NULL GROUP BY number HAVING COUNT(*) > 1`,
     )
     .all();
-const newStandardRow = () =>
-  (db.prepare(`INSERT INTO tournaments (name, seed, kind) VALUES ('T', 's', 'standard') RETURNING id`).get() as {
-    id: number;
-  }).id;
+/** what a real creation site passes to createCrossing: its own INSERT, nothing more */
+const insertStandard = () =>
+  db
+    .prepare(`INSERT INTO tournaments (name, seed, kind) VALUES ('Tournament', 's', 'standard') RETURNING *`)
+    .get() as TournamentRow;
+const newCrossing = () => createCrossing(insertStandard);
+const standardCount = () =>
+  (db.prepare(`SELECT COUNT(*) AS n FROM tournaments WHERE kind = 'standard'`).get() as { n: number }).n;
+/** standard rows carrying no display number — must always be empty */
+const unnumbered = () =>
+  db.prepare(`SELECT id FROM tournaments WHERE kind = 'standard' AND number IS NULL`).all();
 
 describe('the backfill', () => {
   it('renumbers standard tournaments 1..N with no gaps', () => {
@@ -118,14 +129,30 @@ describe('the backfill', () => {
   });
 });
 
-describe('assignCrossingNumber', () => {
+describe('createCrossing', () => {
   it('continues the sequence the backfill wrote, and returns the stamped row', () => {
-    const id = newStandardRow();
-    const stamped = assignCrossingNumber(id);
+    const stamped = newCrossing();
     // The returned row is the post-UPDATE one, so a caller cannot go on
-    // holding the `number: null` row its INSERT ... RETURNING * handed back.
+    // holding the `number: null` row its INSERT ... RETURNING * produced.
     expect({ name: stamped.name, number: stamped.number }).toEqual({ name: 'Tournament #89', number: 89 });
-    expect(rowOf(id)).toEqual({ name: 'Tournament #89', number: 89 });
+    expect(rowOf(stamped.id)).toEqual({ name: 'Tournament #89', number: 89 });
+  });
+
+  it('commits the row and its number together, or neither', () => {
+    // The INSERT runs inside createCrossing's transaction precisely so this
+    // cannot leave a half-made crossing behind. Outside it, the INSERT commits
+    // on its own and any failure before the stamp — a throw, a crash, or a
+    // future creation site that simply forgets the second call — strands a
+    // standard tournament with number NULL, which then renders as its raw id.
+    const before = standardCount();
+    expect(() =>
+      createCrossing(() => {
+        insertStandard();
+        throw new Error('crash between INSERT and stamp');
+      }),
+    ).toThrow(/crash between/);
+    expect(standardCount()).toBe(before); // the row went with it
+    expect(unnumbered()).toEqual([]);
   });
 
   it('skips to a gap rather than reusing a number when a standard row is deleted', () => {
@@ -139,8 +166,7 @@ describe('assignCrossingNumber', () => {
     const before = db.prepare(`SELECT MAX(number) AS n FROM tournaments`).get() as { n: number };
     db.prepare(`DELETE FROM tournaments WHERE number = 40`).run();
 
-    const id = newStandardRow();
-    expect(assignCrossingNumber(id).number).toBe(before.n + 1); // a gap where #40 was, never a reissue
+    expect(newCrossing().number).toBe(before.n + 1); // a gap where #40 was, never a reissue
     expect(duplicates()).toEqual([]);
   });
 
@@ -149,8 +175,8 @@ describe('assignCrossingNumber', () => {
     // than a promise: anything that would duplicate a number — a second
     // writer, a restored backup, a bad hand-edit — raises here instead of
     // shipping two crossings wearing it.
-    const id = newStandardRow();
-    expect(() => db.prepare(`UPDATE tournaments SET number = 88 WHERE id = ?`).run(id)).toThrow(
+    const t = newCrossing();
+    expect(() => db.prepare(`UPDATE tournaments SET number = 88 WHERE id = ?`).run(t.id)).toThrow(
       /UNIQUE constraint failed/,
     );
   });
@@ -163,8 +189,7 @@ describe('assignCrossingNumber', () => {
     const max = (db.prepare(`SELECT MAX(number) AS n FROM tournaments`).get() as { n: number }).n;
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(reh);
 
-    const id = newStandardRow();
-    expect(assignCrossingNumber(id).number).toBe(max + 1);
+    expect(newCrossing().number).toBe(max + 1);
     expect(duplicates()).toEqual(before);
   });
 });

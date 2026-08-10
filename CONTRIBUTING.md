@@ -1251,12 +1251,22 @@ sequence shared by every `kind`, so each rehearsal — and, on `DEMO=1`, each ex
 consumes a number no tournament ever wears. Production had drifted to "Tournament #100" with
 88 tournaments in existence, inflated by 13 Play-From-Here branches a player has no way to
 know about, and since rehearsals are deliberately uncapped that drift has no ceiling.
-`tournaments.number` carries it (NULL on every non-standard kind), `db.ts`'s
-`assignCrossingNumber(id)` is the one place a crossing is ever numbered, and all three
-creation sites call it right after their INSERT — `placeUser`, `demo-seed.ts`'s ambient
-tournaments, and `demo.ts`'s `freshAiField`. `web/src/format.ts`'s `tournamentNo()` still
-parses the number back out of `name` and needed no change; sending `number` over the API and
-retiring both client-side regexes is the natural follow-up, not done here.
+`tournaments.number` carries it (NULL on every non-standard kind) and `db.ts`'s
+`createCrossing(insert)` is the one way a crossing is ever made — all three creation sites
+(`placeUser`, `demo-seed.ts`'s ambient tournaments, `demo.ts`'s `freshAiField`) hand it
+their own INSERT as a callback and get the finished row back. The insert runs INSIDE that
+transaction on purpose: numbering has to be a second statement (the row must exist before
+`MAX + 1` can be written to it), and left outside, that second statement is optional in a way
+nothing catches — the INSERT commits alone, so a throw, a crash, or simply a future creation
+site that forgets the follow-up call strands a standard tournament with `number` NULL and
+its placeholder name, which then renders as its raw id via `tournamentNo()`'s fallback.
+Bundled, the row and its number commit together or not at all, and "create a crossing" has
+no spelling that skips the numbering. A raw INSERT elsewhere could still bypass it; an
+`AFTER INSERT` trigger is what would make that impossible, and is deliberately not done —
+this codebase has no triggers and an invisible rewrite of a row's name is a poor thing to
+discover. `web/src/format.ts`'s `tournamentNo()` still parses the number back out of `name`
+and needed no change; sending `number` over the API and retiring both client-side regexes is
+the natural follow-up, not done here.
 
 **`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
 choice.** A count is a re-derivation, so it is stable only while no earlier standard row

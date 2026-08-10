@@ -348,7 +348,7 @@ if (!tournamentColumns.has('claim_rule')) {
 
 // Migration: `number` — the crossing's DISPLAY number, i.e. the sequence
 // behind `tournaments.name` ("Tournament #12"). NULL on every non-standard
-// kind, which never wears one. See assignCrossingNumber() below for why this
+// kind, which never wears one. See createCrossing() below for why this
 // cannot simply be the row id.
 //
 // The column exists so a number is ASSIGNED ONCE and then owned by the row,
@@ -499,7 +499,7 @@ export interface TournamentRow {
   origin_tournament_id: number | null;
   origin_board_no: number | null;
   branch_ply: number | null;
-  /** the crossing DISPLAY number behind `name`; NULL on every non-standard kind — see assignCrossingNumber() */
+  /** the crossing DISPLAY number behind `name`; NULL on every non-standard kind — see createCrossing() */
   number: number | null;
   created_at: number;
 }
@@ -507,16 +507,17 @@ export interface TournamentRow {
 export const BOARDS_PER_TOURNAMENT = 4;
 
 /**
- * Stamp a freshly-created standard tournament with the next crossing number,
- * write the display name that renders it, and return the UPDATED row. The one
- * place a crossing is ever numbered — call it immediately after the INSERT,
- * from every site that creates a standard tournament (placeUser, demo-seed's
- * ambient tournaments, demo's freshAiField).
+ * Create a standard tournament: run the caller's INSERT, stamp the row with
+ * the next crossing number and the display name that renders it, and return
+ * the finished row — all in one transaction. The one way a crossing is ever
+ * made, used by all three creation sites (placeUser, demo-seed's ambient
+ * tournaments, demo's freshAiField).
  *
- * It returns the row rather than just the name so a caller cannot keep holding
- * the pre-stamp one it got from `INSERT ... RETURNING *`, which still carries
- * `number: null` and the placeholder name. Patching `name` back onto that by
- * hand is how the two drift: the object says one thing, the row another.
+ * It returns the stamped row rather than just the name so a caller cannot keep
+ * holding the pre-stamp one its `INSERT ... RETURNING *` produced, which still
+ * carries `number: null` and the placeholder name. Patching `name` back onto
+ * that by hand is how the two drift: the object says one thing, the row
+ * another.
  *
  * The number is deliberately NOT the row id, and the distinction is the whole
  * point: `id` is a single sequence shared by every kind, so each rehearsal
@@ -548,11 +549,30 @@ export const BOARDS_PER_TOURNAMENT = 4;
  * writer, a restored backup, a hand-edit on the volume — anything that would
  * duplicate a number raises here instead of quietly shipping it.
  *
- * The read and the write are one transaction so the pair cannot interleave.
- * That is belt-and-braces today (better-sqlite3 is synchronous and there is
- * exactly one machine, so nothing runs between the two statements), but it is
- * what makes the failure mode under any future concurrency a rollback rather
- * than a duplicate.
+ * The INSERT runs INSIDE this transaction, which is why the caller hands its
+ * own insert in as a callback rather than doing it first and passing an id.
+ * Numbering is a second statement — the row has to exist before MAX + 1 can be
+ * written to it — and left outside, that second statement is optional in a way
+ * nothing catches: the INSERT commits on its own, so a throw, a crash, or
+ * simply a future creation site that forgets the follow-up call leaves a
+ * standard tournament with `number` NULL and the placeholder name its INSERT
+ * supplied, which then renders as its raw id via tournamentNo()'s fallback.
+ * Bundled, the row and its number commit together or not at all, and "create a
+ * crossing" has no spelling that skips the numbering. (A raw INSERT elsewhere
+ * could still bypass this; an AFTER INSERT trigger is what would make that
+ * impossible, at the cost of hiding the behaviour from anyone reading the call
+ * site. Deliberately not done — this codebase has no triggers, and an
+ * invisible rewrite of a row's name is a poor thing to discover.)
+ *
+ * The three inserts differ in which columns they set (difficulty schedules,
+ * backdated created_at, ai_field), so the statement itself stays with the
+ * caller and only the transaction and the numbering live here.
+ *
+ * Wrapping the read and the write together also means the pair cannot
+ * interleave. That is belt-and-braces today — better-sqlite3 is synchronous
+ * and there is exactly one machine, so nothing runs between the two — but it
+ * is what makes the failure mode under any future concurrency a rollback
+ * rather than a duplicate.
  */
 const stmtNextCrossingNumber = db.prepare(
   `SELECT COALESCE(MAX(number), 0) + 1 AS n FROM tournaments`,
@@ -561,9 +581,10 @@ const stmtStampCrossing = db.prepare(
   `UPDATE tournaments SET number = ?, name = ? WHERE id = ? RETURNING *`,
 );
 
-export const assignCrossingNumber = db.transaction((id: number): TournamentRow => {
+export const createCrossing = db.transaction((insert: () => TournamentRow): TournamentRow => {
+  const created = insert();
   const { n } = stmtNextCrossingNumber.get() as { n: number };
-  return stmtStampCrossing.get(n, `Tournament #${n}`, id) as TournamentRow;
+  return stmtStampCrossing.get(n, `Tournament #${n}`, created.id) as TournamentRow;
 });
 
 /**

@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { withAiPlayersSuspended } from './ai-players.js';
 import { upsertGoogleUser } from './auth.js';
 import { playThrough, seededErraticStrategy } from './bot-play.js';
-import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, assignCrossingNumber, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, TournamentRow, UserRow, createCrossing, db } from './db.js';
 import { claimHandleWithSuffix, ensureDemoUser, ensureExhibitTournament, ensureNewCrosser } from './demo.js';
 import { ensureAdvanced, loadBoard } from './game.js';
 import { SCENARIOS } from './scenarios.js';
@@ -127,11 +127,10 @@ export function ensureBot(name: string): UserRow {
 function ensureAmbientTournament(seed: string, createdAt: number): TournamentRow {
   const existing = stmtTournamentBySeed.get(seed) as TournamentRow | undefined;
   if (existing) return existing;
-  const t = stmtInsertBackdated.get(seed, createdAt) as TournamentRow;
-  // Numbered exactly as placeUser numbers a real one — ambient tournaments
-  // are indistinguishable from real ones on purpose (they SHOULD participate
-  // in placement), so they take a number from the same sequence.
-  return assignCrossingNumber(t.id);
+  // Created exactly as placeUser creates a real one — ambient tournaments are
+  // indistinguishable from real ones on purpose (they SHOULD participate in
+  // placement), so they take a number from the same sequence.
+  return createCrossing(() => stmtInsertBackdated.get(seed, createdAt) as TournamentRow);
 }
 
 async function seedTournament(
