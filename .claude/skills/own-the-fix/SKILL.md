@@ -1,17 +1,21 @@
 ---
 name: own-the-fix
 description: >-
-  Drive a small, well-specified code change all the way to merge-ready with no further
-  human direction — implement it, open a PR, wait for the repo's automated PR reviewer,
-  triage and apply its findings, run a second independent review with the code-review
-  skill, push those fixes, and drive CI to green — then report back exactly once, either
-  "ready for merge" or "blocked on you". Use this whenever the user describes a change
-  and signals they want it carried through the whole PR lifecycle rather than just
-  written: "own this", "take it through to merge", "open a PR and handle the review",
-  "drive it to green", "ping me when it's ready", "I don't want to babysit this", "check
-  back with me when it's mergeable" — or when they invoke /own-the-fix. Also use it when
-  someone hands you an already-written diff and asks you to shepherd it through review
-  and CI. It never merges; a human always does that.
+  Drive a described code change all the way to merge-ready with no further human
+  direction — implement it, open a PR, wait for the repo's automated PR reviewer, triage
+  and apply its findings, run a second independent pass with the code-review skill, push
+  those fixes, and drive CI to green — then report back exactly once, either "ready for
+  merge" or "blocked on you". Trigger on the hand-off rather than the size of the change:
+  "own the fix", "own this", "own the change end to end", "start to finish", "take it
+  from here", "take it through to merge", "open a PR and handle the review", "shepherd it
+  through", "drive it to green", "ping me when it's mergeable", "get it where I can just
+  hit merge", "I don't want to babysit this", "check back when it's ready", "I'm out this
+  afternoon" — or /own-the-fix. A one-line comment fix qualifies if the whole PR
+  lifecycle was handed over. The work need not be unwritten: also use this to pick up
+  uncommitted changes, or an existing open PR whose review feedback or red CI nobody has
+  acted on, and carry it the rest of the way. Not for requests with no change to deliver: critiquing someone else's PR,
+  answering a question, diagnosing a red build, or merging — it never merges, a human
+  always does that.
 ---
 
 # Own the Fix
