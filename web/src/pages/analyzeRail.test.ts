@@ -139,4 +139,52 @@ describe('the worth rail layout', () => {
     expect(l.dots[0].x).toBe(0.5);
     expect(l.gate).toBe(0.5);
   });
+
+  it('omitting rehearsal scores leaves the field untouched', () => {
+    const l = railLayout(
+      [
+        { score: 620, contract: '4♠ by S', you: true },
+        { score: 650, contract: '4♠+1 by S', you: false },
+      ],
+      620,
+    );
+    expect(l.rehearsalDots).toEqual([]);
+  });
+
+  it('colours a rehearsal tick against the real table, not against par', () => {
+    // par is 100, YOUR table (the `you` entry) is −800 — a rehearsal beating
+    // −800 is green even though it is still nowhere near par
+    const l = railLayout(
+      [
+        { score: -800, contract: '4♥X by S −3', you: true },
+        { score: 50, contract: '4♠ by W −1', you: false },
+      ],
+      100,
+      [-500, -800, 200],
+    );
+    const byScore = new Map(l.rehearsalDots.map((d) => [d.score, d]));
+    expect(byScore.get(-500)!.better).toBe(true); // −500 beats −800
+    expect(byScore.get(-800)!.better).toBe(null); // tie with your own table
+    expect(byScore.get(200)!.better).toBe(true);
+    expect(l.rehearsalDots).toHaveLength(3);
+  });
+
+  it('merges rehearsal attempts sharing a score and counts them', () => {
+    const l = railLayout([{ score: 620, contract: '4♠ by S', you: true }], 620, [500, 500, 500]);
+    expect(l.rehearsalDots).toHaveLength(1);
+    expect(l.rehearsalDots[0]).toMatchObject({ score: 500, count: 3, better: false });
+  });
+
+  it('a rehearsal outlier stretches the same frame the field dots sit in', () => {
+    const l = railLayout(
+      [
+        { score: 620, contract: '4♠ by S', you: true },
+        { score: 650, contract: '4♠+1 by S', you: false },
+      ],
+      620,
+      [1440], // grand slam make — far outside the field's own 620-650 range
+    );
+    expect(l.rehearsalDots[0].x).toBeLessThanOrEqual(0.93 + 1e-9);
+    expect(l.rehearsalDots[0].x).toBeGreaterThan(l.dots[l.dots.length - 1].x);
+  });
 });

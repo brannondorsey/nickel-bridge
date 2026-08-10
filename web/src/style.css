@@ -5477,6 +5477,33 @@ a.stat-tile:hover {
   text-align: center;
   margin-top: 2px;
 }
+/* rehearsal attempts on the same axis as .worth-rail, one row below it — a
+   thin tick per distinct score rather than a full labelled dot, since a
+   rehearsal carries no field label of its own, only the comparison its
+   colour already states (green beat your table, red fell short). */
+.worth-rehearsal-track {
+  position: relative;
+  height: 14px;
+  margin-top: 6px;
+}
+.worth-rehearsal-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 1.5px;
+  background: var(--muted);
+  transform: translateX(-50%);
+}
+.worth-rehearsal-tick.positive {
+  background: var(--positive);
+}
+.worth-rehearsal-tick.negative {
+  background: var(--negative);
+}
+.worth-rehearsal-note {
+  margin-top: 4px;
+}
 
 /* ---- the audit ribbon (the tour ribbon's shape, unvoiced) ---- */
 .audit-ribbon {

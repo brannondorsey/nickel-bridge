@@ -21,12 +21,35 @@
  * The gate stays at par's un-relaxed linear position: a crowded field can
  * therefore drift a dot slightly past it, which is accepted — the gate is a
  * reference line, and every dot label carries its true score.
+ *
+ * Rehearsal attempts ("Play From Here" — see server/src/rehearsal.ts) plot
+ * on this SAME axis, as small ticks rather than full labelled dots: they are
+ * not field results (no matchpoints, nobody else played them), so merging
+ * them into the field's own dots would misrepresent what a dot means there.
+ * A tick's colour carries the one comparison a rehearsal is FOR — did this
+ * line beat the table you actually sat — so it is computed against the real
+ * table's own score, not against par (nobody bids with the cards face up,
+ * but a rehearsal is played with them face up on purpose, and the question
+ * it answers is "better than what actually happened", not "better than
+ * theoretical-best"). Included in the same lo/span as the field, so a
+ * rehearsal that lands outside the field's own range still stretches the
+ * frame to show it, exactly like the field's own outliers do.
  */
 
 export interface RailDotInput {
   score: number;
   contract: string;
   you: boolean;
+}
+
+export interface RailRehearsalDot {
+  /** 0..1 position along the same axis as the field dots */
+  x: number;
+  score: number;
+  /** how many attempts landed on exactly this score */
+  count: number;
+  /** true = beat the real table, false = fell short, null = exact tie */
+  better: boolean | null;
 }
 
 export interface RailDot {
@@ -50,6 +73,8 @@ export interface RailLayout {
   /** tables whose scores were sampled out of a crowded rail — counted, never
    *  silently dropped (the ledger's setAside precedent) */
   omittedTables: number;
+  /** finished rehearsal attempts, merged by score, on the same axis as `dots` */
+  rehearsalDots: RailRehearsalDot[];
 }
 
 /** clamp band so dots and their centred labels stay inside the frame */
@@ -68,7 +93,13 @@ const MIN_GAP = 0.08;
  */
 export const MAX_RAIL_DOTS = 8;
 
-export function railLayout(field: RailDotInput[], parScore: number): RailLayout {
+export function railLayout(field: RailDotInput[], parScore: number, rehearsalScores: number[] = []): RailLayout {
+  // the one comparison a rehearsal tick's colour carries: your own real
+  // table's score, read off the field's own `you` entry rather than passed
+  // separately — the field already contains it, and a second parameter that
+  // has to agree with the first is a bug waiting to drift out of sync
+  const tableScore = field.find((f) => f.you)?.score ?? null;
+
   // tables sharing a score merge into one dot — stacked dots are unreadable,
   // and a shared score IS one result as far as matchpoints care
   const byScore = new Map<number, { contracts: string[]; count: number; you: boolean }>();
@@ -99,8 +130,11 @@ export function railLayout(field: RailDotInput[], parScore: number): RailLayout 
   }
 
   const scores = entries.map(([s]) => s);
-  const lo = Math.min(...scores, parScore);
-  const span = Math.max(...scores, parScore) - lo;
+  // rehearsal scores join the SAME span the field is measured against, so a
+  // rehearsal outlier stretches the frame exactly like a field outlier would
+  // rather than being clamped against a scale that never accounted for it
+  const lo = Math.min(...scores, parScore, ...rehearsalScores);
+  const span = Math.max(...scores, parScore, ...rehearsalScores) - lo;
   const usable = 1 - 2 * EDGE;
   const pos = (score: number) => (span === 0 ? 0.5 : EDGE + ((score - lo) / span) * usable);
 
@@ -115,5 +149,21 @@ export function railLayout(field: RailDotInput[], parScore: number): RailLayout 
   for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + gap);
 
   const dots = scores.map((score, i) => ({ score, x: xs[i], ...byScore.get(score)!, up: i % 2 === 1 }));
-  return { gate: pos(parScore), dots, omittedTables };
+
+  // attempts sharing a score merge the same way field tables do — a tick per
+  // distinct score, not per attempt. Unlike the field dots these are never
+  // sampled or gap-relaxed: they carry no label to collide, only a coloured
+  // mark, so a crowded cluster just reads as a denser patch of ticks.
+  const byRehScore = new Map<number, number>();
+  for (const s of rehearsalScores) byRehScore.set(s, (byRehScore.get(s) ?? 0) + 1);
+  const rehearsalDots: RailRehearsalDot[] = [...byRehScore.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([score, count]) => ({
+      x: pos(score),
+      score,
+      count,
+      better: tableScore === null || score === tableScore ? null : score > tableScore,
+    }));
+
+  return { gate: pos(parScore), dots, omittedTables, rehearsalDots };
 }

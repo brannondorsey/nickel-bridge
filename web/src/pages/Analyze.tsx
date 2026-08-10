@@ -588,7 +588,7 @@ function CardsWorthPanel({
               </div>
             ) : null}
           </div>
-          {field.length > 1 ? <WorthRail field={field} parScore={par.parScore} /> : null}
+          {field.length > 1 || done.length > 0 ? <WorthRail field={field} parScore={par.parScore} rehearsals={done} /> : null}
           <p className="analyze-finding">
             <GlossaryProse
               text={
@@ -606,11 +606,30 @@ function CardsWorthPanel({
   );
 }
 
-/** the field on one rail, par as the dashed gate — geometry from analyzeRail.ts */
-function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']>['field']; parScore: number }) {
+/**
+ * The field on one rail, par as the dashed gate, your own rehearsal attempts
+ * as small coloured ticks on the SAME axis just below it — geometry from
+ * analyzeRail.ts. A tick is green when that line beat your real table and
+ * red when it fell short (`--positive`/`--negative`, the app's one
+ * bidirectional pair — see AdjustedReceipt's identical framing for a single
+ * rehearsal's own delta). Ticks are their own row rather than sharing the
+ * dots' label bands: the field dots already use the full 104px height for
+ * alternating up/down contract labels, and a rehearsal has no field label to
+ * carry — only the comparison its colour already states.
+ */
+function WorthRail({
+  field,
+  parScore,
+  rehearsals,
+}: {
+  field: NonNullable<BoardView['result']>['field'];
+  parScore: number;
+  rehearsals: RehearsalSummary[];
+}) {
   const layout = railLayout(
     field.map((f) => ({ score: f.scoreNS, contract: f.contract, you: f.isMe })),
     parScore,
+    rehearsals.map((rh) => rh.scoreNS!),
   );
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   return (
@@ -641,6 +660,23 @@ function WorthRail({ field, parScore }: { field: NonNullable<BoardView['result']
         <p className="worth-rail-note">
           {layout.omittedTables} more {layout.omittedTables === 1 ? 'table' : 'tables'} between the results shown.
         </p>
+      ) : null}
+      {layout.rehearsalDots.length > 0 ? (
+        <>
+          <div className="worth-rehearsal-track num" aria-hidden="true">
+            {layout.rehearsalDots.map((d) => (
+              <span
+                key={d.score}
+                className={`worth-rehearsal-tick${d.better === true ? ' positive' : d.better === false ? ' negative' : ''}`}
+                style={{ left: pct(d.x) }}
+              />
+            ))}
+          </div>
+          <p className="worth-rail-note worth-rehearsal-note">
+            {rehearsals.length === 1 ? 'Your rehearsal' : `Your ${rehearsals.length} rehearsals`} marked below the rail —{' '}
+            <span className="positive">green</span> beat your table, <span className="negative">red</span> fell short.
+          </p>
+        </>
       ) : null}
     </>
   );
