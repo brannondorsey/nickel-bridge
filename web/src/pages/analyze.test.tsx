@@ -810,15 +810,43 @@ describe('Play From Here', () => {
     expect(within(rail as HTMLElement).getByText('+650')).toBeInTheDocument();
     expect(within(rail as HTMLElement).getByText('IN PROGRESS')).toBeInTheDocument();
 
-    // the board-wide ledger, further down the overview — both attempts, same trick
+    // the board-wide ledger, further down the overview — both attempts, same
+    // trick. Sentence case: the ledger's ROWS are entries, not labels.
     expect(screen.getByText('YOUR REHEARSALS')).toBeInTheDocument();
-    expect(screen.getAllByText(`FROM TRICK ${chargedTrick}`)).toHaveLength(2);
+    expect(screen.getAllByText(`From trick ${chargedTrick}`)).toHaveLength(2);
+    expect(screen.getByText('In progress')).toBeInTheDocument();
 
     // THE CARDS WERE WORTH grows a third stub for the best (highest-score) done attempt
     expect(screen.getByText('YOUR BEST REHEARSAL')).toBeInTheDocument();
     const bestStub = document.querySelector('.worth-stub-rehearsal')!;
     expect(bestStub.textContent).toContain('4♠+1 by S');
     expect(bestStub.textContent).toContain('+650');
+  });
+
+  it("inks each moment stub's score against your real table — green better, red worse, plain on a tie", async () => {
+    apiMock.board.mockResolvedValue(donePlayed); // your table scored 620
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    apiMock.rehearsals.mockResolvedValue({
+      rehearsals: [
+        { tournamentId: 55, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 100, contractLabel: '4♠+1 by S', scoreNS: 650 },
+        { tournamentId: 56, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 101, contractLabel: '4♠−1 by S', scoreNS: -100 },
+        { tournamentId: 57, boardNo: 2, branchPly: chargedPly, state: 'done', createdAt: 102, contractLabel: '4♠ by S', scoreNS: 620 },
+        { tournamentId: 58, boardNo: 2, branchPly: chargedPly, state: 'playing', createdAt: 103, contractLabel: null, scoreNS: null },
+      ],
+    });
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+    const rail = await waitFor(() => document.querySelector('.rehearsal-rail')!);
+
+    const scoreClass = (text: string) => within(rail as HTMLElement).getByText(text).className;
+    expect(scoreClass('+650')).toContain('positive');
+    expect(scoreClass('−100')).toContain('negative');
+    expect(scoreClass('+620')).not.toMatch(/positive|negative/); // an exact tie is not a verdict
+    expect(scoreClass('···')).not.toMatch(/positive|negative/); // nothing to compare yet
+
+    // colour is never the only carrier — the stub says which way it went
+    expect(within(rail as HTMLElement).getByRole('link', { name: /\+650 — beat your table/ })).toBeInTheDocument();
+    expect(within(rail as HTMLElement).getByRole('link', { name: /−100 — fell short of your table/ })).toBeInTheDocument();
   });
 
   it('plots finished rehearsals on THE FIELD rail, coloured against your real table, and names only the colours present', async () => {

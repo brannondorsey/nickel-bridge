@@ -265,6 +265,7 @@ export default function Analyze() {
           onRehearse={startRehearsal}
           onDiscardRehearsal={discardRehearsalAttempt}
           rehearsals={rehearsals}
+          actualScoreNS={r?.scoreNS ?? null}
         />
       ) : null}
       {lens === 'overview' ? <YourRehearsals rehearsals={rehearsals} onDiscard={discardRehearsalAttempt} /> : null}
@@ -305,6 +306,7 @@ function WhereItTurned({
   onRehearse,
   onDiscardRehearsal,
   rehearsals,
+  actualScoreNS,
 }: {
   analysis: AnalysisView;
   onOpenPlay: (ply: number) => void;
@@ -313,6 +315,9 @@ function WhereItTurned({
   onRehearse: (ply: number) => void;
   onDiscardRehearsal: (rehearsalTournamentId: number) => void;
   rehearsals: RehearsalSummary[];
+  /** what your real table scored on this board — the one thing a rehearsal
+   *  stub's score is measured against; null on a board with no result row */
+  actualScoreNS: number | null;
 }) {
   const { moments, setAside } = analysis;
   return (
@@ -332,6 +337,7 @@ function WhereItTurned({
               onRehearse={m.kind === 'play' ? () => onRehearse(m.ply!) : null}
               onDiscardRehearsal={onDiscardRehearsal}
               rehearsals={m.kind === 'play' ? rehearsals.filter((rh) => rh.branchPly === m.ply) : []}
+              actualScoreNS={actualScoreNS}
             />
           ))}
           {setAside > 0 ? (
@@ -368,6 +374,7 @@ function MomentRow({
   onRehearse,
   onDiscardRehearsal,
   rehearsals,
+  actualScoreNS,
 }: {
   moment: AnalysisMoment;
   analysis: AnalysisView;
@@ -378,6 +385,8 @@ function MomentRow({
   onDiscardRehearsal: (rehearsalTournamentId: number) => void;
   /** past attempts branched from exactly this moment's ply — always [] on a bid moment */
   rehearsals: RehearsalSummary[];
+  /** your real table's score, for colouring each stub — see RehearsalRail */
+  actualScoreNS: number | null;
 }) {
   const aside = momentAside(m, analysis);
   const name =
@@ -416,28 +425,74 @@ function MomentRow({
           PLAY FROM HERE →
         </Button>
       ) : null}
-      <RehearsalRail rehearsals={rehearsals} onDiscard={onDiscardRehearsal} />
+      <RehearsalRail rehearsals={rehearsals} onDiscard={onDiscardRehearsal} actualScoreNS={actualScoreNS} />
     </div>
   );
+}
+
+/** Did this finished attempt beat the table you actually sat? true = better,
+ *  false = worse, null = an exact tie, still in progress, or no real result
+ *  to measure against. Deliberately the SAME comparison the field rail's
+ *  rehearsal dots make (analyzeRail.ts's `better`) — a rehearsal exists to
+ *  answer "better than what actually happened", not "better than par" — so
+ *  the two surfaces can never disagree about a line's colour. */
+function rehearsalBeatsTable(rh: RehearsalSummary, actualScoreNS: number | null): boolean | null {
+  if (rh.state !== 'done' || rh.scoreNS === null || actualScoreNS === null) return null;
+  return rh.scoreNS === actualScoreNS ? null : rh.scoreNS > actualScoreNS;
 }
 
 /** Past attempts branched from one specific moment — a small ticket-stub
  *  rail, tappable to reopen (resumes if still in progress, per the reload-
  *  survival guarantee; shows its adjusted receipt if done). Renders nothing
  *  when there are none yet — the row's own PLAY FROM HERE button is already
- *  the "start one" affordance, so this never needs an empty-state stub. */
-function RehearsalRail({ rehearsals, onDiscard }: { rehearsals: RehearsalSummary[]; onDiscard: (rehearsalTournamentId: number) => void }) {
+ *  the "start one" affordance, so this never needs an empty-state stub.
+ *
+ *  A finished stub's score is inked green when the line beat your real table
+ *  and red when it fell short — the same colouring, from the same comparison,
+ *  the field rail's rehearsal dots already carry. Colour is never the only
+ *  carrier of that reading: the stub's accessible name says it in words, so
+ *  the verdict survives a screen reader and the colourblind suit palette
+ *  alike (--positive/--negative are outside that palette's swap by design). */
+function RehearsalRail({
+  rehearsals,
+  onDiscard,
+  actualScoreNS,
+}: {
+  rehearsals: RehearsalSummary[];
+  onDiscard: (rehearsalTournamentId: number) => void;
+  actualScoreNS: number | null;
+}) {
   if (!rehearsals.length) return null;
   return (
     <div className="rehearsal-rail">
-      {rehearsals.map((rh) => (
+      {rehearsals.map((rh) => {
+        const beat = rehearsalBeatsTable(rh, actualScoreNS);
+        const done = rh.state === 'done' && rh.scoreNS !== null;
+        return (
         // A <button> can't nest inside the <a> react-router's Link renders,
         // so the stub and its discard control are siblings in a small wrap
         // rather than one interactive element holding another.
         <div key={rh.tournamentId} className="rehearsal-stub-wrap">
-          <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-stub">
-            <span className="rehearsal-stub-label">{rh.state === 'done' ? 'TRIED' : 'IN PROGRESS'}</span>
-            <b className="rehearsal-stub-score num">{rh.state === 'done' && rh.scoreNS !== null ? signedScore(rh.scoreNS) : '···'}</b>
+          <Link
+            to={`/t/${rh.tournamentId}/b/${rh.boardNo}`}
+            className="rehearsal-stub"
+            aria-label={
+              done
+                ? `Rehearsal, scored ${signedScore(rh.scoreNS!)}${
+                    beat === true ? ' — beat your table' : beat === false ? ' — fell short of your table' : ' — tied your table'
+                  }`
+                : 'Rehearsal in progress'
+            }
+          >
+            <span className="rehearsal-stub-label" aria-hidden="true">
+              {rh.state === 'done' ? 'TRIED' : 'IN PROGRESS'}
+            </span>
+            <b
+              className={`rehearsal-stub-score num${beat === true ? ' positive' : beat === false ? ' negative' : ''}`}
+              aria-hidden="true"
+            >
+              {done ? signedScore(rh.scoreNS!) : '···'}
+            </b>
           </Link>
           <button
             type="button"
@@ -448,7 +503,8 @@ function RehearsalRail({ rehearsals, onDiscard }: { rehearsals: RehearsalSummary
             ✕
           </button>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -476,9 +532,14 @@ function YourRehearsals({
         // Same button-can't-nest-in-a constraint as RehearsalRail above.
         <div key={rh.tournamentId} className="rehearsal-ledger-row-wrap">
           <Link to={`/t/${rh.tournamentId}/b/${rh.boardNo}`} className="rehearsal-ledger-row">
-            <span className="rehearsal-ledger-from num">FROM TRICK {Math.floor(rh.branchPly / 4) + 1}</span>
+            {/* Sentence case, not the tracked caps this app uses for labels:
+                these are ledger ENTRIES — a list of things that happened,
+                read like the score cell beside them ("1NT by W −1 · +50"),
+                which was already mixed case. The panel heading above still
+                carries the caps; a row is not a heading. */}
+            <span className="rehearsal-ledger-from num">From trick {Math.floor(rh.branchPly / 4) + 1}</span>
             <span className="rehearsal-ledger-score num">
-              {rh.state === 'done' && rh.scoreNS !== null ? `${rh.contractLabel ?? ''} · ${signedScore(rh.scoreNS)}` : 'IN PROGRESS'}
+              {rh.state === 'done' && rh.scoreNS !== null ? `${rh.contractLabel ?? ''} · ${signedScore(rh.scoreNS)}` : 'In progress'}
             </span>
             <span className="rehearsal-ledger-chev">›</span>
           </Link>

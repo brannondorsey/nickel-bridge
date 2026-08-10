@@ -5233,6 +5233,15 @@ a.stat-tile:hover {
   font-weight: 800;
   font-size: 13px;
 }
+/* A finished attempt's score is inked against the table you actually sat —
+   green beat it, red fell short, ordinary ink on a tie — but that needs no
+   rule here: it wears the bare global .positive/.negative utilities, the
+   same way stats-delta, tourney-rating-delta and tolls-rank do. Nothing in
+   this stub's chain sets a competing colour (.rehearsal-stub is `inherit`,
+   .rehearsal-stub-score and .num set none), so a scoped copy would only
+   restate the utility. Contrast .worth-rehearsal-dot below, which genuinely
+   does need its own pair: it paints border-color and background, which the
+   colour-only utilities don't cover. */
 .rehearsal-stub-discard {
   appearance: none;
   background: var(--panel);

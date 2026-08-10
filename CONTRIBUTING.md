@@ -1178,7 +1178,20 @@ stubs under each `MomentRow`, filtered to that moment's own `branchPly`, and a b
 **YOUR REHEARSALS** panel listing every attempt regardless of branch point, uncapped ("no
 cap, just scroll" — no truncation, no dedicated UI limit). In-progress attempts show up
 too, as resumable links — otherwise reload survival would have nothing to be discoverable
-*from* once a player has navigated away. Once at least one rehearsal is `done`, THE CARDS
+*from* once a player has navigated away. The two surfaces deliberately differ in **voice**:
+a rail stub wears the ticket-stub label idiom (tracked caps, `TRIED`/`IN PROGRESS`), while
+the ledger's rows are sentence case (`From trick 5`, `In progress`) — they're entries in a
+list of things that happened, reading with the mixed-case score cell beside them
+(`1NT by W −1 · +50`), not labels. The panel HEADING keeps the caps; a row is not a heading.
+A finished stub's **score is inked against your real table** — `--positive` green when that
+line beat it, `--negative` red when it fell short, ordinary ink on an exact tie or while an
+attempt is still in progress — sharing `rehearsalBeatsTable` with nothing else but agreeing
+by construction with THE FIELD rail's dots below (same comparison, same two tokens), so the
+two surfaces can't disagree about a line's colour. Colour is never the only carrier: the
+stub's `aria-label` states the verdict in words ("beat your table" / "fell short of your
+table"), which is also what keeps it honest under the colourblind suit palette — the
+`--positive`/`--negative` pair sits outside that swap by design (see "Compare and the gate").
+Once at least one rehearsal is `done`, THE CARDS
 WERE WORTH's `.worth-stubs` panel grows a third stub for the best one (highest `scoreNS` —
 unambiguous since the human is always N–S) as a full-width row beneath the PAR/YOUR TABLE
 pair rather than forcing a cramped 3-up grid at the 390px smoke-test breakpoint, opting out
