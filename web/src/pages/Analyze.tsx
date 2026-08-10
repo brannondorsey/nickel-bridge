@@ -615,7 +615,9 @@ function CardsWorthPanel({
  * a single rehearsal's own delta). Smaller than a field dot and unlabelled
  * (nothing here fights the field dots' alternating up/down contract-label
  * bands) — the caption underneath is what carries the reading, the colour
- * carries the direction.
+ * carries the direction. The caption names only the colours actually on
+ * screen (and disappears entirely if every attempt tied your table), rather
+ * than explaining a red or green dot that isn't there.
  */
 function WorthRail({
   field,
@@ -632,6 +634,12 @@ function WorthRail({
     rehearsals.map((rh) => rh.scoreNS!),
   );
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  // The legend names only the colours actually on screen — a board where
+  // every rehearsal tied your table has no green or red dot to explain, and
+  // one where every attempt landed on the same side of it has no reason to
+  // mention the other.
+  const hasBetter = layout.rehearsalDots.some((d) => d.better === true);
+  const hasWorse = layout.rehearsalDots.some((d) => d.better === false);
   return (
     <>
       <span className="worth-rail-label">
@@ -669,10 +677,21 @@ function WorthRail({
           {layout.omittedTables} more {layout.omittedTables === 1 ? 'table' : 'tables'} between the results shown.
         </p>
       ) : null}
-      {layout.rehearsalDots.length > 0 ? (
+      {hasBetter || hasWorse ? (
         <p className="worth-rail-note worth-rehearsal-note">
           {rehearsals.length === 1 ? 'Your rehearsal' : `Your ${rehearsals.length} rehearsals`} marked on the rail —{' '}
-          <span className="positive">green</span> beat your table, <span className="negative">red</span> fell short.
+          {hasBetter ? (
+            <>
+              <span className="positive">green</span> beat your table
+            </>
+          ) : null}
+          {hasBetter && hasWorse ? ', ' : null}
+          {hasWorse ? (
+            <>
+              <span className="negative">red</span> fell short
+            </>
+          ) : null}
+          .
         </p>
       ) : null}
     </>

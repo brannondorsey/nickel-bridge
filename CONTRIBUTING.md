@@ -1187,7 +1187,11 @@ treatment, one aside line). Every finished attempt also marks THE FIELD rail its
 dot per distinct rehearsal score, right on the SAME line as the real players rather than a
 separate row (unlabelled, so it never fights the field dots' alternating contract-label
 bands), coloured against your real table's own score — `--positive` green when a line beat
-it, `--negative` red when it fell short, unmarked on an exact tie. `analyzeRail.ts`'s `railLayout` takes the
+it, `--negative` red when it fell short, unmarked on an exact tie. The caption underneath
+names only the colours actually on screen — a board where every attempt tied leaves the
+caption off entirely, and one where every attempt landed on the same side of the table
+mentions only that colour, rather than explaining a dot that isn't there.
+`analyzeRail.ts`'s `railLayout` takes the
 rehearsal scores as an optional third argument and folds them into the same lo/span the field
 dots are measured against, so a rehearsal outlier stretches the frame exactly like a field
 outlier would rather than clamping against a scale that never accounted for it. The rail
