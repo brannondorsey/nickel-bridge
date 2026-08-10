@@ -304,14 +304,13 @@ function Tollkeeper({
 function PracticeBoard({ onDone, onLeave, busy }: { onDone: () => void; onLeave: () => void; busy: boolean }) {
   // The tour is public, so there may be no account to have set this; the
   // default matches the live board's.
-  const fastForward = useMe().me?.user?.fastForward !== false;
   const [data, setData] = useState<TourBoard | null>(null);
   const [error, setError] = useState(false);
   // The replay driver — view + staged transitions + the claim beats — is the
   // shared useReplay hook, extracted from this very component so the Analyze
   // play lens could reuse it. Everything script-specific (guidance, the
   // lagging caption index, off-script handling) stays here.
-  const { view, transition, cut, claimInfo, claimAnnounceOpen, skipClaimAnnouncement } = useReplay({ fastForward });
+  const { view, transition, cut, claimInfo, claimAnnounceOpen, skipClaimAnnouncement } = useReplay();
   const [idx, setIdx] = useState(0);
   const [selectedCall, setSelectedCall] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);

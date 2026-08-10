@@ -97,10 +97,7 @@ export default function Board() {
   const tournamentId = Number(tid);
   const boardNo = Number(no);
 
-  // "Fast forward settled tricks" (settings gate) — account state, so it
-  // follows the player between devices; see runClaim below for what it paces.
   const { me, refresh } = useMe();
-  const fastForward = me?.user?.fastForward !== false;
   // "Bid feedback" (settings gate) — gates only whether the post-call grading
   // toast renders below; grading is computed and stored (bidEvals)
   // unconditionally, so turning this off never affects scoring, stats, or
@@ -423,7 +420,7 @@ export default function Board() {
   const runClaim = useCallback(
     async (prev: BoardView, next: BoardView) => {
       const motion = motionOK();
-      const plan = planClaim(prev, next, { fast: fastForward, motion });
+      const plan = planClaim(prev, next, { fast: true, motion });
       if (!plan) {
         applyBoard(prev, next); // data didn't line up — fall back to a plain (unanimated) jump
         return;
@@ -462,11 +459,12 @@ export default function Board() {
       if (claimGenRef.current !== gen) return;
       setClaimAnnounceOpen(false);
 
-      // beat three: the settings tab's "Fast forward settled tricks"
-      // (users.fast_forward) chooses the pacing of this replay and nothing
-      // else — the cards were played by the server before this response
-      // arrived either way, so off means "watch them at table speed", never
-      // "play them yourself". Scheduled against whatever is actually on
+      // beat three: the fast-forward itself, always at the compressed pace.
+      // Whether a settled tail is fast-forwarded AT ALL is the settings gate's
+      // "Settled tricks" (users.auto_claim), and it is answered on the server
+      // — a board that reaches here was already claimed, so its cards were
+      // played before this response arrived. A player who opted out never
+      // gets one. Scheduled against whatever is actually on
       // screen, so scheduleSteps' new-card diff (and with it the fan flight
       // origin for the human's own next card) starts from the right trick.
       if (plan.tail.length) {
@@ -480,7 +478,7 @@ export default function Board() {
       cancelStaging();
       setBoard(next);
     },
-    [applyBoard, cancelStaging, fastForward, scheduleSteps],
+    [applyBoard, cancelStaging, scheduleSteps],
   );
 
   // Refetch this board's true position after a refused play, leaving the

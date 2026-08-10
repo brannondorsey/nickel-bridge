@@ -73,6 +73,14 @@ const stmtUserKind = db.prepare(`SELECT kind FROM users WHERE id = ?`);
 function isAiUser(userId: number): boolean {
   return (stmtUserKind.get(userId) as { kind: 'human' | 'ai' } | undefined)?.kind === 'ai';
 }
+// "Settled tricks" on the settings gate (users.auto_claim): does this player
+// want the server to fast-play a tail they have no decisions left in, or to
+// play it out themselves? Missing row or column ⇒ true, matching the schema
+// default and the behaviour every account had before the setting existed.
+const stmtAutoClaim = db.prepare(`SELECT auto_claim FROM users WHERE id = ?`);
+function wantsAutoClaim(userId: number): boolean {
+  return (stmtAutoClaim.get(userId) as { auto_claim: number } | undefined)?.auto_claim !== 0;
+}
 
 export interface GameBoard {
   row: BoardRow;
@@ -243,6 +251,10 @@ function finishBoard(b: GameBoard): void {
  * next free DD worker — see packages/ai/src/dd-pool.ts's doc comment for why.
  */
 export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'interactive'): Promise<void> {
+  // Read once per request rather than at every gate node: it is a tiny
+  // prepared read, but the gate can be reached several times in one call and
+  // a preference cannot change mid-request.
+  let autoClaim: boolean | null = null;
   for (;;) {
     if (b.row.state === 'bidding') {
       const auction = auctionState(b.deal.dealer, b.calls);
@@ -298,13 +310,24 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
         // a weak-tier robot would really have made. So on tournaments carrying
         // 'pessimistic' the position must also be OUTCOME-INVARIANT: no legal
         // card by any of the four seats, in any continuation, can change the
-        // result (packages/ai/src/claim.ts). Legacy tournaments keep the old
-        // gate — re-gating a board already played would change its replay, and
-        // invariant 1 forbids that. See claimRule()/db.ts's migration comment.
+        // result (packages/ai/src/claim.ts).
+        //
+        // 'optimistic' tournaments keep the old gate AND claim for everyone,
+        // ignoring the player's "Settled tricks" setting. Both halves are the
+        // same rule: on those boards a claim genuinely changes the outcome, so
+        // re-gating one — whether by the rule change or by a checkbox — would
+        // change its replay and hand two players on the identical board
+        // different games. Invariant 1 forbids the first and rejected the
+        // second. Under 'pessimistic' the setting is free precisely because
+        // every legal tail scores the same.
+        //
+        // The preference is checked BEFORE the search, so a player who has
+        // opted out never pays for it.
         const mayClaim =
           ddLaydown &&
           (claimRule(b.tournament) === 'optimistic' ||
-            isOutcomeInvariant(b.deal, b.contract!, b.plays, claimingSide).invariant);
+            ((autoClaim ??= wantsAutoClaim(b.row.user_id)) &&
+              isOutcomeInvariant(b.deal, b.contract!, b.plays, claimingSide).invariant));
         if (mayClaim) {
           b.claimed = true;
           // Persist the boundary: everything from this plays-index on is the

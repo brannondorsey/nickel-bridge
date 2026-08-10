@@ -151,22 +151,44 @@ if (!userColumns.has('onboarded_at')) {
 if (!userColumns.has('ladder_listed')) {
   db.exec(`ALTER TABLE users ADD COLUMN ladder_listed INTEGER NOT NULL DEFAULT 1`);
 }
-// Migration: `fast_forward` — replay a claim's settled tricks compressed
-// (1, the shipped behaviour) or at ordinary play pacing (0). Account state
-// rather than a localStorage flag like the theme: it says how this PERSON
-// wants to be shown a hand they no longer have decisions in, which doesn't
-// change because they picked up a different device. Night mode is the
-// exception, and only because it has to be applied before first paint by an
-// inline script (see "Night mode" in CONTRIBUTING.md) — no server round trip
-// can answer that in time.
-if (!userColumns.has('fast_forward')) {
-  db.exec(`ALTER TABLE users ADD COLUMN fast_forward INTEGER NOT NULL DEFAULT 1`);
+// Migration: `auto_claim` — may the server fast-play a settled tail on this
+// player's behalf (1, the shipped behaviour), or should they play it out
+// themselves (0)? Account state rather than a localStorage flag like the
+// theme: it says how this PERSON wants to be handed a hand they no longer
+// have decisions in, which doesn't change because they picked up a different
+// device. Night mode is the exception, and only because it has to be applied
+// before first paint by an inline script (see "Night mode" in
+// CONTRIBUTING.md) — no server round trip can answer that in time.
+//
+// This is a REAL choice only because the claim gate became pessimistic (see
+// the claim_rule migration below). Under the old gate a claim genuinely
+// changed the outcome — it played the human's remaining decisions correctly
+// on their behalf — so letting one player opt out would have handed two
+// players on the identical board different games because of a checkbox, and
+// fed that into matchpoints and Elo. That is why invariant 1 records the
+// toggle as rejected. Once a claim requires the position to be settled under
+// EVERY legal card, opting out cannot change a score: every tail scores the
+// same, so this is pacing and nothing else.
+//
+// Which is also why it does not apply to 'optimistic' tournaments. There the
+// old reasoning still holds in full, so those boards claim for everyone
+// regardless of this column — see advanceRobots.
+if (!userColumns.has('auto_claim')) {
+  db.exec(`ALTER TABLE users ADD COLUMN auto_claim INTEGER NOT NULL DEFAULT 1`);
 }
+// Retired: `fast_forward` chose between a compressed claim replay (1) and one
+// at ordinary table pacing (0). `auto_claim` above replaces it — the
+// interesting question stopped being how fast to show you a settled tail and
+// became whether to take it off you at all — and a settled tail now always
+// replays compressed. Deliberately not dropped from databases that already
+// have it: nothing reads the column, rewriting the users table buys nothing,
+// and a DROP COLUMN would be the only destructive migration in this file. It
+// is simply no longer created.
 // Migration: `bid_feedback` — show the post-call grading toast (1, the
 // shipped behaviour) or suppress it (0). The toast is deliberately excellent
 // for a learner and unwanted noise for a stronger player who is here to
 // compete rather than study. Account state, not localStorage, for the same
-// reason as fast_forward: it describes how this PERSON wants to be coached,
+// reason as auto_claim: it describes how this PERSON wants to be coached,
 // not a property of the device. Purely a rendering gate — grading is still
 // computed and stored in bidEvals on every submitCall regardless of this
 // flag, so bid-accuracy stats and the post-board "YOUR BIDDING" review table
@@ -182,7 +204,7 @@ if (!userColumns.has('bid_feedback')) {
 // confirm CTA ("BID X →") is unaffected either way — it has always been an
 // equal, independent path to the same submitCall, see BidBox.tsx — so this
 // only removes the shortcut, never the ability to bid. Account state, not
-// localStorage, for the same reason as fast_forward/bid_feedback: it
+// localStorage, for the same reason as auto_claim/bid_feedback: it
 // describes how this PERSON wants to interact with the bid box, not a
 // property of the device.
 if (!userColumns.has('double_tap_bid')) {
@@ -197,7 +219,7 @@ if (!userColumns.has('double_tap_bid')) {
 // pacing choice later (a slower auto, say) extends the column instead of
 // needing a second one — the same reasoning `difficulty`/`tournaments.kind`
 // already use for their own TEXT enums. Defaults to 'auto', preserving prior
-// behaviour for every existing account, same as fast_forward/bid_feedback/
+// behaviour for every existing account, same as auto_claim/bid_feedback/
 // ladder_listed (double_tap_bid is the one sibling that deliberately does
 // NOT do this). Account state, not localStorage, for the same reason as
 // those three: it says how this PERSON wants a trick they can no longer
@@ -215,7 +237,7 @@ if (!userColumns.has('trick_clear_mode')) {
 // here, against THIS process's env, which both backfills existing rows
 // correctly for wherever this migration happens to run AND becomes SQLite's
 // column default for every future INSERT that doesn't name the column (the
-// same mechanism ladder_listed/fast_forward/bid_feedback lean on) — so a
+// same mechanism ladder_listed/auto_claim/bid_feedback lean on) — so a
 // fresh signup needs no second code path to inherit it. Off (0) in
 // production, where nobody has asked for early access yet; on (1) wherever
 // DEV_AUTH or DEMO is set — PR previews and the permanent demo app share
@@ -375,7 +397,8 @@ export interface UserRow {
   /** 1 = a signed-out visitor may see this player on /leaderboard; 0 = the ladder omits them for anonymous callers only */
   ladder_listed: number;
   /** 1 = replay a claim's settled tricks compressed; 0 = at ordinary play pacing */
-  fast_forward: number;
+  /** 1 = the server fast-plays a settled tail; 0 = the player plays it out. Ignored on 'optimistic' tournaments — see the migration comment. */
+  auto_claim: number;
   /** 1 = show the post-call grading toast; 0 = suppress it (grading is still computed and stored either way) */
   bid_feedback: number;
   /** 1 = this account can reach features still in beta (e.g. Analyze); env-dependent default, see the migration comment in db.ts */
