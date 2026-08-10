@@ -196,7 +196,11 @@ tools           offline Python weight conversion + golden-fixture generation;
                 the shipped tiers (--ew-only: signed IMP, matches PARTNER_FLOOR's asymmetry);
                 calibrate_whatif.mjs compares named CANDIDATE configs (not just shipped tiers)
                 for "should we change tier X or Y" questions — see
-                docs/difficulty-tuning-guide.md for how these fit together
+                docs/difficulty-tuning-guide.md for how these fit together;
+                calibrate_placement.mjs replays real placement demand through candidate
+                PLACEMENT policies (its `current` baseline calls the real chooseTournament
+                out of server/dist, so it can't drift from production) — the trace it eats
+                is captured by the player-outreach skill, see "Tuning placement" below
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
@@ -1330,6 +1334,28 @@ the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
 still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
 
+**Tuning placement: measure it, and know which number is already maxed.** `tools/calibrate_placement.mjs`
+replays real demand through candidate policies; the trace comes from
+`.claude/skills/player-outreach/scripts/placement_trace.mjs` (production read, scratchpad
+only), or `--synthetic` needs no production access. Four things it established that are
+easy to get wrong from first principles:
+
+- **Mean humans per tournament cannot be improved.** A player never replays a tournament, so
+  the tournament count is floored at *the busiest player's demand count* — and production
+  sits exactly on that floor (90 of 90). Mean field is therefore pinned. The real objective
+  is the DISTRIBUTION: `soloCrossings`, the crossings that end with no human to compare
+  against. Production spends its mean as ten boards with one human and a tail out to seven.
+- **The grace tier decides ~50% of placements and the scoring tier ~11%**, so the popularity
+  score, `SAMPLE_RATIO` and `TAU_S` are near-inert at this scale — ablation moves them by
+  0.0-0.2pp. Tune the grace tier first; it is where the leverage is.
+- **Grace ordering is the lever, and "concentrate players onto one board" gets its direction
+  BACKWARDS.** Filling the fullest board under the cap starves every board sitting at one
+  human, because there is always something fuller to prefer — measured *worse* than
+  production (12 orphans vs 10). Ordering by EMPTIEST-first is what cuts them.
+- **Orphan elimination and field depth pull against each other**, so there is no free
+  setting: every demand sent to a one-human board is a demand not deepening a three-human
+  one. `--sweep frontier` prints that trade-off rather than pretending a winner exists.
+
 **Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo-bridge.brannon.online):**
 the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the
 visitor in as a shared "Inspector" persona and lands on `/scenarios` — a gallery of
@@ -2269,6 +2295,14 @@ derived from the board's `calls`/`plays` arrays plus core's seat rules — seats
 3=W` with the human always South, `dealer = (boardNo - 1) % 4`, seat `(dealer + i) % 4` on call
 `i`. That yields "left without ever bidding", which the outreach states to a real person, so
 keep it derived from those rules rather than re-guessed.
+
+A sibling script, `scripts/placement_trace.mjs`, is here for the same reason: it execs the
+same read-only query shape on the same machine, to capture the placement-demand trace
+`tools/calibrate_placement.mjs` replays (see "Tuning placement" above). It selects no names,
+handles or addresses — player ids become dense indices and timestamps become offsets — but
+its output is still production behaviour and goes to the scratchpad, never the repo. It is
+deliberately NOT covered by `.claude/settings.json`'s allowance, which names
+`player_report.mjs` specifically: a second production exec should prompt.
 
 Two things to know before touching it. **`boards_done` is not the leaderboard test**: the
 leaderboard gates on `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a
