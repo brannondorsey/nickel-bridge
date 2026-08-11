@@ -124,9 +124,20 @@ jobs:
   # production app) does not apply here. Unlike previews it never gets torn down: it's a
   # stable URL for automation and human click-testers. Self-provisioning and idempotent,
   # except the one-time cert + DNS setup documented in README.md "Deployment".
+  # Flip the leading `false` to `true` to resume deploying/keeping the permanent demo app
+  # alive. It sees no real users day to day (~$1.50-2/mo in Fly machine + volume cost, per
+  # `node scripts/fly-uptime.mjs nickel-bridge-demo --recent` against Fly's own Prometheus),
+  # so it's off until someone next needs it for click-testing or automation. Re-enabling is
+  # exactly this one edit: flip the flag, merge to main, and the "Ensure demo app + volume
+  # exist" step below recreates the volume and machine from scratch — this job was already
+  # self-provisioning/idempotent before this flag existed, which is what makes turning it
+  # back on a one-line change rather than a redeploy runbook. The app SHELL (hostname, TLS
+  # cert, Cloudflare edge config) is left alone while disabled — only its machine and volume
+  # are torn down — specifically so re-enabling never has to repeat the one-time cert/DNS
+  # setup in README.md "Deployment".
   deploy-demo:
     needs: [test, e2e, docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: false && github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-demo
