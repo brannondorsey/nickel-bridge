@@ -146,9 +146,46 @@ describe('placeUser over the database', () => {
   it('creates and names a tournament when the backlog is empty', () => {
     const u = addUser('creator');
     const { tournament, nextBoard } = placeUser(u, 'expert', { nowSec: NOW, rng: rng0 });
-    expect(tournament.name).toBe(`Tournament #${tournament.id}`);
+    // The display number comes off the `number` sequence, not the row id
+    // (db.ts's createCrossing). Asserted against the STORED column rather
+    // than re-derived here: re-deriving it would restate the implementation
+    // and pass no matter what either side did. The rehearsal test below is
+    // what tells the number and the id apart.
+    const stored = db.prepare(`SELECT number FROM tournaments WHERE id = ?`).get(tournament.id) as {
+      number: number | null;
+    };
+    expect(stored.number).not.toBeNull();
+    expect(tournament.name).toBe(`Tournament #${stored.number}`);
     expect(nextBoard).toBe(1);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournament.id); // keep later backlogs clean
+  });
+
+  it('numbers crossings past a rehearsal that consumed an id', () => {
+    // The bug this guards: `tournaments.id` is one sequence shared by every
+    // kind, so each Play-From-Here branch used to push the next tournament's
+    // DISPLAYED number up by one. Production reached "Tournament #100" with 88
+    // tournaments in existence. The id is still the address — only the name
+    // skips the rehearsal.
+    const [a, b] = ['numbering-a', 'numbering-b'].map(addUser);
+    const first = placeUser(a, 'beginner', { nowSec: NOW, rng: rng0 }).tournament;
+
+    // A rehearsal lands between the two placements and eats an id.
+    const branch = db
+      .prepare(
+        `INSERT INTO tournaments (name, seed, kind, difficulty, origin_tournament_id, origin_board_no, branch_ply)
+         VALUES ('rehearsal', 'seed', 'rehearsal', 'beginner', ?, 1, 12) RETURNING id`,
+      )
+      .get(first.id) as { id: number };
+
+    // b must not be graced into `first` (that would resume, not create), so
+    // give it a starter apiece up to the cap and age it past the grace TTL.
+    db.prepare(`UPDATE tournaments SET created_at = ? WHERE id = ?`).run(NOW - days(5), first.id);
+    const second = placeUser(b, 'beginner', { nowSec: NOW, rng: rng0 }).tournament;
+
+    expect(second.id).toBeGreaterThan(branch.id); // the id sequence did advance
+    const no = (t: { name: string }) => Number(t.name.match(/#(\d+)/)![1]);
+    expect(no(second)).toBe(no(first) + 1); // ...but the crossing number did not skip
+    expect(second.number).toBe(no(second)); // and the name renders the stored column
   });
 
   it('counts distinct finishers, not total plays', () => {

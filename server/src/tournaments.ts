@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Difficulty } from '@bridge/ai';
 import { Contract, ELO_INITIAL, contractLabel, eloUpdates, matchpoints } from '@bridge/core';
-import { BOARDS_PER_TOURNAMENT, BoardRow, ClaimRule, TournamentRow, aiTieRank, db } from './db.js';
+import { BOARDS_PER_TOURNAMENT, BoardRow, ClaimRule, TournamentRow, aiTieRank, createCrossing, db } from './db.js';
 
 /**
  * The effective robot difficulty of one board — difficulty is a PER-BOARD
@@ -97,7 +97,6 @@ const stmtCandidates = db.prepare(
 const stmtCreateTournament = db.prepare(
   `INSERT INTO tournaments (name, seed, difficulty, board_difficulties, ai_field) VALUES (?, ?, ?, ?, 1) RETURNING *`,
 );
-const stmtRenameTournament = db.prepare(`UPDATE tournaments SET name = ? WHERE id = ?`);
 const stmtMyBoardCount = db.prepare(
   `SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
 );
@@ -498,14 +497,19 @@ export function placeUser(
   }
   if (!t) {
     const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill(difficulty));
-    t = stmtCreateTournament.get(
-      'Tournament',
-      randomBytes(16).toString('hex'),
-      difficulty,
-      schedule,
-    ) as TournamentRow;
-    stmtRenameTournament.run(`Tournament #${t.id}`, t.id);
-    t.name = `Tournament #${t.id}`;
+    // Numbered off its own sequence, not the row id — rehearsals share the id
+    // sequence and would otherwise show up as gaps in the numbering. The
+    // insert goes THROUGH createCrossing so the row and its number commit
+    // together, and it hands back the stamped row (db.ts).
+    t = createCrossing(
+      () =>
+        stmtCreateTournament.get(
+          'Tournament',
+          randomBytes(16).toString('hex'),
+          difficulty,
+          schedule,
+        ) as TournamentRow,
+    );
   }
   const done = (stmtMyBoardCount.get(t.id, userId) as { n: number }).n;
   return { tournament: t, nextBoard: Math.min(done + 1, BOARDS_PER_TOURNAMENT) };

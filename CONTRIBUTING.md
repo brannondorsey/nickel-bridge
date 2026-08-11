@@ -1238,8 +1238,8 @@ for a genuinely new line, which is the point of PLAY FROM HERE existing at all. 
 dedupe-by-resume, not dedupe-by-refusal, so it needed its own explicit escape hatch for a line
 the player actually wants gone: `discardRehearsal` (`DELETE
 .../rehearsals/:rehearsalId`) deletes the rehearsal's `boards` row then its `tournaments` row
-in one transaction (this codebase runs with no `PRAGMA foreign_keys = ON` — see `db.ts` — so
-FK constraints are declarative only and the child row has to go first, by hand). Ownership is
+in one transaction (`db.ts` sets `PRAGMA foreign_keys = ON`, so `boards.tournament_id` is
+enforced and deleting the parent first would fail outright). Ownership is
 re-verified against the CALLER's own `(originTournamentId, originBoardNo, userId)` rather than
 trusted from the target row alone, the same discipline `listRehearsals`' join already uses.
 Both `RehearsalRail` and `YourRehearsals` grow a small ✕ beside every stub/row; since a
@@ -1255,6 +1255,69 @@ One incidental fix that came out of building this: `submitCall`/`submitPlay`/`en
 today — harmless (the replay's own source query filters `kind = 'standard'`) but expensive.
 Now gated on `b.tournament.kind === 'standard'` too, closing it for exhibits as well as
 rehearsals — worth doing here specifically because rehearsals are explicitly uncapped.
+
+**A crossing's number is its own sequence, not its row id.** `tournaments.id` is one
+sequence shared by every `kind`, so each rehearsal — and, on `DEMO=1`, each exhibit —
+consumes a number no tournament ever wears. Production had drifted to "Tournament #100" with
+88 tournaments in existence, inflated by 13 Play-From-Here branches a player has no way to
+know about, and since rehearsals are deliberately uncapped that drift has no ceiling.
+`tournaments.number` carries it (NULL on every non-standard kind) and `db.ts`'s
+`createCrossing(insert)` is the one way a crossing is ever made — all three creation sites
+(`placeUser`, `demo-seed.ts`'s ambient tournaments, `demo.ts`'s `freshAiField`) hand it
+their own INSERT as a callback and get the finished row back. The insert runs INSIDE that
+transaction on purpose: numbering has to be a second statement (the row must exist before
+`MAX + 1` can be written to it), and left outside, that second statement is optional in a way
+nothing catches — the INSERT commits alone, so a throw, a crash, or simply a future creation
+site that forgets the follow-up call strands a standard tournament with `number` NULL and
+its placeholder name, which then renders as its raw id via `tournamentNo()`'s fallback.
+Bundled, the row and its number commit together or not at all, and "create a crossing" has
+no spelling that skips the numbering. A raw INSERT elsewhere could still bypass it; an
+`AFTER INSERT` trigger is what would make that impossible, and is deliberately not done —
+this codebase has no triggers and an invisible rewrite of a row's name is a poor thing to
+discover. `web/src/format.ts`'s `tournamentNo()` still parses the number back out of `name`
+and needed no change; sending `number` over the API and retiring both client-side regexes is
+the natural follow-up, not done here.
+
+**`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
+choice.** A count is a re-derivation, so it is stable only while no earlier standard row
+ever disappears; the moment one does it hands the next crossing a number an existing row is
+already displaying, silently. A sequence can only ever skip, and a gap in an identifier is
+harmless where a duplicate is a lie. Nothing in the app deletes a standard tournament today
+(the only `DELETE FROM tournaments` is `discardRehearsal`, rehearsal rows only — demo-seed's
+wipe is unqualified, but runs on `DEMO=1` databases that restart from scratch), so both
+rules are correct today — the point is that this one does not *depend* on that staying true,
+which matters for an invariant otherwise enforced by nothing but a doc comment. The `UNIQUE`
+index on `number` is the backstop that turns it from a promise into a guarantee: a restored
+backup, a hand-edit on the volume, any future second writer all raise there instead of
+shipping two crossings wearing one number. `server/test/crossing-number.test.ts` pins the
+delete case specifically, since it is the one that used to fail silently.
+
+**The id stays the ADDRESS, and that separation is deliberate.** `/t/:id/b/:no`,
+`boards.tournament_id`, `elo_history.tournament_id` and `origin_tournament_id` are all raw
+ids. Two things depend on it: rehearsals reuse the board route for free (`Analyze.tsx`
+navigates a fresh branch straight to `/t/:id`, and a rehearsal has no number to put there),
+and shared links keep working. Putting the number in the URL instead would be actively
+unsafe rather than merely churn — numbers `1..N` overlap the id space, so an old `/t/50`
+would resolve to a *different* tournament rather than 404. If it is ever wanted, the only
+safe route is a new path prefix alongside the old one, since the two value spaces cannot be
+told apart within one segment. (One caveat on "links keep working", predating this: SQLite
+reuses a rowid freed by deleting the highest row, so discarding the newest rehearsal frees
+its id for the next tournament created. Rehearsal URLs are not shared, so this is a latent
+wrinkle rather than a live bug — but it is the reason the guarantee is worded as "shared
+links", not "every id is forever".)
+
+The backfill that renamed the existing rows IS that one-time `COUNT`, which is provably
+right at the instant it runs: nothing has deleted a standard row yet, and it is the only
+place the two derivations ever have to agree. Adding a column is also what gives an
+otherwise data-only migration something structural to guard on, so it uses the same
+`!tournamentColumns.has(...)` test as every migration above it rather than a
+`PRAGMA user_version` stamp. That is not just tidiness — a version stamp is a one-way door:
+it cannot repair a database it has already run against, and it makes a rollback lossy, since
+rows created while the older code was live would be named by the old rule and then skipped
+forever by the bumped counter. `ALTER` + backfill + index go through `db.transaction()`
+rather than a `db.exec('BEGIN; … COMMIT;')` string, because SQLite's DDL is transactional
+and a raw `exec` that throws mid-script leaves the `BEGIN` uncommitted — every later
+migration, and then the whole process, runs inside that abandoned write transaction.
 
 **Tournaments never close** (evergreen): `placeUser` in `tournaments.ts` resumes your
 unfinished tournament first. Otherwise it serves a candidate from the last 30 days you
