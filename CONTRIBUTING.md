@@ -1273,7 +1273,8 @@ choice.** A count is a re-derivation, so it is stable only while no earlier stan
 ever disappears; the moment one does it hands the next crossing a number an existing row is
 already displaying, silently. A sequence can only ever skip, and a gap in an identifier is
 harmless where a duplicate is a lie. Nothing in the app deletes a standard tournament today
-(the only `DELETE FROM tournaments` is `discardRehearsal`, rehearsal rows only), so both
+(the only `DELETE FROM tournaments` is `discardRehearsal`, rehearsal rows only — demo-seed's
+wipe is unqualified, but runs on `DEMO=1` databases that restart from scratch), so both
 rules are correct today — the point is that this one does not *depend* on that staying true,
 which matters for an invariant otherwise enforced by nothing but a doc comment. The `UNIQUE`
 index on `number` is the backstop that turns it from a promise into a guarantee: a restored

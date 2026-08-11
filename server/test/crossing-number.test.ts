@@ -10,7 +10,7 @@ import type { TournamentRow } from '../src/db.js';
 
 /**
  * Crossing display numbers — db.ts's `number` column, its backfill migration,
- * and assignCrossingNumber().
+ * and createCrossing().
  *
  * Tested against a replica of production's actual shape rather than a toy
  * table, because the bug it fixes only appears when rehearsals are INTERLEAVED

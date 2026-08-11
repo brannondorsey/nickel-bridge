@@ -147,7 +147,7 @@ describe('placeUser over the database', () => {
     const u = addUser('creator');
     const { tournament, nextBoard } = placeUser(u, 'expert', { nowSec: NOW, rng: rng0 });
     // The display number comes off the `number` sequence, not the row id
-    // (db.ts's assignCrossingNumber). Asserted against the STORED column rather
+    // (db.ts's createCrossing). Asserted against the STORED column rather
     // than re-derived here: re-deriving it would restate the implementation
     // and pass no matter what either side did. The rehearsal test below is
     // what tells the number and the id apart.
