@@ -35,6 +35,15 @@ const APP = 'nickel-bridge';
 const TOKEN = process.env.FLY_API_TOKEN;
 const api = (p, i = {}) => fetch(`https://api.machines.dev/v1${p}`, { ...i, headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...(i.headers ?? {}) } });
 
+// Same guard player_report.mjs opens with, and worth the four lines for the
+// same reason: without it a missing token surfaces as a bare 401 from the Fly
+// API, which reads like "your credentials are wrong" rather than "you are
+// running this somewhere that was never given any".
+if (!TOKEN) {
+  console.error('FLY_API_TOKEN is not set — this script only runs in an environment that has it.');
+  process.exit(1);
+}
+
 const REMOTE = `
 const Database = require('/app/node_modules/better-sqlite3');
 const db = new Database('/data/bridge.db', { readonly: true, fileMustExist: true });
@@ -54,6 +63,9 @@ console.log(JSON.stringify(out));
 `;
 
 const ms = await (await api(`/apps/${APP}/machines`)).json();
+// An empty list would otherwise fall through to `m.state` and throw a bare
+// TypeError, which says nothing about what actually went wrong.
+if (!ms.length) throw new Error(`app ${APP} has no machines`);
 let m = ms.find((x) => x.state === 'started') ?? ms[0];
 if (m.state !== 'started') {
   await fetch(`https://${APP}.fly.dev/health`).catch(() => {});
