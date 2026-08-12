@@ -652,8 +652,19 @@ export const api = {
         elo: number;
         rated_tournaments: number;
         played_tournaments: number;
-        /** rank movement since the previous rated tournament; null without a prior snapshot */
-        movement: number | null;
+        /**
+         * Rank movement over the last day and the last week — rank then minus
+         * rank now, so positive is a climb. Both windows arrive together so the
+         * ladder's switch costs no round trip.
+         *
+         * Ranked over the visible ladder only, which is what makes them
+         * readable against the ranks beside them. `null` means this player was
+         * not ON the ladder at that cutoff, so there is no position to have
+         * moved from — distinct from 0, "held station", even though the display
+         * collapses both to an em dash.
+         */
+        movement1d: number | null;
+        movement7d: number | null;
       }[];
       /**
        * The benchmark house personas — beside the ladder, never on it (they

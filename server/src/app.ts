@@ -324,8 +324,18 @@ export async function buildApp(): Promise<FastifyInstance> {
             WHERE u.handle IS NOT NULL AND u.kind = 'human' AND (? = 1 OR u.ladder_listed = 1)
          ) WHERE rated_tournaments >= ? ORDER BY elo DESC, handle`,
       )
-      .all(user ? 1 : 0, quota) as { id: number }[];
-    const movement = leaderboardMovement();
+      .all(user ? 1 : 0, quota) as { id: number; elo: number; rated_tournaments: number }[];
+    // Movement is ranked over exactly the rows above and nothing else — that is
+    // the whole point of passing them in. Ranking over everyone in elo_history
+    // (what this used to do) let players the caller cannot see push a visible
+    // one down the arrow, which is how a #2 on an eight-row ladder came to wear
+    // a "▼3". It follows that an anonymous caller's movement can differ from a
+    // member's for the same player, exactly as their rank numbering already
+    // does — same cause, same accepted trade.
+    const movement = leaderboardMovement(
+      rows.map((r) => ({ id: r.id, elo: r.elo, ratedTournaments: r.rated_tournaments })),
+      { nowSec: Math.floor(Date.now() / 1000), provisionalMin: quota },
+    );
     // null, not 0, when nobody is signed in: the client renders a "you'll join
     // the field once you've completed N crossings — x of N so far" note off
     // this number, and 0 would state that about a visitor who has no record to
@@ -342,7 +352,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       .prepare(`SELECT id, handle, picture FROM users WHERE kind = 'ai' AND handle IS NOT NULL ORDER BY id`)
       .all() as { id: number; handle: string; picture: string | null }[];
     return reply.send({
-      leaderboard: rows.map((r) => ({ ...r, movement: movement.get(r.id) ?? null })),
+      // Both windows ship on every response: it is two ints per row, and the
+      // client's switch is a reading position rather than a query — flipping it
+      // must not cost a round trip.
+      leaderboard: rows.map((r) => ({
+        ...r,
+        movement1d: movement.get(r.id)?.oneDay ?? null,
+        movement7d: movement.get(r.id)?.sevenDay ?? null,
+      })),
       house,
       provisionalMin: quota,
       yourRatedTournaments,

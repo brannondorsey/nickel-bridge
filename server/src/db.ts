@@ -102,6 +102,17 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 -- (activity.ts) is the one query that starts from a time window and spans all
 -- users, and it would otherwise scan the whole table on every load.
 CREATE INDEX IF NOT EXISTS idx_boards_updated ON boards(updated_at);
+-- elo_history had no index of any kind until this one: its id column is a rowid
+-- alias, so SQLite builds no separate b-tree for it and EVERY lookup against
+-- the table was a full scan. User-first because that is how almost everything
+-- reads it — /api/leaderboard's per-row rated_tournaments count (once per
+-- ladder row, on a public route), stats.ts's per-player rating series,
+-- activity.ts's, tournaments.ts's myEloDelta — and because it also serves the
+-- windowed join leaderboardMovement() now makes, which is equality on both
+-- columns. The trailing tournament_id makes the per-player reads covering and
+-- kills their sort. It costs recomputeElo one extra b-tree per insert, which is
+-- noise against a path that already rewrites the whole table on every board.
+CREATE INDEX IF NOT EXISTS idx_elo_history_user ON elo_history(user_id, tournament_id);
 `);
 
 // Migration: `handle`/`handle_key` were added after the initial schema, so existing

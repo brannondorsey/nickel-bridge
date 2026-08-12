@@ -6,6 +6,7 @@ import { AppHeader } from '../components/ds/AppHeader';
 import { BridgeMark } from '../components/ds/BridgeMark';
 import { Loading } from '../components/ds/Loading';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { PrefSwitch } from '../components/ds/PrefSwitch';
 
 interface Row {
   id: number;
@@ -14,7 +15,42 @@ interface Row {
   elo: number;
   rated_tournaments: number;
   played_tournaments: number;
-  movement: number | null;
+  /** rank movement over the last day / the last week; null = not on the ladder then */
+  movement1d: number | null;
+  movement7d: number | null;
+}
+
+type MoveWindow = '1d' | '7d';
+
+const MOVE_WINDOW_KEY = 'nb:rankwindow';
+
+const MOVE_WINDOWS: { value: MoveWindow; label: string }[] = [
+  { value: '1d', label: '1 DAY' },
+  { value: '7d', label: '7 DAYS' },
+];
+
+/**
+ * Seven days is the default because one day is mostly silent: an arrow only
+ * moves when somebody completes a rated crossing, and on a field this size
+ * that is not a daily event. A reader who wants the fresher reading opts in,
+ * and the choice sticks — same shape as the Stats page's nb:lookback (a
+ * best-effort read, an unrecognised stamp falling back rather than throwing,
+ * and a private-mode write that is allowed to fail silently).
+ */
+function readMoveWindow(): MoveWindow {
+  try {
+    return localStorage.getItem(MOVE_WINDOW_KEY) === '1d' ? '1d' : '7d';
+  } catch {
+    return '7d';
+  }
+}
+
+function storeMoveWindow(v: MoveWindow) {
+  try {
+    localStorage.setItem(MOVE_WINDOW_KEY, v);
+  } catch {
+    /* private mode — the preference just doesn't persist */
+  }
 }
 
 interface LeaderboardData {
@@ -26,7 +62,15 @@ interface LeaderboardData {
   yourRatedTournaments: number | null;
 }
 
-/** Rank movement since the previous rated tournament — glyph + color, never color alone. */
+/**
+ * Rank movement over the chosen window — glyph + color, never color alone.
+ *
+ * `null` (not on the ladder at the cutoff) and `0` (held station) deliberately
+ * render the same em dash: the distinction is real in the data and worth
+ * keeping there, but drawing it twice on screen would ask a reader to tell two
+ * kinds of "nothing happened" apart at a glance. Same collapse the ladder has
+ * always made.
+ */
 function Movement({ value }: { value: number | null }) {
   if (!value) return <span className="rank-move quiet">—</span>;
   if (value > 0) return <span className="rank-move positive">▲{value}</span>;
@@ -38,6 +82,7 @@ export default function Leaderboard() {
   const { me } = useMe();
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moveWindow, setMoveWindow] = useState<MoveWindow>(() => readMoveWindow());
 
   useEffect(() => {
     api
@@ -77,6 +122,23 @@ export default function Leaderboard() {
               {data!.provisionalMin} so far.
             </div>
           ) : null}
+          {/* One switch above the panel rather than a control per row: every
+              arrow reads the same window, and two rows disagreeing about the
+              period would be worse than no control at all. */}
+          {rows.length > 0 ? (
+            <div className="rank-move-row">
+              <span className="label-caps rank-move-label">MOVEMENT</span>
+              <PrefSwitch
+                label="Movement window"
+                value={moveWindow}
+                options={MOVE_WINDOWS}
+                onChange={(v) => {
+                  setMoveWindow(v);
+                  storeMoveWindow(v);
+                }}
+              />
+            </div>
+          ) : null}
           {rows.length === 0 ? (
             <div className="empty-note">No one has crossed yet — rankings appear after the first tournament.</div>
           ) : (
@@ -91,7 +153,7 @@ export default function Leaderboard() {
                       {you ? ' — you' : ''}
                     </span>
                     <b className="rank-elo">{r.elo}</b>
-                    <Movement value={r.movement} />
+                    <Movement value={moveWindow === '1d' ? r.movement1d : r.movement7d} />
                   </>
                 );
                 // Signed out the ladder is readable but the players on it are
@@ -133,6 +195,14 @@ export default function Leaderboard() {
             <BridgeMark width={34} />
             <div className="rank-foot-text">
               Elo from head-to-head tournament results, re-ranked live as results come in.{' '}
+              {/* The one question the old arrow could never answer on screen:
+                  what period is this, and ranked against whom. */}
+              {rows.length > 0 ? (
+                <>
+                  Arrows are places gained or lost in this field over the{' '}
+                  {moveWindow === '1d' ? 'last 24 hours' : 'last 7 days'}.{' '}
+                </>
+              ) : null}
               <span className="rank-foot-quiet">Everyone starts at 1200.</span>
             </div>
           </div>

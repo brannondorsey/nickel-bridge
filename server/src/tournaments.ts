@@ -114,8 +114,57 @@ const stmtSetElo = db.prepare(`UPDATE users SET elo = ? WHERE id = ?`);
 const stmtEloHistory = db.prepare(
   `INSERT INTO elo_history (user_id, tournament_id, before, after) VALUES (?, ?, ?, ?)`,
 );
-const stmtAllEloHistory = db.prepare(
-  `SELECT user_id, tournament_id, after FROM elo_history ORDER BY tournament_id`,
+/**
+ * Every rated crossing that FINISHED inside the seven-day window, folded to one
+ * row per player: the points they moved, and how many crossings that was, for
+ * both the one-day and seven-day windows in a single pass.
+ *
+ * Four things here are decisions, not incidental shape:
+ *
+ * 1. The `tournament_id IN (...)` prefilter keeps the inner aggregate off the
+ *    whole boards table, the same trick activity.ts's stmtWindowCrossings uses
+ *    and what idx_boards_updated exists for. It cannot wrongly exclude
+ *    anything: `finished_at` is a MAX over a subset of that tournament's rows,
+ *    so `finished_at >= :cut7` implies some row of it has `updated_at >= :cut7`
+ *    — the prefilter is a guaranteed superset of what survives.
+ *
+ * 2. The inner MAX is deliberately NOT restricted to the window. Restricting it
+ *    would compute the max of the RECENT boards rather than the crossing's
+ *    finish time, fabricating a finish inside the window for a crossing that
+ *    actually ended before it. Aggregate unrestricted, filter after.
+ *
+ * 3. `t2.kind = 'standard'` is spelled out rather than left to implication.
+ *    elo_history only ever holds standard tournaments today (stmtAllTournamentIds
+ *    filters them), so this changes no result — but this codebase is an
+ *    ALLOWLIST on kind, and a filter-by-implication is exactly how the next kind
+ *    value ends up inert everywhere except here. It also keeps the uncapped
+ *    rehearsal tournaments out of the IN list, which is free speed.
+ *
+ * 4. There is no `done = BOARDS_PER_TOURNAMENT` filter, which makes this match
+ *    stats.ts's stmtEloSeries rather than activity.ts's stmtWindowCrossings.
+ *    The inner join to elo_history already implies a complete rated crossing;
+ *    activity.ts needs the count only because it LEFT JOINs. Movement and the
+ *    profile's rating sparkline are the same timeline seen twice and must not
+ *    drift apart on the definition of when a crossing happened.
+ */
+const stmtWindowedRatingMoves = db.prepare(
+  `SELECT h.user_id AS userId,
+          SUM(CASE WHEN f.finished_at >= :cut1 THEN h.after - h.before ELSE 0 END) AS moved1,
+          SUM(h.after - h.before)                                                  AS moved7,
+          SUM(CASE WHEN f.finished_at >= :cut1 THEN 1 ELSE 0 END)                  AS n1,
+          COUNT(*)                                                                 AS n7
+     FROM elo_history h
+     JOIN (SELECT user_id, tournament_id, MAX(updated_at) AS finished_at
+             FROM boards
+            WHERE state = 'done'
+              AND tournament_id IN (
+                SELECT b2.tournament_id FROM boards b2
+                  JOIN tournaments t2 ON t2.id = b2.tournament_id AND t2.kind = 'standard'
+                 WHERE b2.updated_at >= :cut7)
+            GROUP BY user_id, tournament_id) f
+       ON f.user_id = h.user_id AND f.tournament_id = h.tournament_id
+    WHERE f.finished_at >= :cut7
+    GROUP BY h.user_id`,
 );
 const stmtMyEloDelta = db.prepare(
   `SELECT before, after FROM elo_history WHERE user_id = ? AND tournament_id = ?`,
@@ -595,32 +644,144 @@ export function myTournaments(
   }));
 }
 
+/** The two windows the ladder's movement switch offers, in seconds. */
+export const MOVEMENT_WINDOWS = { oneDay: 86_400, sevenDay: 7 * 86_400 } as const;
+
+/** One ladder row's movement, one entry per window. Null = no position to have moved from. */
+export interface RankMovement {
+  oneDay: number | null;
+  sevenDay: number | null;
+}
+
+/** The parts of a ladder row the movement math needs. */
+export interface MovementRow {
+  id: number;
+  elo: number;
+  ratedTournaments: number;
+}
+
 /**
- * Rank movement per rated user: previous rank − current rank, where "previous"
- * is the rating snapshot before the newest rated tournament in elo_history.
- * Null for users first rated at that tournament (no previous snapshot) and for
- * everyone when fewer than two rated tournaments exist. Because elo_history is
- * wiped and replayed on every board completion, movement can shift
- * retroactively when a late finisher re-ranks an old tournament — that is the
- * evergreen-Elo model working as intended.
+ * Standard competition ranking over one snapshot: ties share a rank and the
+ * next distinct rating skips (1, 2, 2, 4).
+ *
+ * Pure and exported so the movement math can be unit-tested without a database,
+ * and sort-based rather than the count-everyone-above closure this replaced —
+ * that one was O(n²) per call and got called 2n times, i.e. O(n³) overall,
+ * which is real money once the ladder is hundreds of players deep rather than
+ * eight.
  */
-export function leaderboardMovement(): Map<number, number> {
-  const rows = stmtAllEloHistory.all() as { user_id: number; tournament_id: number; after: number }[];
-  const movement = new Map<number, number>();
-  if (!rows.length) return movement;
-  const latestTid = rows[rows.length - 1].tournament_id;
-  const prev = new Map<number, number>();
-  const current = new Map<number, number>();
-  for (const r of rows) {
-    if (r.tournament_id < latestTid) prev.set(r.user_id, r.after);
-    current.set(r.user_id, r.after);
-  }
-  // standard competition ranking (ties share a rank), within each snapshot's population
-  const rank = (ratings: Map<number, number>, userId: number) =>
-    [...ratings.values()].filter((v) => v > ratings.get(userId)!).length + 1;
-  for (const userId of current.keys()) {
-    if (!prev.has(userId)) continue;
-    movement.set(userId, rank(prev, userId) - rank(current, userId));
+export function ranksOf(ratings: Map<number, number>): Map<number, number> {
+  const sorted = [...ratings.entries()].sort((a, b) => b[1] - a[1]);
+  const ranks = new Map<number, number>();
+  let rank = 0;
+  let prevRating: number | null = null;
+  sorted.forEach(([id, rating], i) => {
+    if (prevRating === null || rating < prevRating) {
+      rank = i + 1;
+      prevRating = rating;
+    }
+    ranks.set(id, rank);
+  });
+  return ranks;
+}
+
+/**
+ * How far each visible ladder row has moved over the last day and the last
+ * week: rank then − rank now, so a positive number is a climb.
+ *
+ * This replaced a version that was correct arithmetic answering a question
+ * nobody had asked, and both of its faults are worth stating because both are
+ * easy to reintroduce:
+ *
+ * - It ranked over EVERYONE in elo_history while the ladder on screen is
+ *   filtered (provisional quota, and `ladder_listed` for anonymous callers), so
+ *   invisible players could push a visible one down. A player sitting at #2 on
+ *   an eight-row ladder could wear "▼3". Hence `visible` being a PARAMETER: the
+ *   population the reader can see is the only population the arrow may rank.
+ * - Its "window" was the crossing with the highest tournament id anywhere,
+ *   which is usually somebody else's game and has nothing to do with elapsed
+ *   time. Hence real clock windows.
+ *
+ * The snapshot is a subtraction rather than a walk. elo_history has no
+ * timestamp and is replayed in tournament-id order, which is NOT wall-clock
+ * order, so `after` cannot be read off a date-sorted copy (stats.ts's
+ * eloProgression explains this at length). But a sum ignores order, so
+ * `users.elo` minus the points banked since the cutoff is exactly the rating as
+ * of the cutoff. Exactly, not approximately: core's eloUpdates sets
+ * `before: p.rating` and `after: Math.round(...)`, so every value is an integer
+ * and each player's chain is unbroken — the deltas telescope to
+ * `last_after − ELO_INITIAL`, and recomputeElo sets users.elo to that same
+ * `last_after`. The argument dies if `after` ever stops being rounded.
+ *
+ * `wasOnTheLadder` does two jobs, and the second one is load-bearing. A player
+ * whose every rated crossing falls inside the window has moved exactly
+ * `elo − ELO_INITIAL`, so their "then" rating reconstructs to precisely 1200 —
+ * a phantom that, left in the population, sits in the middle of a real ladder
+ * and displaces people. Three idle players at 1260/1210/1190 plus a newcomer
+ * arriving at 1150 would hand the 1190 player a ▲1 for having played nothing.
+ * So a player who was not ON the ladder at the cutoff is excluded from the
+ * "then" ranking entirely, not merely given a null of their own. Competition
+ * ranking counts only players ABOVE you, which makes that exactly right in both
+ * directions: a newcomer now below you is a no-op, and one now above you
+ * correctly reads as being overtaken.
+ *
+ * Two consequences worth knowing rather than rediscovering. The quota is the
+ * membership test, so this is scoped by whatever `provisionalMin` the caller
+ * passes rather than by the constant — provisionalMin() below is the single
+ * place DEMO is consulted for it, and every consumer takes that answer instead
+ * of re-deriving it. And because the visible population differs for an
+ * anonymous caller (ladder_listed), so does the movement, the same way that
+ * caller's rank numbering already differs.
+ *
+ * Still evergreen: elo_history is wiped and replayed on every board completion,
+ * so a late finisher re-ranking an old crossing restates these retroactively.
+ */
+export function leaderboardMovement(
+  visible: MovementRow[],
+  opts: { nowSec: number; provisionalMin: number },
+): Map<number, RankMovement> {
+  const movement = new Map<number, RankMovement>();
+  if (!visible.length) return movement;
+
+  const cut1 = opts.nowSec - MOVEMENT_WINDOWS.oneDay;
+  const cut7 = opts.nowSec - MOVEMENT_WINDOWS.sevenDay;
+  const moved = new Map(
+    (stmtWindowedRatingMoves.all({ cut1, cut7 }) as {
+      userId: number;
+      moved1: number;
+      moved7: number;
+      n1: number;
+      n7: number;
+    }[]).map((r) => [r.userId, r]),
+  );
+
+  const ranksNow = ranksOf(new Map(visible.map((r) => [r.id, r.elo])));
+
+  // A player with nothing in the window produces no aggregate row at all, so
+  // every read below defaults rather than assuming presence.
+  const windowOf = (r: MovementRow, oneDay: boolean) => {
+    const m = moved.get(r.id);
+    const points = (oneDay ? m?.moved1 : m?.moved7) ?? 0;
+    const crossings = (oneDay ? m?.n1 : m?.n7) ?? 0;
+    return { ratingThen: r.elo - points, ratedBefore: r.ratedTournaments - crossings };
+  };
+
+  const forWindow = (oneDay: boolean): Map<number, number | null> => {
+    const then = new Map<number, number>();
+    for (const r of visible) {
+      const { ratingThen, ratedBefore } = windowOf(r, oneDay);
+      if (ratedBefore >= opts.provisionalMin) then.set(r.id, ratingThen);
+    }
+    const ranksThen = ranksOf(then);
+    return new Map(
+      visible.map((r) => [r.id, then.has(r.id) ? ranksThen.get(r.id)! - ranksNow.get(r.id)! : null]),
+    );
+  };
+
+  const day = forWindow(true);
+  const week = forWindow(false);
+  for (const r of visible) {
+    movement.set(r.id, { oneDay: day.get(r.id) ?? null, sevenDay: week.get(r.id) ?? null });
   }
   return movement;
 }
