@@ -2514,9 +2514,12 @@ a.board-row:hover {
   margin: 12px 16px 0;
   padding: 6px 14px 6px 20px;
 }
-/* Must stay AFTER the rule above: both are two-class selectors, so equal
-   specificity makes source order the tiebreak, and .rankings .rank-panel's
-   shorthand `margin` would otherwise win and restore the full 12px gap. */
+/* Tightens the gap when the switch is present, since the switch already
+   separates the ladder from the heading. Three classes to the rule above's
+   two, so it wins on specificity and not on source order — worth stating
+   because the shorthand `margin` above would otherwise restore the full 12px,
+   and an equal-specificity version of this selector WOULD depend on staying
+   below it. */
 .rankings .rank-move-row + .rank-panel {
   margin-top: 6px;
 }

@@ -727,9 +727,11 @@ export function ranksOf(ratings: Map<number, number>): Map<number, number> {
  *
  * Two consequences worth knowing rather than rediscovering. The quota is the
  * membership test, so this is scoped by whatever `provisionalMin` the caller
- * passes — app.ts owns that env read. And because the visible population
- * differs for an anonymous caller (ladder_listed), so does the movement, the
- * same way that caller's rank numbering already differs.
+ * passes rather than by the constant — provisionalMin() below is the single
+ * place DEMO is consulted for it, and every consumer takes that answer instead
+ * of re-deriving it. And because the visible population differs for an
+ * anonymous caller (ladder_listed), so does the movement, the same way that
+ * caller's rank numbering already differs.
  *
  * Still evergreen: elo_history is wiped and replayed on every board completion,
  * so a late finisher re-ranking an old crossing restates these retroactively.
