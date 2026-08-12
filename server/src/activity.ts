@@ -163,8 +163,11 @@ interface CrossingRow {
  * DEMO=1 relaxes it (DEMO_PROVISIONAL_MIN_TOURNAMENTS) and the seeder's bots
  * never reach the production quota — hardcoding it made 'entered-rankings'
  * unreachable in exactly the environment built for click-testing this screen.
- * app.ts owns that env read for the same reason /api/leaderboard does; nothing
- * in this module or stats.ts or tournaments.ts touches process.env.
+ * The quota reaches this module as an ARGUMENT for the same reason it reaches
+ * /api/leaderboard's movement math as one: provisionalMin() (tournaments.ts) is
+ * the single place DEMO is consulted for it, and every consumer takes the
+ * answer rather than re-deriving it. Nothing in this module or stats.ts reads
+ * process.env at all.
  */
 function milestonesFor(userId: number, sinceUnix: number, provisionalMin: number): ActivityEvent[] {
   const crossings = stmtAllCrossings.all(userId, BOARDS_PER_TOURNAMENT) as {

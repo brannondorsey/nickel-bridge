@@ -2479,9 +2479,46 @@ a.board-row:hover {
   font-weight: 600;
   font-size: 19px;
 }
+/* The movement window switch, above the ladder rather than in it: one control
+   for every arrow, since two rows disagreeing about the period would be worse
+   than no control. Same shape as the Stats page's LOOKBACK row (label, then the
+   lever) and the same 16px inset as the panel it scopes, sitting nearer the
+   ladder below than the heading above so it reads as belonging to it. */
+.rank-move-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 16px 0;
+}
+.rank-move-label {
+  color: var(--muted);
+  font-size: 9.5px;
+  flex: none;
+}
+/* .pref-switch's segments are flex: 1, which sizes them off the row in the
+   settings gate where the switch spans the full width. Here it shares a
+   space-between row with a label, so the segments get only their content's
+   share — and a two-word tracked-caps label ("7 DAYS") wraps to two lines and
+   makes the lever grow a second row. nowrap is the fix; the min-width keeps
+   the two segments even rather than sized by their own text length. */
+.rank-move-row .pref-switch {
+  flex: 0 1 auto;
+  min-width: 172px;
+}
+.rank-move-row .pref-switch button {
+  white-space: nowrap;
+  padding: 0 14px;
+}
 .rankings .rank-panel {
   margin: 12px 16px 0;
   padding: 6px 14px 6px 20px;
+}
+/* Must stay AFTER the rule above: both are two-class selectors, so equal
+   specificity makes source order the tiebreak, and .rankings .rank-panel's
+   shorthand `margin` would otherwise win and restore the full 12px gap. */
+.rankings .rank-move-row + .rank-panel {
+  margin-top: 6px;
 }
 .rank-row {
   display: grid;
