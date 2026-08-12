@@ -103,10 +103,60 @@ describe('chooseTournament', () => {
     expect(chooseTournament([popular, fresh], NOW, () => 0)?.id).toBe(fresh.id);
   });
 
-  it('grace tier picks the oldest grace-eligible tournament', () => {
-    const newer = cand({ starters: 1, ageSec: 3600 });
+  // Grace ordering: rescue, then fill, then freshness. See graceOrder's doc
+  // comment for the measurements behind it; these pin the behaviour it
+  // describes. The tier ran oldest-first until tools/calibrate_placement.mjs
+  // showed that starves boards stuck at one player, so the first test here is
+  // deliberately the inverse of the one it replaced.
+  it('grace tier rescues a stranded tournament over an older, fuller one', () => {
+    const stranded = cand({ starters: 1, ageSec: 3600 });
     const older = cand({ starters: 2, ageSec: 7200 });
-    expect(chooseTournament([newer, older], NOW, () => 0)?.id).toBe(older.id);
+    expect(chooseTournament([stranded, older], NOW, () => 0)?.id).toBe(stranded.id);
+  });
+
+  it('grace tier fills the fullest when nobody is stranded', () => {
+    // Both past the rescue case, so the tie-break that matters is depth: a
+    // third player joining the 2-starter board makes a 3-way field, which is
+    // worth more than making a second 2-way one.
+    const fuller = cand({ starters: 2, ageSec: 7200 });
+    const thinner = cand({ starters: 0, ageSec: 3600 });
+    expect(chooseTournament([thinner, fuller], NOW, () => 0)?.id).toBe(fuller.id);
+  });
+
+  it('grace tier sorts a 0-starter candidate last, since joining it is not a rescue', () => {
+    // A 0-starter tournament is one whose creator has not opened a board yet
+    // (boards deal lazily). Joining leaves it at one human, so it must lose to
+    // both a genuine rescue and a genuine fill.
+    const empty = cand({ starters: 0, ageSec: 3600 });
+    const stranded = cand({ starters: 1, ageSec: 7200 });
+    const fuller = cand({ starters: 3, ageSec: 7200 });
+    expect(chooseTournament([empty, stranded, fuller], NOW, () => 0)?.id).toBe(stranded.id);
+    expect(chooseTournament([empty, fuller], NOW, () => 0)?.id).toBe(fuller.id);
+  });
+
+  it('grace tier prefers the freshest only as a tie-break, never over depth', () => {
+    // Freshness is the co-presence lever (players meeting on the same board
+    // the same day), but it is the LAST thing consulted: it must not pull a
+    // player off a deeper field or away from a rescue.
+    const freshThin = cand({ starters: 1, ageSec: 60 });
+    const staleThin = cand({ starters: 1, ageSec: 40 * 3600 });
+    expect(chooseTournament([staleThin, freshThin], NOW, () => 0)?.id).toBe(freshThin.id);
+
+    const freshShallow = cand({ starters: 2, ageSec: 60 });
+    const staleDeep = cand({ starters: 3, ageSec: 40 * 3600 });
+    expect(chooseTournament([freshShallow, staleDeep], NOW, () => 0)?.id).toBe(staleDeep.id);
+  });
+
+  it('grace ordering is a total order, so placement stays deterministic', () => {
+    // Invariant 1 is about robots rather than placement, but a comparator that
+    // returns 0 for distinct rows makes the served tournament depend on the
+    // input order Array.prototype.sort happens to see. Identical on every
+    // field except id must still resolve the same way from any permutation.
+    const a = cand({ starters: 2, ageSec: 3600 });
+    const b = { ...cand({ starters: 2, ageSec: 3600 }), created_at: a.created_at };
+    const lowest = Math.min(a.id, b.id);
+    expect(chooseTournament([a, b], NOW, () => 0)?.id).toBe(lowest);
+    expect(chooseTournament([b, a], NOW, () => 0)?.id).toBe(lowest);
   });
 
   it('grace ends at the starter cap and at the TTL', () => {
@@ -158,6 +208,33 @@ describe('placeUser over the database', () => {
     expect(tournament.name).toBe(`Tournament #${stored.number}`);
     expect(nextBoard).toBe(1);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournament.id); // keep later backlogs clean
+  });
+
+  it('sends a real arrival to the stranded board, not the oldest one', () => {
+    // The whole change, end to end through the DB rather than the pure
+    // comparator: under the previous oldest-first rule this player landed on
+    // `older` and the board sitting at one human aged out of its grace window
+    // alone. Both candidates are inside the window and under the cap, so the
+    // ordering is the only thing deciding it.
+    const [alone, pair1, pair2, arrival] = ['g-alone', 'g-pair1', 'g-pair2', 'g-arrival'].map(addUser);
+    const older = addTournament('older-fuller', NOW - 30 * 3600);
+    startBoard(older, pair1);
+    startBoard(older, pair2);
+    const stranded = addTournament('younger-stranded', NOW - 3600);
+    startBoard(stranded, alone);
+
+    const picked = placeUser(arrival, 'expert', { nowSec: NOW, rng: rng0 }).tournament.id;
+
+    // Clean up BEFORE asserting, so later cases in this file see the backlog
+    // they expect even when this one fails. Cleanup after the expect() leaks
+    // both tournaments on failure and takes four unrelated tests down with it,
+    // which turns one honest red into a cascade nobody can read.
+    for (const id of [older, stranded]) {
+      db.prepare(`DELETE FROM boards WHERE tournament_id = ?`).run(id);
+      db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(id);
+    }
+
+    expect(picked).toBe(stranded);
   });
 
   it('numbers crossings past a rehearsal that consumed an id', () => {

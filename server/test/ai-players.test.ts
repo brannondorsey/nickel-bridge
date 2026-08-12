@@ -307,9 +307,31 @@ describe('benchmark AI players', () => {
       .get() as { id: number };
     // Unfixed counts would see starters = 4 (grace full) and done_players = 3
     // (instant popularity magnet); human-only counts grace-join the second
-    // human into the same boards. (This tournament is a day old — the grace
-    // sort prefers the OLDEST young underfilled tournament, so the scheduler
-    // test's fresher fixtures can't shadow it.)
+    // human into the same boards.
+    //
+    // Close every OTHER grace slot first, so this asserts grace ELIGIBILITY —
+    // the thing AI rows could break — rather than grace ORDERING, which is a
+    // separately tuned policy (graceOrder in tournaments.ts) that
+    // placement.test.ts pins. This test used to lean on the tier serving the
+    // oldest candidate and broke the day that ordering changed, even though
+    // nothing about AI-row counting was touched. Filling the others to
+    // GRACE_CAP with human starters makes it ordering-independent.
+    const filler = db.prepare(`INSERT INTO users (google_id, name, kind) VALUES (?, 'F', 'human') RETURNING id`);
+    for (const other of db.prepare(`SELECT id FROM tournaments WHERE id != ?`).all(t.id) as { id: number }[]) {
+      const humans = (
+        db
+          .prepare(
+            `SELECT COUNT(DISTINCT b.user_id) AS n FROM boards b JOIN users u ON u.id = b.user_id
+             WHERE b.tournament_id = ? AND u.kind = 'human'`,
+          )
+          .get(other.id) as { n: number }
+      ).n;
+      for (let i = humans; i < 4; i++) {
+        const f = filler.get(`dev:filler-${other.id}-${i}`) as { id: number };
+        db.prepare(`INSERT INTO boards (tournament_id, user_id, board_no) VALUES (?, ?, 1)`).run(other.id, f.id);
+      }
+    }
+
     const placed = placeUser(second.id, 'intermediate', { nowSec: now, rng: () => 0.5 });
     expect(placed.tournament.id).toBe(t.id);
   });

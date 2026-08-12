@@ -419,16 +419,81 @@ export function tournamentScore(donePlayers: number, ageSec: number): number {
 }
 
 /**
+ * Grace-tier ordering: RESCUE first, then FILL, with freshness only breaking
+ * ties. Among young under-filled candidates, prefer one stuck at exactly one
+ * starter; failing that the fullest; failing that the newest.
+ *
+ * This replaced plain oldest-first, and the reasoning is measured rather than
+ * argued — `tools/calibrate_placement.mjs` replays real placement demand, and
+ * the trade-off it exposes is not the one intuition predicts. Three things it
+ * established, in the order they matter:
+ *
+ * 1. The grace tier decides roughly half of all placements and the scoring
+ *    tier about a tenth, so this comparator is where essentially all the
+ *    leverage is. TAU_S, SAMPLE_RATIO and the popularity score are near-inert
+ *    at this scale — ablating each moved the outcome by 0.0-0.2pp.
+ * 2. Oldest-first behaves like FULLEST-first, which is the failure. Older
+ *    candidates have had the most time to accumulate starters, so a FIFO queue
+ *    keeps topping up boards that are already fine while boards sitting at one
+ *    human wait behind them and age out of the window. It is not a neutral
+ *    ordering; it actively starves the tail whenever one player out-produces
+ *    the rest, which is exactly production's shape.
+ * 3. Yet explicit fullest-first is WORSE than production (15 orphaned
+ *    crossings vs 10), and explicit emptiest-first gives up the deep fields
+ *    (best solo rate, worst share of crossings with 4+ humans). Neither pure
+ *    ordering wins because the two goals only compete once every board has a
+ *    second player. Below that line rescuing is nearly free — turning a 4-way
+ *    field into a 5-way is worth far less than turning a 1-way into a 2-way —
+ *    and above it, filling is unopposed.
+ *
+ * So: do the cheap thing first, then the good thing. Measured against the real
+ * 279-demand trace, versus oldest-first: orphaned crossings 10 → 7, field at
+ * the average crossing 3.78 → 3.87, and the median gap between the first and
+ * last player arriving at a board 41.3h → 22.6h. That last one is the point of
+ * the freshness tiebreak — a board is worth talking about when the people you
+ * are compared against played it the same day, not two days later.
+ *
+ * The obvious refinement — among stranded boards, rescue the one closest to
+ * aging out of the window rather than the freshest — was measured and
+ * rejected. It does cut orphans further (4 vs 7) because it saves boards that
+ * are about to expire, but it collapses the co-presence win: median first-to-
+ * last arrival goes back to 39.4h, against 22.6h here and 41.3h under the old
+ * rule, and it gives up more field depth than any other ordering tried (46.6%
+ * of crossings reaching four humans, against 57.7%). It buys three crossings a
+ * human opponent at the cost of making almost every shared board a two-day-
+ * stale comparison, which is the wrong trade for a game whose fields are worth
+ * talking about. The knowing cost of the
+ * freshness tie-break is that a stranded board with hours left on its grace
+ * window can still lose to one created minutes ago, and expire alone.
+ *
+ * `starters === 1` and not `<= 1` is deliberate: a 0-starter candidate is a
+ * tournament created moments ago whose creator has not opened a board yet
+ * (boards deal lazily on GET). Joining it leaves it at one human, so it is not
+ * a rescue; it sorts last among the non-solo group, behind every board where
+ * an extra player actually deepens a field.
+ */
+function graceOrder(a: PlacementCandidate, b: PlacementCandidate): number {
+  const stranded = (c: PlacementCandidate) => (c.starters === 1 ? 0 : 1);
+  return (
+    stranded(a) - stranded(b) || // rescue anyone sitting alone
+    b.starters - a.starters || // else deepen the fullest field
+    b.created_at - a.created_at || // else the freshest, for co-presence
+    a.id - b.id // total order, so placement stays deterministic
+  );
+}
+
+/**
  * Pick the tournament to serve, or null to create a new one.
  *
- * Grace tier: force-join the oldest young (< GRACE_TTL_S), under-filled
- * (< GRACE_CAP starters) tournament. Fresh tournaments collect their first few
- * players before entering normal scoring instead of dying as 1-player
- * orphans, and two friends who both return after a long absence land on the
- * same deals (first returner creates, second is grace-served into it). Grace
- * slots are occupied by board rows, not placements — boards deal lazily on
- * GET, so several players placed before any of them opens a board can all be
- * graced into the same tournament. Harmless at friends scale.
+ * Grace tier: force-join a young (< GRACE_TTL_S), under-filled
+ * (< GRACE_CAP starters) tournament, chosen by graceOrder above. Fresh
+ * tournaments collect their first few players before entering normal scoring
+ * instead of dying as 1-player orphans, and two friends who both return after
+ * a long absence land on the same deals (first returner creates, second is
+ * grace-served into it). Grace slots are occupied by board rows, not
+ * placements — boards deal lazily on GET, so several players placed before any
+ * of them opens a board can all be graced into the same tournament. Harmless
+ * at friends scale.
  *
  * Scoring tier: if the best candidate beats what a brand-new tournament would
  * score (ln 2 — one finisher at age 0), weighted-sample among the candidates
@@ -446,7 +511,7 @@ export function chooseTournament(
 ): PlacementCandidate | null {
   const grace = candidates
     .filter((c) => nowSec - c.created_at < PLACEMENT.GRACE_TTL_S && c.starters < PLACEMENT.GRACE_CAP)
-    .sort((a, b) => a.created_at - b.created_at || a.id - b.id);
+    .sort(graceOrder);
   if (grace.length) return grace[0];
 
   const scored = candidates.map((c) => ({ c, score: tournamentScore(c.done_players, nowSec - c.created_at) }));
