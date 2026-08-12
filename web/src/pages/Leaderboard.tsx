@@ -6,7 +6,6 @@ import { AppHeader } from '../components/ds/AppHeader';
 import { BridgeMark } from '../components/ds/BridgeMark';
 import { Loading } from '../components/ds/Loading';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
-import { PrefSwitch } from '../components/ds/PrefSwitch';
 
 interface Row {
   id: number;
@@ -124,19 +123,28 @@ export default function Leaderboard() {
           ) : null}
           {/* One switch above the panel rather than a control per row: every
               arrow reads the same window, and two rows disagreeing about the
-              period would be worse than no control at all. */}
+              period would be worse than no control at all. Same chip-switch
+              chrome as the Stats page's LOOKBACK control — both are a small
+              preference switch sitting above the content it scopes. */}
           {rows.length > 0 ? (
             <div className="rank-move-row">
               <span className="label-caps rank-move-label">MOVEMENT</span>
-              <PrefSwitch
-                label="Movement window"
-                value={moveWindow}
-                options={MOVE_WINDOWS}
-                onChange={(v) => {
-                  setMoveWindow(v);
-                  storeMoveWindow(v);
-                }}
-              />
+              <div className="chip-switch" role="group" aria-label="Movement window">
+                {MOVE_WINDOWS.map((w) => (
+                  <button
+                    key={w.value}
+                    type="button"
+                    className={w.value === moveWindow ? 'active' : ''}
+                    aria-pressed={w.value === moveWindow}
+                    onClick={() => {
+                      setMoveWindow(w.value);
+                      storeMoveWindow(w.value);
+                    }}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
           {rows.length === 0 ? (

@@ -1200,16 +1200,20 @@ a.ds-btn-secondary:hover {
   color: var(--muted);
 }
 
-/* ---- Lookback window switch (Stats) ----
-   One control above all three charts, never one per panel: three charts that can
-   disagree about which period they show is worse than no control at all.
+/* ---- Chip switch: chrome-above-a-panel preference control ----
+   Shared button styling for a small switch that sits above the content it
+   scopes (Stats' LOOKBACK, Rankings' MOVEMENT) — a row with a label on the
+   left and this on the right.
 
    Deliberately NOT .pref-switch, though it does a similar job on the settings
-   gate. That one is a settings control that owns its row — four options at
-   flex: 1, 40px tall. This is chrome for the panels beneath it and has to stay out
-   of their way, so the buttons size to their labels and sit right-aligned against
-   the panel edge. 30px tall clears the 24px WCAG 2.5.8 target floor with room to
-   spare while staying well under the weight a primary control earns. */
+   gate. That one is a settings control that owns its row — options at
+   flex: 1, 40px tall. This is chrome for the panel beneath/beside it and has
+   to stay out of its way, so the buttons size to their labels rather than
+   stretching to fill the row. 30px tall clears the 24px WCAG 2.5.8 target
+   floor with room to spare while staying well under the weight a primary
+   control earns. The row/label classes stay per-page (`.lookback-row`,
+   `.rank-move-row`) since their margins scope different content; only the
+   button chrome itself is shared, as `.chip-switch`. */
 .lookback-row {
   display: flex;
   align-items: center;
@@ -1228,13 +1232,14 @@ a.ds-btn-secondary:hover {
   font-size: 9.5px;
   flex: none;
 }
-.lookback-switch {
+.chip-switch {
   display: inline-flex;
+  flex: none;
   border: 1px solid var(--line);
   border-radius: var(--radius-btn);
   overflow: hidden;
 }
-.lookback-switch button {
+.chip-switch button {
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 10px;
@@ -1245,12 +1250,13 @@ a.ds-btn-secondary:hover {
   border-left: 1px solid var(--line);
   min-height: 30px;
   padding: 0 13px;
+  white-space: nowrap;
   cursor: pointer;
 }
-.lookback-switch button:first-child {
+.chip-switch button:first-child {
   border-left: 0;
 }
-.lookback-switch button.active {
+.chip-switch button.active {
   background: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
 }
@@ -2495,20 +2501,6 @@ a.board-row:hover {
   color: var(--muted);
   font-size: 9.5px;
   flex: none;
-}
-/* .pref-switch's segments are flex: 1, which sizes them off the row in the
-   settings gate where the switch spans the full width. Here it shares a
-   space-between row with a label, so the segments get only their content's
-   share — and a two-word tracked-caps label ("7 DAYS") wraps to two lines and
-   makes the lever grow a second row. nowrap is the fix; the min-width keeps
-   the two segments even rather than sized by their own text length. */
-.rank-move-row .pref-switch {
-  flex: 0 1 auto;
-  min-width: 172px;
-}
-.rank-move-row .pref-switch button {
-  white-space: nowrap;
-  padding: 0 14px;
 }
 .rankings .rank-panel {
   margin: 12px 16px 0;

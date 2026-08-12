@@ -473,7 +473,7 @@ export default function Player() {
           {windows.length > 0 ? (
             <div className="lookback-row">
               <span className="label-caps lookback-label">LOOKBACK</span>
-              <div className="lookback-switch" role="group" aria-label="Lookback window">
+              <div className="chip-switch" role="group" aria-label="Lookback window">
                 {[...windows, 'all' as const].map((w) => (
                   <button
                     key={String(w)}
