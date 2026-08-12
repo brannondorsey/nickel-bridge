@@ -88,8 +88,15 @@ export default function Tournament() {
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
   const complete = myDone === TOTAL_BOARDS;
   // A signed integer beside a matchpoint percentage says nothing on its own, so
-  // the column gets a caption — but only once there is a figure to explain.
-  // A crossing that has rated nobody shows a column of em dashes and no claim.
+  // the column carries a caption — and neither appears until there is a figure
+  // to explain. A crossing that has rated nobody keeps the three-column field
+  // it always had rather than growing a column of em dashes.
+  //
+  // Note this is a property of the CROSSING, not of the viewer's progress
+  // through it: tournaments never close and players move through the same field
+  // independently, so two others can finish and rate while this viewer is still
+  // on board 2. Their swings are true and worth showing on a live scoresheet —
+  // the same evergreen reading the pct column beside it already gives.
   const anyRated = t.standings.some((s) => s.eloDelta !== null && s.eloDelta !== undefined);
 
   // The field reads the same live or final — one panel, two headings.
@@ -110,7 +117,9 @@ export default function Tournament() {
           return (
             <div
               key={s.userId}
-              className={`tourney-field-row ${you ? 'tourney-field-you' : ''}${house ? ' tourney-field-house' : ''}`}
+              className={`tourney-field-row${anyRated ? ' has-swing' : ''} ${you ? 'tourney-field-you' : ''}${
+                house ? ' tourney-field-house' : ''
+              }`}
             >
               <b className="tourney-field-rank">{rankLabel}</b>
               <span className="tourney-field-name">
@@ -119,7 +128,7 @@ export default function Tournament() {
                 {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
               </span>
               <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>
-              <FieldSwing value={s.eloDelta} />
+              {anyRated ? <FieldSwing value={s.eloDelta} /> : null}
             </div>
           );
         })

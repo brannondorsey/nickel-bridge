@@ -94,6 +94,40 @@ describe('Tournament sheet', () => {
     expect(screen.getByText(/rating change from this crossing/i)).toBeInTheDocument();
   });
 
+  it('shows swings on a LIVE scoresheet for players who already rated', async () => {
+    // Tournaments never close and players move through the same crossing
+    // independently, so others can finish and rate while this viewer is still
+    // mid-tournament. Their swings are true then, and the field panel is shared
+    // between the live and final states — this pins that as intended rather
+    // than incidental.
+    apiMock.tournament.mockResolvedValue({
+      ...tournamentInProgress,
+      standings: tournamentInProgress.standings.map((s) =>
+        s.handle === 'Alice' ? { ...s, eloDelta: 9 } : { ...s, eloDelta: null },
+      ),
+    });
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    expect(await screen.findByText('THE FIELD — AFTER BOARD 1')).toBeInTheDocument();
+    const alice = screen.getByText('Alice').closest('.tourney-field-row')! as HTMLElement;
+    expect(within(alice).getByText('+9')).toHaveClass('positive');
+    expect(screen.getByText(/rating change from this crossing/i)).toBeInTheDocument();
+  });
+
+  it('omits the swing column entirely, not just the caption, when nothing rated', async () => {
+    apiMock.tournament.mockResolvedValue({
+      ...tournamentInProgress,
+      standings: tournamentInProgress.standings.map((s) => ({ ...s, eloDelta: null })),
+    });
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    await screen.findByText('THE FIELD — AFTER BOARD 1');
+    // no unexplained column of em dashes, and the row keeps its 3-column grid
+    expect(document.querySelector('.tourney-field-swing')).toBeNull();
+    expect(document.querySelector('.tourney-field-row.has-swing')).toBeNull();
+    expect(screen.queryByText(/rating change from this crossing/i)).not.toBeInTheDocument();
+  });
+
   it('omits the swing caption for a crossing that rated nobody', async () => {
     apiMock.tournament.mockResolvedValue({
       ...tournamentCompleteWithHouse,
