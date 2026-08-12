@@ -7,5 +7,9 @@ export default defineConfig({
     // few cores. The suites are fast in practice; this only guards against
     // contention-induced flakes.
     testTimeout: 30_000,
+    // Same reasoning, and it needs saying separately: hookTimeout does not
+    // inherit from testTimeout, and its default is 10s. A beforeAll that sets a
+    // suite up by playing real boards is doing exactly the work above.
+    hookTimeout: 30_000,
   },
 });

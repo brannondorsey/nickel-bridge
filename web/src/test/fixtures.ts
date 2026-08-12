@@ -609,11 +609,15 @@ export const playerStatsEmpty: PlayerStats = {
 
 // ---- leaderboard ----
 
+// The two windows deliberately disagree per row: 7 DAYS is the default reading
+// and 1 DAY is the quieter one, so a fixture where they matched would let the
+// switch appear to work while reading the same field twice.
 export const leaderboardRows = [
-  { id: 7, handle: 'Alice', picture: null, elo: 1642, rated_tournaments: 9, played_tournaments: 11, movement: 2 },
-  { id: 10, handle: 'Henry', picture: null, elo: 1601, rated_tournaments: 8, played_tournaments: 9, movement: -1 },
-  { id: 1, handle: 'Margaret', picture: null, elo: 1487, rated_tournaments: 10, played_tournaments: 12, movement: 3 },
-  { id: 8, handle: 'Bob', picture: null, elo: 1466, rated_tournaments: 5, played_tournaments: 7, movement: null },
+  { id: 7, handle: 'Alice', picture: null, elo: 1642, rated_tournaments: 9, played_tournaments: 11, movement1d: 1, movement7d: 2 },
+  { id: 10, handle: 'Henry', picture: null, elo: 1601, rated_tournaments: 8, played_tournaments: 9, movement1d: 0, movement7d: -1 },
+  { id: 1, handle: 'Margaret', picture: null, elo: 1487, rated_tournaments: 10, played_tournaments: 12, movement1d: -1, movement7d: 3 },
+  // on the ladder for less than a week: a real 1-day reading, no 7-day position
+  { id: 8, handle: 'Bob', picture: null, elo: 1466, rated_tournaments: 5, played_tournaments: 7, movement1d: 2, movement7d: null },
 ];
 
 // meFixture (id 1, Margaret) already has 10 rated tournaments — past the

@@ -1551,16 +1551,48 @@ about it are load-bearing, and [docs/compare.md](docs/compare.md) has the full r
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
 everyone — so don't "optimize" it into an incremental update without redesigning the model.
 
-**A crossing's rating swings are shown per player, on the crossing itself.** The finished
-tournament page's THE FIELD panel draws each player's `after - before` for that tournament
-(`tournamentEloDeltas()` in `tournaments.ts`, folded onto the standings by the `/api/tournaments/:id`
-**detail** route only — the lobby list draws no swings and a player can hold hundreds of
-tournaments). `null` is not zero and never renders as it: the three ways a player of a field can
-have no swing are that house personas never rate, an incomplete player never rates, and a
-crossing rates nobody until 2+ humans finish it. This is where the "how did one crossing move
-everybody" question lives; the ladder's arrow deliberately does not answer it (see
-`leaderboardMovement`). Reading it costs `idx_elo_history_tournament` — before it, `elo_history`
-had no index at all beyond its rowid alias, so every lookup anywhere was a full scan.
+**The ladder's movement arrow is a real clock window, ranked over the rows on screen — and
+both halves of that are load-bearing.** `leaderboardMovement(visible, {nowSec, provisionalMin})`
+takes the visible ladder as an ARGUMENT because the version that didn't was the bug: it ranked
+over everyone in `elo_history` while `/api/leaderboard` filters its rows (the provisional quota,
+plus `ladder_listed` for anonymous callers), so a player the reader cannot see could push a
+visible one down and a #2 on an eight-row ladder could wear "▼3". Its "window" was likewise the
+crossing with the highest tournament id anywhere — usually somebody else's game, and unrelated
+to elapsed time. Now it reports a 1-day and a 7-day figure (`MOVEMENT_WINDOWS`), both shipped on
+every response so the client's switch costs no round trip, and the Rankings footer names the
+period on screen.
+
+The "then" rating is a SUBTRACTION, not a walk: `elo_history` has no timestamp and replays in
+tournament-id order, so `after` can't be read off a date-sorted copy (see `eloProgression`) — but
+a sum ignores order, so `users.elo` minus the points banked since the cutoff is the rating as of
+the cutoff, exactly (core's `eloUpdates` rounds, so every value is an integer and the deltas
+telescope). A crossing's finish time is `MAX(boards.updated_at)` for that (user, tournament), the
+same bridge `stmtEloSeries` uses; the query prefilters by `idx_boards_updated` the way
+`activity.ts` does, and spells out `kind = 'standard'` rather than relying on `elo_history` only
+ever holding standard rows.
+
+**A player who was not on the ladder at the cutoff is excluded from the "then" ranking
+entirely**, not merely given a null of their own — and that is the one rule here most likely to
+get "simplified" back out. Their reconstructed rating is exactly `ELO_INITIAL`, a phantom that
+otherwise sits mid-ladder and displaces real players: three idle players and one newcomer
+arriving beneath them would hand the bottom idle player a ▲1 for having played nothing.
+Excluding is correct in both directions because competition ranking counts only players *above*
+you. It follows that movement can differ between an anonymous and a signed-in caller, exactly as
+that caller's rank numbering already does.
+
+**A crossing's rating swings are shown per player, on the crossing itself** — the question the
+ladder's arrow above deliberately does not answer. The tournament page's THE FIELD panel draws
+each player's `after - before` for that tournament (`tournamentEloDeltas()` in `tournaments.ts`,
+folded onto the standings by the `/api/tournaments/:id` **detail** route only — the lobby list
+draws no swings and a player can hold hundreds of tournaments). `null` is not zero and never
+renders as it: the three ways a player of a field can have no swing are that house personas never
+rate, an incomplete player never rates, and a crossing rates nobody until 2+ humans finish it.
+The column and its caption appear on the same test, so a crossing that has rated nobody keeps its
+three-column field rather than growing a column of em dashes — and because that test is a
+property of the CROSSING rather than of the viewer's progress, swings show on a live scoresheet
+too, for players who finished ahead of you. Reading it costs `idx_elo_history_tournament`, the
+tournament-first sibling of `idx_elo_history_user`; see the pair's note in `db.ts` for why one
+index cannot serve both directions.
 
 **Replay order is not play order, and every surface that draws a timeline has to convert.**
 Tournaments never close, so a player can be placed into a months-old tournament or resume one
@@ -1619,8 +1651,10 @@ reorder the pair. `entered-rankings` takes the provisional quota as an **argumen
 reading `PROVISIONAL_MIN_TOURNAMENTS`, because `DEMO=1` relaxes it to
 `DEMO_PROVISIONAL_MIN_TOURNAMENTS` and the seeder's bots never reach the production 4 —
 hardcoding it made the milestone unreachable in exactly the environment built to click-test
-it. `app.ts`'s `provisionalMin()` is the one place that env is read, shared with
-`/api/leaderboard`; `activity.ts`, `stats.ts` and `tournaments.ts` touch no env at all. Note it
+it. `tournaments.ts`'s `provisionalMin()` is the one place `DEMO` is consulted for that quota —
+`app.ts` imports it and passes the answer to `/api/leaderboard`'s movement math, to `activity.ts`
+and to `compare.ts`, so no consumer re-derives it; `activity.ts` and `stats.ts` read no env at
+all. Note it
 means **rated** tournaments, not played ones — a crossing only rates you when a second human
 finishes the same field — so the milestone is named for the screen a player lands on rather
 than for a number of games. One run can earn several milestones; `pickMilestone` ranks them by

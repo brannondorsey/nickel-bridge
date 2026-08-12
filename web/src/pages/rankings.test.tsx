@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { leaderboardResponse, leaderboardRows, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Leaderboard from './Leaderboard';
@@ -12,6 +13,11 @@ vi.mock('../api', async (importOriginal) => ({
 }));
 
 describe('Rankings', () => {
+  // The window preference persists in localStorage, so it would otherwise leak
+  // between tests in file order and make the default-window assertions depend
+  // on which test ran first.
+  beforeEach(() => localStorage.removeItem('nb:rankwindow'));
+
   it('shows the loading treatment while the ladder loads', () => {
     apiMock.leaderboard.mockReturnValue(new Promise(() => {}));
     renderWithMe(<Leaderboard />, { me: meFixture });
@@ -24,6 +30,7 @@ describe('Rankings', () => {
     expect(await screen.findByText('The field')).toBeInTheDocument();
     expect(screen.getByText('ALL-TIME · 4 PLAYERS')).toBeInTheDocument();
 
+    // 7 DAYS is the default window, so these are the movement7d values
     const alice = screen.getByText('Alice').closest('a')!;
     expect(alice).toHaveAttribute('href', '/players/7');
     expect(within(alice).getByText('1')).toBeInTheDocument();
@@ -33,9 +40,44 @@ describe('Rankings', () => {
     const henry = screen.getByText('Henry').closest('a')!;
     expect(within(henry).getByText('▼1')).toHaveClass('negative');
 
-    // no prior snapshot → em dash, muted
+    // on the ladder for less than a week → no position to have moved from
     const bob = screen.getByText('Bob').closest('a')!;
     expect(within(bob).getByText('—')).toHaveClass('quiet');
+  });
+
+  it('reads the other window when the switch is flipped, without refetching', async () => {
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    await screen.findByText('The field');
+
+    const alice = () => screen.getByText('Alice').closest('a')!;
+    expect(within(alice()).getByText('▲2')).toBeInTheDocument(); // 7d
+    expect(screen.getByText(/over the last 7 days/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '1 DAY' }));
+
+    // both windows ship on the one response, so the switch is a reading
+    // position rather than a query — flipping it must not cost a round trip
+    expect(apiMock.leaderboard).toHaveBeenCalledTimes(1);
+    expect(within(alice()).getByText('▲1')).toBeInTheDocument(); // 1d
+    // Bob has a 1-day reading even though he has no 7-day one
+    expect(within(screen.getByText('Bob').closest('a')!).getByText('▲2')).toBeInTheDocument();
+    // and the footer says which period is on screen — the question the old
+    // arrow could never answer
+    expect(screen.getByText(/over the last 24 hours/)).toBeInTheDocument();
+  });
+
+  it('remembers the chosen window across mounts', async () => {
+    apiMock.leaderboard.mockResolvedValue(leaderboardResponse);
+    const first = renderWithMe(<Leaderboard />, { me: meFixture });
+    await screen.findByText('The field');
+    await userEvent.click(screen.getByRole('button', { name: '1 DAY' }));
+    first.unmount();
+
+    renderWithMe(<Leaderboard />, { me: meFixture });
+    await screen.findByText('The field');
+    expect(screen.getByRole('button', { name: '1 DAY' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/over the last 24 hours/)).toBeInTheDocument();
   });
 
   it('highlights the signed-in player as "— you"', async () => {
@@ -46,9 +88,12 @@ describe('Rankings', () => {
   });
 
   it('treats zero movement like no movement', async () => {
+    // Held station and never-on-the-ladder stay distinct in the data and
+    // collapse to one em dash on screen — two kinds of "nothing happened" are
+    // not worth asking a reader to tell apart at a glance.
     apiMock.leaderboard.mockResolvedValue({
       ...leaderboardResponse,
-      leaderboard: [{ ...leaderboardRows[0], movement: 0 }],
+      leaderboard: [{ ...leaderboardRows[0], movement1d: 0, movement7d: 0 }],
     });
     renderWithMe(<Leaderboard />, { me: meFixture });
     expect(await screen.findByText('—')).toHaveClass('quiet');
