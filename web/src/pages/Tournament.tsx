@@ -16,6 +16,27 @@ import { ordinal, postmarkDate, signedScore, tournamentNo, vulLabel } from '../f
 const TOTAL_BOARDS = 4;
 
 /**
+ * One player's rating swing from this crossing, in points.
+ *
+ * The sign convention is the hero receipt's, verbatim (a leading `+` or a real
+ * U+2212 minus over Math.abs, never a hyphen) so the two surfaces on this page
+ * can't spell the same number two ways. `null` is not zero and doesn't render
+ * as it: it means the crossing never rated this player — a house persona, an
+ * unfinished field, or a crossing only one human completed — so it reads as an
+ * em dash, the same "no figure to report" mark the ladder's Movement uses.
+ */
+function FieldSwing({ value }: { value: number | null | undefined }) {
+  if (value === null || value === undefined) return <span className="tourney-field-swing quiet">—</span>;
+  if (value === 0) return <span className="tourney-field-swing">0</span>;
+  return (
+    <span className={`tourney-field-swing ${value > 0 ? 'positive' : 'negative'}`}>
+      {value > 0 ? '+' : '−'}
+      {Math.abs(value)}
+    </span>
+  );
+}
+
+/**
  * One page, one URL (/t/:tid), two states of the same crossing. While the
  * tournament is live it's the scoresheet: four boards as tickets (scored /
  * live / sealed) over the running field. Once my four boards are done the
@@ -66,6 +87,10 @@ export default function Tournament() {
   const playersWord = players === 1 ? 'player' : 'players';
   const meRow = t.standings.find((s) => s.userId === me?.user?.id);
   const complete = myDone === TOTAL_BOARDS;
+  // A signed integer beside a matchpoint percentage says nothing on its own, so
+  // the column gets a caption — but only once there is a figure to explain.
+  // A crossing that has rated nobody shows a column of em dashes and no claim.
+  const anyRated = t.standings.some((s) => s.eloDelta !== null && s.eloDelta !== undefined);
 
   // The field reads the same live or final — one panel, two headings.
   const field = (
@@ -94,10 +119,12 @@ export default function Tournament() {
                 {!s.complete ? <span className="tourney-field-progress"> · {s.boardsDone}/4</span> : null}
               </span>
               <b>{s.totalPct !== null ? `${s.totalPct}%` : '—'}</b>
+              <FieldSwing value={s.eloDelta} />
             </div>
           );
         })
       )}
+      {anyRated ? <div className="tourney-field-hint">Right column: rating change from this crossing.</div> : null}
     </PerforatedPanel>
   );
 

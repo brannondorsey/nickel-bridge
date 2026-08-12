@@ -293,6 +293,13 @@ interface Standing {
   totalPct: number | null;
   complete: boolean;
   rank?: number;
+  /**
+   * This player's rating swing from this crossing, in points. Sent by the
+   * tournament detail endpoint only (absent on the lobby list); `null` there
+   * means the crossing never rated them — a house persona, an unfinished
+   * field, or a crossing only one human completed.
+   */
+  eloDelta?: number | null;
 }
 
 interface MyBoardSummary {

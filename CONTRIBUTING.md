@@ -1551,6 +1551,17 @@ about it are load-bearing, and [docs/compare.md](docs/compare.md) has the full r
 order** (not timestamps). That's deliberate — a late finisher in an old tournament re-ranks
 everyone — so don't "optimize" it into an incremental update without redesigning the model.
 
+**A crossing's rating swings are shown per player, on the crossing itself.** The finished
+tournament page's THE FIELD panel draws each player's `after - before` for that tournament
+(`tournamentEloDeltas()` in `tournaments.ts`, folded onto the standings by the `/api/tournaments/:id`
+**detail** route only — the lobby list draws no swings and a player can hold hundreds of
+tournaments). `null` is not zero and never renders as it: the three ways a player of a field can
+have no swing are that house personas never rate, an incomplete player never rates, and a
+crossing rates nobody until 2+ humans finish it. This is where the "how did one crossing move
+everybody" question lives; the ladder's arrow deliberately does not answer it (see
+`leaderboardMovement`). Reading it costs `idx_elo_history_tournament` — before it, `elo_history`
+had no index at all beyond its rowid alias, so every lookup anywhere was a full scan.
+
 **Replay order is not play order, and every surface that draws a timeline has to convert.**
 Tournaments never close, so a player can be placed into a months-old tournament or resume one
 they abandoned in the spring; its id is low but they finished it today. Two consequences, and
