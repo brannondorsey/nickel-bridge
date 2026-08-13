@@ -304,6 +304,11 @@ describe('the play lens', () => {
       // the pct pair the retired pending caption used to carry rides on this
       // beat now — it is the only one the moment gets
       expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/worth 83% instead of 58%/);
+      // and "double dummy" links nowhere: the ribbon's skip policy keeps the
+      // matcher off `dummy`, which here would open the wrong sense entirely
+      // (declarer's exposed partner, not the perfect-information yardstick)
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/double dummy/);
+      expect([...document.querySelectorAll('.audit-ribbon .gloss-link')].map((el) => el.textContent)).not.toContain('dummy');
 
       // at the first moment there is nothing earlier to hop back to — even
       // though the replay position sits one card PAST the decision
