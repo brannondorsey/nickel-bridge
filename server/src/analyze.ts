@@ -339,6 +339,25 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
 }
 
 /**
+ * The matchpoint layer — cfPct/mpCost (play) and cf.cfPct/cf.mpGain (bid) —
+ * is nulled out before persisting, at every call site that writes
+ * board_analyses. refreshMatchpointLayer recomputes all of it from the LIVE
+ * field on every serve regardless of what's in the cache (see its own doc
+ * comment), so those fields are pure write-time noise: persisting whatever
+ * happened to be live at write time would make the cache row's literal
+ * bytes depend on WHEN it was written, contradicting "the cache stores
+ * ENGINE facts only." Returns shallow clones — never mutates the caller's
+ * live core/par, which the CURRENT response still needs the real values
+ * from.
+ */
+function stripMatchpointLayer(core: AnalysisCore, par: AnalysisPar | null): { core: AnalysisCore; par: AnalysisPar | null } {
+  return {
+    core: { ...core, plies: core.plies.map((p) => ({ ...p, cfPct: null, mpCost: null })) },
+    par: par && { ...par, calls: par.calls.map((c) => (c.cf ? { ...c, cf: { ...c.cf, cfPct: null, mpGain: null } } : c)) },
+  };
+}
+
+/**
  * The matchpoint layer, recomputed at SERVE time against the LIVE field.
  * The cache stores engine facts — the DD trace, the sampled verdicts, the
  * counterfactual SCORES — none of which depend on who else has played the
@@ -349,7 +368,12 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
  * refresh picks up tables that finished since the audit first ran. (The
  * first design froze the field into the cache: equally consistent, but
  * permanently stale — the receipts' percentage and the rail would disagree
- * with the Result forever once the field grew.)
+ * with the Result forever once the field grew.) "Engine facts only" is
+ * enforced at every write, not just assumed: stripMatchpointLayer nulls out
+ * cfPct/mpCost/cf.cfPct/cf.mpGain before every stmtPutAnalysis/stmtPutPar
+ * call, so the persisted bytes can never depend on which field happened to
+ * be live at write time — only this function, reading in-memory, ever
+ * populates them.
  *
  * Stage 3's floor SELECTION — which plies bought the expensive sampled
  * verdict — is decided against whatever field existed when this analysis
@@ -670,12 +694,13 @@ export async function getBoardAnalysis(t: TournamentRow, b: GameBoard, wantPar: 
     par = cached.par ? JSON.parse(cached.par) : null;
     if (wantPar && !par) {
       par = await computePar(t, b, core);
-      stmtPutPar.run(JSON.stringify(par), b.row.id);
+      stmtPutPar.run(JSON.stringify(stripMatchpointLayer(core, par).par), b.row.id);
     }
   } else {
     core = await computeCore(t, b);
     par = wantPar ? await computePar(t, b, core) : null;
-    stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(core), par ? JSON.stringify(par) : null);
+    const stripped = stripMatchpointLayer(core, par);
+    stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(stripped.core), stripped.par ? JSON.stringify(stripped.par) : null);
   }
 
   // serve-time: measure everything against today's field, then give any
@@ -683,7 +708,8 @@ export async function getBoardAnalysis(t: TournamentRow, b: GameBoard, wantPar: 
   // from those fresh figures
   refreshMatchpointLayer(t, b, core, par);
   if (await backfillDriftedPlies(t, b, core)) {
-    stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(core), par ? JSON.stringify(par) : null);
+    const stripped = stripMatchpointLayer(core, par);
+    stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(stripped.core), stripped.par ? JSON.stringify(stripped.par) : null);
   }
   const { moments, setAside } = assembleMoments(core, par);
   return { ...core, version: ANALYZE_VERSION, moments, setAside, par, momentFloor: MOMENT_FLOOR };

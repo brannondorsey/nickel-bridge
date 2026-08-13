@@ -96,6 +96,31 @@ async function driveBoard(
   return b;
 }
 
+/**
+ * Drives an optimal rival then a deliberate blunderer on the same board: the
+ * rival plays the DD-optimal line the blunderer would have played, so the
+ * counterfactual ties them (50%) while the actual loses outright (0%) — a
+ * clean 50-point cost, comfortably over MOMENT_FLOOR. Shared by every test
+ * below that needs one guaranteed, deterministic moment to work with.
+ */
+async function driveOneBlunder(t: any, uid: number, rival: number, boardNo: number): Promise<{ b: any; blunderPly: number }> {
+  await driveBoard(t, rival, boardNo, optimalCard);
+  let blunderPly = -1;
+  const b = await driveBoard(t, uid, boardNo, async (bb, view) => {
+    const legal = view.legalCards as number[];
+    const solve = await solveFutureTricks(bb.deal, bb.contract, bb.plays);
+    if (blunderPly < 0) {
+      const worst = [...legal].sort((a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99))[0];
+      if ((solve.cardScores.get(worst) ?? 0) < solve.bestScore) {
+        blunderPly = bb.plays.length;
+        return worst;
+      }
+    }
+    return pickFromSolve(legal, solve);
+  });
+  return { b, blunderPly };
+}
+
 describe('gradeFromDeficit', () => {
   it('bands a positive deficit — deficit <= 0 is the excused case, filtered before this ever runs', () => {
     expect(analyze.gradeFromDeficit(2)).toBe(0);
@@ -299,25 +324,8 @@ describe('cache behaviour', () => {
   }, 240_000);
 
   it('a ply that never cleared the floor at first open gets its stage-3 verdict once the field drifts it over — and the backfill is persisted', async () => {
-    // same shape as the "one deliberate blunder" test above: a clean,
-    // comfortably-over-floor cost against a real (non-single) field.
     const t = makeTournament('analyze-f');
-    await driveBoard(t, rivalId, 1, optimalCard);
-    let blunderPly = -1;
-    const b = await driveBoard(t, userId, 1, async (bb, view) => {
-      const legal = view.legalCards as number[];
-      const solve = await solveFutureTricks(bb.deal, bb.contract, bb.plays);
-      if (blunderPly < 0) {
-        const worst = [...legal].sort(
-          (a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99),
-        )[0];
-        if ((solve.cardScores.get(worst) ?? 0) < solve.bestScore) {
-          blunderPly = bb.plays.length;
-          return worst;
-        }
-      }
-      return pickFromSolve(legal, solve);
-    });
+    const { b, blunderPly } = await driveOneBlunder(t, userId, rivalId, 1);
     const original = await analyze.getBoardAnalysis(t, b, false);
     expect(original.plies).toHaveLength(1);
     expect(original.plies[0].mpCost).toBe(50); // comfortably over MOMENT_FLOOR
@@ -358,7 +366,44 @@ describe('cache behaviour', () => {
     const rowAfterBackfill = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
       core: string;
     };
-    expect(JSON.parse(rowAfterBackfill.core).plies[0].sampled).toEqual(original.plies[0].sampled);
+    const persisted = JSON.parse(rowAfterBackfill.core);
+    expect(persisted.plies[0].sampled).toEqual(original.plies[0].sampled);
+    // and the write that persisted it did NOT bake in the live field's
+    // mpCost — see the next test for why that matters generally
+    expect(persisted.plies[0].cfPct).toBeNull();
+    expect(persisted.plies[0].mpCost).toBeNull();
+  }, 240_000);
+
+  it('the persisted cache never bakes in a live-field snapshot — cfPct/mpCost are null on disk at every write site, always recomputed on serve', async () => {
+    const t = makeTournament('analyze-f');
+    const { b } = await driveOneBlunder(t, userId, rivalId, 1);
+
+    // write site 1: computeCore's own first-open write
+    const view = await analyze.getBoardAnalysis(t, b, true); // wantPar=true also exercises write site 2 below
+    expect(view.plies[0].mpCost).toBe(50); // the SERVED response still carries the real, live value
+    const row1 = db.prepare(`SELECT core, par FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+      par: string;
+    };
+    const core1 = JSON.parse(row1.core);
+    expect(core1.plies[0].cfPct).toBeNull();
+    expect(core1.plies[0].mpCost).toBeNull();
+    const par1 = JSON.parse(row1.par);
+    for (const c of par1.calls) if (c.cf) { expect(c.cf.cfPct).toBeNull(); expect(c.cf.mpGain).toBeNull(); }
+
+    // write site 2 in isolation: par backfilled onto an EXISTING cached core
+    // (a board first opened without ?par=1, then reopened with it)
+    const t2 = makeTournament('analyze-f');
+    const { b: b2 } = await driveOneBlunder(t2, userId, rivalId, 1);
+    await analyze.getBoardAnalysis(t2, b2, false); // caches core, no par yet
+    const rowNoParYet = db.prepare(`SELECT par FROM board_analyses WHERE board_id = ?`).get(b2.row.id) as {
+      par: string | null;
+    };
+    expect(rowNoParYet.par).toBeNull();
+    await analyze.getBoardAnalysis(t2, b2, true); // backfills par via stmtPutPar
+    const row2 = db.prepare(`SELECT par FROM board_analyses WHERE board_id = ?`).get(b2.row.id) as { par: string };
+    const par2 = JSON.parse(row2.par);
+    for (const c of par2.calls) if (c.cf) { expect(c.cf.cfPct).toBeNull(); expect(c.cf.mpGain).toBeNull(); }
   }, 240_000);
 });
 
