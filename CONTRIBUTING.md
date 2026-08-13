@@ -200,7 +200,13 @@ tools           offline Python weight conversion + golden-fixture generation;
                 calibrate_placement.mjs replays real placement demand through candidate
                 PLACEMENT policies (its `current` baseline calls the real chooseTournament
                 out of server/dist, so it can't drift from production) — the trace it eats
-                is captured by the player-outreach skill, see "Tuning placement" below
+                is captured by the player-outreach skill, see "Tuning placement" below;
+                calibrate_moment_floor.mjs sweeps candidate MOMENT_FLOOR values (Analyze's
+                moments-ledger gate, server/src/analyze.ts) against a production trace of
+                finished boards, reimplementing computeCore's stage-1+3 loop without the
+                floor gate so every real DD-loss candidate gets one genuine stage-3 verdict
+                to threshold post-hoc — the trace is captured by the player-outreach skill's
+                analyze_trace.mjs, see "Tuning Analyze's moment floor" below
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
@@ -1133,6 +1139,27 @@ nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
 gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
 path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
 dissolved the tour's class-for-class `TourResult` copy).
+
+**Tuning Analyze's moment floor: measure it, the same way FULL_TILT was.** `MOMENT_FLOOR`
+(the matchpoint-point gate stage 2 applies before a candidate earns the expensive stage-3
+findability verdict — see `analyze.ts`'s doc comment above) shipped at 10 on a first-principles
+guess ("fields are small — one place in a five-player field is 25 points — so 10 is roughly
+half a place"). That guess was never checked against what fields actually look like.
+`.claude/skills/player-outreach/scripts/analyze_trace.mjs` pulls a read-only, anonymized trace
+of finished standard-tournament boards (no names/handles/user ids — a board's own deal, calls,
+plays and its real field's scores, the same safety shape as `placement_trace.mjs`); `tools/
+calibrate_moment_floor.mjs` replays `computeCore`'s stage-1+3 loop against it WITHOUT the floor
+gate — every real double-dummy-loss candidate gets one genuine, expensive stage-3 verdict
+regardless of size, so candidate floor values can be swept post-hoc over a single pass instead
+of one production run per floor. Measured 2026-08-13, n=1237 human-owned finished boards: mean
+field size was 6.7, not 5 — "one place" is closer to 15 points and "half a place" to 7-8. 733
+boards had a genuine double-dummy loss; 280 of 1280 such candidates (21.9%) were excused by
+stage 3 as unfindable from the seat, leaving 486 boards (39.3% of all 1237) with at least one
+real, gradable fault — the ceiling no floor value can exceed. The old floor of 10 reached only
+433 of those (89.1% of the ceiling); 8 reaches 477 (98.1%), while floors below 8 add back fewer
+than ten more boards — meaning stage 3's excusal was already doing the "don't nag on noise"
+work, so there was little risk in lowering the gate. `MOMENT_FLOOR` is now 8; re-run both
+scripts and record a fresh date + n if the population's field sizes or mistake rate drift.
 
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
@@ -2368,6 +2395,13 @@ handles or addresses — player ids become dense indices and timestamps become o
 its output is still production behaviour and goes to the scratchpad, never the repo. It is
 deliberately NOT covered by `.claude/settings.json`'s allowance, which names
 `player_report.mjs` specifically: a second production exec should prompt.
+
+A second sibling, `scripts/analyze_trace.mjs`, captures the finished-board trace `tools/
+calibrate_moment_floor.mjs` replays (see "Tuning Analyze's moment floor" above) — same shape
+again: read-only, fixed SELECT, output to the scratchpad only. It selects no names, handles,
+emails or even user ids (unlike `placement_trace.mjs`'s dense player indices, nothing here
+needs to survive who played) — just a board's own deal, calls, plays and its real field's
+scores. Also deliberately NOT covered by the `autoMode` allowance, for the same reason.
 
 Two things to know before touching it. **`boards_done` is not the leaderboard test**: the
 leaderboard gates on `rated_tournaments >= PROVISIONAL_MIN_TOURNAMENTS` (4), and a

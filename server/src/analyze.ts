@@ -66,14 +66,32 @@ import { claimRule } from './tournaments.js';
 export const ANALYZE_K = 8;
 
 /**
- * The gate on the moments ledger, in matchpoint percentage points. Fields
- * here are small — one place in a five-player field is 25 points — so 10 is
- * roughly "half a place". THE one number to move if the screen starts
- * nagging; calibrate against production the way FULL_TILT was (a read-only
- * sweep counting moments per board at each candidate floor) and record the
- * date and n when you do.
+ * The gate on the moments ledger, in matchpoint percentage points. Originally
+ * shipped at 10 on the judgement "fields are small — one place in a
+ * five-player field is 25 points — so 10 is roughly half a place," which
+ * assumed a smaller field than production actually has.
+ *
+ * Measured 2026-08-13 against production, read-only
+ * (`.claude/skills/player-outreach/scripts/analyze_trace.mjs` +
+ * `tools/calibrate_moment_floor.mjs`, the same two-script shape as
+ * `placement_trace.mjs`/`calibrate_placement.mjs`): 1237 human-owned
+ * finished boards, mean field size 6.7 (not 5) — so "one place" is closer to
+ * 15 points and "half a place" to 7-8, not 10. 733 of those boards had at
+ * least one real double-dummy trick loss; of the 1280 such candidates, 280
+ * (21.9%) were excused by stage 3 as unfindable from the seat, leaving 486
+ * boards (39.3% of all 1237) with at least one genuine, gradable fault —
+ * that 486 is the ceiling no floor value can exceed. At floor=10 only 433 of
+ * those (89.1% of the ceiling) surfaced a moment; floor=8 recovers 477
+ * (98.1% of the ceiling) while floors below 8 add back fewer than ten more
+ * boards, meaning stage 3's excusal is already doing the "don't nag on
+ * noise" work and there was no real risk in lowering the gate. 8 is the
+ * calibrated value below.
+ *
+ * THE one number to move if the screen starts nagging (raise it) or stays
+ * too quiet on boards with real, findable mistakes (lower it); re-run the
+ * two scripts above and record the date and n when you do.
  */
-export const MOMENT_FLOOR = 10;
+export const MOMENT_FLOOR = 8;
 
 /** Ledger rows shown — Chess.com's Key Moments shape: a handful of turning
  *  points beats a narration. Overflow is counted and stated, never silent. */
@@ -99,7 +117,7 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-export const ANALYZE_VERSION = 3; // 3: stage 3 drops excused candidates instead of flagging them (never a moment)
+export const ANALYZE_VERSION = 4; // 4: MOMENT_FLOOR recalibrated 10 -> 8 against measured production field sizes
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
