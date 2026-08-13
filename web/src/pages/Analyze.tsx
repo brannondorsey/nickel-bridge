@@ -1040,7 +1040,7 @@ function ReplayLens({
           <Button variant="secondary" onClick={back} disabled={ply <= 0}>
             ‹ BACK A CARD
           </Button>
-          <Button onClick={next} disabled={ply >= totalPlies}>
+          <Button variant="secondary" onClick={next} disabled={ply >= totalPlies}>
             NEXT CARD →
           </Button>
         </div>
