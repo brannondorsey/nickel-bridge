@@ -180,7 +180,7 @@ export default function Analyze() {
   // Jump into the replay AT the human decision itself, not the top of its
   // trick — the reader tapped a moment, so the moment is what should be on
   // the table. The replay lands it as ONE step: the played card glides into
-  // the trick while the engine's pick stays highlighted in the hand.
+  // the trick and the engine's pick lights up in the hand as it lands.
   const openPlayAt = (ply: number) => {
     const next = new URLSearchParams(params);
     next.set('lens', 'play');
@@ -832,8 +832,10 @@ function ReplayLens({
   // the played card's glide into the trick — so the card that was played
   // (animated in) and the engine's pick (highlighted where it still sits in
   // the hand) are on screen at the same time, with no NEXT press between
-  // "what should have happened" and "what did". A non-graded target is a
-  // plain cut, same as the pips.
+  // "what should have happened" and "what did". The cut-to view it glides
+  // FROM narrates nothing about the decision (see captionFor) — the moment
+  // gets one reading, on arrival, rather than one either side of the glide.
+  // A non-graded target is a plain cut, same as the pips.
   // Only JUDGED decisions are moments. Stage 3's sampled verdict exists for
   // exactly the plies that cleared the matchpoint floor (or the trick gate in
   // a single field); the sub-floor candidates — a double-dummy trick that
@@ -921,8 +923,9 @@ function ReplayLens({
   // The engine's card, highlighted where it still sits — the same pre-
   // confirmation `.selected` treatment a live tap uses, so "the card that
   // should have been played" reads in the vocabulary the player already
-  // knows. It holds through the played card's landing (the collapsed moment
-  // shows both at once) and clears when the replay steps on.
+  // knows. It appears WITH the played card (never before it — the caption
+  // that used to light it a beat early is gone) and clears when the replay
+  // steps on.
   const highlight = caption.highlight;
   const fanHighlight = highlight !== null && view.hand.includes(highlight) ? highlight : null;
   // Same idea, for the across hand once it renders as a card fan too — the
@@ -961,7 +964,16 @@ function ReplayLens({
           {caption.gain !== null ? <span className="audit-ribbon-gain num">+{Math.round(caption.gain)} MP</span> : null}
         </div>
         <p>
-          <GlossaryProse text={caption.text} />
+          {/* `dummy` is skipped here in the linkify.ts sense of "a term the
+              matcher reads in the wrong sense for this copy": the ribbon says
+              "double dummy" (the perfect-information yardstick) and never
+              "dummy" (declarer's exposed partner), so the sheet that opened
+              from it explained the wrong thing. Dropping the link also stops
+              the punctuation after it orphaning onto the next line — a
+              .gloss-link is a <button>, which Blink lays out as an atomic
+              inline whatever its `display`, so "(+1 double dummy" / ")" was a
+              live break opportunity. */}
+          <GlossaryProse text={caption.text} skip={['dummy']} />
         </p>
       </div>
 
@@ -1141,33 +1153,33 @@ interface RibbonCaption {
 }
 
 /**
- * The ribbon's reading for the position after `ply` cards. A PENDING graded
- * decision (the next card to play is one the audit graded) takes precedence
- * over describing the card just played — a moment jump lands exactly here,
- * with the decision still on the table and the engine's pick highlighted in
- * the hand; NEXT CARD then shows what actually happened. `analysis.plies`
- * never carries an excused candidate — the server drops those before this
- * ever sees them (see server/src/analyze.ts) — so every `sampled` verdict
- * reached below is a genuine, chargeable fault.
+ * The ribbon's reading for the position after `ply` cards — always a reading
+ * of the card just PLAYED, never of the decision about to be made. A graded
+ * decision therefore gets exactly ONE beat: the card lands in the trick and
+ * the engine's pick lights up in the hand at the same instant.
+ *
+ * It used to get two. The pending beat ("The turn is here: South to play, and
+ * the engine, from your seat, plays 5♣") was the original moment landing —
+ * the reader was put back in the chair with the choice still open, and
+ * NEXT CARD showed what actually happened. The round-three collapse then
+ * staged the played card's glide immediately, which is what a moment jump
+ * still does, but the pending caption stayed: the same finding was narrated
+ * once before the card and once after, with the engine's pick highlighted
+ * through both, so a moment jump flashed reading one and walking the play
+ * with NEXT/BACK spent two presses on one finding. Two captions for one
+ * decision is a stutter, not a build-up — the interesting comparison is the
+ * played card and the engine's card side by side, which only the second beat
+ * shows. So the position before a graded decision now reads exactly like any
+ * other position: the card that just landed, and nothing about the one
+ * coming.
+ *
+ * `analysis.plies` never carries an excused candidate — the server drops
+ * those before this ever sees them (see server/src/analyze.ts) — so every
+ * `sampled` verdict reached below is a genuine, chargeable fault.
  */
 function captionFor(analysis: AnalysisView, board: BoardView, ply: number): RibbonCaption {
   const flat = board.playHistory?.flat() ?? [];
   const seatNames = ['North', 'East', 'South', 'West'];
-
-  // a PENDING caption only fires for a JUDGED decision (stage 3 ran) — a
-  // sub-floor candidate has no engine pick to point at and nothing to charge
-  const pending = analysis.plies.find((p) => p.ply === ply && p.sampled !== null);
-  if (pending?.sampled && !(analysis.claimedAtPly !== null && ply >= analysis.claimedAtPly)) {
-    const pct =
-      pending.cfPct !== null && analysis.actualPct !== null
-        ? ` — worth ${Math.round(pending.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
-        : '';
-    return {
-      text: `The turn is here: ${seatNames[flat[ply]?.seat ?? 2]} to play, and the engine, from your seat, plays ${cardLabel(pending.sampled.bestCard)}${pct}.`,
-      gain: pending.mpCost,
-      highlight: pending.sampled.bestCard,
-    };
-  }
 
   if (ply === 0) {
     // a laydown claimed before the first decision has no moments to promise —
@@ -1200,11 +1212,20 @@ function captionFor(analysis: AnalysisView, board: BoardView, ply: number): Ribb
   const mark = ddMark(analysis, j);
   const seatName = seatNames[played.seat];
   if (verdict?.sampled) {
+    // the pct pair the pending caption used to carry, folded into the one
+    // beat that outlived it: the play lens is reachable by deep link (?ply=)
+    // and by the pager, so the overview ledger's own aside — the only other
+    // place this reading exists — can't be assumed to have been read
+    const pct =
+      verdict.cfPct !== null && analysis.actualPct !== null
+        ? ` — worth ${Math.round(verdict.cfPct)}% instead of ${Math.round(analysis.actualPct)}%`
+        : '';
     return {
-      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy). The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}.`,
+      text: `${seatName} played ${cardLabel(played.card)} — the moment turned here (${mark ?? ''} double dummy). The engine, from your seat, plays ${cardLabel(verdict.sampled.bestCard)}${pct}.`,
       gain: verdict.mpCost,
-      // the engine's pick stays marked in the hand while the played card sits
-      // in the trick — a collapsed moment landing shows both at once
+      // the engine's pick marked in the hand while the played card sits in
+      // the trick — the two cards side by side ARE the finding, and this is
+      // the only beat that shows them
       highlight: verdict.sampled.bestCard,
     };
   }

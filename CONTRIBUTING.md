@@ -1104,7 +1104,16 @@ PREV/NEXT MOMENT pair) collapses to ONE step: it cuts to the decision and immedi
 stages the played card's glide, so the card that was played (in the trick) and the
 engine's pick (the live pre-confirmation `.selected` treatment in the fan, an underlined
 rank in the suit-line rails) are on screen together — the pager anchors on the moment
-being read, not the replay position, which sits one card past it. A moment on a trick's
+being read, not the replay position, which sits one card past it. **A moment gets exactly
+that ONE beat**: the ribbon reads the card just PLAYED and never the decision about to be
+made, so the engine's pick lights up with the played card rather than a beat before it. It
+used to get two — the original landing was the pending decision ("The turn is here: South
+to play, and the engine … plays 5♣"), with NEXT CARD showing what happened; the collapse
+above staged the played card immediately but left that caption in place, so the same
+finding was narrated once either side of the glide and walking the play spent two presses
+on one moment. The pct pair the pending caption carried ("worth 67% instead of 50%") moved
+onto the surviving beat, since a `?ply=` deep link never passes the ledger row that also
+says it. A moment on a trick's
 LAST card lands on a synthetic held view (trick complete on the table, un-collected —
 `momentLandingView`) so the take-up sweep can't carry the moment away; the centre rail is
 always the seat ACROSS the fan (`playingSeat + 2`), dummy-tagged when it is the dummy, so
