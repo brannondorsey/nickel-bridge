@@ -169,6 +169,9 @@ const stmtWindowedRatingMoves = db.prepare(
 const stmtMyEloDelta = db.prepare(
   `SELECT before, after FROM elo_history WHERE user_id = ? AND tournament_id = ?`,
 );
+const stmtTournamentEloDeltas = db.prepare(
+  `SELECT user_id, before, after FROM elo_history WHERE tournament_id = ?`,
+);
 const stmtMyLastPlayed = db.prepare(
   `SELECT MAX(updated_at) AS at FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
 );
@@ -185,6 +188,17 @@ export interface Standing {
   totalPct: number | null;
   complete: boolean;
   rank?: number;
+  /**
+   * This player's rating swing from this crossing, in points (`after - before`).
+   * Attached by the tournament DETAIL route only (app.ts) — the lobby list draws
+   * no swings and a player can hold hundreds of tournaments, so paying a query
+   * per listed row would be waste. Absent there; `null` here means the crossing
+   * genuinely never rated this player, which happens for three distinct reasons:
+   * house personas never rate at all (eloParticipants is human-only), a player
+   * who hasn't finished all four boards never rates, and a crossing rates nobody
+   * until 2+ humans have completed it (recomputeElo's `complete.length < 2`).
+   */
+  eloDelta?: number | null;
 }
 
 /**
@@ -790,6 +804,30 @@ export function leaderboardMovement(
 export function myEloDelta(tournamentId: number, userId: number): { before: number; after: number } | null {
   const row = stmtMyEloDelta.get(userId, tournamentId) as { before: number; after: number } | undefined;
   return row ?? null;
+}
+
+/**
+ * Every rated player's point swing from one crossing — the whole field's
+ * version of myEloDelta above, which answers the same question for one player.
+ *
+ * A missing entry is the honest answer rather than a zero: the three ways a
+ * player of this field can fail to appear are spelled out on Standing.eloDelta,
+ * and none of them is "the rating didn't move". Callers map absent to null, the
+ * same null-never-zero discipline activity.ts's eloDelta already follows.
+ *
+ * The swing is re-derived on every read, like everything else built on
+ * elo_history, so a late finisher re-ranking this crossing restates it — which
+ * is the evergreen-Elo model working, and reads honestly here in a way it never
+ * did on the ladder, because the number is attached to the crossing it
+ * describes rather than floating free of one.
+ */
+export function tournamentEloDeltas(tournamentId: number): Map<number, number> {
+  const rows = stmtTournamentEloDeltas.all(tournamentId) as {
+    user_id: number;
+    before: number;
+    after: number;
+  }[];
+  return new Map(rows.map((r) => [r.user_id, r.after - r.before]));
 }
 
 interface MyBoardSummary {

@@ -1580,6 +1580,20 @@ Excluding is correct in both directions because competition ranking counts only 
 you. It follows that movement can differ between an anonymous and a signed-in caller, exactly as
 that caller's rank numbering already does.
 
+**A crossing's rating swings are shown per player, on the crossing itself** — the question the
+ladder's arrow above deliberately does not answer. The tournament page's THE FIELD panel draws
+each player's `after - before` for that tournament (`tournamentEloDeltas()` in `tournaments.ts`,
+folded onto the standings by the `/api/tournaments/:id` **detail** route only — the lobby list
+draws no swings and a player can hold hundreds of tournaments). `null` is not zero and never
+renders as it: the three ways a player of a field can have no swing are that house personas never
+rate, an incomplete player never rates, and a crossing rates nobody until 2+ humans finish it.
+The column and its caption appear on the same test, so a crossing that has rated nobody keeps its
+three-column field rather than growing a column of em dashes — and because that test is a
+property of the CROSSING rather than of the viewer's progress, swings show on a live scoresheet
+too, for players who finished ahead of you. Reading it costs `idx_elo_history_tournament`, the
+tournament-first sibling of `idx_elo_history_user`; see the pair's note in `db.ts` for why one
+index cannot serve both directions.
+
 **Replay order is not play order, and every surface that draws a timeline has to convert.**
 Tournaments never close, so a player can be placed into a months-old tournament or resume one
 they abandoned in the spring; its id is low but they finished it today. Two consequences, and

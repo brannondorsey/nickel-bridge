@@ -102,17 +102,25 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 -- (activity.ts) is the one query that starts from a time window and spans all
 -- users, and it would otherwise scan the whole table on every load.
 CREATE INDEX IF NOT EXISTS idx_boards_updated ON boards(updated_at);
--- elo_history had no index of any kind until this one: its id column is a rowid
--- alias, so SQLite builds no separate b-tree for it and EVERY lookup against
--- the table was a full scan. User-first because that is how almost everything
--- reads it — /api/leaderboard's per-row rated_tournaments count (once per
--- ladder row, on a public route), stats.ts's per-player rating series,
--- activity.ts's, tournaments.ts's myEloDelta — and because it also serves the
--- windowed join leaderboardMovement() now makes, which is equality on both
--- columns. The trailing tournament_id makes the per-player reads covering and
--- kills their sort. It costs recomputeElo one extra b-tree per insert, which is
--- noise against a path that already rewrites the whole table on every board.
+-- elo_history had no index of any kind until these two: its id column is a
+-- rowid alias, so SQLite builds no separate b-tree for it and EVERY lookup
+-- against the table was a full scan. There are two because the table is read
+-- from both ends, and neither order serves the other — a composite only helps
+-- a lookup that constrains its LEADING column. Together they cost recomputeElo
+-- two extra b-trees per insert, which is noise against a path that already
+-- rewrites the whole table on every board completion.
+--
+-- User-first is how almost everything reads it: /api/leaderboard's per-row
+-- rated_tournaments count (once per ladder row, on a public route), stats.ts's
+-- per-player rating series, activity.ts's, tournaments.ts's myEloDelta. It also
+-- serves leaderboardMovement()'s windowed join, which constrains both columns.
+-- The trailing tournament_id makes the per-player reads covering and kills
+-- their sort.
 CREATE INDEX IF NOT EXISTS idx_elo_history_user ON elo_history(user_id, tournament_id);
+-- Tournament-first serves the one read that starts from a crossing rather than
+-- a player: tournamentEloDeltas() (tournaments.ts) pulls a whole field's swings
+-- at once for the tournament page. The trailing user_id makes that covering.
+CREATE INDEX IF NOT EXISTS idx_elo_history_tournament ON elo_history(tournament_id, user_id);
 `);
 
 // Migration: `handle`/`handle_key` were added after the initial schema, so existing

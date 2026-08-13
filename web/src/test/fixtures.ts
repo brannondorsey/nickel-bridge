@@ -459,10 +459,11 @@ export const tournamentComplete: TournamentInfo = {
 export const tournamentCompleteWithHouse: TournamentInfo = {
   ...tournamentComplete,
   standings: [
-    { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 71, complete: true, rank: 1 },
-    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true, rank: 2 },
-    { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 4, totalPct: 61, complete: true, rank: 3 },
-    { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 4, totalPct: 18, complete: true, rank: 4 },
+    { userId: 7, handle: 'Alice', kind: 'human', boardsDone: 4, totalPct: 71, complete: true, rank: 1, eloDelta: 14 },
+    // the house never rates, so its swing is null however well it played
+    { userId: 90, handle: 'The Shark', kind: 'ai', boardsDone: 4, totalPct: 66, complete: true, rank: 2, eloDelta: null },
+    { userId: 1, handle: 'Margaret', kind: 'human', boardsDone: 4, totalPct: 61, complete: true, rank: 3, eloDelta: 2 },
+    { userId: 8, handle: 'Bob', kind: 'human', boardsDone: 4, totalPct: 18, complete: true, rank: 4, eloDelta: -16 },
   ],
 };
 

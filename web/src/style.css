@@ -3709,6 +3709,38 @@ a.stat-tile:hover {
   align-items: baseline;
   padding: 3px 0;
 }
+/* The swing column only exists once some player in this crossing has actually
+   rated — otherwise the field keeps the three columns it always had, rather
+   than growing an unexplained column of em dashes and a trailing gap. The
+   class is set from the same test that gates the caption, so the two can't
+   disagree about whether there is anything to say. */
+.tourney-field-row.has-swing {
+  grid-template-columns: 22px 1fr auto auto;
+}
+/* The rating swing this crossing paid each player. Tracked-label figures at the
+   ledger's smaller size so the matchpoint percentage beside it stays the row's
+   headline — this is the supporting number, not the score. min-width keeps the
+   column edge straight across rows whether they read "+12", "−8" or an em
+   dash. Direction is carried by the sign itself, so the colour tokens only
+   reinforce it (see docs/compare.md: --positive/--negative are byte-identical
+   to --suit-c/--suit-h and sit outside the colourblind palette's swap). */
+.tourney-field-swing {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11.5px;
+  text-align: right;
+  min-width: 30px;
+}
+.tourney-field-swing.quiet {
+  color: var(--muted);
+}
+.tourney-field-hint {
+  margin-top: 8px;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 .tourney-field-rank {
   font-family: var(--font-label);
   font-size: 12px;

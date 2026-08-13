@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MeContext } from '../App';
-import { meFixture, tournamentComplete, tournamentInProgress } from '../test/fixtures';
+import { meFixture, tournamentComplete, tournamentCompleteWithHouse, tournamentInProgress } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Tournament from './Tournament';
 
@@ -68,6 +68,77 @@ describe('Tournament sheet', () => {
     // house included — Bob sits 4th behind Alice, The Shark, and Margaret
     const bob = screen.getByText('Bob').closest('.tourney-field-row')! as HTMLElement;
     expect(within(bob).getByText('4')).toBeInTheDocument();
+  });
+
+  it('shows each player the rating swing this crossing paid them', async () => {
+    apiMock.tournament.mockResolvedValue(tournamentCompleteWithHouse);
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    // signs and inks are directional, and the sign is what carries it — the
+    // colour only reinforces (docs/compare.md)
+    const alice = (await screen.findByText('Alice')).closest('.tourney-field-row')! as HTMLElement;
+    expect(within(alice).getByText('+14')).toHaveClass('positive');
+    const bob = screen.getByText('Bob').closest('.tourney-field-row')! as HTMLElement;
+    expect(within(bob).getByText('−16')).toHaveClass('negative');
+
+    // your own row is drawn like every other, even though the hero above
+    // already reports your swing — one column, no special case
+    const you = screen.getByText('You').closest('.tourney-field-row')! as HTMLElement;
+    expect(within(you).getByText('+2')).toHaveClass('positive');
+
+    // the house never rates, so it reports nothing rather than a zero
+    const house = screen.getByText('The Shark').closest('.tourney-field-row')! as HTMLElement;
+    expect(within(house).getByText('—')).toHaveClass('quiet');
+
+    // a bare signed integer beside a percentage needs saying what it is
+    expect(screen.getByText(/rating change from this crossing/i)).toBeInTheDocument();
+  });
+
+  it('shows swings on a LIVE scoresheet for players who already rated', async () => {
+    // Tournaments never close and players move through the same crossing
+    // independently, so others can finish and rate while this viewer is still
+    // mid-tournament. Their swings are true then, and the field panel is shared
+    // between the live and final states — this pins that as intended rather
+    // than incidental.
+    apiMock.tournament.mockResolvedValue({
+      ...tournamentInProgress,
+      standings: tournamentInProgress.standings.map((s) =>
+        s.handle === 'Alice' ? { ...s, eloDelta: 9 } : { ...s, eloDelta: null },
+      ),
+    });
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    expect(await screen.findByText('THE FIELD — AFTER BOARD 1')).toBeInTheDocument();
+    const alice = screen.getByText('Alice').closest('.tourney-field-row')! as HTMLElement;
+    expect(within(alice).getByText('+9')).toHaveClass('positive');
+    expect(screen.getByText(/rating change from this crossing/i)).toBeInTheDocument();
+  });
+
+  it('omits the swing column entirely, not just the caption, when nothing rated', async () => {
+    apiMock.tournament.mockResolvedValue({
+      ...tournamentInProgress,
+      standings: tournamentInProgress.standings.map((s) => ({ ...s, eloDelta: null })),
+    });
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    await screen.findByText('THE FIELD — AFTER BOARD 1');
+    // no unexplained column of em dashes, and the row keeps its 3-column grid
+    expect(document.querySelector('.tourney-field-swing')).toBeNull();
+    expect(document.querySelector('.tourney-field-row.has-swing')).toBeNull();
+    expect(screen.queryByText(/rating change from this crossing/i)).not.toBeInTheDocument();
+  });
+
+  it('omits the swing caption for a crossing that rated nobody', async () => {
+    apiMock.tournament.mockResolvedValue({
+      ...tournamentCompleteWithHouse,
+      myEloDelta: null,
+      standings: tournamentCompleteWithHouse.standings.map((s) => ({ ...s, eloDelta: null })),
+    });
+    renderWithMe(<Tournament />, { me: meFixture });
+
+    expect(await screen.findByText('THE FIELD — FINAL')).toBeInTheDocument();
+    // nothing to explain, so no explanation — just a column of em dashes
+    expect(screen.queryByText(/rating change from this crossing/i)).not.toBeInTheDocument();
   });
 
   it('marks an unstarted tournament as PLAY BOARD 1', async () => {

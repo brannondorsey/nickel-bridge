@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { freshDbEnv, makeApp, playBoard, TestClient } from './helpers.js';
+// Type-only, so it is erased at compile time and never evaluates ../src/db.js
+// before freshDbEnv() below has set DB_PATH — the whole reason every other
+// import in this file is dynamic.
+import type { TournamentRow } from '../src/db.js';
 
 freshDbEnv('redesign');
 
@@ -304,6 +308,59 @@ describe('tournament metadata', () => {
     expect(mine.contractLabel).toBe(board1.result.contractLabel);
     expect(mine.scoreNS).toBe(board1.result.scoreNS);
     expect(mine.pct).toBe(board1.result.pct);
+  });
+
+  // The per-player swings the finished tournament page draws in THE FIELD.
+  // They are the whole field's version of myEloDelta above, so they have to
+  // agree with it for the viewer's own row.
+  it('detail carries a per-player eloDelta agreeing with myEloDelta', async () => {
+    const { tournaments } = await alice.get('/api/tournaments');
+    const finished = tournaments.find((t: { myDone: number }) => t.myDone === 4);
+    const detail = await alice.get(`/api/tournaments/${finished.id}`);
+    const aliceId = (await alice.get('/api/me')).user.id;
+
+    const mine = detail.standings.find((s: { userId: number }) => s.userId === aliceId);
+    expect(mine.eloDelta).toBe(detail.myEloDelta.after - detail.myEloDelta.before);
+
+    // Every complete human of a rated crossing gets a row (recomputeElo inserts
+    // one per participant), so none of them may report null.
+    const humans = detail.standings.filter((s: { kind: string; complete: boolean }) => s.kind === 'human' && s.complete);
+    expect(humans.length).toBeGreaterThanOrEqual(2);
+    for (const s of humans) expect(typeof s.eloDelta).toBe('number');
+
+    // Elo is zero-sum across the rated field, so the swings cancel. This also
+    // pins that we are reading whole rows rather than one player's view of them.
+    const total = humans.reduce((a: number, s: { eloDelta: number }) => a + s.eloDelta, 0);
+    expect(Math.abs(total)).toBeLessThanOrEqual(humans.length); // ±1 per row for Math.round
+  });
+
+  it('reports eloDelta null for a crossing that has rated nobody', async () => {
+    // One human, four boards: complete, but recomputeElo needs 2+ complete
+    // humans to rate a crossing at all, so nobody in this field has a swing.
+    //
+    // Deliberately NOT via POST /api/play, for the same reason the late-joiner
+    // test above avoids it: placement's grace tier force-joins under-filled
+    // young tournaments, so a fresh client lands in an EXISTING field that has
+    // very likely already rated. Boards deal lazily on GET, so playing into a
+    // tournament by id is all this needs. A raw insert also leaves ai_field at
+    // 0, which keeps the benchmark personas out and the field genuinely one
+    // player deep.
+    const { db, createCrossing } = await import('../src/db.js');
+    const solo = new TestClient(app, 'Solo');
+    await solo.login();
+    const { id: tid } = createCrossing(
+      () =>
+        db
+          .prepare(`INSERT INTO tournaments (name, seed, difficulty) VALUES (?, ?, 'perfect') RETURNING *`)
+          .get('Tournament', 'solo-crossing-seed') as TournamentRow,
+    );
+    for (let no = 1; no <= 4; no++) await playBoard(solo, tid, no);
+
+    const detail = await solo.get(`/api/tournaments/${tid}`);
+    expect(detail.myDone).toBe(4);
+    expect(detail.myEloDelta).toBeNull();
+    expect(detail.standings.length).toBe(1);
+    for (const s of detail.standings) expect(s.eloDelta).toBeNull();
   });
 
   it('myBoards reports non-done boards without result fields and omits unstarted boards', async () => {

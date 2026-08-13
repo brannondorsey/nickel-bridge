@@ -28,6 +28,7 @@ import {
   myTournaments,
   placeUser,
   provisionalMin,
+  tournamentEloDeltas,
   visibleStandings,
 } from './tournaments.js';
 
@@ -154,6 +155,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     const t = getTournament(Number((req.params as { id: string }).id));
     if (!t) return reply.code(404).send({ error: 'not found' });
     const myBoards = myBoardSummaries(t.id, user.id);
+    // The whole field's rating swings, folded onto the standings the same way
+    // `movement` is folded onto the ladder rows below. Detail route only: the
+    // lobby list above renders no swings, and a player can hold hundreds of
+    // tournaments, so paying for this per listed row would buy nothing.
+    const deltas = tournamentEloDeltas(t.id);
     return reply.send({
       id: t.id,
       name: t.name,
@@ -163,7 +169,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       myDone: myBoards.filter((b) => b.state === 'done').length,
       myEloDelta: myEloDelta(t.id, user.id),
       myBoards,
-      standings: visibleStandings(t.id),
+      standings: visibleStandings(t.id).map((s) => ({ ...s, eloDelta: deltas.get(s.userId) ?? null })),
     });
   });
 
