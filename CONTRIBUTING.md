@@ -1164,11 +1164,13 @@ of one production run per floor. Measured 2026-08-13, n=1237 human-owned finishe
 field size was 6.7, not 5 — "one place" is closer to 15 points and "half a place" to 7-8. 733
 boards had a genuine double-dummy loss; 280 of 1280 such candidates (21.9%) were excused by
 stage 3 as unfindable from the seat, leaving 486 boards (39.3% of all 1237) with at least one
-real, gradable fault — the ceiling no floor value can exceed. The old floor of 10 reached only
-433 of those (89.1% of the ceiling); 8 reaches 477 (98.1%), while floors below 8 add back fewer
-than ten more boards — meaning stage 3's excusal was already doing the "don't nag on noise"
-work, so there was little risk in lowering the gate. `MOMENT_FLOOR` is now 8; re-run both
-scripts and record a fresh date + n if the population's field sizes or mistake rate drift.
+real, gradable fault — the ceiling no floor value can exceed, and a follow-up finer sweep found
+it is FLAT from floor=2 through floor=5 (486 at each), only easing off at 6 (485), 7 (481), 8
+(477, 98.1% of the ceiling), with the real cliff between 8 and 10 (433, 89.1%). So stage 3's
+excusal was already doing the "don't nag on noise" work well inside that flat band, and there
+was no coverage or meaningful compute reason to sit above it. `MOMENT_FLOOR` is now 5 — the
+cleanest round number inside the flat 2-5 band; re-run both scripts and record a fresh date + n
+if the population's field sizes or mistake rate drift.
 
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on

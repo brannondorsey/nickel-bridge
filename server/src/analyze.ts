@@ -87,18 +87,21 @@ export const ANALYZE_K = 8;
  * least one real double-dummy trick loss; of the 1280 such candidates, 280
  * (21.9%) were excused by stage 3 as unfindable from the seat, leaving 486
  * boards (39.3% of all 1237) with at least one genuine, gradable fault —
- * that 486 is the ceiling no floor value can exceed. At floor=10 only 433 of
- * those (89.1% of the ceiling) surfaced a moment; floor=8 recovers 477
- * (98.1% of the ceiling) while floors below 8 add back fewer than ten more
- * boards, meaning stage 3's excusal is already doing the "don't nag on
- * noise" work and there was no real risk in lowering the gate. 8 is the
- * calibrated value below.
+ * that 486 is the ceiling no floor value can exceed (reached at any floor
+ * <= 5: 2, 3, 4 and 5 all recover exactly 486). Coverage only starts
+ * dropping from floor=6 (485), 7 (481), 8 (477, 98.1% of the ceiling), with
+ * the real cliff between 8 and 10 (433, 89.1%) — so stage 3's excusal was
+ * already doing the "don't nag on noise" work well below 5, and there was
+ * no real coverage or cost reason to sit above it (the extra stage-3 solves
+ * a floor of 5 buys over 8 are a rounding error against ANALYZE_K's own
+ * background-priority cost). 5 is the calibrated value below, chosen as the
+ * cleanest round number inside that flat 2-5 band.
  *
  * THE one number to move if the screen starts nagging (raise it) or stays
  * too quiet on boards with real, findable mistakes (lower it); re-run the
  * two scripts above and record the date and n when you do.
  */
-export const MOMENT_FLOOR = 8;
+export const MOMENT_FLOOR = 5;
 
 /** Ledger rows shown — Chess.com's Key Moments shape: a handful of turning
  *  points beats a narration. Overflow is counted and stated, never silent. */
@@ -124,7 +127,7 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-export const ANALYZE_VERSION = 4; // 4: MOMENT_FLOOR recalibrated 10 -> 8 against measured production field sizes
+export const ANALYZE_VERSION = 5; // 5: MOMENT_FLOOR recalibrated 8 -> 5, same flat band the 8 -> 10 measurement found
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
