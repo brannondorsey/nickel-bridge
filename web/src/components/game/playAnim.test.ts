@@ -393,6 +393,37 @@ describe('stageBidSteps', () => {
     expect(steps[steps.length - 1].view).toBe(intoPlay);
   });
 
+  // The one thing about resortMs that is easy to misread (and was, in this
+  // PR's review): the AUCTION_END_MS override lands on the SETTLE step, which
+  // stagePlaySteps emits at delayBefore 0, and the Draw's room lives on the
+  // step AFTER it — the opening lead. So the override cannot swallow it. Both
+  // halves are asserted here, because "the fixed gap covers the Draw anyway"
+  // is true (DRAW_BUDGET_MS === AUCTION_END_MS) but is NOT the reason the
+  // pacing is right, and acting on that reading would delete a real beat.
+  it('spends the auction-end beat on the turn-over and the Draw’s own room on the lead', () => {
+    const intoPlay: BoardView = {
+      ...boardPlaying,
+      auction: [...prev.auction, mkEntry(2, 0, 'Pass')],
+      currentTrick: [{ seat: 3, card: S(1) }],
+      completedTricks: 0,
+      declarerTricks: 0,
+      defenderTricks: 0,
+      lastTrick: null,
+    };
+    const RESORT = 790;
+    const plain = stageBidSteps(prev, intoPlay);
+    const resorted = stageBidSteps(prev, intoPlay, RESORT);
+    expect(resorted).toHaveLength(plain.length);
+    // the settle step keeps the auction-end beat, resort or no resort
+    expect(resorted[1].delayBefore).toBe(AUCTION_END_MS);
+    expect(plain[1].delayBefore).toBe(AUCTION_END_MS);
+    // ...and the lead is held for exactly the Draw's duration longer
+    expect(resorted[2].delayBefore).toBe(plain[2].delayBefore + RESORT);
+    // nothing else moves: same views, same remaining delays
+    expect(resorted.map((s) => s.view)).toEqual(plain.map((s) => s.view));
+    expect(resorted.slice(3).map((s) => s.delayBefore)).toEqual(plain.slice(3).map((s) => s.delayBefore));
+  });
+
   it('still reveals the calls when the board ends without entering play', () => {
     // passed out: no contract, so stagePlaySteps has nothing to stage
     const passedOut: BoardView = {
