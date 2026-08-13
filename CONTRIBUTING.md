@@ -234,6 +234,11 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
+                trump-placement-concepts.html — the concept-exploration board for the
+                "trump suit to the left of the fan" request: three live, replayable
+                motions (The Cut / The Squeeze / The Draw) over the real fan geometry,
+                plus the re-sort rule and which hands it touches. Owner's pick pending —
+                the setting it ships behind is "Trump placement · SUIT ORDER / LEFT SIDE";
                 onboarding-design.md — the new-user onboarding ("first crossing") design
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
