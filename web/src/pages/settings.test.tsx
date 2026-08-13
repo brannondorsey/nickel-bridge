@@ -99,6 +99,11 @@ describe('Settings', () => {
   it('writes "Trump placement" to the account, defaulting to suit order', async () => {
     apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, trumpPlacement: 'left' });
     const { refresh } = renderSettings();
+    // LEFT SIDE reads first, but SUIT ORDER is still the default and the lit
+    // one — segment order is presentation, `value` decides precedence
+    expect(
+      [...screen.getByRole('group', { name: 'Trump placement' }).querySelectorAll('button')].map((b) => b.textContent),
+    ).toEqual(['LEFT SIDE', 'SUIT ORDER']);
     expect(segment('Trump placement', 'SUIT ORDER')).toHaveClass('active');
     await userEvent.click(segment('Trump placement', 'LEFT SIDE')!);
     expect(apiMock.setPrefs).toHaveBeenCalledWith({ trumpPlacement: 'left' });
