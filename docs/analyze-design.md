@@ -75,7 +75,34 @@ come back with an EMPTY ledger, full stop, the same as a board with a truly flat
 `server/src/analyze.ts`'s stage-3 loop now drops a `deficit <= 0` candidate from the response
 entirely rather than attaching an excused verdict to it (`ANALYZE_VERSION` bumped so every
 cached analysis recomputes under the new rule). Every UI surface downstream — the moments
-ledger, the audit ribbon's pending/settled captions, the reduced-motion trick list, the
-PREV/NEXT MOMENT pager — simplifies accordingly: `sampled` non-null now always means a
-genuine, chargeable fault, so there is no excused branch left to render anywhere. See
-CONTRIBUTING.md's "Analyze" section for the current shape.
+ledger, the audit ribbon's captions (pending and settled, at the time; see the next section),
+the reduced-motion trick list, the PREV/NEXT MOMENT pager — simplifies accordingly: `sampled`
+non-null now always means a genuine, chargeable fault, so there is no excused branch left to
+render anywhere. See CONTRIBUTING.md's "Analyze" section for the current shape.
+
+## One beat per moment (the pending caption, retired)
+
+**Status: shipped (2026-08-13).** The play lens narrated a graded decision twice — once at the
+position before it ("The turn is here: South to play, and the engine, from your seat, plays 5♣
+— worth 63% instead of 50%"), and again at the position after it ("South played J♣ — the
+moment turned here …") — with the engine's card wearing the `.selected` treatment through
+both.
+
+The pending caption was the round-two landing, and it was a defensible idea: put the reader
+back in the chair with the choice still open, then let NEXT CARD show what they actually did.
+Round three took most of it back, collapsing a moment jump into one step so the played card
+glides in immediately — but the caption stayed, so the pending beat survived as a *frame* of
+the landing and as a *stop* on the card-by-card walk. Owner report from real use: the second
+telling adds nothing and the walk falls out of tempo, spending two presses of NEXT CARD on
+one finding.
+
+The build-up was never the point — the comparison is: the played card in the trick beside the
+engine's pick in the hand, which only the second beat shows. So `captionFor` is now, without
+exception, a reading of the card just played; the position before a graded decision reads like
+any other position and lights nothing up. The pct pair moved onto the surviving beat (the play
+lens is deep-linkable, so the ledger row that also carries it can't be assumed read), which
+lands the caption at exactly the three reserved lines — measured at 390 px, no shift.
+
+One thing fell out of it: `dummy` is now `skip`ped in that ribbon's linkify policy. The
+captions say "double dummy" and never "dummy", so the sheet opening from it explained
+declarer's exposed partner — the wrong sense.

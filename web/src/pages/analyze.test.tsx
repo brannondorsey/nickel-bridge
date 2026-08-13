@@ -301,16 +301,27 @@ describe('the play lens', () => {
       expect(trickCards()).toContain(cardText(playedCard));
       expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
       expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/\+25 MP/);
+      // the pct pair the retired pending caption used to carry rides on this
+      // beat now — it is the only one the moment gets
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/worth 83% instead of 58%/);
+      // and "double dummy" links nowhere: the ribbon's skip policy keeps the
+      // matcher off `dummy`, which here would open the wrong sense entirely
+      // (declarer's exposed partner, not the perfect-information yardstick)
+      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/double dummy/);
+      expect([...document.querySelectorAll('.audit-ribbon .gloss-link')].map((el) => el.textContent)).not.toContain('dummy');
 
       // at the first moment there is nothing earlier to hop back to — even
       // though the replay position sits one card PAST the decision
       expect(screen.getByRole('button', { name: /PREV MOMENT/ })).toBeDisabled();
 
-      // BACK A CARD steps to the pending decision itself: the ribbon reads
-      // the turn and the highlight stays on the engine's card
+      // BACK A CARD steps to the position before the decision, and that
+      // position says NOTHING about it: no second telling of the finding, and
+      // no engine card lit a beat before the card it is being compared with
       await userEvent.click(screen.getByRole('button', { name: /BACK A CARD/ }));
-      expect(document.querySelector('.audit-ribbon')!.textContent).toMatch(/The turn is here/);
-      expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).not.toBeNull();
+      expect(document.querySelector('.audit-ribbon')!.textContent).not.toMatch(/the moment turned here/);
+      expect(document.querySelector('.audit-ribbon')!.textContent).not.toMatch(/the engine, from your seat/i);
+      expect(document.querySelector(`.cardbtn.selected[data-card="${engineCard}"]`)).toBeNull();
+      expect(trickCards()).not.toContain(cardText(playedCard));
 
       // NEXT MOMENT lands the second graded decision, collapsed the same way
       await userEvent.click(screen.getByRole('button', { name: /NEXT MOMENT/ }));
