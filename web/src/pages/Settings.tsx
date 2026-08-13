@@ -61,6 +61,15 @@ const TRICK_CLEAR_OPTIONS: { value: 'auto' | 'tap'; label: string }[] = [
   { value: 'tap', label: 'TAP' },
 ];
 
+// Named for where the cards end up, not for on/off: both ends are a real
+// way to hold a hand, and "SUIT ORDER" says what today's behaviour actually
+// is rather than calling it the absence of the other one — the same reason
+// SETTLED_TRICK_OPTIONS above names both of its ends.
+const TRUMP_PLACEMENT_OPTIONS: { value: 'suit' | 'left'; label: string }[] = [
+  { value: 'suit', label: 'SUIT ORDER' },
+  { value: 'left', label: 'LEFT SIDE' },
+];
+
 function SettingRow({ label, note, children }: { label: string; note: string; children: ReactNode }) {
   return (
     <div className="setting-row">
@@ -78,6 +87,7 @@ type AccountPrefs = {
   betaFeatures: boolean;
   doubleTapBid: boolean;
   trickClearMode: 'auto' | 'tap';
+  trumpPlacement: 'suit' | 'left';
 };
 
 export default function Settings() {
@@ -95,6 +105,8 @@ export default function Settings() {
     // Fail to 'auto' — the shipped behaviour before this setting existed —
     // rather than assuming the field is always present.
     trickClearMode: me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto',
+    // ...and to 'suit', the ♠♥♦♣ every hand has always been laid out in.
+    trumpPlacement: me?.user?.trumpPlacement === 'left' ? 'left' : 'suit',
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -187,6 +199,18 @@ export default function Settings() {
               value={prefs.trickClearMode}
               options={TRICK_CLEAR_OPTIONS}
               onChange={(trickClearMode) => change({ trickClearMode })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Trump placement"
+            note="Suit order lays every hand out ♠ ♥ ♦ ♣. Left side moves the trump suit to the front once the contract is settled — in your hand and in dummy — drawing the trumps across as the auction ends."
+          >
+            <PrefSwitch
+              label="Trump placement"
+              value={prefs.trumpPlacement}
+              options={TRUMP_PLACEMENT_OPTIONS}
+              onChange={(trumpPlacement) => change({ trumpPlacement })}
             />
           </SettingRow>
 

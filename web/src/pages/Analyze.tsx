@@ -18,6 +18,8 @@ import {
   cardSuit,
   displaySort,
   suitClass,
+  suitDisplayOrder,
+  trumpForDisplay,
 } from '../api';
 import { Button } from '../components/ds/Button';
 import { InkStamp } from '../components/ds/InkStamp';
@@ -819,6 +821,13 @@ function ReplayLens({
   onRehearse: (ply: number) => void;
 }) {
   const replay = useReplay();
+  // The reader's own "Trump placement" applies here too, so a board reads
+  // the way they played it. Statically, with no Draw: this lens is entered
+  // on a finished board and scrubbed, so there is never a ♠♥♦♣ frame on
+  // screen for the hand to have moved from — and re-sorting on every step
+  // would be a motion that says nothing about the play being reviewed.
+  const { me } = useMe();
+  const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'left' ? 'left' : 'suit');
   const totalPlies = views.length - 1;
   const flat = useMemo(() => board.playHistory?.flat() ?? [], [board]);
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));
@@ -976,11 +985,11 @@ function ReplayLens({
       <div className="analyze-rails num">
         <div className="analyze-rail side">
           <span className="analyze-rail-label">WEST</span>
-          <SuitLine cards={remainingAt(board, shownPly, 3)} highlight={highlight} />
+          <SuitLine cards={remainingAt(board, shownPly, 3)} highlight={highlight} trump={trump} />
         </div>
         <div className="analyze-rail side right">
           <span className="analyze-rail-label">EAST</span>
-          <SuitLine cards={remainingAt(board, shownPly, 1)} highlight={highlight} />
+          <SuitLine cards={remainingAt(board, shownPly, 1)} highlight={highlight} trump={trump} />
         </div>
       </div>
       {/* the across hand, as a real card fan directly above the trick box —
@@ -991,12 +1000,12 @@ function ReplayLens({
           seat and role still reach assistive tech via aria-label. */}
       <div className="analyze-rail north" aria-label={`${acrossName}${dummy === across ? ' · DUMMY' : ''}`}>
         <div className="board-fan">
-          <HandFan cards={acrossOpen} selected={acrossHighlight} />
+          <HandFan cards={acrossOpen} selected={acrossHighlight} trump={trump} />
         </div>
       </div>
       <TrickArea board={view} />
       <div className="board-fan">
-        <HandFan cards={displaySort(view.hand)} selected={fanHighlight} />
+        <HandFan cards={view.hand} selected={fanHighlight} trump={trump} />
       </div>
 
       <div className="replay-dock">
@@ -1110,16 +1119,25 @@ function playedAt(board: BoardView, ply: number): number[] {
  *  group refuses to break internally; whether the LINE may wrap between
  *  groups is the container's decision (the side rails never do, the PLAYED
  *  rail must — 52 cards fit no single line). */
-function SuitLine({ cards, highlight = null }: { cards: number[]; highlight?: number | null }) {
+function SuitLine({
+  cards,
+  highlight = null,
+  trump = null,
+}: {
+  cards: number[];
+  highlight?: number | null;
+  /** suit to list first ("Trump placement"), so the rails agree with the fans beside them */
+  trump?: number | null;
+}) {
   const bySuit: number[][] = [[], [], [], []];
   for (const c of cards) bySuit[cardSuit(c)].push(c);
   return (
     <span className="analyze-suitline">
-      {bySuit.map((suit, s) =>
-        suit.length ? (
+      {suitDisplayOrder(trump).map((s) =>
+        bySuit[s].length ? (
           <span key={s} className="analyze-suitgroup">
             <span className={suitClass(s)}>{SUIT_SYMBOLS[s]}</span>
-            {suit.map((c) => (
+            {bySuit[s].map((c) => (
               <Fragment key={c}>
                 {'\u2009'}
                 {c === highlight ? <b className="analyze-hl">{RANK_CHARS[cardRank(c)]}</b> : RANK_CHARS[cardRank(c)]}

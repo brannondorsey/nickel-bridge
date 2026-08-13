@@ -37,6 +37,7 @@ const stmtSetBidFeedback = db.prepare(`UPDATE users SET bid_feedback = ? WHERE i
 const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE id = ?`);
 const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
 const stmtSetTrickClearMode = db.prepare(`UPDATE users SET trick_clear_mode = ? WHERE id = ?`);
+const stmtSetTrumpPlacement = db.prepare(`UPDATE users SET trump_placement = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -218,6 +219,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             betaFeatures: user.beta_features !== 0,
             doubleTapBid: user.double_tap_bid !== 0,
             trickClearMode: user.trick_clear_mode,
+            trumpPlacement: user.trump_placement,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
@@ -305,10 +307,19 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   double_tap_bid migration in db.ts.
    * - trickClearMode — how a completed trick leaves the table: 'auto' (times
    *   out on its own, the shipped behaviour) or 'tap' (holds until the
-   *   player taps the trick area). The one preference here that isn't a
-   *   boolean — see the trick_clear_mode migration in db.ts for why it's a
-   *   TEXT enum — so it's validated and applied separately from `fields`
-   *   below rather than forcing a string into that boolean-only list.
+   *   player taps the trick area).
+   * - trumpPlacement — where the trump suit sits in a hand once a trump
+   *   contract is settled: 'suit' (always ♠♥♦♣, the shipped behaviour) or
+   *   'left' (the trump block moves to the front). Client-side ordering
+   *   only — see the trump_placement migration in db.ts.
+   *
+   * The last two are TEXT enums rather than booleans (each names a MODE, not
+   * a yes/no — see their migrations in db.ts), so they live in `enums` below
+   * rather than being forced into the boolean list. That was one inline
+   * special case while there was one of them; a second is what makes it a
+   * table. Both lists are validated the same way, and an unknown key or a
+   * value outside a column's set is a 400 either way, so a typo can never
+   * look like a successful write.
    */
   app.post('/api/me/prefs', (req, reply) => {
     const user = requireUser(req, reply);
@@ -321,21 +332,29 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['betaFeatures', (on) => stmtSetBetaFeatures.run(on ? 1 : 0, user.id)],
       ['doubleTapBid', (on) => stmtSetDoubleTapBid.run(on ? 1 : 0, user.id)],
     ];
-    const known = new Set(fields.map(([key]) => key));
+    const enums: [key: string, values: string[], apply: (value: string) => void][] = [
+      ['trickClearMode', ['auto', 'tap'], (v) => stmtSetTrickClearMode.run(v, user.id)],
+      ['trumpPlacement', ['suit', 'left'], (v) => stmtSetTrumpPlacement.run(v, user.id)],
+    ];
+    const booleans = new Set(fields.map(([key]) => key));
+    const choices = new Map(enums.map(([key, values]) => [key, values]));
     for (const key of Object.keys(body)) {
-      if (key === 'trickClearMode') {
-        if (body[key] !== 'auto' && body[key] !== 'tap') {
-          return reply.code(400).send({ error: 'trickClearMode must be "auto" or "tap"' });
+      const values = choices.get(key);
+      if (values) {
+        if (typeof body[key] !== 'string' || !values.includes(body[key] as string)) {
+          return reply.code(400).send({ error: `${key} must be ${values.map((v) => `"${v}"`).join(' or ')}` });
         }
         continue;
       }
-      if (!known.has(key)) return reply.code(400).send({ error: `unknown preference: ${key}` });
+      if (!booleans.has(key)) return reply.code(400).send({ error: `unknown preference: ${key}` });
       if (typeof body[key] !== 'boolean') return reply.code(400).send({ error: `${key} must be a boolean` });
     }
     for (const [key, apply] of fields) {
       if (key in body) apply(body[key] as boolean);
     }
-    if ('trickClearMode' in body) stmtSetTrickClearMode.run(body.trickClearMode, user.id);
+    for (const [key, , apply] of enums) {
+      if (key in body) apply(body[key] as string);
+    }
     const row = stmtUserById.get(user.id) as UserRow;
     return reply.send({
       ladderListed: row.ladder_listed !== 0,
@@ -344,6 +363,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       betaFeatures: row.beta_features !== 0,
       doubleTapBid: row.double_tap_bid !== 0,
       trickClearMode: row.trick_clear_mode,
+      trumpPlacement: row.trump_placement,
     });
   });
 

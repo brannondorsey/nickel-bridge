@@ -236,9 +236,9 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 machine time (see "The edge" below);
                 trump-placement-concepts.html — the concept-exploration board for the
                 "trump suit to the left of the fan" request: three live, replayable
-                motions (The Cut / The Squeeze / The Draw) over the real fan geometry,
-                plus the re-sort rule and which hands it touches. Owner's pick pending —
-                the setting it ships behind is "Trump placement · SUIT ORDER / LEFT SIDE";
+                motions over the real fan geometry, plus the re-sort rule and which
+                hands it touches. The owner chose III, "The Draw" — shipped as
+                web/src/components/game/trumpDraw.ts behind "Trump placement";
                 onboarding-design.md — the new-user onboarding ("first crossing") design
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
@@ -2024,6 +2024,50 @@ already settled inside the first trick — which is exactly why it went unnotice
   the response landed, same as `auto` (actually faster, since even `auto`'s timed hold is
   skipped under reduced motion) — which directly contradicts the setting's own purpose for
   exactly the population likeliest to want a manual, unhurried pause.
+- **Trump placement** (`users.trump_placement`, TEXT `'suit'`/`'left'`, default `'suit'`)
+  decides whether a hand always reads ♠♥♦♣ or promotes the trump suit's block to the
+  front once the contract is settled. Repeatedly requested by players, and a genuine
+  playing aid rather than decoration — the suit you are counting is the one your eye
+  should land on first. `api.ts`'s `suitDisplayOrder`/`displaySort`/`trumpForDisplay`
+  are the whole of the ordering, in one place, because the fan, a partner's dummy fan,
+  the E/W `DummyRail` and Analyze's suit lines all have to agree: a hand that reads
+  trump-left in the fan and ♠♥♦♣ in the rail beside it is worse than either alone. The
+  other three suits keep their relative order rather than rotating (rotating would sit
+  ♥ next to ♦ on two contracts in four). `trumpForDisplay` also owns the one conversion
+  worth centralising — `strain` counts ♣♦♥♠NT and suits count ♠♥♦♣, so it is `3 - strain`,
+  and getting it backwards promotes the wrong suit rather than failing.
+
+  **The re-sort is animated, once, and only where it was watched.** "The Draw"
+  (`components/game/trumpDraw.ts` — the pure timing; `HandFan.tsx` — the DOM) slides the
+  other suits right to open a gap, then draws the trumps in one at a time, highest first.
+  It was chosen from three motions prototyped in `docs/trump-placement-concepts.html`
+  (all three still run — open it): it is the only one that says WHICH suit changed the
+  order rather than just that the order changed. Two structural things about it:
+
+  - **It starts from an order that was never painted.** The fan the auction ended with
+    belongs to `BiddingPhase` and the one that re-sorts belongs to `PlayPhase`, so there
+    is no previous render of the same element to FLIP away from. `HandFan`'s `drawIn`
+    makes the MOUNT supply it: first render in suit order, layout effect measures and
+    drops the flag, re-render lands trump-left, and the animation runs from the measured
+    delta — one motion, from a position that existed only between two layout passes.
+    `drawIn` is captured in the `useState` initializer, so a flag left true for the rest
+    of the board can never re-sort a hand twice.
+  - **It gets its own beat, and pays for it.** `stagePlaySteps`' new `resortMs` argument
+    delays the opening lead by the Draw's own duration — without it the lead glides in
+    350ms later, over a hand still sorting itself, and the motion that teaches something
+    loses. Board.tsx is the only caller that passes it (it is the only one that knows the
+    preference), and `drawDuration` returns 0 — so the pacing is byte-identical to before
+    — for a no-trump contract, a spade contract, a hand with no trumps, and any hand
+    already in the right order.
+
+  Everything else arrives already ordered and animates nothing: dummy is tabled after the
+  opening lead, the E/W rail is four stacked rows (so "left" is "top" there), and Analyze
+  applies the reader's preference statically to a board they are scrubbing. `Tour.tsx`
+  reads no preference at all, the `doubleTapBid` precedent. **The fan is inert while the
+  Draw is in flight** — a card in motion is not a card you can tap, which is the rule the
+  staged snapshots already enforce by dropping `legalCards`; the Draw needs its own guard
+  because the case they do not cover is the player being on LEAD, where there are no robot
+  cards to stage and the fan arrives live with the trumps still travelling.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,

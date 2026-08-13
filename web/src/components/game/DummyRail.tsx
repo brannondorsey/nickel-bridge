@@ -1,4 +1,4 @@
-import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, displaySort, suitClass } from '../../api';
+import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, displaySort, suitClass, suitDisplayOrder } from '../../api';
 import { HcpBadge } from '../ds/HcpBadge';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
@@ -19,13 +19,22 @@ export function DummyRail({
   cards,
   hcp,
   side,
+  trump = null,
 }: {
   seat: number;
   cards: number[];
   hcp?: number;
   side: 'left' | 'right';
+  /**
+   * Suit to list first ("Trump placement · LEFT SIDE"); null = plain ♠♥♦♣.
+   * The rail is four stacked rows rather than a fan, so "left" reads as
+   * "top" here — the trump row moves to the first line. No motion to match
+   * the fan's Draw: dummy is tabled after the opening lead, so this rail is
+   * never on screen in the other order and there is nothing to move FROM.
+   */
+  trump?: number | null;
 }) {
-  const sorted = displaySort(cards);
+  const sorted = displaySort(cards, trump);
   const suitRow = (suit: number) => sorted.filter((c) => cardSuit(c) === suit).map((c) => RANK_CHARS[cardRank(c)]);
   return (
     <div className={`dummy-rail dummy-rail-${side}`}>
@@ -34,7 +43,7 @@ export function DummyRail({
         <span className="dummy-rail-role">DUMMY</span>
         {typeof hcp === 'number' ? <HcpBadge hcp={hcp} /> : null}
       </div>
-      {[0, 1, 2, 3].map((suit) => {
+      {suitDisplayOrder(trump).map((suit) => {
         const ranks = suitRow(suit);
         return (
           <div key={suit} className="dummy-rail-row num">

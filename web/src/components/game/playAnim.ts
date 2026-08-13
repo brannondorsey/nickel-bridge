@@ -357,8 +357,17 @@ export function trimStagedPrefix(steps: StagedStep[], shown: BoardView | null, e
  * At most one trick boundary can occur per transition: the human plays at
  * least one card in every trick, so advanceRobots always stops within the
  * trick after the one the human just completed.
+ *
+ * `resortMs` buys room for the one animation this file does NOT own: the
+ * trump Draw (trumpDraw.ts), which runs inside the fan as the play screen
+ * mounts. Without it the opening lead glides in 350ms later, on top of a
+ * hand still sorting itself — two motions at once, and the one that teaches
+ * something loses. The caller passes the duration because only it knows the
+ * player's preference and their trump length; 0 (every caller but Board.tsx,
+ * every no-trump contract, every hand already in order) leaves the pacing
+ * byte-identical to what it always was.
  */
-export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
+export function stagePlaySteps(prev: BoardView, next: BoardView, resortMs = 0): StagedStep[] {
   const intoPlay = prev.state === 'bidding' && next.state === 'playing';
   const withinPlay = prev.state === 'playing' && (next.state === 'playing' || next.state === 'done');
   if (!intoPlay && !withinPlay) return [];
@@ -427,7 +436,7 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
 
   finishing.forEach((play, i) => {
     steps.push({
-      delayBefore: i === 0 ? (intoPlay ? 350 : 0) : GLIDE_MS + ROBOT_GAP_MS,
+      delayBefore: i === 0 ? (intoPlay ? 350 + resortMs : 0) : GLIDE_MS + ROBOT_GAP_MS,
       view: lockedView(next, {
         currentTrick: [...prevTrick, ...finishing.slice(0, i + 1)],
         completedTricks: prevDone,
@@ -508,15 +517,15 @@ export function stagePlaySteps(prev: BoardView, next: BoardView): StagedStep[] {
  * transition with no new calls falls through to stagePlaySteps unchanged, so
  * a caller can dispatch on `prev.state === 'bidding'` alone.
  */
-export function stageBidSteps(prev: BoardView, next: BoardView): StagedStep[] {
+export function stageBidSteps(prev: BoardView, next: BoardView, resortMs = 0): StagedStep[] {
   if (prev.state !== 'bidding') return [];
   if (prev.tournamentId !== next.tournamentId || prev.boardNo !== next.boardNo) return [];
   const from = prev.auction.length;
-  if (next.auction.length <= from) return stagePlaySteps(prev, next);
+  if (next.auction.length <= from) return stagePlaySteps(prev, next, resortMs);
   // a reload or a race can hand us an auction that isn't an extension of the
   // one on screen — don't guess a reveal order for it
   if (!prev.auction.every((e, i) => e.call === next.auction[i]?.call && e.seat === next.auction[i]?.seat)) {
-    return stagePlaySteps(prev, next);
+    return stagePlaySteps(prev, next, resortMs);
   }
 
   const steps: StagedStep[] = [];
@@ -531,7 +540,7 @@ export function stageBidSteps(prev: BoardView, next: BoardView): StagedStep[] {
   // own staging to run (the layout settle, then the opening lead) — its first
   // step is a delayBefore: 0 that assumed it was starting from the response,
   // so it gets the turn-over beat instead.
-  const tail = next.state === 'bidding' ? [] : stagePlaySteps(prev, next);
+  const tail = next.state === 'bidding' ? [] : stagePlaySteps(prev, next, resortMs);
   const gap = next.state === 'bidding' ? BID_GAP_MS : AUCTION_END_MS;
   if (tail.length) steps.push({ ...tail[0], delayBefore: gap }, ...tail.slice(1));
   else steps.push({ delayBefore: gap, view: next });

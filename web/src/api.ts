@@ -33,6 +33,8 @@ export interface Me {
     doubleTapBid: boolean;
     /** how a completed trick leaves the table (settings: "Trick clearing") — 'auto' times out on its own, 'tap' holds until the trick area is tapped */
     trickClearMode: 'auto' | 'tap';
+    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'suit' is always ♠♥♦♣, 'left' promotes the trump block */
+    trumpPlacement: 'suit' | 'left';
     /**
      * Opt in to features still being tried out before a general release —
      * currently gates Analyze. Off by default in production, on by default
@@ -587,6 +589,7 @@ export const api = {
     betaFeatures?: boolean;
     doubleTapBid?: boolean;
     trickClearMode?: 'auto' | 'tap';
+    trumpPlacement?: 'suit' | 'left';
   }) =>
     request<{
       ladderListed: boolean;
@@ -595,6 +598,7 @@ export const api = {
       betaFeatures: boolean;
       doubleTapBid: boolean;
       trickClearMode: 'auto' | 'tap';
+      trumpPlacement: 'suit' | 'left';
     }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
@@ -737,10 +741,57 @@ export function boardConditions(boardNo: number): { dealer: number; vul: { ns: b
   return { dealer, vul: VULS[idx] };
 }
 
-/** sort for display: ♠ ♥ ♦ ♣ (each suit has its own color), descending ranks */
-export function displaySort(hand: number[]): number[] {
+/**
+ * The suits, in the order a hand is laid out: ♠ ♥ ♦ ♣ normally, and with the
+ * trump suit promoted to the front when the reader has asked for that
+ * ("Trump placement · LEFT SIDE", users.trump_placement).
+ *
+ * The other three keep their relative order behind it rather than rotating —
+ * a player reads the fan by colour as much as by glyph, and rotating would
+ * move ♥ and ♦ next to each other on two contracts in four. Pass null (no
+ * trump suit, a no-trump contract, or the preference off) for plain suit
+ * order. One helper rather than three copies because the fan, the dummy rail
+ * and Analyze's suit lines all have to agree — a hand that reads trump-left
+ * in the fan and ♠♥♦♣ in the rail beside it is worse than either alone.
+ */
+export function suitDisplayOrder(trump?: number | null): number[] {
+  const suits = [0, 1, 2, 3];
+  if (trump === null || trump === undefined) return suits;
+  return [trump, ...suits.filter((s) => s !== trump)];
+}
+
+/**
+ * Sort for display: suits per suitDisplayOrder above (each has its own
+ * color), descending ranks within each.
+ *
+ * Note what `trump` does NOT change: the cards themselves, which of them are
+ * legal, or anything the server was told. This is the order they are drawn
+ * in and nothing else, so two players on the same board holding opposite
+ * preferences still hold the same hand.
+ */
+export function displaySort(hand: number[], trump?: number | null): number[] {
+  const rank = suitDisplayOrder(trump);
   return [...hand].sort((a, b) => {
-    if (cardSuit(a) !== cardSuit(b)) return cardSuit(a) - cardSuit(b);
+    if (cardSuit(a) !== cardSuit(b)) return rank.indexOf(cardSuit(a)) - rank.indexOf(cardSuit(b));
     return cardRank(b) - cardRank(a);
   });
+}
+
+/**
+ * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
+ * the preference, the contract and the strain encoding meet.
+ *
+ * `strain` counts in BID order (0=♣ 1=♦ 2=♥ 3=♠ 4=NT) and suits count the
+ * other way (0=♠ 1=♥ 2=♦ 3=♣), so the conversion is `3 - strain`; getting
+ * that backwards promotes the wrong suit rather than failing, which is why
+ * it lives here once instead of at each call site. No-trump has no trump
+ * suit, an unsettled auction has no contract, and the default preference
+ * leaves every hand in suit order — all three answer null.
+ */
+export function trumpForDisplay(
+  contract: { strain: number } | undefined,
+  placement: 'suit' | 'left' | undefined,
+): number | null {
+  if (placement !== 'left' || !contract) return null;
+  return contract.strain === 4 ? null : 3 - contract.strain;
 }
