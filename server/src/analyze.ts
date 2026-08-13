@@ -44,16 +44,23 @@ import { claimRule } from './tournaments.js';
  *
  * Stage order is load-bearing: DD is the cheap filter, sampled DD the
  * expensive verdict (k full solves of DIFFERENT deals per candidate — no
- * shared transposition table), so the verdict only ever runs on candidates
- * that already cleared the matchpoint floor. Stage 4 (par + counterfactual
- * auctions, CalcDDTablePBN at p90 ~576ms) runs only when a lens that shows it
- * is opened, and is cached separately for the same reason.
+ * shared transposition table), so the verdict only runs on candidates that
+ * clear the matchpoint floor — AT COMPUTE TIME, the first time, as the cost
+ * -saving filter it's for. A field that grows afterward doesn't leave a
+ * ply stuck below a floor it has since cleared: getBoardAnalysis's
+ * backfillDriftedPlies gives any such ply its one stage-3 solve on the
+ * serve that discovers the drift, so the floor filter is deliberately not
+ * a one-shot verdict. Stage 4 (par + counterfactual auctions, CalcDDTablePBN
+ * at p90 ~576ms) runs only when a lens that shows it is opened, and is
+ * cached separately for the same reason.
  *
  * Everything here is a pure, seeded function of the finished board plus the
  * field rows, dispatched at 'background' priority (a live card-play solve
  * beats a report loading; STARVATION_PROMOTE_MS bounds the wait). The cache
  * (board_analyses, see db.ts) and the screen are therefore the same claim
- * made twice — a recompute is byte-identical until ANALYZE_VERSION bumps.
+ * made twice — a recompute (or a drift backfill) is byte-identical to what a
+ * fresh compute against the SAME field would produce, until ANALYZE_VERSION
+ * bumps.
  */
 
 /**
@@ -341,12 +348,16 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
  * permanently stale — the receipts' percentage and the rail would disagree
  * with the Result forever once the field grew.)
  *
- * The one thing that stays as-of-compute is stage 3's floor SELECTION —
- * which plies bought the expensive sampled verdict. A field shift can
- * therefore leave an unjudged ply whose refreshed cost clears the floor;
- * assembleMoments only promotes judged plies, and the client captions the
- * drifted case honestly (momentFloor is served for that comparison).
- * Mutates the parsed copies, never the cache row.
+ * Stage 3's floor SELECTION — which plies bought the expensive sampled
+ * verdict — is decided against whatever field existed when this analysis
+ * was first computed, not today's; a growing field can leave a ply
+ * under-judged here. That gap does NOT stay open, though:
+ * getBoardAnalysis calls backfillDriftedPlies immediately after this
+ * function runs, using the mpCost this function just refreshed, so a ply
+ * that has since drifted over MOMENT_FLOOR gets its stage-3 solve there
+ * rather than being served unjudged. Mutates the parsed copies, never the
+ * cache row (backfillDriftedPlies is the one that persists, and only when
+ * it actually changed something).
  */
 function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCore, par: AnalysisPar | null): void {
   const rows = boardFieldRows(t.id, b.row.board_no);
@@ -366,6 +377,81 @@ function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCo
     c.cf.cfPct = singleField ? null : substitutePct(scores, myIndex, c.cf.scoreNS);
     c.cf.mpGain = c.cf.cfPct === null || core.actualPct === null ? null : c.cf.cfPct - core.actualPct;
   }
+}
+
+/**
+ * Stage 3's per-candidate findability verdict, extracted so computeCore's
+ * first pass and backfillDriftedPlies' serve-time second chance (below) call
+ * exactly the same judging logic — the two must never diverge on what makes
+ * a card excused. Returns null for an EXCUSED candidate (the sampled engine
+ * would also have played the card, deficit <= 0); the caller drops it from
+ * `plies` entirely rather than keeping a null verdict, so a dropped
+ * candidate is never re-attempted on a later serve.
+ */
+async function sampleFindability(
+  t: TournamentRow,
+  b: GameBoard,
+  deal: Deal,
+  contract: Contract,
+  p: PlyAnalysis,
+): Promise<PlyAnalysis['sampled']> {
+  const { legal, totals } = await scoreCardsSampled(deal, contract, b.plays.slice(0, p.ply), {
+    k: ANALYZE_K,
+    // per-ply namespace: two opens of the same board must sample the same
+    // layouts or the cache and a recompute would disagree (same
+    // duplicate-fairness argument as mcDecisionSeed, different namespace)
+    seed: `${t.seed}:analyze:${b.row.board_no}:${p.ply}`,
+    dealer: deal.dealer,
+    calls: b.calls,
+    useAuction: true,
+    priority: 'background',
+  });
+  let bestCard = legal[0];
+  for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
+  const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(p.card) ?? 0)) / ANALYZE_K;
+  if (deficit <= 0) return null;
+  return { bestCard, deficit, grade: gradeFromDeficit(deficit) };
+}
+
+/**
+ * The serve-time second chance for the one thing refreshMatchpointLayer's
+ * field refresh cannot fix on its own: a candidate whose floor SELECTION ran
+ * against a thinner field at first-open than exists now. Called from
+ * getBoardAnalysis right after refreshMatchpointLayer, so every ply's
+ * mpCost is already today's — any still-unjudged ply (sampled === null,
+ * meaning it never cleared the floor at compute time, NOT an excused one:
+ * those are already gone from `plies`, see computeCore) whose refreshed
+ * cost clears MOMENT_FLOOR now gets the one stage-3 solve it was denied
+ * before, via the exact same sampleFindability computeCore itself calls.
+ * Mutates core.plies in place (a genuine verdict is attached; a candidate
+ * that turns out excused is dropped, matching computeCore's own rule, so it
+ * is never re-attempted on a future serve) and returns whether anything
+ * changed, so the caller only re-persists the cache row when it did.
+ *
+ * This closes the gap refreshMatchpointLayer's doc comment used to describe
+ * as permanent ("assembleMoments only promotes judged plies... the client
+ * captions the drifted case honestly"): that caption (Analyze.tsx's
+ * captionFor, the "field has shifted since the audit ran" branch) still
+ * exists for a genuinely unreachable-in-practice residual — it compares a
+ * ROUNDED matchpoint figure for display, while this backfill (like
+ * computeCore) compares the raw, unrounded mpCost, so a candidate sitting
+ * exactly on the rounding boundary can still read as "cleared" to a reader
+ * without having cleared the raw gate here.
+ */
+async function backfillDriftedPlies(t: TournamentRow, b: GameBoard, core: AnalysisCore): Promise<boolean> {
+  if (!core.contract) return false;
+  const excusedOnBackfill: number[] = [];
+  let changed = false;
+  for (const p of core.plies) {
+    if (p.sampled !== null) continue;
+    if (p.mpCost === null || p.mpCost < MOMENT_FLOOR) continue;
+    const sampled = await sampleFindability(t, b, b.deal, core.contract, p);
+    changed = true;
+    if (sampled === null) excusedOnBackfill.push(p.ply);
+    else p.sampled = sampled;
+  }
+  if (excusedOnBackfill.length) core.plies = core.plies.filter((p) => !excusedOnBackfill.includes(p.ply));
+  return changed;
 }
 
 /** Stages 1–3. `b` must be a finished board belonging to the analysis's viewer. */
@@ -445,30 +531,21 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   // entirely rather than flagged — that trick only ever existed for a trace
   // that can see all 52 cards, nobody at the table had a real shot at it, and
   // a well-played board should come back with nothing to show for it rather
-  // than a row arguing the player's own innocence.
+  // than a row arguing the player's own innocence. Candidates that DON'T
+  // clear the floor here can still be judged later — see backfillDriftedPlies,
+  // called from getBoardAnalysis on every serve — so this first pass is a
+  // COST-SAVING filter (skip the expensive solve when the field obviously
+  // won't reward it), not the only chance a candidate gets.
   const excusedPlies = new Set<number>();
   for (const p of plies) {
     const clears = p.mpCost === null ? p.ddLoss >= 1 : p.mpCost >= MOMENT_FLOOR;
     if (!clears) continue;
-    const { legal, totals } = await scoreCardsSampled(deal, contract, b.plays.slice(0, p.ply), {
-      k: ANALYZE_K,
-      // per-ply namespace: two opens of the same board must sample the same
-      // layouts or the cache and a recompute would disagree (same
-      // duplicate-fairness argument as mcDecisionSeed, different namespace)
-      seed: `${t.seed}:analyze:${b.row.board_no}:${p.ply}`,
-      dealer: deal.dealer,
-      calls: b.calls,
-      useAuction: true,
-      priority: 'background',
-    });
-    let bestCard = legal[0];
-    for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
-    const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(p.card) ?? 0)) / ANALYZE_K;
-    if (deficit <= 0) {
+    const sampled = await sampleFindability(t, b, deal, contract, p);
+    if (sampled === null) {
       excusedPlies.add(p.ply);
       continue;
     }
-    p.sampled = { bestCard, deficit, grade: gradeFromDeficit(deficit) };
+    p.sampled = sampled;
   }
   const judgedPlies = excusedPlies.size ? plies.filter((p) => !excusedPlies.has(p.ply)) : plies;
 
@@ -571,6 +648,13 @@ export function assembleMoments(core: AnalysisCore, par: AnalysisPar | null): { 
  * Computed on the FIRST open (never on completion — most boards are never
  * analyzed) and cached; `wantPar` backfills stage 4 into an existing row
  * without recomputing core. A version mismatch recomputes everything.
+ *
+ * Two backfills run on every serve, cached row or fresh: `wantPar` above,
+ * and backfillDriftedPlies below for stage 3's own floor selection — a ply
+ * that was under MOMENT_FLOOR when this analysis was first computed but
+ * whose cost has since drifted over it (the field grew) gets its one
+ * stage-3 solve here rather than staying unjudged forever, and the result
+ * is written back so no later serve repeats it.
  */
 export async function getBoardAnalysis(t: TournamentRow, b: GameBoard, wantPar: boolean): Promise<AnalysisView> {
   const cached = stmtGetAnalysis.get(b.row.id) as { version: number; core: string; par: string | null } | undefined;
@@ -591,9 +675,13 @@ export async function getBoardAnalysis(t: TournamentRow, b: GameBoard, wantPar: 
     stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(core), par ? JSON.stringify(par) : null);
   }
 
-  // serve-time: measure everything against today's field, then assemble
-  // moments from those fresh figures
+  // serve-time: measure everything against today's field, then give any
+  // newly-over-the-floor ply its stage-3 verdict, then assemble moments
+  // from those fresh figures
   refreshMatchpointLayer(t, b, core, par);
+  if (await backfillDriftedPlies(t, b, core)) {
+    stmtPutAnalysis.run(b.row.id, ANALYZE_VERSION, JSON.stringify(core), par ? JSON.stringify(par) : null);
+  }
   const { moments, setAside } = assembleMoments(core, par);
   return { ...core, version: ANALYZE_VERSION, moments, setAside, par, momentFloor: MOMENT_FLOOR };
 }

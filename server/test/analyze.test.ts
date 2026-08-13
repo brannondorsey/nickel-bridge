@@ -297,6 +297,69 @@ describe('cache behaviour', () => {
       solo.plies.map((p) => ({ ply: p.ply, card: p.card, ddLoss: p.ddLoss, sampled: p.sampled })),
     );
   }, 240_000);
+
+  it('a ply that never cleared the floor at first open gets its stage-3 verdict once the field drifts it over — and the backfill is persisted', async () => {
+    // same shape as the "one deliberate blunder" test above: a clean,
+    // comfortably-over-floor cost against a real (non-single) field.
+    const t = makeTournament('analyze-f');
+    await driveBoard(t, rivalId, 1, optimalCard);
+    let blunderPly = -1;
+    const b = await driveBoard(t, userId, 1, async (bb, view) => {
+      const legal = view.legalCards as number[];
+      const solve = await solveFutureTricks(bb.deal, bb.contract, bb.plays);
+      if (blunderPly < 0) {
+        const worst = [...legal].sort(
+          (a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99),
+        )[0];
+        if ((solve.cardScores.get(worst) ?? 0) < solve.bestScore) {
+          blunderPly = bb.plays.length;
+          return worst;
+        }
+      }
+      return pickFromSolve(legal, solve);
+    });
+    const original = await analyze.getBoardAnalysis(t, b, false);
+    expect(original.plies).toHaveLength(1);
+    expect(original.plies[0].mpCost).toBe(50); // comfortably over MOMENT_FLOOR
+    expect(original.plies[0].sampled).not.toBeNull();
+    expect(original.moments).toHaveLength(1);
+
+    // Simulate first-open having happened against a floor this ply didn't
+    // clear (a thinner field, or a higher MOMENT_FLOOR at the time) by
+    // hand-resetting the cached verdict to unjudged — the same
+    // hand-editing-cached-state technique the claim-boundary legacy test
+    // above uses. mpCost is NOT touched: refreshMatchpointLayer recomputes
+    // it fresh from the live field on every serve regardless, so leaving it
+    // stale here would be overwritten immediately and prove nothing.
+    const row = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as { core: string };
+    const core = JSON.parse(row.core);
+    core.plies[0].sampled = null;
+    db.prepare(`UPDATE board_analyses SET core = ? WHERE board_id = ?`).run(JSON.stringify(core), b.row.id);
+    const rowAfterReset = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+    };
+    expect(JSON.parse(rowAfterReset.core).plies[0].sampled).toBeNull(); // confirms the mutation actually landed
+
+    // The very next serve IS the "field drifted over the floor" case:
+    // refreshMatchpointLayer recomputes mpCost fresh from the (unchanged,
+    // real) field first — still 50, still over MOMENT_FLOOR — and
+    // backfillDriftedPlies then gives the ply the stage-3 solve it never
+    // got, byte-identical to the original verdict (same seed, same deal,
+    // same played card) since sampleFindability is deterministic regardless
+    // of when it runs. There is no separately-observable "unjudged" response
+    // in between: the backfill runs inside this very call.
+    const backfilled = await analyze.getBoardAnalysis(t, b, false);
+    expect(backfilled.plies[0].sampled).toEqual(original.plies[0].sampled);
+    expect(backfilled.moments).toHaveLength(1);
+    expect(backfilled.moments[0]).toMatchObject({ kind: 'play', ply: blunderPly, mpCost: 50 });
+
+    // and it was PERSISTED, not just recomputed for this one response — a
+    // third serve with no further mutation must not need to re-solve
+    const rowAfterBackfill = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+    };
+    expect(JSON.parse(rowAfterBackfill.core).plies[0].sampled).toEqual(original.plies[0].sampled);
+  }, 240_000);
 });
 
 describe('the endpoint', () => {

@@ -1063,9 +1063,18 @@ Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed b
 `STARVATION_PROMOTE_MS` bounds the wait. The cache stores ENGINE facts only: the
 matchpoint layer (`refreshMatchpointLayer` — actualPct, per-ply costs, bid mpGains) is
 recomputed against the LIVE field on every serve, so the whole response shares one field
-with the Result's own table and a refresh sees late finishers; the one as-of-compute
-residue is stage 3's floor selection, and a drifted unjudged ply is captioned honestly
-via the served `momentFloor`. The grading boundary is `boards.claimed_at_ply`
+with the Result's own table and a refresh sees late finishers; stage 3's floor selection —
+which plies bought the expensive sampled verdict — is decided at compute time too, but a
+field that grows afterward doesn't leave a ply stuck below a floor it has since cleared:
+`getBoardAnalysis` calls `backfillDriftedPlies` right after the refresh, on every serve,
+giving any newly-over-the-floor ply its one stage-3 solve there and persisting the result
+(`sampleFindability`, extracted so `computeCore`'s first pass and this second chance can
+never judge a card two different ways) — so a moment that was invisible on first open can
+still surface on a later one without ever being recomputed twice. The served `momentFloor`
+still backs one honest caption for the residual case that check can't close (Analyze.tsx's
+play-lens ribbon compares a ROUNDED figure for display; the raw, unrounded mpCost decides
+backfill, so a candidate sitting exactly on the rounding boundary can still read as
+"cleared" without having cleared the raw gate). The grading boundary is `boards.claimed_at_ply`
 (re-derived by `deriveClaimBoundary` replaying the claim gate for pre-migration NULLs — under
 the board's OWN tournament's `claim_rule`, which is a required argument precisely so a legacy
 board can't be re-derived under today's gate): cards past it were played by
