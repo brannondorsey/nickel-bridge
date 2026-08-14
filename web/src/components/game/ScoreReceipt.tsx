@@ -21,12 +21,11 @@ import { GlossaryProse } from './GlossaryProse';
  * changes the URL and nothing else — leaving it has to go through the tour's
  * own exit (which stamps the onboarding gate) instead.
  *
- * `analyzeHref` mirrors the Result screen's own beta-gated "Analyze play →"
- * door (Board.tsx passes it only when betaFeatures is on) — the toll receipt
- * is reached first, before a player ever taps SEE THE FIELD, so the door
- * belongs here too rather than only one screen later. Omitted entirely (not
- * just hidden) when the caller has nothing to link to — Tour.tsx's captured
- * practice board has no real tournamentId to analyze.
+ * `analyzeHref` mirrors the Result screen's own "Analyze play →" door — the
+ * toll receipt is reached first, before a player ever taps SEE THE FIELD, so
+ * the door belongs here too rather than only one screen later. Omitted
+ * entirely (not just hidden) when the caller has nothing to link to —
+ * Tour.tsx's captured practice board has no real tournamentId to analyze.
  */
 export function ScoreReceipt({
   board,

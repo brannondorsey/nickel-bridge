@@ -294,11 +294,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   itself (bidEvals, stats, the post-board review table) is computed and
    *   stored unconditionally; this only gates the live interruption — see
    *   the bid_feedback migration in db.ts.
-   * - betaFeatures — opt in to features still being tried out (currently:
-   *   Analyze). Off by default in production, on by default on preview/demo
-   *   deployments — see the beta_features migration in db.ts for why. This
-   *   is the one row in Settings that GRANTS access rather than describing a
-   *   preference, so it stays visible and settable the same way as the rest.
+   * - betaFeatures — opt in to features still being tried out before a
+   *   general release. Nothing is gated behind it today. Off by default in
+   *   production, on by default on preview/demo deployments — see the
+   *   beta_features migration in db.ts for why. This is the one row in
+   *   Settings that GRANTS access rather than describing a preference, so it
+   *   stays visible and settable the same way as the rest.
    * - doubleTapBid — whether a second tap on the already-selected call in the
    *   bid box submits it, without pressing the confirm CTA. Defaults false,
    *   unlike the three above: this is the one preference that changes

@@ -247,7 +247,7 @@ export default function Settings() {
 
           <SettingRow
             label="Beta features"
-            note="Try screens still being tried out before they reach everyone — currently: Analyze, the after-the-fact review of a finished board's play."
+            note="Try screens still being tried out before they reach everyone — nothing is gated behind this today, but flipping it opts you in the moment something is."
           >
             <PrefSwitch
               label="Beta features"

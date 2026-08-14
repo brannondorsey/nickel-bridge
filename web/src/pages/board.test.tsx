@@ -1570,23 +1570,13 @@ describe('Board — result', () => {
     expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
   });
 
-  it('offers the ANALYZE PLAY door for a beta account', async () => {
+  it('offers the ANALYZE PLAY door', async () => {
     apiMock.board.mockResolvedValue(boardDone);
     renderBoard();
     expect(await screen.findByRole('link', { name: /analyze play/i })).toHaveAttribute(
       'href',
       '/t/12/b/2/analyze',
     );
-  });
-
-  it('hides the ANALYZE PLAY door for an account without beta features — Analyze is still in beta', async () => {
-    apiMock.board.mockResolvedValue(boardDone);
-    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
-    await screen.findByText('SCORED');
-    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
-    // the rest of the receipt's actions are unaffected
-    expect(screen.getByRole('button', { name: /NEXT BOARD — 3 OF 4/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /back to lobby/i })).toHaveAttribute('href', '/');
   });
 
   it('marks a poor board in the low treatment', async () => {
@@ -1646,20 +1636,12 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('Toll collected')).toBeInTheDocument();
   });
 
-  it('carries the same ANALYZE PLAY door as the field view, beta-gated the same way', async () => {
+  it('carries the same ANALYZE PLAY door as the field view', async () => {
     apiMock.board.mockResolvedValue(boardDone);
     renderBoard();
     await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
     expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /analyze play/i })).toHaveAttribute('href', '/t/12/b/2/analyze');
-  });
-
-  it('hides ANALYZE PLAY on the toll receipt for an account without beta features', async () => {
-    apiMock.board.mockResolvedValue(boardDone);
-    renderBoard({ ...meFixture, user: { ...meFixture.user!, betaFeatures: false } });
-    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
-    expect(screen.getByText('THE TOLL — BOARD 2')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /analyze play/i })).not.toBeInTheDocument();
   });
 
   it('itemizes a set contract as Toll refused with the penalty in red', async () => {

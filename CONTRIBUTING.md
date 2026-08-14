@@ -2007,23 +2007,26 @@ already settled inside the first trick — which is exactly why it went unnotice
   signed-in tester's) own setting.
 - **Beta features** (`users.beta_features`) is the odd one out: every switch above describes
   how an already-shipped feature behaves for this person, while this one GRANTS access to
-  features still being tried out — today, just Analyze (the post-board review screen,
-  `pages/Analyze.tsx`). Its default is environment-dependent rather than a fixed literal: the
-  `beta_features` migration in `db.ts` computes it once, from `DEV_AUTH`/`DEMO`, and bakes
-  that into the column's SQL `DEFAULT` — so it's simultaneously the backfill for existing
-  rows on whatever deployment runs the migration AND, because SQLite reuses an `ADD COLUMN`
-  default for every future `INSERT` that omits the column, the default for every signup after
-  it with no second code path. Off in production (nobody has asked for early access), on
-  wherever `DEV_AUTH` or `DEMO` is set — PR previews and the permanent demo app share that
-  exact shape (`ci.yml`'s `deploy-preview`/`deploy-demo`), so testers and click-testers see
-  new work without hunting for a switch, and a shipped-but-gated feature like Analyze's demo
-  exhibit (`analyze-play`, see "Demo mode" below) just works. A production account reaches a
-  beta feature only by deliberately flipping this switch — the intended path for a named
-  handful of early testers, not a general release. Both the door (`Board.tsx`'s ANALYZE PLAY
-  button, `Tournament.tsx`'s ledger hint, `Analyze.tsx`'s own route) and the data
-  (`GET .../analysis` in `app.ts`) check it independently: the client hiding the door is a
-  courtesy, the route's `403` is the actual gate, since a beta feature that only the UI
-  refuses is one curl command away from everyone.
+  features still being tried out ahead of a general release. Nothing is gated behind it today
+  — Analyze (the post-board review screen, `pages/Analyze.tsx`, plus its "Play From Here"
+  rehearsal routes) was the first and only feature to use it, and has since shipped to
+  everyone (see "Analyze" and "Play From Here" below); the column and the Settings row stay so
+  the next feature that wants a narrow test population has a mechanism ready. Its default is
+  environment-dependent rather than a fixed literal: the `beta_features` migration in `db.ts`
+  computes it once, from `DEV_AUTH`/`DEMO`, and bakes that into the column's SQL `DEFAULT` —
+  so it's simultaneously the backfill for existing rows on whatever deployment runs the
+  migration AND, because SQLite reuses an `ADD COLUMN` default for every future `INSERT` that
+  omits the column, the default for every signup after it with no second code path. Off in
+  production (nobody has asked for early access to anything), on wherever `DEV_AUTH` or `DEMO`
+  is set — PR previews and the permanent demo app share that exact shape (`ci.yml`'s
+  `deploy-preview`/`deploy-demo`), so testers and click-testers see whatever's next without
+  hunting for a switch. A production account would reach a beta feature only by deliberately
+  flipping this switch — the intended path for a named handful of early testers, not a general
+  release. The pattern Analyze's own gate followed while it was live, and the one worth
+  repeating for the next beta feature: check BOTH the door (hiding the entry point in the web
+  client) and the data (the route itself refusing an account that hasn't opted in)
+  independently — the client hiding a door is only a courtesy, and a route that trusts it is
+  one curl command away from everyone.
 - **Double-tap to bid** (`users.double_tap_bid`, **default OFF**) is the one switch on this
   panel that does not preserve prior behavior — every other row above defaults to whatever the
   app already did, so it reads as a way OUT rather than a change. This one exists because it
