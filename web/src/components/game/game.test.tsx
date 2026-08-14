@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -83,6 +83,58 @@ describe('HandFan', () => {
 
     const { container: readOnly } = render(<HandFan cards={southHand} />);
     expect(readOnly.querySelectorAll('.pcard.dimmed').length).toBe(0);
+  });
+
+  // The trump Draw, at the level it can actually be pinned: jsdom has no
+  // WAAPI, so motionOK() is false and the fan simply RENDERS trump-first —
+  // which is the reduced-motion path, and worth asserting on its own.
+  it('lays the trump suit first when asked, with no motion to wait out', () => {
+    const { container } = render(<HandFan cards={southHand} trump={1} drawIn legal={southHand} onSelect={() => {}} />);
+    const suits = [...container.querySelectorAll<HTMLElement>('.cardbtn')].map((el) =>
+      Math.floor(Number(el.dataset.card) / 13),
+    );
+    expect(suits).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 2, 2, 3, 3, 3]);
+    // nothing is in flight, so nothing is withheld
+    expect(container.querySelectorAll('.cardbtn:disabled')).toHaveLength(0);
+  });
+
+  // ...and with WAAPI, a card in motion is not a card you can tap. This is
+  // the rule the staged snapshots enforce by dropping legalCards; the Draw
+  // has to enforce it itself, because the one case it covers — the player on
+  // LEAD — has no staged snapshot to hide behind.
+  it('withholds taps while the Draw is in flight, and returns them when it lands', async () => {
+    let land!: () => void;
+    const landed = new Promise<void>((resolve) => (land = resolve));
+    const before = Object.getOwnPropertyDescriptor(Element.prototype, 'animate');
+    (Element.prototype as unknown as { animate: unknown }).animate = () => ({ cancel() {}, finished: landed });
+    // jsdom lays nothing out — every rect is zeros, so the FLIP measures no
+    // movement and skips every card. Stand in a rect derived from where the
+    // card sits among its siblings, which is exactly what the re-sort
+    // changes.
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const i = this.parentElement ? [...this.parentElement.children].indexOf(this) : 0;
+      return { left: i * 20, top: 0, right: i * 20 + 20, bottom: 60, width: 20, height: 60, x: i * 20, y: 0 } as DOMRect;
+    });
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+    );
+    try {
+      const { container } = render(
+        <HandFan cards={southHand} trump={1} drawIn legal={southHand} onSelect={() => {}} />,
+      );
+      expect(container.querySelectorAll('.cardbtn:disabled')).toHaveLength(13);
+      land();
+      await waitFor(() => expect(container.querySelectorAll('.cardbtn:disabled')).toHaveLength(0));
+      // ...and the cards never LOOKED unplayable — dimming follows `legal`,
+      // not the flight, so nothing changes on screen as this clears
+      expect(container.querySelectorAll('.pcard.dimmed')).toHaveLength(0);
+    } finally {
+      rect.mockRestore();
+      if (before) Object.defineProperty(Element.prototype, 'animate', before);
+      else delete (Element.prototype as Partial<Element>).animate;
+      vi.unstubAllGlobals();
+    }
   });
 
   it('spaces cards optically: an inline token-scaled margin on every card but the first', () => {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardView, Me, TrickCard } from '../api';
 import {
   AUTO_PLAY_DELAY_MS,
+  AUCTION_END_MS,
   BID_GAP_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
   CLAIM_LEAD_SETTLE_MS,
@@ -13,8 +14,10 @@ import {
   ROBOT_GAP_MS,
   motionOK,
 } from '../components/game/playAnim';
+import { drawDuration, drawTiming } from '../components/game/trumpDraw';
 import {
   bid2H,
+  boardAuctionEndsHearts,
   boardBidding,
   boardBiddingBurst,
   boardBiddingOpening,
@@ -1053,6 +1056,131 @@ describe('Board — staged bidding', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('Board — trump placement', () => {
+  // Same motion stub as "staged bidding" above — without WAAPI, motionOK() is
+  // false, applyBoard never stages anything and the Draw is simply never
+  // reached. TrickArea's flight machinery does mount here (the auction ends
+  // into a real opening lead), so the stub carries the onfinish/oncancel
+  // surface that path touches.
+  beforeEach(() => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+    );
+    (Element.prototype as unknown as { animate: unknown }).animate = () => ({
+      onfinish: null,
+      oncancel: null,
+      cancel() {},
+      finished: Promise.resolve(),
+    });
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).animate;
+    vi.unstubAllGlobals();
+  });
+
+  const meLeft: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } };
+  /**
+   * A fan's cards as suit indices, left to right — the one thing this whole
+   * feature changes. `which` picks between the two fans a declared board can
+   * show: dummy's is rendered above the trick area, the player's own below,
+   * so 'mine' is the last one on the page and 'dummy' the first.
+   */
+  const fanSuits = (which: 'mine' | 'dummy' = 'mine') => {
+    const fans = [...document.querySelectorAll('.board-fan')];
+    const fan = which === 'mine' ? fans[fans.length - 1] : fans[0];
+    return [...fan.querySelectorAll('.cardbtn')].map((el) => Math.floor(Number((el as HTMLElement).dataset.card) / 13));
+  };
+
+  it('draws the trumps to the left as the auction settles, and holds the lead until it has', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardAuctionEndsHearts,
+    });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard(meLeft);
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      // the hand the Draw starts from: ♠♠♠ ♥♥♥♥♥ ♦♦ ♣♣♣, as it has always been
+      expect(fanSuits()).toEqual([0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3]);
+
+      fireEvent.click(screen.getByRole('button', { name: '2♥' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+      // three robot passes, then the auction-ending beat, then the board turns
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS * 3 + AUCTION_END_MS);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // hearts lead the fan now — and the opening lead has NOT landed on top
+      // of a hand still sorting itself
+      expect(fanSuits()).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 2, 2, 3, 3, 3]);
+      const draw = drawDuration(boardAuctionEndsHearts.hand, 1);
+      expect(draw).toBe(drawTiming(5).total);
+      await vi.advanceTimersByTimeAsync(350);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelectorAll('.trick .pcard')).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(draw);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelectorAll('.trick .pcard').length).toBeGreaterThan(0);
+      // ...and dummy, tabled with the lead, arrives already trump-first — no
+      // second Draw for a hand that was never on screen in the other order
+      expect(fanSuits('dummy').slice(0, 2)).toEqual([1, 1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the fan and the pacing exactly as they were for the default preference', async () => {
+    apiMock.board.mockResolvedValue(boardBidding);
+    apiMock.call.mockResolvedValue({
+      evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
+      board: boardAuctionEndsHearts,
+    });
+
+    vi.useFakeTimers();
+    try {
+      renderBoard(); // meFixture — 'suit'
+      await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: '2♥' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(BID_GAP_MS * 3 + AUCTION_END_MS);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(fanSuits()).toEqual([0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3]);
+      // the lead lands on the 350ms it always did — no beat bought for a
+      // motion this player never asked for
+      await vi.advanceTimersByTimeAsync(350);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelectorAll('.trick .pcard').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-sorts without a Draw on a board resumed mid-play, where nothing was there to move', async () => {
+    // boardPlaying is 4♠ by S — a spade contract, the no-op case — so this
+    // uses the heart board's own play state instead, arrived at by a plain
+    // GET rather than by watching the auction end.
+    apiMock.board.mockResolvedValue(boardAuctionEndsHearts);
+    renderBoard(meLeft);
+    await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+    expect(fanSuits()).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 2, 2, 3, 3, 3]);
+  });
+
+  it('lays a spade contract out exactly as it always was — the no-op the Draw must not animate', async () => {
+    apiMock.board.mockResolvedValue(boardPlaying); // 4♠ by S
+    renderBoard(meLeft);
+    await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
+    expect(drawDuration(boardPlaying.hand, 0)).toBe(0);
+    expect(fanSuits()).toEqual([0, 0, 0, 1, 1, 1, 2, 3, 3]); // ♠AQ10 ♥KJ9 ♦8 ♣Q9, four cards already played
   });
 });
 

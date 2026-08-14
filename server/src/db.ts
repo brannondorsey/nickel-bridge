@@ -248,6 +248,29 @@ if (!userColumns.has('double_tap_bid')) {
 if (!userColumns.has('trick_clear_mode')) {
   db.exec(`ALTER TABLE users ADD COLUMN trick_clear_mode TEXT NOT NULL DEFAULT 'auto'`);
 }
+// Migration: `trump_placement` — where the trump suit sits in a hand once a
+// trump contract is settled: 'suit' (the shipped behaviour — every hand reads
+// ♠♥♦♣, always) or 'left' (the trump suit's block moves to the front, the
+// other three keeping their relative order behind it). Asked for repeatedly
+// by players, and it is a real playing aid rather than decoration: the suit
+// you are counting is the one your eye should land on first.
+//
+// TEXT rather than an INTEGER boolean for the same reason as
+// trick_clear_mode above: it names a PLACEMENT, and the two obvious future
+// values ('right', or trump-left-with-alternating-colours) extend this
+// column instead of needing a second one. Defaults to 'suit', preserving
+// prior behaviour for every existing account.
+//
+// Account state, not localStorage: how someone wants to READ a hand belongs
+// to the person, not the device — and unlike appearance/suit colours there
+// is no pre-paint problem forcing it local (a board is fetched over the
+// network before a fan is ever drawn). Purely a CLIENT ordering choice: the
+// server never reads this column, and nothing about the deal, the legal
+// cards, scoring or robot play depends on it — two players on the same board
+// with opposite settings still hold identical hands.
+if (!userColumns.has('trump_placement')) {
+  db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'suit'`);
+}
 
 // Migration: `beta_features` — opt in to features still being tried out
 // before a general release (currently: Analyze, the post-board review
@@ -484,6 +507,8 @@ export interface UserRow {
   double_tap_bid: number;
   /** how a completed trick leaves the table: 'auto' (default, times out on its own) or 'tap' (holds until the player taps the trick area) */
   trick_clear_mode: 'auto' | 'tap';
+  /** where the trump suit sits in a hand once a trump contract is settled: 'suit' (default, always ♠♥♦♣) or 'left' (trump block first) */
+  trump_placement: 'suit' | 'left';
   elo: number;
   created_at: number;
 }

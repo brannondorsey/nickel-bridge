@@ -38,6 +38,7 @@ export const meFixture: Me = {
     betaFeatures: true,
     doubleTapBid: false,
     trickClearMode: 'auto',
+    trumpPlacement: 'suit',
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
@@ -212,6 +213,42 @@ export const boardBiddingBurst: BoardView = {
   ],
   legalCalls,
   legalCallMeanings: {},
+};
+
+/**
+ * The auction ENDING, on 2♥ by South — the one transition the trump Draw
+ * plays on (see trumpDraw.ts). An extension of boardBidding's auction, so
+ * stageBidSteps reveals the closing calls and then hands off into play with
+ * West's opening lead already made and dummy tabled.
+ *
+ * Hearts on purpose: South holds five of them behind three spades, so the
+ * re-sort genuinely moves cards. A spade contract would be the no-op case,
+ * which is worth a test of its own but cannot stand in for this one.
+ */
+export const boardAuctionEndsHearts: BoardView = {
+  ...base,
+  state: 'playing',
+  myTurn: true,
+  auction: [
+    ...biddingAuction, // 6 entries, South to call
+    entry(2, bid2H, '2♥', meaning2H), // the human's call
+    entry(3, 0, 'Pass'), // W
+    entry(0, 0, 'Pass'), // N
+    entry(1, 0, 'Pass'), // E — three passes end it
+  ],
+  contractLabel: '2♥ by S',
+  contract: { level: 2, strain: 2, declarer: 2, doubled: false, redoubled: false },
+  declarer: 2,
+  dummy: 0,
+  currentTrick: [{ seat: 3, card: card(D, 'K') }],
+  completedTricks: 0,
+  declarerTricks: 0,
+  defenderTricks: 0,
+  lastTrick: null,
+  dummyHand: northHand,
+  dummyHcp: 13,
+  handToPlay: 0, // South declares, so the human plays dummy's card first
+  legalCards: [card(D, 'A'), card(D, 'Q'), card(D, '7'), card(D, '4')],
 };
 
 // ---- play: 4♠ by S, trick 5, spades led ----

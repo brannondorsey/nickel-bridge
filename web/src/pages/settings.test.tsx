@@ -94,6 +94,27 @@ describe('Settings', () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
+  // Named ends rather than OFF/ON, like "Settled tricks" — and defaulting to
+  // SUIT ORDER, the layout every hand has always had.
+  it('writes "Trump placement" to the account, defaulting to suit order', async () => {
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, trumpPlacement: 'left' });
+    const { refresh } = renderSettings();
+    // LEFT SIDE reads first, but SUIT ORDER is still the default and the lit
+    // one — segment order is presentation, `value` decides precedence
+    expect(
+      [...screen.getByRole('group', { name: 'Trump placement' }).querySelectorAll('button')].map((b) => b.textContent),
+    ).toEqual(['LEFT SIDE', 'SUIT ORDER']);
+    expect(segment('Trump placement', 'SUIT ORDER')).toHaveClass('active');
+    await userEvent.click(segment('Trump placement', 'LEFT SIDE')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ trumpPlacement: 'left' });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('reflects an account that already reads its hands trump-left', () => {
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } });
+    expect(segment('Trump placement', 'LEFT SIDE')).toHaveClass('active');
+  });
+
   // The switch moves under the finger, so a rejected write has to move it
   // back — otherwise the screen quietly claims a state the server never
   // accepted.

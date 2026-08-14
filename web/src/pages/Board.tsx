@@ -11,8 +11,8 @@ import {
   api,
   cardRank,
   cardSuit,
-  displaySort,
   suitClass,
+  trumpForDisplay,
 } from '../api';
 import { Button } from '../components/ds/Button';
 import { Chip } from '../components/ds/Chip';
@@ -54,6 +54,7 @@ import {
   totalDuration,
   trimStagedPrefix,
 } from '../components/game/playAnim';
+import { drawDuration } from '../components/game/trumpDraw';
 import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
@@ -119,8 +120,25 @@ export default function Board() {
   // taps the trick area. See scheduleSteps below for where this is read, and
   // the trick_clear_mode migration in db.ts for why claims are excluded.
   const trickClearMode = me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto';
+  // "Trump placement" (settings gate) — 'left' lays every hand on the play
+  // screen out with the trump suit first, and animates the re-sort once, as
+  // the auction settles (trumpDraw.ts). Defaults to 'suit', the shipped
+  // ♠♥♦♣; see the trump_placement migration in db.ts. Purely how the cards
+  // are drawn — nothing here reaches the server or changes what is legal.
+  const trumpPlacement = me?.user?.trumpPlacement === 'left' ? 'left' : 'suit';
 
   const [board, setBoard] = useState<BoardView | null>(null);
+  /**
+   * Is the hand about to re-sort itself under the player's eyes?
+   *
+   * Set only where the auction was WATCHED settling — applyBoard's
+   * bidding → playing transition — so the Draw plays for the person who saw
+   * the ♠♥♦♣ hand it moves away from, and never for a reload, a second
+   * device or a board resumed mid-play, all of which arrive already sorted
+   * with nothing to have moved. Consumed by the fan at mount (see HandFan's
+   * `drawIn`), which is why nothing ever has to clear it.
+   */
+  const [drawTrumps, setDrawTrumps] = useState(false);
   // The auction length stageOpeningBids' reveal is building toward — see
   // AuctionGrid's reserveThrough. Set alongside the reveal it paces (load,
   // below) so the tray is already at its settled row count on the empty
@@ -358,6 +376,19 @@ export default function Board() {
       // motion-gated behavior.
       const ordinaryPlay = prev !== null && !next.claimed && prev.state !== 'bidding';
       const holdsOnTapWithoutMotion = trickClearMode === 'tap' && ordinaryPlay;
+      // The auction settling under the player's eyes is the one transition
+      // the trump Draw plays on. A claimed response is excluded on purpose:
+      // there the announcement owns the beat, and a hand nobody has any
+      // decisions left in has nothing to gain from being re-sorted with
+      // ceremony. drawDuration answers 0 for a no-trump contract, a spade
+      // contract, and any hand already in the right order — so `drawTrumps`
+      // stays false on exactly the boards where a pause would animate
+      // nothing, and the pacing below stays untouched.
+      const resortMs =
+        prev?.state === 'bidding' && next.state === 'playing' && !next.claimed && motionOK()
+          ? drawDuration(next.hand, trumpForDisplay(next.contract, trumpPlacement))
+          : 0;
+      if (resortMs > 0) setDrawTrumps(true);
       const staged =
         prev && (motionOK() || holdsOnTapWithoutMotion)
           ? next.claimed
@@ -370,8 +401,8 @@ export default function Board() {
               // deliberately: there is no announcement to pace against here.
               stageClaimSteps(prev, next)
             : prev.state === 'bidding'
-              ? stageBidSteps(prev, next)
-              : stagePlaySteps(prev, next)
+              ? stageBidSteps(prev, next, resortMs)
+              : stagePlaySteps(prev, next, resortMs)
           : [];
       // A claim is left alone: runClaim owns that sequence, its own beats
       // already separate the tap from the fast-forward, and whichever step
@@ -399,7 +430,7 @@ export default function Board() {
       // (scheduleSteps' newPlay) has to diff against that, not against prev.
       scheduleSteps(shown?.view ?? prev!, steps);
     },
-    [cancelStaging, scheduleSteps, trickClearMode],
+    [cancelStaging, scheduleSteps, trickClearMode, trumpPlacement],
   );
 
   // Bracket a claim in three beats. First the LEAD: the newly-completed
@@ -542,6 +573,11 @@ export default function Board() {
     setClaimInfo(null);
     setClaimAnnounceOpen(false);
     setAuctionReserve(0);
+    // Board.tsx stays MOUNTED across a board change, so this has to be reset
+    // by hand: left set from the previous board, a board RESUMED mid-play at
+    // a trump contract would draw its trumps as though its auction had just
+    // ended in front of the player.
+    setDrawTrumps(false);
     claimSkipRef.current = null;
     sawLiveRef.current = false;
     // Everything past the await belongs to the board this load was started
@@ -838,6 +874,8 @@ export default function Board() {
           onSkipClaim={skipClaimAnnouncement}
           awaitingTrickClear={awaitingTrickClear}
           onClearTrick={clearHeldTrick}
+          trumpPlacement={trumpPlacement}
+          drawTrumps={drawTrumps}
         />
       ) : (
         <BiddingPhase
@@ -999,8 +1037,10 @@ export function BiddingPhase({
         />
         <div className="bid-decision">
           {feedback}
+          {/* No trump prop: the auction has not settled, so there is no
+              trump suit yet — this is the ♠♥♦♣ hand the Draw starts from. */}
           <div className="board-fan">
-            <HandFan cards={displaySort(board.hand)} />
+            <HandFan cards={board.hand} />
           </div>
           <SeatLine label="SOUTH · YOU" hcp={board.hcp} />
         </div>
@@ -1046,6 +1086,8 @@ export function PlayPhase({
   hint = null,
   awaitingTrickClear = false,
   onClearTrick = () => {},
+  trumpPlacement = 'suit',
+  drawTrumps = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -1067,6 +1109,20 @@ export function PlayPhase({
   awaitingTrickClear?: boolean;
   /** tap anywhere on the trick area to sweep the held trick — a no-op unless awaitingTrickClear */
   onClearTrick?: () => void;
+  /**
+   * "Trump placement" (users.trump_placement): 'left' lays every hand on this
+   * screen out trump-first. Defaults to 'suit' — the shipped ♠♥♦♣ — so the
+   * tour and Analyze, which mount this component without passing it, are
+   * unaffected exactly as they are by doubleTapBid.
+   */
+  trumpPlacement?: 'suit' | 'left';
+  /**
+   * Play the Draw (trumpDraw.ts) into that order, once, as this mounts. Only
+   * true when the player WATCHED the auction settle — a reload mid-play, a
+   * replay or a second device gets the finished order with no motion, since
+   * there was no ♠♥♦♣ hand on screen for it to have moved from.
+   */
+  drawTrumps?: boolean;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -1075,6 +1131,9 @@ export function PlayPhase({
 
   const dummyLabel = board.dummy !== undefined ? `${SEAT_NAMES[board.dummy]} · DUMMY` : '';
   const bottomLabel = `${SEAT_NAMES[playingSeat]} · YOU`;
+  // One derivation for every hand on the screen — the fan, a partner's dummy
+  // fan and an opponent's dummy rail have to agree about which suit leads.
+  const trump = trumpForDisplay(board.contract, trumpPlacement);
 
 
   // Dummy on East or West is always the opposing side's exposed hand — never
@@ -1104,7 +1163,8 @@ export function PlayPhase({
           <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
           <div className="board-fan">
             <HandFan
-              cards={displaySort(board.dummyHand)}
+              cards={board.dummyHand}
+              trump={trump}
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
               selected={selectedCard ?? soleLegal}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
@@ -1116,11 +1176,11 @@ export function PlayPhase({
       {board.dummyHand && dummyOnSide ? (
         <div className="play-row">
           {board.dummy === 3 ? (
-            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" />
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" trump={trump} />
           ) : null}
           <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
           {board.dummy === 1 ? (
-            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" />
+            <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" trump={trump} />
           ) : null}
         </div>
       ) : (
@@ -1128,7 +1188,9 @@ export function PlayPhase({
       )}
       <div className="board-fan">
         <HandFan
-          cards={displaySort(board.hand)}
+          cards={board.hand}
+          trump={trump}
+          drawIn={drawTrumps}
           legal={canPlayFrom(playingSeat) ? board.legalCards : []}
           selected={selectedCard ?? soleLegal}
           onSelect={canPlayFrom(playingSeat) ? onSelectCard : undefined}

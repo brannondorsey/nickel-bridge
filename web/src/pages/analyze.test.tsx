@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, type AnalysisView } from '../api';
+import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, type AnalysisView, type Me } from '../api';
 import { firstPlyOfTrick } from '../replay/replayViews';
 import { allHands, donePlayed, meFixture } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
@@ -97,12 +97,12 @@ const parPayload = {
   ],
 };
 
-const renderAnalyze = (route = '/t/12/b/2/analyze') =>
+const renderAnalyze = (route = '/t/12/b/2/analyze', me: Me = meFixture) =>
   renderWithMe(
     <Routes>
       <Route path="/t/:tid/b/:no/analyze" element={<Analyze />} />
     </Routes>,
-    { me: meFixture, route },
+    { me, route },
   );
 
 afterEach(() => {
@@ -399,6 +399,73 @@ describe('the play lens', () => {
     expect(parStub.textContent).toContain('Passed out');
     expect(parStub.textContent).toContain('+0');
     expect(parStub.textContent).not.toMatch(/^pass$/m);
+  });
+
+  // "Trump placement" reaches the review as well as the live board: a reader
+  // should see the board laid out the way they played it. Statically — this
+  // lens is scrubbed, so there is no ♠♥♦♣ frame for a Draw to move from.
+  // donePlayed is 4♠, the no-op case, so the contract is re-strained to
+  // hearts here; nothing in this test reads a trick winner, which is the only
+  // other thing strain decides.
+  describe('trump placement', () => {
+    const heartsBoard = { ...donePlayed, contract: { ...donePlayed.contract!, strain: 2 } };
+    const meLeft: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } };
+    /** the suits of a fan, left to right */
+    const fanSuits = (fan: Element) =>
+      [...fan.querySelectorAll<HTMLElement>('.cardbtn')].map((el) => Math.floor(Number(el.dataset.card) / 13));
+    /** the suit glyph each rail line leads with, top to bottom */
+    const railSuits = (rail: Element) =>
+      [...rail.querySelectorAll('.analyze-suitgroup')].map((g) => g.firstElementChild?.textContent);
+
+    const openPlayLens = async (me: Me) => {
+      const animateStub = vi.fn(() => ({ onfinish: null, cancel: vi.fn(), finish: vi.fn() }));
+      (Element.prototype as unknown as { animate: unknown }).animate = animateStub;
+      apiMock.board.mockResolvedValue(heartsBoard);
+      apiMock.analysis.mockResolvedValue(makeAnalysis({ contract: heartsBoard.contract }));
+      renderAnalyze('/t/12/b/2/analyze?lens=play', me);
+      await screen.findByText(/THE AUDIT — TRICK/);
+    };
+
+    afterEach(() => {
+      delete (Element.prototype as unknown as { animate?: unknown }).animate;
+    });
+
+    it('lays the fans and the suit-line rails out trump-first for a reader who asked for it', async () => {
+      await openPlayLens(meLeft);
+      // every fan on the lens — the player's own and the hand across — leads
+      // with hearts, and every card is still there
+      const fans = [...document.querySelectorAll('.board-fan')];
+      expect(fans.length).toBeGreaterThan(0);
+      for (const fan of fans) {
+        const suits = fanSuits(fan);
+        expect(suits.length).toBeGreaterThan(0);
+        // trumps in ONE block at the front, the others ascending behind it
+        const trumps = suits.filter((x) => x === 1).length;
+        expect(trumps).toBeGreaterThan(0);
+        expect(suits.slice(0, trumps)).toEqual(Array(trumps).fill(1));
+        const rest = suits.slice(trumps);
+        expect(rest).toEqual([...rest].sort((a, b) => a - b));
+        expect(rest).not.toContain(1);
+      }
+      // and the W/E rails agree with them — a hand that reads trump-left in
+      // the fan and ♠♥♦♣ in the rail beside it is worse than either alone
+      for (const rail of document.querySelectorAll('.analyze-rail.side')) {
+        const suits = railSuits(rail);
+        if (suits.length > 1) expect(suits[0]).toBe('♥');
+      }
+    });
+
+    it('leaves them in ♠♥♦♣ for the default preference', async () => {
+      await openPlayLens(meFixture);
+      for (const fan of document.querySelectorAll('.board-fan')) {
+        const suits = fanSuits(fan);
+        expect(suits).toEqual([...suits].sort((a, b) => a - b));
+      }
+      for (const rail of document.querySelectorAll('.analyze-rail.side')) {
+        const suits = railSuits(rail);
+        if (suits.length > 1) expect(suits[0]).not.toBe('♥');
+      }
+    });
   });
 
   it('a board claimed before the first card opens on the settled reading, not an invitation to hunt moments', async () => {

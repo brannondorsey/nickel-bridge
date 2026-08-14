@@ -135,7 +135,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'pass-ends-auction',
     label: 'Your pass seals the contract',
     description:
-      'The auction stands at 2♥ by your partner. Pass, and the rest follows in order: your bid is graded, the tray fills out, then the board flips and the opening lead is staged into play.',
+      'The auction stands at 2♥ by your partner. Pass, and the rest follows in order: your bid is graded, the tray fills out, then the board flips and the opening lead is staged into play. This is also the click-test for “Trump placement” — turn it to LEFT SIDE on the settings gate first and the hearts are drawn out of the fan one at a time, into the gap the other suits open, before the lead lands.',
     category: 'bidding',
     seed: 'hunt-1',
     boardNo: 2,
