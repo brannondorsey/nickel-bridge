@@ -189,12 +189,7 @@ export default function Tournament() {
               </span>
             </Link>
           ))}
-          {/* "analyze" is only true for a beta account — Analyze itself is
-              still gated behind ANALYZE PLAY on the board's own receipt
-              (Board.tsx), see the beta_features migration in db.ts */}
-          <div className="tourney-boards-hint">
-            {me?.user?.betaFeatures === true ? 'Tap a board to analyze the play.' : 'Tap a board to look back over the play.'}
-          </div>
+          <div className="tourney-boards-hint">Tap a board to analyze the play.</div>
         </PerforatedPanel>
         {field}
         <div className="tourney-actions">

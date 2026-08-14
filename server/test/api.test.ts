@@ -275,9 +275,9 @@ describe('handle (first-login username)', () => {
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
-    // betaFeatures patches the same way, and opting out is what the
-    // /analysis route's gate (see the endpoint suite in analyze.test.ts) is
-    // measured against
+    // betaFeatures patches the same way as the other switches — nothing in
+    // the app currently reads it (see the beta_features migration in db.ts),
+    // but the endpoint exercises the same prefs-patching mechanics either way
     expect(await pete.post('/api/me/prefs', { betaFeatures: false })).toEqual({
       ladderListed: false,
       autoClaim: false,

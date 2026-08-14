@@ -109,22 +109,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('the beta gate', () => {
-  it('refuses an account without beta features rather than fetching the analysis', async () => {
-    apiMock.board.mockResolvedValue(donePlayed);
-    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
-    renderWithMe(
-      <Routes>
-        <Route path="/t/:tid/b/:no/analyze" element={<Analyze />} />
-      </Routes>,
-      { me: { ...meFixture, user: { ...meFixture.user!, betaFeatures: false } }, route: '/t/12/b/2/analyze' },
-    );
-    expect(await screen.findByText(/beta feature/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /back to the board/i })).toHaveAttribute('href', '/t/12/b/2');
-    expect(apiMock.analysis).not.toHaveBeenCalled();
-  });
-});
-
 describe('the moments ledger (THE CROSSING)', () => {
   it('requests par for the crossing lens and renders the charged row, with the overflow counted', async () => {
     apiMock.board.mockResolvedValue(donePlayed);

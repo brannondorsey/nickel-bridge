@@ -37,9 +37,9 @@ export interface Me {
     trumpPlacement: 'suit' | 'left';
     /**
      * Opt in to features still being tried out before a general release —
-     * currently gates Analyze. Off by default in production, on by default
-     * on preview/demo deployments (settings: "Beta features"); see the
-     * beta_features migration in server/src/db.ts.
+     * nothing is gated behind it today. Off by default in production, on by
+     * default on preview/demo deployments (settings: "Beta features"); see
+     * the beta_features migration in server/src/db.ts.
      */
     betaFeatures: boolean;
     /**

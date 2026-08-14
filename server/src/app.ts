@@ -201,16 +201,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   // hands boardView has therefore already revealed to this player; boards
   // are per-user rows, so there is no cross-player surface, and /api/* is in
   // the edge bypass set.
-  //
-  // Still in beta (see the beta_features migration in db.ts): gated here as
-  // well as by the web client hiding its doors, since a client-side gate
-  // alone is only a UI courtesy — this route is the one place that can
-  // actually keep the feature (and the DDS work it costs) off an account
-  // that hasn't opted in.
   app.get('/api/tournaments/:id/boards/:no/analysis', async (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
     const { id, no } = req.params as { id: string; no: string };
     const wantPar = (req.query as { par?: string }).par === '1';
     const t = getTournament(Number(id));
@@ -231,12 +224,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // "Play From Here" — branch a finished board's real play at `ply` into a
   // new, live, ordinary board the player plays out themselves. See
-  // rehearsal.ts's doc comment for the whole design. Gated on beta_features,
-  // matching Analyze's own gate — this is only reachable from there today.
+  // rehearsal.ts's doc comment for the whole design — this is only
+  // reachable from Analyze today.
   app.post('/api/tournaments/:id/boards/:no/rehearse', async (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
     const { id, no } = req.params as { id: string; no: string };
     const { ply } = (req.body ?? {}) as { ply?: number };
     const t = getTournament(Number(id));
@@ -252,7 +244,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/tournaments/:id/boards/:no/rehearsals', async (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
     const { id, no } = req.params as { id: string; no: string };
     const t = getTournament(Number(id));
     const boardNo = boardNoParam(no);
@@ -265,7 +256,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.delete('/api/tournaments/:id/boards/:no/rehearsals/:rehearsalId', async (req, reply) => {
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    if (!user.beta_features) return reply.code(403).send({ error: 'beta feature not enabled' });
     const { id, no, rehearsalId } = req.params as { id: string; no: string; rehearsalId: string };
     const boardNo = boardNoParam(no);
     if (boardNo === null) return reply.code(404).send({ error: 'not found' });

@@ -109,13 +109,6 @@ export default function Analyze() {
   const navigate = useNavigate();
   const tournamentId = Number(tid);
   const boardNo = Number(no);
-  // Analyze is still in beta (see the beta_features migration in db.ts).
-  // The server enforces this independently (GET .../analysis 403s an
-  // account without it) — this is a nicer landing than that error for
-  // someone who reaches the route directly (an old bookmark, a shared link)
-  // without the door Board.tsx shows them.
-  const { me } = useMe();
-  const betaFeatures = me?.user?.betaFeatures === true;
   const [params, setParams] = useSearchParams();
   const lens = lensFromParam(params.get('lens'));
   const wantPar = lens === 'overview';
@@ -141,7 +134,6 @@ export default function Analyze() {
   }, [tournamentId, boardNo]);
 
   useEffect(() => {
-    if (!betaFeatures) return;
     let alive = true;
     api
       .rehearsals(tournamentId, boardNo)
@@ -153,14 +145,13 @@ export default function Analyze() {
     return () => {
       alive = false;
     };
-  }, [tournamentId, boardNo, betaFeatures]);
+  }, [tournamentId, boardNo]);
 
   // The analysis, computed server-side on first open and cached. Refetched
   // with par=1 when a lens that shows it is opened and the cached payload
   // doesn't carry it yet — the backfill updates the same cache row.
   const parLoadedRef = useRef(false);
   useEffect(() => {
-    if (!betaFeatures) return;
     if (analysis && (!wantPar || analysis.par || parLoadedRef.current)) return;
     let alive = true;
     if (wantPar) parLoadedRef.current = true;
@@ -171,7 +162,7 @@ export default function Analyze() {
     return () => {
       alive = false;
     };
-  }, [tournamentId, boardNo, wantPar, analysis, betaFeatures]);
+  }, [tournamentId, boardNo, wantPar, analysis]);
 
   const setLens = (l: Lens) => {
     const next = new URLSearchParams(params);
@@ -215,18 +206,6 @@ export default function Analyze() {
     });
   };
 
-  if (!betaFeatures) {
-    return (
-      <div className="board-page analyze-page">
-        <div className="notice-error">Analyze is a beta feature, not yet turned on for this account.</div>
-        <div className="board-actions">
-          <Button variant="secondary" to={`/t/${tournamentId}/b/${boardNo}`}>
-            Back to the board
-          </Button>
-        </div>
-      </div>
-    );
-  }
   if (error) {
     return (
       <div className="board-page analyze-page">
