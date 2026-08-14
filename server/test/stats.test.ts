@@ -116,8 +116,16 @@ describe('player stats', () => {
     expect(stats.totals.boardsCompleted).toBe(4);
     expect(stats.totals.tournamentsPlayed).toBe(1);
     expect(stats.totals.tournamentsCompleted).toBe(1);
-    // all 4 boards land in dailyBoards on the same UTC day → a 1-day streak
-    expect(stats.totals.streakDays).toBe(1);
+    // The four boards are played right here, so they land on the UTC day this
+    // test runs on — and, once a day, on TWO of them: a suite that starts at
+    // 23:59 finishes the tournament after midnight, which is a genuine 2-day
+    // streak rather than a bug. (CI hit exactly that on 2026-08-14T00:01Z,
+    // where a run starting 23:59:57 failed here with "expected 2 to be 1".)
+    // So the assertion is tied to the days the boards actually fell on rather
+    // than to the literal 1: still exact, still fails if the streak stops
+    // counting or stops linking adjacent days, and no longer keeps a clock.
+    expect(stats.dailyBoards.length).toBeGreaterThanOrEqual(1);
+    expect(stats.totals.streakDays).toBe(stats.dailyBoards.length);
 
     // elo matches the stored rating — alice's 1 rated tournament is below the
     // leaderboard's provisional quota, so she isn't in its list yet (covered
