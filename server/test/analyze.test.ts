@@ -96,6 +96,31 @@ async function driveBoard(
   return b;
 }
 
+/**
+ * Drives an optimal rival then a deliberate blunderer on the same board: the
+ * rival plays the DD-optimal line the blunderer would have played, so the
+ * counterfactual ties them (50%) while the actual loses outright (0%) — a
+ * clean 50-point cost, comfortably over MOMENT_FLOOR. Shared by every test
+ * below that needs one guaranteed, deterministic moment to work with.
+ */
+async function driveOneBlunder(t: any, uid: number, rival: number, boardNo: number): Promise<{ b: any; blunderPly: number }> {
+  await driveBoard(t, rival, boardNo, optimalCard);
+  let blunderPly = -1;
+  const b = await driveBoard(t, uid, boardNo, async (bb, view) => {
+    const legal = view.legalCards as number[];
+    const solve = await solveFutureTricks(bb.deal, bb.contract, bb.plays);
+    if (blunderPly < 0) {
+      const worst = [...legal].sort((a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99))[0];
+      if ((solve.cardScores.get(worst) ?? 0) < solve.bestScore) {
+        blunderPly = bb.plays.length;
+        return worst;
+      }
+    }
+    return pickFromSolve(legal, solve);
+  });
+  return { b, blunderPly };
+}
+
 describe('gradeFromDeficit', () => {
   it('bands a positive deficit — deficit <= 0 is the excused case, filtered before this ever runs', () => {
     expect(analyze.gradeFromDeficit(2)).toBe(0);
@@ -296,6 +321,89 @@ describe('cache behaviour', () => {
     expect(withPar.plies.map((p) => ({ ply: p.ply, card: p.card, ddLoss: p.ddLoss, sampled: p.sampled }))).toEqual(
       solo.plies.map((p) => ({ ply: p.ply, card: p.card, ddLoss: p.ddLoss, sampled: p.sampled })),
     );
+  }, 240_000);
+
+  it('a ply that never cleared the floor at first open gets its stage-3 verdict once the field drifts it over — and the backfill is persisted', async () => {
+    const t = makeTournament('analyze-f');
+    const { b, blunderPly } = await driveOneBlunder(t, userId, rivalId, 1);
+    const original = await analyze.getBoardAnalysis(t, b, false);
+    expect(original.plies).toHaveLength(1);
+    expect(original.plies[0].mpCost).toBe(50); // comfortably over MOMENT_FLOOR
+    expect(original.plies[0].sampled).not.toBeNull();
+    expect(original.moments).toHaveLength(1);
+
+    // Simulate first-open having happened against a floor this ply didn't
+    // clear (a thinner field, or a higher MOMENT_FLOOR at the time) by
+    // hand-resetting the cached verdict to unjudged — the same
+    // hand-editing-cached-state technique the claim-boundary legacy test
+    // above uses. mpCost is NOT touched: refreshMatchpointLayer recomputes
+    // it fresh from the live field on every serve regardless, so leaving it
+    // stale here would be overwritten immediately and prove nothing.
+    const row = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as { core: string };
+    const core = JSON.parse(row.core);
+    core.plies[0].sampled = null;
+    db.prepare(`UPDATE board_analyses SET core = ? WHERE board_id = ?`).run(JSON.stringify(core), b.row.id);
+    const rowAfterReset = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+    };
+    expect(JSON.parse(rowAfterReset.core).plies[0].sampled).toBeNull(); // confirms the mutation actually landed
+
+    // The very next serve IS the "field drifted over the floor" case:
+    // refreshMatchpointLayer recomputes mpCost fresh from the (unchanged,
+    // real) field first — still 50, still over MOMENT_FLOOR — and
+    // backfillDriftedPlies then gives the ply the stage-3 solve it never
+    // got, byte-identical to the original verdict (same seed, same deal,
+    // same played card) since sampleFindability is deterministic regardless
+    // of when it runs. There is no separately-observable "unjudged" response
+    // in between: the backfill runs inside this very call.
+    const backfilled = await analyze.getBoardAnalysis(t, b, false);
+    expect(backfilled.plies[0].sampled).toEqual(original.plies[0].sampled);
+    expect(backfilled.moments).toHaveLength(1);
+    expect(backfilled.moments[0]).toMatchObject({ kind: 'play', ply: blunderPly, mpCost: 50 });
+
+    // and it was PERSISTED, not just recomputed for this one response — a
+    // third serve with no further mutation must not need to re-solve
+    const rowAfterBackfill = db.prepare(`SELECT core FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+    };
+    const persisted = JSON.parse(rowAfterBackfill.core);
+    expect(persisted.plies[0].sampled).toEqual(original.plies[0].sampled);
+    // and the write that persisted it did NOT bake in the live field's
+    // mpCost — see the next test for why that matters generally
+    expect(persisted.plies[0].cfPct).toBeNull();
+    expect(persisted.plies[0].mpCost).toBeNull();
+  }, 240_000);
+
+  it('the persisted cache never bakes in a live-field snapshot — cfPct/mpCost are null on disk at every write site, always recomputed on serve', async () => {
+    const t = makeTournament('analyze-f');
+    const { b } = await driveOneBlunder(t, userId, rivalId, 1);
+
+    // write site 1: computeCore's own first-open write
+    const view = await analyze.getBoardAnalysis(t, b, true); // wantPar=true also exercises write site 2 below
+    expect(view.plies[0].mpCost).toBe(50); // the SERVED response still carries the real, live value
+    const row1 = db.prepare(`SELECT core, par FROM board_analyses WHERE board_id = ?`).get(b.row.id) as {
+      core: string;
+      par: string;
+    };
+    const core1 = JSON.parse(row1.core);
+    expect(core1.plies[0].cfPct).toBeNull();
+    expect(core1.plies[0].mpCost).toBeNull();
+    const par1 = JSON.parse(row1.par);
+    for (const c of par1.calls) if (c.cf) { expect(c.cf.cfPct).toBeNull(); expect(c.cf.mpGain).toBeNull(); }
+
+    // write site 2 in isolation: par backfilled onto an EXISTING cached core
+    // (a board first opened without ?par=1, then reopened with it)
+    const t2 = makeTournament('analyze-f');
+    const { b: b2 } = await driveOneBlunder(t2, userId, rivalId, 1);
+    await analyze.getBoardAnalysis(t2, b2, false); // caches core, no par yet
+    const rowNoParYet = db.prepare(`SELECT par FROM board_analyses WHERE board_id = ?`).get(b2.row.id) as {
+      par: string | null;
+    };
+    expect(rowNoParYet.par).toBeNull();
+    await analyze.getBoardAnalysis(t2, b2, true); // backfills par via stmtPutPar
+    const row2 = db.prepare(`SELECT par FROM board_analyses WHERE board_id = ?`).get(b2.row.id) as { par: string };
+    const par2 = JSON.parse(row2.par);
+    for (const c of par2.calls) if (c.cf) { expect(c.cf.cfPct).toBeNull(); expect(c.cf.mpGain).toBeNull(); }
   }, 240_000);
 });
 
