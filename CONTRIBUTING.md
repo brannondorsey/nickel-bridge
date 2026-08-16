@@ -65,7 +65,10 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 timeout rules; latency only, never outcomes), play-mc-forget.ts
                 (EXPERIMENTAL,
                 unshipped card-"forgetting" prototype — see its doc comment and
-                docs/difficulty-calibration-research.md)
+                docs/difficulty-calibration-research.md), quiz.ts (Pop-Up Quiz question
+                generation — deriveQuizKnowledge/selectQuizQuestion, reusing play-mc.ts's
+                sampleLayouts belief model but needing NO double-dummy solve at all; see
+                "Pop-Up Quiz" below)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
                 config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE,
                 plus the boot assertion index.ts calls; lenient at import so tests
@@ -77,6 +80,10 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 rehearsal.ts (createRehearsal/listRehearsals — "Play From Here,"
                 branching a finished board's real play into a live, never-scored
                 board of its own; see "Play From Here" below),
+                quiz.ts (Pop-Up Quiz DB access + orchestration — maybeGenerateQuiz/
+                hasPendingQuiz/recordQuizAnswer/quizReportCard/quizAnalyzeReveal/
+                quizStatsForUser, deliberately independent of game.ts's types; see
+                "Pop-Up Quiz" below),
                 tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
@@ -171,7 +178,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
-                the landing page share),
+                the landing page share,
+                PopUpQuiz.tsx — the between-tricks counting-check overlay, stays mounted
+                owning its own minimize/selection state, and QuizReportCard.tsx — the
+                finished-board ledger summary; see "Pop-Up Quiz" below),
                 src/test/ (fixtures + apiMock pattern),
                 style.css (all styling — token blocks ported from the design prototype;
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
@@ -1311,6 +1321,242 @@ One incidental fix that came out of building this: `submitCall`/`submitPlay`/`en
 today — harmless (the replay's own source query filters `kind = 'standard'`) but expensive.
 Now gated on `b.tournament.kind === 'standard'` too, closing it for exhibits as well as
 rehearsals — worth doing here specifically because rehearsals are explicitly uncapped.
+
+**Pop-Up Quiz is an opt-in, between-tricks counting check** — a short multiple-choice question
+("How many diamonds have been played so far, across all four hands?") that interrupts card play
+after a trick completes, graded immediately but never revealed live: duplicate bridge means
+every player on a board must face the identical game, so a quiz that told you "wrong" mid-hand
+would be coaching one player and not the field it's matchpointed against. The reveal is
+deferred to two surfaces instead — the finished board's Quiz Report Card (right/wrong only) and
+a deeper Analyze Play reveal (full reasoning, but only on a miss) — the same "grade now, explain
+later" split Bidding already uses (`bidEvals`) and Analyze's own moments ledger. Six new
+surfaces in all: the in-play interrupt, its minimize/resume dock, the post-answer
+acknowledgment, the Quiz Report Card, a Settings frequency switch, and a Card Counting stats
+panel on profiles, plus a Compare row. Off by default (`quiz_frequency = 'never'`) — this is a
+feature for players who want it, not a tax on everyone's tempo.
+
+**The engine layer needs no double-dummy solve at all, unlike everything else in `packages/ai`.**
+`packages/ai/src/quiz.ts` mirrors `play-mc.ts`'s shape — a public-knowledge snapshot
+(`deriveQuizKnowledge`, a sibling of `play-mc.ts`'s `DecisionKnowledge`) and the same
+`sampleLayouts`/`hoistAuctionConstraints` belief machinery — but a quiz only ever asks about
+which cards plausibly sit where, never how they'd be played, so `selectQuizQuestion` draws
+exactly ONE `sampleLayouts()` call per trigger trick (`QUIZ_SAMPLE_K = 64`, synchronous, no
+DDS) and reuses it across every probabilistic candidate that trick, instead of paying a solve
+per candidate the way `scoreCardsSampled` pays a solve per legal card. This is why quiz
+generation carries no `priority` argument anywhere in its call chain: there is no `dd-pool.ts`
+work to schedule.
+
+Seven question types, in two families. Five are CERTAIN — computable exactly from what's
+publicly visible, no sampling needed: **suit-count** ("how many spades are still unaccounted
+for"), **running-total** ("how many diamonds have been played so far"), **trump-count** (the
+same shape as suit-count, worded neutrally rather than naming the trump suit — see below),
+**suit-exhaustion** ("which suit has West shown out of," only asked once a hidden seat's void
+is unambiguous — exactly one suit voided) and **void** (multi-select, "which hand(s) are known
+to be void in hearts," only generated when at least one hidden seat has actually shown out —
+no "none of the above" trick questions). Two are always PROBABILISTIC, scored against the
+sampled layouts' own distribution rather than a certain fact: **opponent-length** ("how many
+hearts does East most likely hold") and **honor-location** ("where is the missing ♠A most
+likely sitting"), both reporting the sampled layouts' modal answer and its margin
+(`probMargin`) — the round-6 spec correction this shipped against: an earlier draft tried to
+make these "certain" once enough tricks had passed, which doesn't hold since the hidden hands
+are never actually known, only inferred.
+
+**Trump-count is deliberately worded to name no side.** Early drafts asked "how many trumps do
+the defenders have left" — but the human isn't always declaring (the hand-flip subtlety below
+means South is sometimes the declaring seat, sometimes the dummy's partner defending), so a
+question hard-coded to one side's perspective would sometimes be asking the human to count
+their OWN side's remaining trumps under a "defenders" label. "Still unaccounted for (not
+visible in either hand on the table, and not yet played)" is true regardless of which side is
+declaring, which is why every certain question type is phrased the same declarer-agnostic way.
+
+**A candidate has to clear a triviality gate and then a difficulty score, not one combined
+threshold.** `isTrivial` rejects a candidate outright when: it has fewer than 2 possible
+answers; a void/suit-exhaustion/opponent-length/honor-location candidate's key evidence became
+current on the SAME trick as the trigger (`evidenceTrick === triggerTrick` — asking about a
+void a player just watched happen isn't a counting exercise, it's an observation test; the
+three "current fact" types — suit-count/running-total/trump-count — are deliberately exempt,
+since those are always-current facts and asking right after the trick that made them current is
+the normal case, not a freshness bug); the position is within `LATE_ENDGAME_TRICKS_LEFT` (3)
+tricks of the end (too close to full information to be a meaningful counting exercise); or a
+probabilistic candidate's margin is `>= 0.97` (a "probabilistic" question with no real
+uncertainty left is just a certain fact wearing the wrong label). Only candidates that survive
+get scored for DIFFICULTY (`DIFFICULTY_WEIGHTS`: hops from public knowledge to the answer
+0.4, suits touched 0.15 — reserved, every v1 type is single-suit so this term is always zero
+today, kept as a weight rather than deleted since a future multi-suit type should cost
+something here — recency of the evidence 0.2, closeness of the nearest wrong option or,
+for probabilistic types, `1 - probMargin`, 0.25) into easy/medium/hard buckets, then ONE
+candidate is drawn via a seeded 70/25/5 tier weighting (`TIER_WEIGHTS`) — mostly easy
+questions, a real but occasional medium, hard rare enough to be a genuine event rather than the
+median experience. A tier with no eligible candidate that trick falls back to the next
+non-empty tier rather than skipping the quiz entirely.
+
+**Cadence is a stratified, seeded pick, not a fixed interval — and it's a pure function of
+`(tournament seed, board, frequency)` alone, independent of anything that happens at the
+table.** `triggerTricks(seed, freq)` splits tricks 1-12 (trick 13 ends the board — there's no
+"between tricks" moment after it) into `n` disjoint windows (`sometimes`: 1-2 quizzes per
+board; `often`: 3-4) and draws one randomized trick per window, so the spacing is guaranteed
+but the exact tricks aren't predictable turn to turn. Every player with the SAME frequency
+setting on the SAME board gets the identical trigger-trick assignment — this is the "duplicate
+fairness" invariant applied to quiz timing itself, the same argument that governs robot
+determinism (see invariant 1). The seed deliberately folds in a `QUIZ_SEED_SEAT_LITERAL`
+constant (`2`, South's seat number) to literally satisfy the brief's "(board ID, seat, setting)"
+spec, even though every human in this codebase is always South and the literal therefore adds
+no real entropy today — if seat assignment is ever made configurable, this constant and
+`server/src/game.ts`'s `HUMAN_SEAT` must be updated together by hand, since `packages/ai` can't
+import from `server` (the core→ai→server→web build order) and there is no single source of
+truth enforcing the two agree.
+
+**The hand-flip subtlety applies here exactly as it does everywhere else, and it's the one
+question-generation bug class this module's doc comments call out by name.** When the human's
+partner (North) declares, the human plays North's hand and their own dealt cards become dummy
+— so a quiz's knowledge snapshot has to be built from `playingSeat`/`dummySeat`, never a
+module-level "the human is South" assumption, or a "probabilistic" question would silently run
+inference over cards the player is looking directly at. `server/src/game.ts` exports
+`playingSeatFor(contract)` — extracted from `boardView`'s own inline flip computation
+specifically so both call sites (the view and the quiz trigger-check) share one derivation —
+and `packages/ai/src/quiz.ts`'s `deriveQuizKnowledge`/`selectQuizQuestion` both take
+`playingSeat`/`dummySeat` as required parameters rather than ever re-deriving the flip
+themselves.
+
+**`advanceRobots` gets a new stopping condition, checked first.** The loop already stops for
+"it's the human's turn" and "the board is done"; a pending quiz is now checked BEFORE either,
+via `hasPendingQuiz(boardId)` — a single indexed read against `pop_quizzes` (`answer IS NULL`)
+that is authoritative across every call, not just the one that generated the quiz: a reload, a
+second tab, `ensureAdvanced`'s own re-entry, and `submitQuizAnswer`'s resumed call after
+recording an answer all see the same freeze. `submitPlay` also throws a 409 if a quiz is
+pending, so a client racing a stale card-tap against a just-arrived quiz gets a genuine
+rejection rather than silently playing past it — `Board.tsx`'s existing resync-on-reject
+machinery (see "A rejected play means this screen is BEHIND THE SERVER" above) already knows
+how to recover from that shape of error without new client code.
+
+Inside the 'playing' branch, a local `quizCheckedThroughTrick` (re-initialized every call,
+unlike `hasPendingQuiz`'s DB read) tracks how many completed tricks THIS call has already
+scanned for a trigger — every newly-crossed trick boundary since the last check gets one
+`maybeGenerateQuiz` call, and the loop stops the instant one returns true, exactly like a human
+decision point. **The claimed-tail fix is the one bug this design had to be built to avoid
+directly**: `resolveClaim` fast-forwards many tricks in a single call, and without an explicit
+guard the loop's re-entry after a claim fires would re-scan that whole claimed tail for quiz
+triggers — generating a quiz about a position the human never actually reached a decision in.
+`quizCheckedThroughTrick` is set to `13` (past every real trick) at the exact moment a claim
+fires, right before `resolveClaim` runs, so the claimed tail is never scanned at all. A second,
+independent guard sits in `server/src/quiz.ts`'s `maybeGenerateQuiz` itself:
+`QuizGenerationContext.claimedAtPly` (the board's persisted claim boundary) makes any trigger
+trick past it refuse outright, defense-in-depth against the same bug class from a different
+angle in case the caller-side guard is ever weakened.
+
+**Generation only ever runs for `tournamentKind === 'standard'`** — the same allowlist every
+other per-tournament-kind feature in this codebase follows (exhibits, rehearsals, AI-persona
+boards are all excluded for free by not being `'standard'`), so a demo exhibit or a "Play From
+Here" rehearsal never fires a quiz regardless of the player's own frequency setting.
+
+**The frozen board and the answer round-trip.** While a quiz is pending, `boardView` reports it
+LOCKED exactly like a staged snapshot mid-animation — `myTurn: false`, `legalCards` deleted —
+so the client can't tap a card underneath the modal. `POST
+/api/tournaments/:id/boards/:no/quiz-answer` (`submitQuizAnswer` in `game.ts`, mirroring
+`submitCall`/`submitPlay`'s lock→refresh→mutate→advanceRobots→save→Elo pattern exactly) calls
+`recordQuizAnswer` — a pure DB step in `server/src/quiz.ts` that checks the quiz belongs to this
+board, isn't already answered (409 otherwise — no double-scoring a quiz via a replayed
+request), scores the answer against the FROZEN `correct_answer` column (never re-derived; the
+question was generated once and its key never changes underneath a slow answerer), and writes
+`answer`/`correct`/`answered_at` — then calls `advanceRobots` again exactly as `submitCall`
+does. Because `hasPendingQuiz` now sees `false` for this quiz specifically, play genuinely
+resumes: robots continue, the next trigger trick (if any) can fire a new quiz, or the board
+finishes. The response's `boardView.quiz` field reports whatever's pending NEXT (a fresh quiz,
+or null) using the exact same shape the live view already uses — there is no separate
+"quiz answered" response type.
+
+**No penalty, ever, for a wrong answer — this is a counting exercise, not a scored decision.**
+An incorrect answer changes nothing about the board's outcome, matchpoints, or Elo; it only
+feeds the Card Counting stats and (once the board is done) the two reveal surfaces. The
+acknowledgment beat after answering ("LOGGED — PLAY RESUMES") deliberately says nothing about
+correctness, for the same duplicate-fairness reason the question itself is never graded live.
+
+**Client staging: the quiz interrupt is the LAST possible beat of a robot burst, never a
+mid-burst interruption.** `playAnim.ts`'s `stagePlaySteps` sets `holdForQuiz: true` on its
+final staged step — the one carrying the real, already-locked server view — rather than on the
+intermediate trick-boundary "holdForClear" step, so the modal only ever appears after the full
+trick-collect/tally animation has finished playing, never mid-glide. `Board.tsx`'s
+`scheduleSteps` treats `holdForQuiz` as an unconditional hold (unlike `holdForClear`, which
+only holds when the "Trick clearing" preference is `'tap'`): the burst runs up to that step,
+`awaitingQuiz` is set true, and the modal renders. **A plain fetch has to set the same flag a
+staged animation does** — `load()` and `resync()` both check `fresh.quiz` directly and call
+`setAwaitingQuiz(true)` themselves, not just the animation-callback path, which is the fix for
+a real bug found during manual verification: without it, reloading mid-quiz (or a resync after
+a rejected play) left a pending quiz sitting in `boardView` with no modal ever rendering, since
+nothing but the staged-step path used to flip `awaitingQuiz`. `board.test.tsx` pins this as a
+dedicated regression test ("shows a pending quiz immediately on load — no animation needed to
+reveal it").
+
+**The quiz can arrive on a call, exactly like a claim can (see "Auto-play and claims" above for
+the precedent) — a trigger trick can complete from either a card OR the auction's last pass**
+advancing `advanceRobots` past a trick boundary. `submitCall` and `submitPlay` both dispatch
+into the same trigger-check, so a quiz that fires the instant the auction ends (before any card
+is played) is a real, reachable state, not just a card-play feature.
+
+**The overlay stays mounted and owns its own minimize/selection state, keyed only on the
+quiz's `id` changing** (`PopUpQuiz.tsx`) — tapping the minimize control docks it to a small
+"POP QUIZ · MINIMIZED / RESUME →" bar at the bottom of the screen (`.resume-dock`) without
+losing the player's in-progress selection (including partial multi-select picks for the `void`
+type), and tapping the dock reopens the same in-flight state. This is the same "don't lose
+what the player already did" discipline the trick-clearing `'tap'` mode and the claim
+lead/announcement beats already follow — a counting question is a real interruption to a game
+in progress, and minimizing it is a courtesy for "let me see the table for a second," not a
+cancel.
+
+**The Quiz Report Card** (`QuizReportCard.tsx`, rendered inside `Result` on a finished board
+that took at least one quiz) is a ledger-style summary — trick number, question type, prompt,
+and a ✗/✓ mark, nothing more — with a "REVIEW IN ANALYZE →" link into the deeper reveal.
+`server/src/quiz.ts`'s `quizReportCard(boardId)` is intentionally summary-only (no
+`correctAnswer`/`reasoning` in this response): a board can never finish with an unanswered quiz
+(the cross-call freeze guarantees it), so every row here is already scored, but the full
+explanation is reserved for Analyze, where the player is actively reviewing rather than just
+seeing the final tally.
+
+**The Analyze Play reveal is the deep one** — `quizAnalyzeReveal(boardId)` returns full
+`reasoning`, but ONLY on a miss (`correct ? null : r.reasoning`, mirroring the "high cost with
+no fault is dropped, not shown-but-forgiven" discipline Analyze's moments ledger already
+applies): a correct answer needs no explaining, and showing the reasoning unconditionally would
+clutter the one review screen that's supposed to be about what went wrong. Merged into the
+existing `GET /api/tournaments/:id/boards/:no/analysis` response as a `quiz` field rather than
+a new route — Analyze already owns "the post-board review," and a second endpoint would just
+be a second cache-invalidation question to answer. `Analyze.tsx`'s `CardCountingReveal`
+component renders it below `WhereItTurned` in the overview lens, each miss showing "You said X
+· Correct: Y" plus the reasoning and a "SEE THIS MOMENT IN THE PLAY →" link that jumps into the
+existing play-lens replay at that trick — reusing the moment-jump mechanism the bidding/play
+moments ledger already has, not a second replay entry point.
+
+**Card Counting stats are server-aggregated, not client-derived, the same discipline every
+other stats panel in this codebase follows.** `quizStatsForUser(userId)` in `server/src/quiz.ts`
+returns `null` ONLY when the player's CURRENT `quiz_frequency` setting is `'never'` — a real
+(possibly all-zero) object otherwise, including for a player who opted in but hasn't answered
+anything yet. That contract matters because `compare.ts` gates the Compare row on it directly
+rather than re-reading the live column: a player who has since turned quizzes off still shows
+historical stats on their own profile (their answered quizzes don't retroactively vanish), but
+is excluded from a NEW Compare row, which is the right asymmetry — "no data going forward"
+should stop new comparisons, not erase the record. The panel itself
+(`Player.tsx`'s `CardCountingPanel`) follows the profile's existing idiom exactly: a headline
+accuracy percentage, a `Sparkline` trend (reusing the scrubbable `role="slider"` component —
+see "The profile sparklines" above — with no separate lookback control, since a quiz history is
+already small), a `PctBar` row per question type, and a three-cell easy/medium/hard tier
+summary.
+
+**Compare's `quizAccuracy` row is a documented placeholder, not a calibrated constant.**
+`FULL_TILT.quizAccuracy = 15` was set at launch with no production data behind it (see
+"Compare and the gate" above for what `FULL_TILT` does and why it has to be measured, not
+guessed) — the comment beside it says so explicitly, so a future pass that measures real
+quiz-accuracy variance and finds 15 wrong isn't surprised to discover it was always a guess.
+The row's `breakdown` (an expandable "▾ BY QUESTION TYPE" disclosure, `Compare.tsx`'s
+`MeasureRow`) is the one row on the whole screen with a second level of detail — reusing the
+per-type percentages `quizStatsForUser` already computes rather than a second query.
+
+**The `pop_quizzes` table is one row per generated question**, `UNIQUE(board_id, trick)` so a
+race between two near-simultaneous requests generating for the same trick can only ever insert
+once (`INSERT OR IGNORE`), `answer`/`correct`/`answered_at` all nullable and written together
+by exactly one `UPDATE` (`recordQuizAnswer`). `users.quiz_frequency` (`'never'`/`'sometimes'`/
+`'often'`, default `'never'`) is a plain preference column through the existing
+`POST /api/me/prefs` partial-update endpoint (see "Where a preference lives is a decision, not
+an accident" above), the same pattern every other per-user boolean/enum setting in this
+codebase already follows.
 
 **A crossing's number is its own sequence, not its row id.** `tournaments.id` is one
 sequence shared by every `kind`, so each rehearsal — and, on `DEMO=1`, each exhibit —

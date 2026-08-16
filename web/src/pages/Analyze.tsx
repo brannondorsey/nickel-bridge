@@ -7,6 +7,7 @@ import {
   AnalysisPly,
   AnalysisView,
   BoardView,
+  QuizAnalyzeRow,
   RANK_CHARS,
   RehearsalSummary,
   SEAT_SHORT,
@@ -249,6 +250,9 @@ export default function Analyze() {
           actualScoreNS={r?.scoreNS ?? null}
         />
       ) : null}
+      {lens === 'overview' && analysis.quiz?.length ? (
+        <CardCountingReveal quiz={analysis.quiz} onOpenPlay={openPlayAt} />
+      ) : null}
       {lens === 'overview' ? <YourRehearsals rehearsals={rehearsals} onDiscard={discardRehearsalAttempt} /> : null}
       {lens === 'play' ? (
         analysis.contract && board.playHistory?.length ? (
@@ -487,6 +491,56 @@ function RehearsalRail({
         );
       })}
     </div>
+  );
+}
+
+/** "West, North" — the plain-language reading of a quiz answer's option
+ *  indices; "none" for an empty multi-select. */
+function formatQuizAnswer(options: string[], indices: number[]): string {
+  return indices.length ? indices.map((i) => options[i]).join(', ') : 'none';
+}
+
+/**
+ * ⑤ CARD COUNTING — Pop-Up Quiz's deeper reveal ("A, its own section below
+ * the ledger" from the design review): every question this board took, your
+ * answer, the correct one — and, only on a miss, the full reasoning plus a
+ * jump into the exact moment in the play. Deliberately separate from WHERE
+ * IT TURNED: "what should I have played" and "what should I have known" stay
+ * legible as two different skills, and the jump link is the one place they
+ * cross.
+ */
+function CardCountingReveal({ quiz, onOpenPlay }: { quiz: QuizAnalyzeRow[]; onOpenPlay: (ply: number) => void }) {
+  return (
+    <PerforatedPanel heading="Card Counting" className="analyze-quiz">
+      <p className="an-subtitle">Your Pop Quiz answers, explained.</p>
+      {quiz.map((q, i) => (
+        <div className="qq-row" key={i}>
+          <div className="qq-top">
+            <div className={`qq-mark ${q.correct ? 'yes' : 'no'}`} aria-hidden="true">
+              {q.correct ? '✓' : '✗'}
+            </div>
+            <div className="qq-q">
+              <span className="sr-only">{q.correct ? 'Correct. ' : 'Missed. '}</span>
+              Trick {Math.floor(q.ply / 4)} — <GlossaryProse text={q.prompt} />
+            </div>
+          </div>
+          <div className="qq-ans">
+            You said <b>{formatQuizAnswer(q.options, q.yourAnswer)}</b> · Correct:{' '}
+            <b>{formatQuizAnswer(q.options, q.correctAnswer)}</b>
+          </div>
+          {!q.correct && q.reasoning ? (
+            <>
+              <div className="qq-why">
+                <GlossaryProse text={q.reasoning} />
+              </div>
+              <button type="button" className="qq-jump" onClick={() => onOpenPlay(q.ply)}>
+                SEE THIS MOMENT IN THE PLAY →
+              </button>
+            </>
+          ) : null}
+        </div>
+      ))}
+    </PerforatedPanel>
   );
 }
 

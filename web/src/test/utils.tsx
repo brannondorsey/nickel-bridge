@@ -40,6 +40,7 @@ function freshApiMock(): ApiMock {
     board: stub(),
     call: stub(),
     playCard: stub(),
+    submitQuizAnswer: stub(),
     analysis: stub(),
     rehearse: stub(),
     rehearsals: stub(),

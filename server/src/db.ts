@@ -94,6 +94,36 @@ CREATE TABLE IF NOT EXISTS board_analyses (
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+-- Pop-Up Quiz: one row per fired quiz (server/src/quiz.ts). Not folded into
+-- board_analyses — different lifecycle (generated LIVE during play, not
+-- lazily post-hoc) and different cardinality (N rows per board, not one).
+-- ON DELETE CASCADE for the same reason board_analyses carries it: demo
+-- mode's wipe/reseed deletes boards rows outright, and PRAGMA foreign_keys=ON
+-- makes a non-cascading FK a hard failure there.
+CREATE TABLE IF NOT EXISTS pop_quizzes (
+  id INTEGER PRIMARY KEY,
+  board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+  trick INTEGER NOT NULL,           -- 1-based trick this fired after (1..12)
+  ply INTEGER NOT NULL,             -- trick*4 — feeds Analyze's openPlayAt jump link
+  question_type TEXT NOT NULL,      -- 'suit-count'|'opponent-length'|'void'|'trump-count'
+                                     --   |'honor-location'|'suit-exhaustion'|'running-total'
+  difficulty_tier TEXT NOT NULL,    -- 'easy'|'medium'|'hard'
+  multi_select INTEGER NOT NULL DEFAULT 0,
+  prompt TEXT NOT NULL,
+  options TEXT NOT NULL,            -- JSON string[]
+  correct_answer TEXT NOT NULL,     -- JSON number[] (option indices) — never served pre-'done'
+  reasoning TEXT NOT NULL,          -- templated explanation, frozen at generation time
+  answer TEXT,                      -- JSON number[] | null until answered
+  correct INTEGER,                  -- 0/1, null until answered
+  answered_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+-- Defense-in-depth: withBoardLock's in-process serialization + advanceRobots'
+-- hasPendingQuiz gate already prevent a concurrent-write race, but a real
+-- DB-level invariant is cheap insurance against ever double-firing a trick.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pop_quizzes_board_trick ON pop_quizzes(board_id, trick);
+CREATE INDEX IF NOT EXISTS idx_pop_quizzes_board ON pop_quizzes(board_id);
+
 CREATE INDEX IF NOT EXISTS idx_boards_tournament ON boards(tournament_id, board_no);
 CREATE INDEX IF NOT EXISTS idx_boards_user ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
@@ -270,6 +300,17 @@ if (!userColumns.has('trick_clear_mode')) {
 // with opposite settings still hold identical hands.
 if (!userColumns.has('trump_placement')) {
   db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'suit'`);
+}
+
+// Migration: `quiz_frequency` — Pop-Up Quiz cadence: 'never' (default, the
+// shipped behaviour for every existing account), 'sometimes' (~1-2 quizzes a
+// board) or 'often' (~3-4). TEXT enum for the same reason as
+// trick_clear_mode/trump_placement above — this names a MODE, not a yes/no —
+// and it fails CLOSED like double_tap_bid (new opt-in behaviour), not open
+// like auto_claim/bid_feedback: read as `=== 'sometimes' || === 'often'`,
+// never `!== 'never'`. See server/src/quiz.ts and CLAUDE.md's "Pop-Up Quiz".
+if (!userColumns.has('quiz_frequency')) {
+  db.exec(`ALTER TABLE users ADD COLUMN quiz_frequency TEXT NOT NULL DEFAULT 'never'`);
 }
 
 // Migration: `beta_features` — opt in to features still being tried out
@@ -511,6 +552,8 @@ export interface UserRow {
   trick_clear_mode: 'auto' | 'tap';
   /** where the trump suit sits in a hand once a trump contract is settled: 'suit' (default, always ♠♥♦♣) or 'left' (trump block first) */
   trump_placement: 'suit' | 'left';
+  /** Pop-Up Quiz cadence: 'never' (default) | 'sometimes' | 'often' — see server/src/quiz.ts */
+  quiz_frequency: 'never' | 'sometimes' | 'often';
   elo: number;
   created_at: number;
 }

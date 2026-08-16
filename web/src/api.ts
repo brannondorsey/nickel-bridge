@@ -15,6 +15,68 @@ export interface MedalProgress {
   tournamentsRemaining: number;
 }
 
+/** Pop-Up Quiz cadence (server/src/quiz.ts). */
+export type QuizFrequency = 'never' | 'sometimes' | 'often';
+
+/** Which fact a Pop-Up Quiz question asks about — mirrors @bridge/ai's QuestionType. */
+export type QuestionType =
+  | 'suit-count'
+  | 'opponent-length'
+  | 'void'
+  | 'trump-count'
+  | 'honor-location'
+  | 'suit-exhaustion'
+  | 'running-total';
+
+export type DifficultyTier = 'easy' | 'medium' | 'hard';
+
+/**
+ * A live, pending Pop-Up Quiz — boardView.quiz. NEVER carries correctAnswer
+ * or reasoning; the server withholds both until the board is done (duplicate-
+ * bridge fairness — see CLAUDE.md's "Pop-Up Quiz" section).
+ */
+export interface PendingQuiz {
+  id: number;
+  trick: number;
+  questionType: QuestionType;
+  difficultyTier: DifficultyTier;
+  multiSelect: boolean;
+  prompt: string;
+  options: string[];
+}
+
+/** The board result screen's Quiz Report Card — summary only, no reasoning. */
+export interface QuizReportRow {
+  trick: number;
+  questionType: QuestionType;
+  description: string;
+  correct: boolean;
+}
+
+/** Analyze Play's deeper reveal — full reasoning, but only on a miss. */
+export interface QuizAnalyzeRow {
+  ply: number;
+  questionType: QuestionType;
+  difficultyTier: DifficultyTier;
+  multiSelect: boolean;
+  prompt: string;
+  options: string[];
+  yourAnswer: number[];
+  correctAnswer: number[];
+  correct: boolean;
+  reasoning: string | null;
+}
+
+/** Player stats' Card Counting panel (server/src/quiz.ts's CardCountingStats). */
+export interface CardCountingStats {
+  totalAnswered: number;
+  totalCorrect: number;
+  accuracyPct: number | null;
+  byType: { type: QuestionType; total: number; correct: number }[];
+  byTier: { tier: DifficultyTier; total: number; correct: number }[];
+  trend: { at: number; correct: boolean }[];
+}
+
 export interface Me {
   user: {
     id: number;
@@ -35,6 +97,8 @@ export interface Me {
     trickClearMode: 'auto' | 'tap';
     /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'suit' is always ♠♥♦♣, 'left' promotes the trump block */
     trumpPlacement: 'suit' | 'left';
+    /** Pop-Up Quiz cadence (settings: "Pop Quizzes") — 'never' (default) | 'sometimes' | 'often' */
+    quizFrequency: QuizFrequency;
     /**
      * Opt in to features still being tried out before a general release —
      * nothing is gated behind it today. Off by default in production, on by
@@ -197,6 +261,11 @@ export interface BoardView {
   originResult?: BoardResult;
   /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
   lineMatchpoints?: number | null;
+  /** a pending, unanswered Pop-Up Quiz — present only while one is live for
+   *  this board; locked (myTurn false, no legalCards) whenever set */
+  quiz?: PendingQuiz;
+  /** the Quiz Report Card — present on a finished board that took at least one quiz */
+  quizReportCard?: QuizReportRow[];
 }
 
 /** One "Play From Here" attempt on a board — see server/src/rehearsal.ts */
@@ -284,6 +353,8 @@ export interface AnalysisView {
    *  per request while stage 3's floor selection ran at first open, so the
    *  caption for a drifted unjudged ply needs the floor to compare against */
   momentFloor: number;
+  /** Pop-Up Quiz's deeper reveal — null when this board took no quizzes */
+  quiz: QuizAnalyzeRow[] | null;
 }
 
 interface Standing {
@@ -429,6 +500,8 @@ export interface PlayerStats {
   dailyBoards: DailyBoardCount[];
   /** other players ranked by shared-tournament count, most-crossed-paths first (max RIVAL_TOP_N = 10) */
   rivals: Rival[];
+  /** Card Counting — null only when this player's CURRENT Pop Quizzes setting is 'never' */
+  quizStats: CardCountingStats | null;
 }
 
 /**
@@ -449,7 +522,7 @@ export interface PlayerStats {
 export const COMPARE_MIN_BOARDS_FALLBACK = 16;
 
 export type CompareVerdict = 'you' | 'them' | 'level' | 'aside';
-export type CompareAsideReason = 'thin' | 'provisional' | 'no-data';
+export type CompareAsideReason = 'thin' | 'provisional' | 'no-data' | 'disabled';
 export type ComparePanel = 'headline' | 'bidType' | 'convention' | 'contract';
 
 export interface CompareMeasure {
@@ -466,6 +539,8 @@ export interface CompareMeasure {
   verdict: CompareVerdict;
   reason?: CompareAsideReason;
   samples: [number, number];
+  /** quiz-accuracy row only: the "▾ BY QUESTION TYPE" disclosure */
+  breakdown?: { key: string; label: string; a: number; b: number }[];
 }
 
 export interface CompareContextRow {
@@ -590,6 +665,7 @@ export const api = {
     doubleTapBid?: boolean;
     trickClearMode?: 'auto' | 'tap';
     trumpPlacement?: 'suit' | 'left';
+    quizFrequency?: QuizFrequency;
   }) =>
     request<{
       ladderListed: boolean;
@@ -599,6 +675,7 @@ export const api = {
       doubleTapBid: boolean;
       trickClearMode: 'auto' | 'tap';
       trumpPlacement: 'suit' | 'left';
+      quizFrequency: QuizFrequency;
     }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
@@ -613,6 +690,13 @@ export const api = {
     request<{ board: BoardView }>(`/api/tournaments/${tid}/boards/${no}/play`, {
       method: 'POST',
       body: JSON.stringify({ card }),
+    }),
+  /** Answer a pending Pop-Up Quiz — resumes play, exactly like a call or a
+   *  play. Correctness is never revealed in the response. */
+  submitQuizAnswer: (tid: number, no: number, quizId: number, answer: number[]) =>
+    request<{ board: BoardView }>(`/api/tournaments/${tid}/boards/${no}/quiz-answer`, {
+      method: 'POST',
+      body: JSON.stringify({ quizId, answer }),
     }),
   /** Analyze verdicts for a finished board; par=true adds stage 4 (the crossing/auction lenses) */
   analysis: (tid: number, no: number, par: boolean) =>

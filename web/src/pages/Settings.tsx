@@ -61,6 +61,12 @@ const TRICK_CLEAR_OPTIONS: { value: 'auto' | 'tap'; label: string }[] = [
   { value: 'tap', label: 'TAP' },
 ];
 
+const QUIZ_FREQUENCY_OPTIONS: { value: 'never' | 'sometimes' | 'often'; label: string }[] = [
+  { value: 'never', label: 'NEVER' },
+  { value: 'sometimes', label: 'SOMETIMES' },
+  { value: 'often', label: 'OFTEN' },
+];
+
 // Named for where the cards end up, not for on/off: both ends are a real
 // way to hold a hand, and "SUIT ORDER" says what today's behaviour actually
 // is rather than calling it the absence of the other one — the same reason
@@ -95,6 +101,7 @@ type AccountPrefs = {
   doubleTapBid: boolean;
   trickClearMode: 'auto' | 'tap';
   trumpPlacement: 'suit' | 'left';
+  quizFrequency: 'never' | 'sometimes' | 'often';
 };
 
 export default function Settings() {
@@ -114,6 +121,10 @@ export default function Settings() {
     trickClearMode: me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto',
     // ...and to 'suit', the ♠♥♦♣ every hand has always been laid out in.
     trumpPlacement: me?.user?.trumpPlacement === 'left' ? 'left' : 'suit',
+    // Fails CLOSED to 'never' — an opt-in interruption, not a preserved
+    // default. See the quiz_frequency migration in db.ts.
+    quizFrequency:
+      me?.user?.quizFrequency === 'sometimes' || me?.user?.quizFrequency === 'often' ? me.user.quizFrequency : 'never',
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -218,6 +229,18 @@ export default function Settings() {
               value={prefs.trumpPlacement}
               options={TRUMP_PLACEMENT_OPTIONS}
               onChange={(trumpPlacement) => change({ trumpPlacement })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Pop Quizzes"
+            note="Between-trick counting checks — never mid-trick, never during the auction. No penalty for a wrong answer; you'll see how you did after the board. Your answers build the Card Counting stats on your profile."
+          >
+            <PrefSwitch
+              label="Pop Quizzes"
+              value={prefs.quizFrequency}
+              options={QUIZ_FREQUENCY_OPTIONS}
+              onChange={(quizFrequency) => change({ quizFrequency })}
             />
           </SettingRow>
 

@@ -1,0 +1,39 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`selectQuizQuestion — golden fixture > a different seed at the same position may pick a different candidate, but is itself stable 1`] = `
+{
+  "correctAnswer": [
+    0,
+  ],
+  "multiSelect": false,
+  "options": [
+    "5",
+    "3",
+    "6",
+    "4",
+  ],
+  "prompt": "How many diamonds are still unaccounted for (not in your hand, dummy, or played)?",
+  "reasoning": "13 diamonds in the deck, minus 4 you can see between your hand and dummy and 4 already played, leaves 5 unaccounted for.",
+  "tier": "easy",
+  "type": "suit-count",
+}
+`;
+
+exports[`selectQuizQuestion — golden fixture > pins exact output for a fixed board/trick/seed 1`] = `
+{
+  "correctAnswer": [
+    2,
+  ],
+  "multiSelect": false,
+  "options": [
+    "7",
+    "9",
+    "8",
+    "6",
+  ],
+  "prompt": "How many spades are still unaccounted for (not in your hand, dummy, or played)?",
+  "reasoning": "13 spades in the deck, minus 5 you can see between your hand and dummy and 0 already played, leaves 8 unaccounted for.",
+  "tier": "easy",
+  "type": "suit-count",
+}
+`;

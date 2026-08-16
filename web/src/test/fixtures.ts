@@ -39,6 +39,7 @@ export const meFixture: Me = {
     doubleTapBid: false,
     trickClearMode: 'auto',
     trumpPlacement: 'suit',
+    quizFrequency: 'often',
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
@@ -278,6 +279,24 @@ export const boardPlaying: BoardView = {
   dummyHcp: 13,
   handToPlay: 2,
   legalCards: [card(S, 'A'), card(S, 'Q'), card(S, '10')],
+};
+
+/** A pending Pop-Up Quiz between tricks — locked (myTurn false, no legalCards), matching game.ts's boardView contract. */
+export const boardPlayingQuiz: BoardView = {
+  ...boardPlaying,
+  myTurn: false,
+  legalCards: undefined,
+  currentTrick: [],
+  completedTricks: 5,
+  quiz: {
+    id: 501,
+    trick: 5,
+    questionType: 'opponent-length',
+    difficultyTier: 'easy',
+    multiSelect: false,
+    prompt: 'How many hearts does West most likely hold, based on the play so far?',
+    options: ['1', '2', '3', '4'],
+  },
 };
 
 /** partner (N) declared — human plays the North hand; South is dummy */
@@ -592,6 +611,29 @@ export const playerStatsFull: PlayerStats = {
     { userId: 50, handle: 'Marge', kind: 'human', shared: 5, record: { ahead: 2, behind: 2, tied: 1 }, boards: 48 },
     { userId: 51, handle: 'Dev', kind: 'human', shared: 4, record: { ahead: 1, behind: 3, tied: 0 }, boards: 7 },
   ],
+  // 31 of 40 correct = 78% — matches the design review's Card Counting mock
+  // exactly (byTier sums to the same 40; byType sums to the same 31/40).
+  quizStats: {
+    totalAnswered: 40,
+    totalCorrect: 31,
+    accuracyPct: 78,
+    byType: [
+      { type: 'suit-count', total: 11, correct: 9 },
+      { type: 'void', total: 9, correct: 5 },
+      { type: 'honor-location', total: 8, correct: 6 },
+      { type: 'trump-count', total: 7, correct: 7 },
+      { type: 'running-total', total: 5, correct: 4 },
+    ],
+    byTier: [
+      { tier: 'easy', total: 27, correct: 26 },
+      { tier: 'medium', total: 11, correct: 7 },
+      { tier: 'hard', total: 2, correct: 1 },
+    ],
+    trend: Array.from({ length: 25 }, (_, i) => ({
+      at: 1_770_000_000 + i * 86_400,
+      correct: i < 10 ? i % 3 !== 0 : i % 4 !== 0,
+    })),
+  },
 };
 
 export const playerStatsEmpty: PlayerStats = {
@@ -642,6 +684,8 @@ export const playerStatsEmpty: PlayerStats = {
   },
   dailyBoards: [],
   rivals: [],
+  // Pop Quizzes off (or never answered) — the "not opted in" case.
+  quizStats: null,
 };
 
 // ---- leaderboard ----

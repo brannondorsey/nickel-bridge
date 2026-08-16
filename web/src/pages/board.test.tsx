@@ -29,6 +29,7 @@ import {
   boardPlayingDummyTurn,
   boardPlayingEastDummy,
   boardPlayingFlipped,
+  boardPlayingQuiz,
   boardPlayingRehearsal,
   boardPlayingWestDummy,
   meFixture,
@@ -439,6 +440,93 @@ describe('Board — play', () => {
     expect(west.textContent).toContain('W · DUMMY');
     const east = document.querySelector('.trick .seatpos.e')!;
     expect(east.textContent).toContain('E · DECL');
+  });
+});
+
+describe('Board — Pop-Up Quiz', () => {
+  it('shows a pending quiz immediately on load — no animation needed to reveal it', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingQuiz);
+    renderBoard();
+    expect(await screen.findByRole('dialog', { name: 'Pop Quiz' })).toBeInTheDocument();
+    expect(screen.getByText(boardPlayingQuiz.quiz!.prompt)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^[1-4] ◯$/ })).toHaveLength(4);
+    // the board underneath is genuinely locked — no legal-card fan to tap
+    expect(screen.queryByText(/your turn/)).not.toBeInTheDocument();
+  });
+
+  it('answering holds an optimistic acknowledgment, then resumes with the server’s next view', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingQuiz);
+    const resumed: BoardView = { ...boardPlaying, quiz: undefined, myTurn: true };
+    let resolveAnswer: (v: { board: BoardView }) => void;
+    apiMock.submitQuizAnswer.mockReturnValue(new Promise((res) => (resolveAnswer = res)));
+    renderBoard();
+    await screen.findByRole('dialog', { name: 'Pop Quiz' });
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await userEvent.setup({ delay: null }).click(screen.getByRole('button', { name: '2 ◯' }));
+      expect(apiMock.submitQuizAnswer).toHaveBeenCalledWith(12, 2, boardPlayingQuiz.quiz!.id, [1]);
+      // optimistic ack — no correctness shown, just confirmation the tap registered
+      expect(await screen.findByText('LOGGED — PLAY RESUMES')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 ●' })).toBeInTheDocument();
+
+      // the ack holds for its floor even though the response is already in hand
+      resolveAnswer!({ board: resumed });
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByText('LOGGED — PLAY RESUMES')).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(1200);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.queryByRole('dialog', { name: 'Pop Quiz' })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('minimizing hides the card behind a resume dock, tapping the dock resumes it', async () => {
+    apiMock.board.mockResolvedValue(boardPlayingQuiz);
+    renderBoard();
+    await screen.findByRole('dialog', { name: 'Pop Quiz' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Minimize' }));
+    expect(screen.queryByRole('dialog', { name: 'Pop Quiz' })).not.toBeInTheDocument();
+    const dock = screen.getByRole('button', { name: /Pop Quiz minimized/ });
+    expect(dock).toBeInTheDocument();
+    expect(dock).toHaveTextContent('POP QUIZ · MINIMIZED');
+    expect(dock).toHaveTextContent('RESUME →');
+    expect(apiMock.submitQuizAnswer).not.toHaveBeenCalled();
+
+    await userEvent.click(dock);
+    expect(await screen.findByRole('dialog', { name: 'Pop Quiz' })).toBeInTheDocument();
+    expect(screen.getByText(boardPlayingQuiz.quiz!.prompt)).toBeInTheDocument();
+  });
+
+  it('a multi-select question requires at least one pick before CONFIRM, and preserves picks across minimize', async () => {
+    const multi: BoardView = {
+      ...boardPlayingQuiz,
+      quiz: {
+        ...boardPlayingQuiz.quiz!,
+        multiSelect: true,
+        prompt: 'Which hand(s) are known to be void in clubs?',
+        options: ['East', 'West'],
+      },
+    };
+    apiMock.board.mockResolvedValue(multi);
+    renderBoard();
+    await screen.findByRole('dialog', { name: 'Pop Quiz' });
+
+    const confirm = screen.getByRole('button', { name: 'CONFIRM →' });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(screen.getByRole('checkbox', { name: /West/ }));
+    expect(confirm).toBeEnabled();
+
+    // minimize and resume — the checkbox tap survives the round trip
+    await userEvent.click(screen.getByRole('button', { name: 'Minimize' }));
+    await userEvent.click(screen.getByRole('button', { name: /Pop Quiz minimized/ }));
+    await screen.findByRole('dialog', { name: 'Pop Quiz' });
+    expect(screen.getByRole('checkbox', { name: /West/ })).toHaveAttribute('aria-checked', 'true');
+    expect(apiMock.submitQuizAnswer).not.toHaveBeenCalled();
   });
 });
 

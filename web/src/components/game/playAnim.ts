@@ -89,6 +89,17 @@ export const CLAIM_ANNOUNCE_HOLD_MS = 2000;
 // number that just changed and deserves to be read.
 export const CLAIM_LEAD_SETTLE_MS = 500;
 
+// A tapped Pop-Up Quiz answer renders "LOGGED — PLAY RESUMES" immediately
+// (optimistically), then holds that acknowledgment for this long before
+// applying whatever /quiz-answer actually returned — the same "the news
+// deserves a beat before the board changes under you" argument
+// CLAIM_ANNOUNCE_HOLD_MS makes, at a shorter duration since this is
+// confirming a tap rather than announcing news. Held for BOTH this floor and
+// the real response landing, not either alone: the reply can be as fast as
+// the claim-answer round trip, and this beat is what makes it readable rather
+// than a flash.
+export const QUIZ_ACK_HOLD_MS = 1200;
+
 // Once the announcement is dismissed, the fast-forward itself runs 33%
 // faster than its base pacing above: scaling every gap's duration by 3/4
 // raises speed by 4/3 (⅓ = 33.3%), so this is applied directly to
@@ -114,6 +125,20 @@ export interface StagedStep {
    * this way regardless of trickClearMode.
    */
   holdForClear?: boolean;
+  /**
+   * This step is the one that carries a pending Pop-Up Quiz (next.quiz) —
+   * always the LAST step of a play-phase burst, the one whose view IS the
+   * real server response. Unlike holdForClear, this hold is UNCONDITIONAL —
+   * fires regardless of trickClearMode and reduced-motion, because it isn't
+   * a legibility pause, it's the brief's hard "no skip" requirement: the
+   * player has to see the completed trick settle (collected, tallied) before
+   * the quiz card covers the table, not while cards are still mid-flight.
+   * Every intermediate snapshot in the same burst carries the identical
+   * `next.quiz` value too (lockedView spreads `...next`), so `awaitingQuiz`
+   * — set only by this step's own callback — is the render gate for the
+   * PopUpQuiz overlay, never `board.quiz != null` directly.
+   */
+  holdForQuiz?: boolean;
 }
 
 /** True when we can (and should) animate: WAAPI present, no reduced-motion. */
@@ -491,9 +516,14 @@ export function stagePlaySteps(prev: BoardView, next: BoardView, resortMs = 0): 
     });
   }
 
-  // the real server view last: restores myTurn/legalCards (or shows the result)
+  // the real server view last: restores myTurn/legalCards (or shows the
+  // result, or — see holdForQuiz's doc comment — holds for a pending quiz)
   const lastWasPlay = !boundary || after.length > 0;
-  steps.push({ delayBefore: lastWasPlay ? GLIDE_MS + 160 : STAMP_MS, view: next });
+  steps.push({
+    delayBefore: lastWasPlay ? GLIDE_MS + 160 : STAMP_MS,
+    view: next,
+    holdForQuiz: Boolean(next.quiz),
+  });
   return steps;
 }
 

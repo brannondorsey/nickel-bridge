@@ -235,6 +235,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: false,
       trickClearMode: 'auto',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
@@ -258,6 +259,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: false,
       trickClearMode: 'auto',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     expect((await pete.raw('POST', '/api/me/prefs', { autoClaim: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -272,6 +274,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: false,
       trickClearMode: 'auto',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
@@ -286,6 +289,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: false,
       trickClearMode: 'auto',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     expect((await pete.get('/api/me')).user.betaFeatures).toBe(false);
 
@@ -298,6 +302,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: true,
       trickClearMode: 'auto',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     expect((await pete.get('/api/me')).user.doubleTapBid).toBe(true);
 
@@ -312,6 +317,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: true,
       trickClearMode: 'tap',
       trumpPlacement: 'suit',
+      quizFrequency: 'never',
     });
     expect((await pete.get('/api/me')).user.trickClearMode).toBe('tap');
     expect((await pete.raw('POST', '/api/me/prefs', { trickClearMode: 'fast' })).statusCode).toBe(400);
@@ -325,6 +331,7 @@ describe('handle (first-login username)', () => {
       doubleTapBid: true,
       trickClearMode: 'tap',
       trumpPlacement: 'left',
+      quizFrequency: 'never',
     });
     expect((await pete.get('/api/me')).user.trumpPlacement).toBe('left');
     // ...including the ways a second enum could be got wrong: a value from
@@ -333,6 +340,22 @@ describe('handle (first-login username)', () => {
     expect((await pete.raw('POST', '/api/me/prefs', { trumpPlacement: 'tap' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { trumpPlacement: true })).statusCode).toBe(400);
     expect((await pete.get('/api/me')).user.trumpPlacement).toBe('left');
+
+    // quizFrequency is a third TEXT enum, same discipline: patches, reads
+    // back, and refuses a value outside its own set.
+    expect(await pete.post('/api/me/prefs', { quizFrequency: 'often' })).toEqual({
+      ladderListed: false,
+      autoClaim: false,
+      bidFeedback: false,
+      betaFeatures: false,
+      doubleTapBid: true,
+      trickClearMode: 'tap',
+      trumpPlacement: 'left',
+      quizFrequency: 'often',
+    });
+    expect((await pete.get('/api/me')).user.quizFrequency).toBe('often');
+    expect((await pete.raw('POST', '/api/me/prefs', { quizFrequency: 'sometimes-ish' })).statusCode).toBe(400);
+    expect((await pete.get('/api/me')).user.quizFrequency).toBe('often');
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

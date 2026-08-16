@@ -36,12 +36,15 @@ import { DummyRail } from '../components/game/DummyRail';
 import { GRADE_STARS, GRADE_TEXT, GradeToast } from '../components/game/GradeToast';
 import { HandFan } from '../components/game/HandFan';
 import { MeaningPanel } from '../components/game/MeaningPanel';
+import { PopUpQuiz } from '../components/game/PopUpQuiz';
+import { QuizReportCard } from '../components/game/QuizReportCard';
 import { SuitText } from '../components/game/SuitText';
 import {
   AUTO_PLAY_DELAY_MS,
   CLAIM_ANNOUNCE_HOLD_MS,
   CLAIM_LEAD_SETTLE_MS,
   ClaimAnnouncement,
+  QUIZ_ACK_HOLD_MS,
   StagedStep,
   captureFanOriginIfVisible,
   motionOK,
@@ -239,12 +242,22 @@ export default function Board() {
   // tap can never resume a sequence that's since been superseded.
   const stagingRef = useRef({ gen: 0, timers: [] as number[], resumeStep: null as (() => void) | null });
   const [awaitingTrickClear, setAwaitingTrickClear] = useState(false);
+  // Pop-Up Quiz's render gate — set only by the held step's own callback in
+  // scheduleSteps below, never derived from `board.quiz != null` directly:
+  // every intermediate staged snapshot in a burst carries the same
+  // `next.quiz` value (lockedView spreads `...next`), so gating on it
+  // directly would pop the modal mid-glide, before the triggering trick's
+  // own animation has settled. `quizAcking` covers the beat between tapping
+  // an answer and the resumed board actually landing (see answerQuiz below).
+  const [awaitingQuiz, setAwaitingQuiz] = useState(false);
+  const [quizAcking, setQuizAcking] = useState(false);
   const cancelStaging = useCallback(() => {
     stagingRef.current.gen++;
     stagingRef.current.timers.forEach(clearTimeout);
     stagingRef.current.timers = [];
     stagingRef.current.resumeStep = null;
     setAwaitingTrickClear(false);
+    setAwaitingQuiz(false);
   }, []);
   useEffect(() => cancelStaging, [cancelStaging]);
 
@@ -306,7 +319,11 @@ export default function Board() {
 
       const runFrom = (rest: StagedStep[]) => {
         if (!rest.length || stagingRef.current.gen !== gen) return;
-        const holdIndex = trickClearMode === 'tap' ? rest.findIndex((s) => s.holdForClear) : -1;
+        // A quiz hold is unconditional (see holdForQuiz's doc comment); a
+        // trick-clear hold only matters in 'tap' mode. At most one applies to
+        // a given held step in practice (holdForQuiz is always the burst's
+        // LAST step), but the search stays generic either way.
+        const holdIndex = rest.findIndex((s) => s.holdForQuiz || (trickClearMode === 'tap' && s.holdForClear));
         if (holdIndex === -1) {
           runSegment(rest, () => {});
           return;
@@ -318,6 +335,16 @@ export default function Board() {
           const curTrick = holdStep.view.currentTrick ?? [];
           const newPlay = curTrick.length > priorTrick.length ? curTrick[curTrick.length - 1] : null;
           priorTrick = curTrick;
+          if (holdStep.holdForQuiz) {
+            // Nothing external to wait for: apply the (already-locked) real
+            // view now and let the PopUpQuiz overlay take over. The next
+            // "resume" is a fresh server response from answering, applied
+            // through applyBoard — not through this hold's resumeStep.
+            if (newPlay) captureFanOriginIfVisible(holdStep.view, newPlay);
+            setBoard(holdStep.view);
+            setAwaitingQuiz(true);
+            return;
+          }
           stagingRef.current.resumeStep = () => {
             if (stagingRef.current.gen !== gen) return;
             if (newPlay) captureFanOriginIfVisible(holdStep.view, newPlay);
@@ -370,7 +397,13 @@ export default function Board() {
       // see its doc comment): bidding and claims keep their untouched,
       // motion-gated behavior.
       const ordinaryPlay = prev !== null && !next.claimed && prev.state !== 'bidding';
-      const holdsOnTapWithoutMotion = trickClearMode === 'tap' && ordinaryPlay;
+      // A pending quiz stages through the held path even under reduced
+      // motion (and even when `prev` was still the auction — a quiz can
+      // fire the instant an auction-ending response also completes trick
+      // one) — the same carve-out ordinary tap-mode trick clearing already
+      // gets, for the same reason: it's a real pause on real state, not an
+      // animation.
+      const holdsOnTapWithoutMotion = (trickClearMode === 'tap' && ordinaryPlay) || Boolean(next.quiz);
       // The auction settling under the player's eyes is the one transition
       // the trump Draw plays on. A claimed response is excluded on purpose:
       // there the announcement owns the beat, and a hand nobody has any
@@ -415,7 +448,9 @@ export default function Board() {
       // to make the rest of the sequence feel instant. A no-op whenever
       // `steps` has no holdForClear step (nothing here changes the final
       // state, only how many synchronous renders it takes to reach it).
-      if (!motionOK()) steps = steps.map((step) => (step.holdForClear ? step : { ...step, delayBefore: 0 }));
+      if (!motionOK()) {
+        steps = steps.map((step) => (step.holdForClear || step.holdForQuiz ? step : { ...step, delayBefore: 0 }));
+      }
       if (!steps.length) {
         cancelStaging();
         setBoard(next);
@@ -543,6 +578,9 @@ export default function Board() {
         afterHold(() => {
           setBoard(fresh);
           setPlayNotice(null);
+          // See the matching comment in load() above — a resync can just as
+          // well land on a board a quiz has since been generated for.
+          if (fresh.state === 'playing' && fresh.quiz) setAwaitingQuiz(true);
         }),
       )
       .catch((e) =>
@@ -596,6 +634,12 @@ export default function Board() {
         const steps = motionOK() ? stageOpeningBids(fresh) : [];
         if (!steps.length) {
           setBoard(fresh);
+          // A pending quiz survives a reload (server-side state, see
+          // quiz.ts) — there is no burst to stage here to set awaitingQuiz
+          // via its usual held-step callback, so a fresh GET that already
+          // carries one has to set the gate directly, or the overlay would
+          // never appear until SOME staged transition happened to run.
+          if (fresh.state === 'playing' && fresh.quiz) setAwaitingQuiz(true);
           return;
         }
         // fresh.auction.length is the tray this reveal is building toward —
@@ -746,6 +790,35 @@ export default function Board() {
     }
   };
 
+  // Answer a pending Pop-Up Quiz. `LOGGED — PLAY RESUMES` renders the
+  // instant the tap fires (quizAcking, set by PopUpQuiz itself via `acking`)
+  // — held for QUIZ_ACK_HOLD_MS *and* the real response landing, whichever
+  // takes longer, so a fast round trip still gets its full readable beat.
+  // Then the resumed board is applied through the ordinary applyBoard
+  // pipeline — not resumeStep, which has nothing queued past the quiz
+  // boundary: the server hadn't staged anything beyond it yet.
+  const answerQuiz = async (answer: number[]) => {
+    if (!board?.quiz) return;
+    const quizId = board.quiz.id;
+    const prev = board;
+    setQuizAcking(true);
+    const gen = stagingRef.current.gen;
+    const stillMyBoard = () => stagingRef.current.gen === gen;
+    try {
+      const [{ board: next }] = await Promise.all([
+        api.submitQuizAnswer(tournamentId, boardNo, quizId, answer),
+        sleep(QUIZ_ACK_HOLD_MS),
+      ]);
+      if (!stillMyBoard()) return;
+      setQuizAcking(false);
+      applyBoard(prev, next);
+    } catch (e) {
+      if (!stillMyBoard()) return;
+      setQuizAcking(false);
+      setError((e as Error).message);
+    }
+  };
+
   // A forced move (exactly one legal card) plays itself after a short delay,
   // so the human can see it happen without needing to tap it — this simulates
   // the same "second tap" a manual play would trigger, so it reuses the whole
@@ -868,6 +941,9 @@ export default function Board() {
           onClearTrick={clearHeldTrick}
           trumpPlacement={trumpPlacement}
           drawTrumps={drawTrumps}
+          quiz={awaitingQuiz ? board.quiz : undefined}
+          onAnswerQuiz={answerQuiz}
+          quizAcking={quizAcking}
         />
       ) : (
         <BiddingPhase
@@ -1080,6 +1156,9 @@ export function PlayPhase({
   onClearTrick = () => {},
   trumpPlacement = 'suit',
   drawTrumps = false,
+  quiz,
+  onAnswerQuiz = () => {},
+  quizAcking = false,
 }: {
   board: BoardView;
   lastEval: BidEval | null;
@@ -1115,6 +1194,15 @@ export function PlayPhase({
    * there was no ♠♥♦♣ hand on screen for it to have moved from.
    */
   drawTrumps?: boolean;
+  /**
+   * A pending Pop-Up Quiz to render right now — Board.tsx passes
+   * `awaitingQuiz ? board.quiz : undefined`, never `board.quiz` directly
+   * (see playAnim.ts's `holdForQuiz` doc comment for why). Absent entirely
+   * for the tour/Analyze replay, which never carry one.
+   */
+  quiz?: BoardView['quiz'];
+  onAnswerQuiz?: (answer: number[]) => void;
+  quizAcking?: boolean;
 }) {
   // Bottom fan = the hand the human plays from (South, or North when the
   // board is flipped). Top fan = dummy. Either can be the hand to play.
@@ -1150,6 +1238,7 @@ export function PlayPhase({
         </Toast>
       ) : null}
       {claimAnnounceOpen && claimInfo ? <ClaimOverlay info={claimInfo} onDismiss={onSkipClaim} /> : null}
+      {quiz ? <PopUpQuiz quiz={quiz} onAnswer={onAnswerQuiz} acking={quizAcking} /> : null}
       {board.dummyHand && !dummyOnSide ? (
         <>
           <SeatLine label={dummyLabel} hcp={board.dummyHcp} active={canPlayFrom(board.dummy)} />
@@ -1343,6 +1432,10 @@ export function Result({
             </div>
           ))}
         </div>
+      ) : null}
+
+      {board.quizReportCard?.length ? (
+        <QuizReportCard rows={board.quizReportCard} analyzeHref={`/t/${board.tournamentId}/b/${board.boardNo}/analyze`} />
       ) : null}
 
       <div className="board-actions">{actions}</div>
