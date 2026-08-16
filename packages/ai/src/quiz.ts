@@ -483,7 +483,18 @@ function isTrivial(c: RawCandidate, triggerTrick: number): boolean {
   // suit-count/running-total/trump-count are always "current" facts — asking
   // about them the instant after the trick that made them current isn't
   // trivially fresh the way a void/exhaustion candidate would be.
-  const exempt = c.type === 'suit-count' || c.type === 'running-total' || c.type === 'trump-count';
+  // opponent-length/honor-location are exempt for a different reason: they're
+  // a continuously-updated probabilistic belief with no discrete "became
+  // known" trick to be stale relative to, so genOpponentLength/
+  // genHonorLocation always stamp evidenceTrick as the trigger trick itself —
+  // that's accurate, not staleness, and must never trip this freshness gate
+  // (their own genuine freshness check is the probMargin >= 0.97 gate below).
+  const exempt =
+    c.type === 'suit-count' ||
+    c.type === 'running-total' ||
+    c.type === 'trump-count' ||
+    c.type === 'opponent-length' ||
+    c.type === 'honor-location';
   if (!exempt && c.evidenceTrick === triggerTrick) return true;
   if (13 - triggerTrick < LATE_ENDGAME_TRICKS_LEFT) return true;
   if (c.probMargin !== undefined && c.probMargin >= 0.97) return true;

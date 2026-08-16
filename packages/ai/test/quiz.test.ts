@@ -118,6 +118,29 @@ describe('selectQuizQuestion', () => {
     expect(sawHiddenSeatType).toBe(true);
   }, 20000);
 
+  it('opponent-length and honor-location are reachable, not silently filtered as trivial', async () => {
+    // Regression test: genOpponentLength/genHonorLocation always stamp
+    // evidenceTrick as the trigger trick itself (there's no discrete "became
+    // known" moment for a continuously-updated probabilistic belief), which
+    // used to trip isTrivial's freshness check unconditionally since these
+    // two types weren't in its exempt list — 0 of either type could ever be
+    // generated. Sweep enough boards/tricks that both types should surface
+    // at least once if the exemption is correctly in place.
+    const seen = new Set<string>();
+    for (let b = 1; b <= 15; b++) {
+      const d = dealBoard(`quiz-prob-${b}`, (b % 4) + 1);
+      const c: Contract = { level: 3, strain: (b % 5) as 0 | 1 | 2 | 3 | 4, declarer: 2, doubled: false, redoubled: false };
+      const plays = await playOut(d, c);
+      for (let trick = 1; trick <= 9; trick++) {
+        const seed = quizSeedForTrick(`quiz-prob-${b}`, (b % 4) + 1, 'often', trick);
+        const q = selectQuizQuestion(d, c, plays.slice(0, trick * 4), d.dealer, quietCalls, 2, 0, trick, seed);
+        if (q) seen.add(q.type);
+      }
+    }
+    expect(seen.has('opponent-length')).toBe(true);
+    expect(seen.has('honor-location')).toBe(true);
+  }, 20000);
+
   it('difficulty tiers realize as a real distribution, easy predominant, across many trigger points', async () => {
     const tiers: Record<string, number> = { easy: 0, medium: 0, hard: 0 };
     for (let b = 1; b <= 10; b++) {
