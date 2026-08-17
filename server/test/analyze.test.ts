@@ -241,6 +241,82 @@ describe('the verdict matrix', () => {
     const view = await analyze.getBoardAnalysis(t, b, false);
     for (const p of view.plies) expect([0, 2]).toContain(p.seat);
   }, 240_000);
+
+  it('a bid moment never fires when the "better" call would reach the identical contract you actually played', async () => {
+    // probed: South's call at index 6 (a pass) disagrees with the model's
+    // preferred call there (it would have raised instead), but re-running
+    // the auction from that raise still settles on 2♣ by South — so there
+    // is nothing a different bid could have won here, only play. Driven by
+    // hand (not the shared driveBoard) because it needs the RAW GameBoard
+    // (b.deal/b.calls) to call the bidder itself for the "deviate every
+    // other call" strategy that surfaces the mismatch.
+    const t = makeTournament('probe-sc3-0');
+    const b = game.loadBoard(t, userId, 1, true)!;
+    await game.ensureAdvanced(b);
+    let view = game.boardView(t, b, 1200) as any;
+    let callCount = 0;
+    let safety = 250;
+    while (view.state !== 'done' && safety-- > 0) {
+      if (view.state === 'bidding' && view.myTurn) {
+        callCount++;
+        const legal = view.legalCalls as number[];
+        const best = game.bidder.chooseCall(b.deal, b.calls);
+        const pick = callCount % 2 === 0 ? (legal.find((c) => c !== best) ?? best) : best;
+        await game.submitCall(b, pick);
+      } else if (view.state === 'playing' && view.myTurn) {
+        await game.submitPlay(b, (view.legalCards as number[])[0]);
+      } else {
+        throw new Error(`stuck: ${view.state} myTurn=${view.myTurn}`);
+      }
+      view = game.boardView(t, b, 1200) as any;
+    }
+    expect(view.state).toBe('done');
+
+    const analysisView = await analyze.getBoardAnalysis(t, b, true);
+    const call = analysisView.par!.calls.find((c) => c.callIndex === 6);
+    expect(call).toBeDefined();
+    expect(call!.call).not.toBe(call!.bestCall); // a genuine model disagreement...
+    expect(call!.cf).toBeNull(); // ...but nothing to recommend: same contract either way
+    expect(analysisView.moments.some((m) => m.kind === 'bid' && m.callIndex === 6)).toBe(false);
+  }, 240_000);
+
+  it('several small plays that never individually cleared the floor become one combined moment when their sum does', async () => {
+    // probed: three genuine ddLoss>0 candidates (2, 1 and 1 tricks), each
+    // landing at mpCost 0 in isolation against a field bunched well above
+    // -50 — but their sum (4 tricks) reaches the field's cluster, and all
+    // three survive their own stage-3 findability check.
+    const t = makeTournament('probe-combined-1');
+    const makeRival = (name: string) =>
+      (db.prepare(`INSERT INTO users (google_id, name, handle) VALUES (?, ?, ?) RETURNING id`).get(`module:${name}`, name, name) as { id: number })
+        .id;
+    const rival1 = makeRival('combined-rival1');
+    const rival2 = makeRival('combined-rival2');
+    const rival3 = makeRival('combined-rival3');
+    const bRival = await driveBoard(t, rival1, 1, optimalCard);
+    await driveBoard(t, rival2, 1, optimalCard);
+    await driveBoard(t, rival3, 1, optimalCard);
+    expect(bRival.contract!.declarer % 2).toBe(0);
+
+    const mediocreCard: CardChooser = async (b, view) => {
+      const legal = view.legalCards as number[];
+      const solve = await solveFutureTricks(b.deal, b.contract, b.plays);
+      const sorted = [...legal].sort((a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99));
+      return sorted.length > 1 && (solve.cardScores.get(sorted[1]) ?? 99) < solve.bestScore ? sorted[1] : sorted[0];
+    };
+    const b = await driveBoard(t, userId, 1, mediocreCard);
+
+    const view = await analyze.getBoardAnalysis(t, b, false);
+    // every individual candidate stayed under the floor...
+    for (const p of view.plies) expect(p.mpCost).toBeLessThan(analyze.MOMENT_FLOOR);
+    for (const p of view.plies) expect(p.sampled).toBeNull();
+    // ...but the combined moment exists, clears it, and lists all three
+    expect(view.combined).not.toBeNull();
+    expect(view.combined!.contributors).toHaveLength(3);
+    expect(view.combined!.mpCost).toBeGreaterThanOrEqual(analyze.MOMENT_FLOOR);
+    expect(view.moments).toHaveLength(1);
+    expect(view.moments[0]).toMatchObject({ kind: 'combined', mpCost: view.combined!.mpCost });
+    expect(view.moments[0].plies).toEqual(view.combined!.contributors.map((c) => c.ply));
+  }, 240_000);
 });
 
 describe('cache behaviour', () => {

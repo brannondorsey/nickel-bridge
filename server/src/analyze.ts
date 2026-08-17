@@ -42,6 +42,24 @@ import { claimRule } from './tournaments.js';
  *          a well-played board should come back moment-free, not decorated
  *          with a stack of "not your fault" stamps.
  *
+ * Stage 3 grades each human decision in ISOLATION — "if only THIS card had
+ * been different, holding the rest of the actual play exactly as it
+ * happened, would the result have moved you up in the field" — which is
+ * blind to a board where the deficit against the field is the SUM of
+ * several separate small mistakes rather than one big one: no individual
+ * fix alone clears a field clustered above you, so every candidate's
+ * mpCost lands at (or near) zero and nothing ever reaches stage 3, even
+ * though "Play From Here" on the whole line would recover the lot. Stage
+ * 3.5 (inline in computeCore, right after the per-ply stage-3 loop) is the
+ * fix: sum the ddLoss of every
+ * candidate that DIDN'T individually clear the floor, substitute the
+ * combined result, and — only if THAT clears the floor — run the exact
+ * same per-candidate findability check on each contributor and keep only
+ * the survivors, recomputing the total from what's left. Never
+ * double-counts: only candidates that never individually became a moment
+ * are eligible, and it is reported as one additional ledger entry
+ * pointing at the whole set, not folded into any single ply.
+ *
  * Stage order is load-bearing: DD is the cheap filter, sampled DD the
  * expensive verdict (k full solves of DIFFERENT deals per candidate — no
  * shared transposition table), so the verdict only runs on candidates that
@@ -127,7 +145,7 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-export const ANALYZE_VERSION = 5; // 5: MOMENT_FLOOR recalibrated 8 -> 5, same flat band the 8 -> 10 measurement found
+export const ANALYZE_VERSION = 6; // 6: bid moments no longer fire when the "better" call reaches the identical contract; added the stage-3.5 combined-candidate moment
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
@@ -181,7 +199,37 @@ export interface PlyAnalysis {
   } | null;
 }
 
-/** Stages 1–3, cached as board_analyses.core. */
+/**
+ * Stage 3.5 — the combined candidate (see the file doc comment). Each
+ * contributor is a ply that did NOT individually clear MOMENT_FLOOR (so it
+ * never became its own moment, and its own PlyAnalysis.sampled stays null —
+ * this type carries findability separately rather than mutating that field,
+ * since the play lens's moment pager treats PlyAnalysis.sampled !== null as
+ * "individually judged and charged," which a leftover contributor is not).
+ * null when there were fewer than two individually-excused-or-uncleared
+ * candidates, or when the combined total still doesn't clear the floor.
+ */
+export interface CombinedMoment {
+  contributors: {
+    ply: number;
+    trick: number;
+    seat: Seat;
+    card: Card;
+    ddLoss: number;
+    bestCard: Card;
+    deficit: number;
+    grade: CardGrade;
+  }[];
+  /** sum of the survivors' ddLoss */
+  ddLoss: number;
+  cfScoreNS: number;
+  /** counterfactual matchpoint pct after substituting cfScoreNS into the real field; null in a single field */
+  cfPct: number | null;
+  /** cfPct − actualPct, the moment-ranking axis; null in a single field */
+  mpCost: number | null;
+}
+
+/** Stages 1–3.5, cached as board_analyses.core. */
 export interface AnalysisCore {
   boardNo: number;
   contract: Contract | null;
@@ -205,6 +253,8 @@ export interface AnalysisCore {
   /** AnalysePlayPBN trace (declaring-side absolute totals, length min(cards+1, 49)); null on a pass-out */
   ddTricks: number[] | null;
   plies: PlyAnalysis[];
+  /** stage 3.5's combined candidate, see CombinedMoment's doc comment; null when there is none */
+  combined: CombinedMoment | null;
 }
 
 /** One human call's counterfactual (stage 4). */
@@ -213,7 +263,12 @@ export interface CallAnalysis {
   callIndex: number;
   call: Call;
   bestCall: Call;
-  /** null when the robot's preferred call was the one played */
+  /**
+   * null when the robot's preferred call was the one played, OR when it
+   * would have reached the SAME final contract (strain/declarer/level/
+   * doubled/redoubled) you actually played — see contractsEqual's doc
+   * comment for why that case must never be shown as a bidding finding.
+   */
   cf: {
     /** the re-run auction from the substituted call on (the app's opinion, not a fact) */
     calls: Call[];
@@ -238,7 +293,7 @@ export interface AnalysisPar {
 }
 
 export interface Moment {
-  kind: 'play' | 'bid';
+  kind: 'play' | 'bid' | 'combined';
   /** play moments */
   ply?: number;
   trick?: number;
@@ -247,7 +302,9 @@ export interface Moment {
   /** bid moments */
   callIndex?: number;
   call?: Call;
-  /** matchpoint pct points this decision cost (the ranking axis) */
+  /** combined moments (stage 3.5) — the plays[] indices of the contributing plies, ascending */
+  plies?: number[];
+  /** matchpoint pct points this decision (or, for 'combined', this whole set) cost — the ranking axis */
   mpCost: number;
 }
 
@@ -276,6 +333,25 @@ const stmtPutPar = db.prepare(`UPDATE board_analyses SET par = ?, updated_at = u
 /** N-S is the human's side; the human's side declares when declarer is N or S. */
 function humanSideDeclares(contract: Contract): boolean {
   return contract.declarer % 2 === HUMAN_SEAT % 2;
+}
+
+/**
+ * Is the counterfactual auction's contract THE SAME ONE actually played?
+ * ddTableTricks is a pure double-dummy fact about the deal, indexed only by
+ * (strain, declarer) — identical regardless of which auction route reached
+ * it (verified: it equals analysePlayTricks's own ply-0 value for the same
+ * contract). So when a "better" call leads to a contract that's otherwise
+ * identical to the one the human actually played, the resulting score gap
+ * is entirely a PLAY-quality difference — DD-optimal play of that contract
+ * vs. the human's actual (possibly imperfect) play of it — with nothing a
+ * different bid could have changed. Attributing that gap to the bid is a
+ * false accusation, not a finding: computePar must not construct a `cf` for
+ * it, and null/undefined declarers or doubling never count as equal to a
+ * real contract's.
+ */
+function contractsEqual(a: Contract | null, b: Contract | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.strain === b.strain && a.declarer === b.declarer && a.level === b.level && a.doubled === b.doubled && a.redoubled === b.redoubled;
 }
 
 /**
@@ -339,7 +415,8 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
 }
 
 /**
- * The matchpoint layer — cfPct/mpCost (play) and cf.cfPct/cf.mpGain (bid) —
+ * The matchpoint layer — cfPct/mpCost (play, and stage 3.5's combined
+ * candidate the same way), and cf.cfPct/cf.mpGain (bid) —
  * is nulled out before persisting, at every call site that writes
  * board_analyses. refreshMatchpointLayer recomputes all of it from the LIVE
  * field on every serve regardless of what's in the cache (see its own doc
@@ -352,7 +429,11 @@ function substitutePct(scores: number[], myIndex: number, myScore: number): numb
  */
 function stripMatchpointLayer(core: AnalysisCore, par: AnalysisPar | null): { core: AnalysisCore; par: AnalysisPar | null } {
   return {
-    core: { ...core, plies: core.plies.map((p) => ({ ...p, cfPct: null, mpCost: null })) },
+    core: {
+      ...core,
+      plies: core.plies.map((p) => ({ ...p, cfPct: null, mpCost: null })),
+      combined: core.combined && { ...core.combined, cfPct: null, mpCost: null },
+    },
     par: par && { ...par, calls: par.calls.map((c) => (c.cf ? { ...c, cf: { ...c.cf, cfPct: null, mpGain: null } } : c)) },
   };
 }
@@ -398,6 +479,10 @@ function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCo
   for (const p of core.plies) {
     p.cfPct = singleField ? null : substitutePct(scores, myIndex, p.cfScoreNS);
     p.mpCost = p.cfPct === null || core.actualPct === null ? null : p.cfPct - core.actualPct;
+  }
+  if (core.combined) {
+    core.combined.cfPct = singleField ? null : substitutePct(scores, myIndex, core.combined.cfScoreNS);
+    core.combined.mpCost = core.combined.cfPct === null || core.actualPct === null ? null : core.combined.cfPct - core.actualPct;
   }
   for (const c of par?.calls ?? []) {
     if (!c.cf) continue;
@@ -502,6 +587,7 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
       actualPct,
       ddTricks: null,
       plies: [],
+      combined: null,
     };
   }
   const contract = b.contract;
@@ -576,6 +662,48 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   }
   const judgedPlies = excusedPlies.size ? plies.filter((p) => !excusedPlies.has(p.ply)) : plies;
 
+  // Stage 3.5 — the combined candidate (see the file doc comment above): the
+  // per-ply gate just above judges each decision in isolation, holding the
+  // rest of the actual play fixed — which never fires when the deficit
+  // against the field is the SUM of several separate small mistakes, since
+  // no single fix alone clears a field clustered above you. Sum the ddLoss
+  // of every candidate that did NOT individually clear the floor (an
+  // excused one is already gone from judgedPlies; anything left with
+  // sampled === null is exactly "real ddLoss, never even tried stage 3"),
+  // and see whether fixing all of them TOGETHER would have.
+  const leftover = judgedPlies.filter((p) => p.sampled === null);
+  let combined: AnalysisCore['combined'] = null;
+  if (leftover.length >= 2) {
+    const totalDdLoss = leftover.reduce((s, p) => s + p.ddLoss, 0);
+    const totalTricks = Math.max(0, Math.min(13, actualTricks + (declaring ? totalDdLoss : -totalDdLoss)));
+    const totalScoreNS = boardScoreNS(contract, deal.vul, totalTricks);
+    const totalPct = singleField ? null : substitutePct(scores, myIndex, totalScoreNS);
+    const totalCost = totalPct === null || actualPct === null ? null : totalPct - actualPct;
+    const clears = totalCost === null ? totalDdLoss >= 1 : totalCost >= MOMENT_FLOOR;
+    if (clears) {
+      // The same findability check every individual candidate gets — a
+      // contributor the sampled engine would ALSO have played from this
+      // seat is excused from the combined total exactly as it would be
+      // excused from an individual one. Deliberately does NOT mutate
+      // p.sampled (see CombinedMoment's doc comment): that field stays the
+      // play lens's "individually judged and charged" signal, untouched by
+      // a leftover candidate that only mattered as part of the combined set.
+      const contributors: CombinedMoment['contributors'] = [];
+      for (const p of leftover) {
+        const sampled = await sampleFindability(t, b, deal, contract, p);
+        if (sampled !== null) contributors.push({ ply: p.ply, trick: p.trick, seat: p.seat, card: p.card, ddLoss: p.ddLoss, ...sampled });
+      }
+      if (contributors.length >= 2) {
+        const survivorDdLoss = contributors.reduce((s, c) => s + c.ddLoss, 0);
+        const survivorTricks = Math.max(0, Math.min(13, actualTricks + (declaring ? survivorDdLoss : -survivorDdLoss)));
+        const survivorScoreNS = boardScoreNS(contract, deal.vul, survivorTricks);
+        // cfPct/mpCost stay null here — refreshMatchpointLayer fills them
+        // from cfScoreNS against the live field, same as every play ply's.
+        combined = { contributors, ddLoss: survivorDdLoss, cfScoreNS: survivorScoreNS, cfPct: null, mpCost: null };
+      }
+    }
+  }
+
   return {
     boardNo: b.row.board_no,
     contract,
@@ -586,6 +714,7 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
     actualPct,
     ddTricks,
     plies: judgedPlies,
+    combined,
   };
 }
 
@@ -620,18 +749,25 @@ async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): 
         cfCalls.push(bidder.chooseCall(deal, cfCalls));
       }
       const cfContract = finalContract(deal.dealer, cfCalls);
-      const ddTricks = cfContract ? ddTableTricks(table, cfContract.strain, cfContract.declarer) : null;
-      const scoreNS = cfContract ? boardScoreNS(cfContract, deal.vul, ddTricks!) : 0;
-      const cfPct = core.singleField ? null : substitutePct(scores, myIndex, scoreNS);
-      cf = {
-        calls: cfCalls,
-        contract: cfContract,
-        contractLabel: cfContract ? contractLabel(cfContract, ddTricks ?? undefined) : 'Passed out',
-        ddTricks,
-        scoreNS,
-        cfPct,
-        mpGain: cfPct === null || core.actualPct === null ? null : cfPct - core.actualPct,
-      };
+      // If the "better" call would have reached the SAME contract you
+      // actually played, there is nothing a different bid could have
+      // changed — any score gap here is a play-quality gap, not a bidding
+      // one (see contractsEqual's doc comment). Leave cf null: nothing to
+      // recommend.
+      if (!contractsEqual(cfContract, core.contract)) {
+        const ddTricks = cfContract ? ddTableTricks(table, cfContract.strain, cfContract.declarer) : null;
+        const scoreNS = cfContract ? boardScoreNS(cfContract, deal.vul, ddTricks!) : 0;
+        const cfPct = core.singleField ? null : substitutePct(scores, myIndex, scoreNS);
+        cf = {
+          calls: cfCalls,
+          contract: cfContract,
+          contractLabel: cfContract ? contractLabel(cfContract, ddTricks ?? undefined) : 'Passed out',
+          ddTricks,
+          scoreNS,
+          cfPct,
+          mpGain: cfPct === null || core.actualPct === null ? null : cfPct - core.actualPct,
+        };
+      }
     }
     calls.push({ callIndex: i, call: b.calls[i], bestCall: ev.bestCall, cf });
   }
@@ -646,7 +782,12 @@ async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): 
  * before this runs), so every row assembled here is a genuine, chargeable
  * fault — a board played to the limit of what was findable from the seat
  * comes back with an empty ledger, not a list of forgiven costs. Ranking is
- * by cost, capped at MAX_MOMENTS with the overflow counted.
+ * by cost, capped at MAX_MOMENTS with the overflow counted. core.combined
+ * (stage 3.5) becomes its own 'combined' entry the same way, gated on the
+ * SAME floor at serve time (its cfPct/mpCost are refreshed against the live
+ * field exactly like a play ply's — see refreshMatchpointLayer) rather than
+ * on whatever computeCore decided at compute time, so a combined candidate
+ * that has since drifted under or over the floor is handled honestly too.
  */
 export function assembleMoments(core: AnalysisCore, par: AnalysisPar | null): { moments: Moment[]; setAside: number } {
   const all: Moment[] = [];
@@ -660,6 +801,22 @@ export function assembleMoments(core: AnalysisCore, par: AnalysisPar | null): { 
       grade: p.sampled.grade,
       mpCost: p.mpCost,
     });
+  }
+  // A combined contributor can be individually promoted later by
+  // backfillDriftedPlies (the field grew enough that its OWN mpCost now
+  // clears the floor alone) without combined.contributors ever being
+  // recomputed — showing both would double-count that ply's tricks. Rather
+  // than a second DDS-free recompute here, just drop the combined moment
+  // for this one serve when that overlap exists; it is a rare drift edge
+  // case, and the individually-promoted ply still shows on its own.
+  const promoted = new Set(core.plies.filter((p) => p.sampled !== null).map((p) => p.ply));
+  if (
+    core.combined &&
+    core.combined.mpCost !== null &&
+    core.combined.mpCost >= MOMENT_FLOOR &&
+    !core.combined.contributors.some((c) => promoted.has(c.ply))
+  ) {
+    all.push({ kind: 'combined', plies: core.combined.contributors.map((c) => c.ply), mpCost: core.combined.mpCost });
   }
   for (const c of par?.calls ?? []) {
     if (c.cf?.mpGain != null && c.cf.mpGain >= MOMENT_FLOOR) {
