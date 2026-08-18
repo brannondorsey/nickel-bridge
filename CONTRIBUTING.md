@@ -257,9 +257,13 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 the design-system skill — see "Design system" below; and
                 skills/player-outreach/, the operator skill that reads the production
                 roster and drafts the weekly player emails — see "Player outreach" below;
-                and skills/own-the-fix/, the workflow skill that carries a described
+                skills/own-the-fix/, the workflow skill that carries a described
                 change through PR, review and CI to merge-ready — see "Owning a change
-                end to end" below
+                end to end" below; and skills/find-skills, a third-party meta-skill
+                (vercel-labs/skills, installed via `npx skills add`) that discovers and
+                installs further skills on request — a symlink into ../.agents/skills/,
+                the CLI's own canonical, cross-agent storage location, tracked alongside
+                ../skills-lock.json
 ```
 
 ## Development workflow
