@@ -151,6 +151,7 @@ const legalCalls = [0, ...Array.from({ length: 30 }, (_, i) => i + 8)]; // Pass 
 const base = {
   tournamentId: 12,
   tournamentName: 'Tournament #12',
+  tournamentNumber: 12,
   boardNo: 2,
   totalBoards: 4,
   dealer: 0,
@@ -341,7 +342,7 @@ export const boardPlayingWestDummy: BoardView = {
  *  board_no is always copied verbatim from the board it branched from. */
 export const boardPlayingRehearsal: BoardView = {
   ...boardPlaying,
-  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24, originNumber: 18 },
 };
 
 // ---- done ----
@@ -419,7 +420,7 @@ export const boardDoneLow: BoardView = {
  *  receipt and the positive delta framing in the VS YOUR REAL TABLE panel. */
 export const boardDoneRehearsal: BoardView = {
   ...boardDone,
-  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24, originNumber: 18 },
   result: {
     ...boardDone.result!,
     contractLabel: '4♠+1 by S',
@@ -713,6 +714,7 @@ export const activityResponse = {
       at: at(23, 20, 5),
       tournamentId: 40,
       tournamentName: 'Tournament #40',
+      tournamentNumber: 40,
       pct: 55.5,
       rank: 3,
       of: 5,
@@ -724,6 +726,7 @@ export const activityResponse = {
       at: at(23, 21, 41),
       tournamentId: 41,
       tournamentName: 'Tournament #41',
+      tournamentNumber: 41,
       pct: 62,
       rank: 2,
       of: 5,
@@ -743,6 +746,7 @@ export const activityResponse = {
       at: at(23, 16, 38),
       tournamentId: 39,
       tournamentName: 'Tournament #39',
+      tournamentNumber: 39,
       pct: 47,
       rank: 4,
       of: 5,
@@ -760,6 +764,7 @@ export const activityResponse = {
       at: at(22, 7, 58),
       tournamentId: 38,
       tournamentName: 'Tournament #38',
+      tournamentNumber: 38,
       pct: 68,
       rank: 1,
       of: 4,

@@ -1694,8 +1694,12 @@ describe('Board — rehearsal', () => {
   it('relabels the header and shows END instead of the vul chip, mid-play', async () => {
     apiMock.board.mockResolvedValue(boardPlayingRehearsal);
     renderBoard();
-    // branchPly 24 -> trick floor(24/4)+1 = 7
-    expect(await screen.findByText('REHEARSAL — Board 2, from Trick 7')).toBeInTheDocument();
+    // The header names the ORIGIN crossing's DISPLAY number. The fixture's
+    // origin is id 20 wearing number 18 — deliberately different, because the
+    // bug this replaced printed a row id (production's crossing #105 read
+    // "126"), and identical values would let that regress unnoticed.
+    expect(await screen.findByText('REHEARSAL — Crossing 18, Board 2')).toBeInTheDocument();
+    expect(screen.queryByText(/Crossing 20/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'END' })).toHaveAttribute('href', '/t/20/b/2/analyze');
     // the ordinary vulnerability chip is gone — this is the one thing that swaps
     expect(screen.queryByText('NS VUL')).not.toBeInTheDocument();

@@ -1345,9 +1345,24 @@ Bundled, the row and its number commit together or not at all, and "create a cro
 no spelling that skips the numbering. A raw INSERT elsewhere could still bypass it; an
 `AFTER INSERT` trigger is what would make that impossible, and is deliberately not done —
 this codebase has no triggers and an invisible rewrite of a row's name is a poor thing to
-discover. `web/src/format.ts`'s `tournamentNo()` still parses the number back out of `name`
-and needed no change; sending `number` over the API and retiring both client-side regexes is
-the natural follow-up, not done here.
+discover.
+
+**The API sends `number`, and no client re-derives it.** `boardView` (as `tournamentNumber`),
+both `/api/tournaments` routes and the activity feed's crossing events all carry the column,
+and `web/src/format.ts`'s `tournamentNo(number, id)` is the ONE place deciding how a crossing
+is named. It used to regex `#(\d+)` back out of `name`, with a second copy of that regex in
+`pages/activityFeed.ts` — wrong in the direction that fails silently, since any name without a
+`#` fell through to the raw id. Not hypothetical: a rehearsal is named "Rehearsal — Board 1,
+from Trick 10", and `pages/Analyze.tsx`'s header skipped the helper entirely to interpolate the
+route param, so production's crossing **#105 announced itself as "CROSSING 126"** — its row id.
+The id fallback survives only for rows that genuinely carry no number (rehearsal and exhibit
+kinds are NULL by design); a standard crossing reaching it is a `createCrossing` bug, not a
+display case.
+
+A rehearsal has no number of its own, so `boardView`'s `rehearsal` field carries `originNumber`
+— the ORIGIN crossing's display number, since that is the crossing being rehearsed — and
+`BoardHead` renders `REHEARSAL — Crossing N, Board M`. The web fixtures deliberately give that
+origin id 20 and number 18, so a return to the id cannot pass unnoticed.
 
 **`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
 choice.** A count is a re-derivation, so it is stable only while no earlier standard row

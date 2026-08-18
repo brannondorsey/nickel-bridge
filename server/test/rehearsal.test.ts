@@ -103,7 +103,15 @@ describe('POST .../rehearse — seeding correctness', () => {
     const created = await alice.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/rehearse`, { ply: branchPly });
     const view = await alice.get(`/api/tournaments/${created.tournamentId}/boards/${created.boardNo}`);
 
-    expect(view.rehearsal).toEqual({ originTournamentId: tournamentId, originBoardNo: boardNo, branchPly });
+    // originNumber is the ORIGIN's display number, not the rehearsal's own
+    // (which is NULL by design) and not either row id — the rehearsal header
+    // names the crossing the player is actually rehearsing.
+    const originNumber = (db.prepare(`SELECT number FROM tournaments WHERE id = ?`).get(tournamentId) as { number: number | null }).number;
+    expect(originNumber).not.toBeNull();
+    expect(view.rehearsal).toEqual({ originTournamentId: tournamentId, originBoardNo: boardNo, branchPly, originNumber });
+    // the rehearsal's own crossing carries no number, which is exactly why the
+    // header has to reach for the origin's
+    expect(view.tournamentNumber).toBeNull();
     if (view.state === 'done') {
       // ensureAdvanced fast-forwarded straight to completion (every
       // remaining decision belonged to a robot) — allHands is legitimately

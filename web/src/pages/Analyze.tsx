@@ -34,7 +34,7 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
 import { HandFan } from '../components/game/HandFan';
 import { motionOK, trickWinner } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
-import { signedScore } from '../format';
+import { signedScore, tournamentNo } from '../format';
 import { buildReplayViews, firstPlyOfTrick, plyOfSeatInTrick } from '../replay/replayViews';
 import { useReplay } from '../replay/useReplay';
 import { railLayout } from './analyzeRail';
@@ -233,7 +233,7 @@ export default function Analyze() {
 
   return (
     <div className="board-page analyze-page">
-      <ScreenHeader title={`CROSSING ${tournamentId} — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
+      <ScreenHeader title={`CROSSING ${tournamentNo(board.tournamentNumber, board.tournamentId)} — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
       <div className="analyze-lens">
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
