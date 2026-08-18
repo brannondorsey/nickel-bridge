@@ -2958,6 +2958,9 @@ a.board-row:hover {
   .stats-page > .stats-tiles,
   .stats-page > .empty-note,
   .stats-page > .stats-gated,
+  /* the signed-in "no such player" message, which renders in the same slot as
+     .stats-gated and should span like it rather than sit in half a column */
+  .stats-page > .notice-error,
   .stats-page > .stats-footer {
     grid-column: 1 / -1;
   }
@@ -4337,15 +4340,30 @@ a.stat-tile:hover {
  * it, and that rule spends all of it in ONE gap between the tray and the
  * feedback, leaving two islands with a hole between them.
  *
- * Bottom-aligning the whole scroll region instead puts the slack above the
- * tray, where it reads as page margin, and groups tray + feedback + hand into
- * one block sitting on the dock. The stability the auto margin was protecting
- * is unchanged and that is the point of doing it this way round: the last
- * child's bottom edge is still fixed to the dock, so a feedback panel that
- * grows by two lines pushes the TRAY up rather than pushing the hand down. */
+ * Moving the auto margin to the TRAY instead puts the slack above it, where it
+ * reads as page margin, and groups tray + feedback + hand into one block
+ * sitting on the dock. The stability the original was protecting is unchanged,
+ * and that is the point of doing it this way round rather than the other: the
+ * last child's bottom edge is still fixed to the dock, so a feedback panel
+ * that grows by two lines pushes the TRAY up rather than pushing the hand
+ * down.
+ *
+ * It must be an auto MARGIN and never `justify-content: flex-end` on
+ * .bid-scroll, which is the same composition and is a real bug. .bid-scroll is
+ * an `overflow-y: auto` flex container, and when a flex container's content
+ * overflows, `justify-content` still pushes it off the START edge — where
+ * scrollTop cannot reach it, since scrollTop cannot go negative. Measured in
+ * Chromium: with flex-end and 300px of content in a 200px box, the first child
+ * sat 99px above the box's top and scrollHeight stayed equal to clientHeight,
+ * i.e. the browser did not even report it as scrollable. That is not
+ * hypothetical here — at 1194×834 a full competitive auction plus a meaning
+ * panel plus the fan does overflow this region, and the earliest calls in the
+ * tray would have become unreachable. An auto margin has no such failure mode:
+ * auto margins absorb POSITIVE free space only and resolve to zero when the
+ * space is negative, so the same layout degrades into an ordinary scroll. */
 @media (min-width: 720px) {
-  .bid-scroll {
-    justify-content: flex-end;
+  .board-page .bid-scroll > .auction {
+    margin-top: auto;
   }
   .bid-decision {
     margin-top: 0;
