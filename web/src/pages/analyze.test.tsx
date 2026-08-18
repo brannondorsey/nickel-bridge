@@ -67,6 +67,7 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
         sampled: { bestCard: engineCard, deficit: 1, grade: 1 },
       },
     ],
+    combined: null,
     moments: [{ kind: 'play', ply: chargedPly, trick: chargedTrick, card: flat[chargedPly].card, grade: 1, mpCost: 25 }],
     setAside: 0,
     par: null,

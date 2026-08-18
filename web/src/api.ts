@@ -246,6 +246,23 @@ export interface AnalysisMoment {
   mpCost: number;
 }
 
+/**
+ * Stage 3.5's combined candidate (server/src/analyze.ts's CombinedMoment),
+ * mirrored the same way AnalysisPly is even though nothing here reads the
+ * per-contributor engine detail today (the ledger's combined row only needs
+ * AnalysisMoment.plies + AnalysisPly.trick to caption itself) — kept
+ * available rather than trimmed, the same "documented, not just present on
+ * the wire" precedent every other AnalysisCore field follows, and it is
+ * where a future combined-moment engine-pick display would read from.
+ */
+export interface AnalysisCombined {
+  contributors: { ply: number; trick: number; seat: number; card: number; ddLoss: number; bestCard: number; deficit: number; grade: 0 | 1 | 2 | 3 }[];
+  ddLoss: number;
+  cfScoreNS: number;
+  cfPct: number | null;
+  mpCost: number | null;
+}
+
 export interface AnalysisCall {
   callIndex: number;
   call: number;
@@ -279,6 +296,8 @@ export interface AnalysisView {
   actualPct: number | null;
   ddTricks: number[] | null;
   plies: AnalysisPly[];
+  /** stage 3.5's combined candidate; null when there is none — see AnalysisCombined's doc comment */
+  combined: AnalysisCombined | null;
   moments: AnalysisMoment[];
   setAside: number;
   par: AnalysisPar | null;
