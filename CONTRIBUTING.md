@@ -1054,12 +1054,27 @@ human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for th
 converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
 (`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
 insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
-seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
-would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault is DROPPED before the
+response is built,
 not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
 just because an omniscient trace prefers something else, and a well-played board comes back
 with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
-when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
+when this shipped, so every cached analysis recomputes). **"No fault" is TWO tests, and the
+second one is easy to leave out** — `sampleFindability` excuses a candidate when the sampled
+engine would also have played the card (`deficit <= 0`), *and* when the sampled engine's own
+pick is not DD-optimal at that node. The second is not a refinement of the first: comparing
+the played card against the sampled argmax only asks whether the engine DISAGREES, and an
+engine that disagrees while being just as wrong is not evidence of a findable trick.
+Shipped after production tournament id 126 board 1 (5♣ by W) came back with two moments,
+both false — trick 4 charged 100 MP naming ♠K (only ♠6 recovers), trick 10 charged 100 MP
+naming ♣T (only ♥A/♥K recover) — and the player's three "Play From Here" rehearsals of the
+trick-10 advice all returned the identical −400, which is what surfaced it. Costs one extra
+true-deal `solveFutureTricks` per candidate that clears the first test, ordered after it so
+the free check runs first. The payoff beyond fairness: a surviving verdict's `bestCard` is
+now guaranteed to recover the loss, so the play lens's "the engine, from your seat, plays X"
+and the ledger's "worth N% instead of M%" describe the same reachable outcome — before, the
+named card and the promised percentage came from two different engines and could disagree.
+`server/test/analyze.test.ts` pins that exact board, raw-seeded. Stage order is load-bearing: the DD trace is the cheap filter, the
 sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
 counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
 Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with

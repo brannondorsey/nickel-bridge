@@ -40,7 +40,11 @@ import { claimRule } from './tournaments.js';
  *          shown: a card nobody could reasonably find from that seat isn't a
  *          moment just because an omniscient trace prefers something else —
  *          a well-played board should come back moment-free, not decorated
- *          with a stack of "not your fault" stamps.
+ *          with a stack of "not your fault" stamps. "Findable" means the
+ *          sampled engine's own pick actually RECOVERS the trick, not merely
+ *          that it differs from what was played; see sampleFindability for
+ *          why the weaker test produced false accusations naming cards that
+ *          could not work.
  *
  * Stage order is load-bearing: DD is the cheap filter, sampled DD the
  * expensive verdict (k full solves of DIFFERENT deals per candidate — no
@@ -100,6 +104,15 @@ export const ANALYZE_K = 8;
  * THE one number to move if the screen starts nagging (raise it) or stays
  * too quiet on boards with real, findable mistakes (lower it); re-run the
  * two scripts above and record the date and n when you do.
+ *
+ * STALE CAVEAT on the excusal figures above (not on the floor itself): that
+ * sweep ran while stage 3 excused only `deficit <= 0`. sampleFindability now
+ * also excuses a candidate whose sampled pick isn't DD-optimal, so the real
+ * excusal rate is higher than 21.9% and the 486-board "ceiling" is an upper
+ * bound rather than today's figure. The floor is a matchpoint-SIZE gate and
+ * the excusal a findability gate — orthogonal, which is why 5 was left alone
+ * rather than re-guessed — but re-run the pair before quoting these numbers
+ * or moving the floor on them.
  */
 export const MOMENT_FLOOR = 5;
 
@@ -127,7 +140,7 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-export const ANALYZE_VERSION = 5; // 5: MOMENT_FLOOR recalibrated 8 -> 5, same flat band the 8 -> 10 measurement found
+export const ANALYZE_VERSION = 6; // 6: stage 3 also excuses a candidate whose sampled pick doesn't recover the DD loss (see sampleFindability)
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
@@ -168,12 +181,19 @@ export interface PlyAnalysis {
   /**
    * stage-3 findability — only for candidates that cleared the floor AND
    * turned out to be a genuine fault. A candidate the sampled engine would
-   * also have played (deficit <= 0) never reaches here: computeCore drops it
+   * also have played (deficit <= 0), or one whose sampled pick doesn't
+   * actually recover the DD loss, never reaches here: computeCore drops it
    * before this field is populated, so its ply carries no PlyAnalysis at all
    * (see the doc comment on that stage).
    */
   sampled: {
-    /** the card the sampled engine plays from the player's seat */
+    /**
+     * The card the sampled engine plays from the player's seat. Guaranteed
+     * DD-optimal at this node — sampleFindability excuses the candidate
+     * outright when its pick doesn't recover the trick — so naming it to
+     * the player as the better card is a claim that holds up when they
+     * replay it ("Play From Here").
+     */
     bestCard: Card;
     /** average tricks the played card gave up across the k sampled layouts */
     deficit: number;
@@ -410,10 +430,45 @@ function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCo
  * Stage 3's per-candidate findability verdict, extracted so computeCore's
  * first pass and backfillDriftedPlies' serve-time second chance (below) call
  * exactly the same judging logic — the two must never diverge on what makes
- * a card excused. Returns null for an EXCUSED candidate (the sampled engine
- * would also have played the card, deficit <= 0); the caller drops it from
- * `plies` entirely rather than keeping a null verdict, so a dropped
+ * a card excused. Returns null for an EXCUSED candidate; the caller drops it
+ * from `plies` entirely rather than keeping a null verdict, so a dropped
  * candidate is never re-attempted on a later serve.
+ *
+ * There are TWO ways to be excused, and the second one is the whole reason
+ * this function is not just a disagreement test:
+ *
+ *  1. `deficit <= 0` — the sampled engine would have played the card itself.
+ *     The original excusal, and the obvious one.
+ *  2. The sampled engine's own pick DOESN'T RECOVER THE DD LOSS. This is the
+ *     case that used to slip through and produce false accusations, so it is
+ *     worth being precise about. Stage 1 flags a ply because the omniscient
+ *     trace says a *different* card was worth a trick; stage 3 is supposed to
+ *     ask whether that trick was findable from the player's own seat. But
+ *     comparing the played card against the sampled engine's argmax only
+ *     asks whether the engine DISAGREES — and an engine that disagrees while
+ *     being just as wrong is not evidence of a findable trick. Measured on
+ *     production board 1 of tournament 126 (5♣ by W): at trick 10 South led
+ *     ♥T for a real 1-trick DD loss, the sampled engine preferred ♣T, and
+ *     ♣T is worth exactly as little as ♥T double dummy (only ♥A/♥K recover).
+ *     The old gate charged the player 100 matchpoints and told them to try a
+ *     card that cannot work; three "Play From Here" rehearsals of it all
+ *     returned the identical −400. Same board, trick 4: engine picked ♠K,
+ *     also DD-worthless, only ♠6 recovers.
+ *
+ * Testing (2) against the true-deal solve is what makes the response's own
+ * claim true rather than merely plausible: a surviving verdict's `bestCard`
+ * is now guaranteed to be a card that genuinely recovers the loss, so the
+ * play lens's "the engine, from your seat, plays X" and the ledger's
+ * "worth N% instead of M%" describe the same reachable outcome. It costs one
+ * extra DD solve per candidate that clears (1) — deliberately ordered after
+ * the free `deficit` test, and dwarfed by the ANALYZE_K solves already spent
+ * above, on an already-floor-gated background-priority path.
+ *
+ * The test is strict membership in the DD-optimal set rather than "the
+ * engine's pick is merely better than what was played". A partial recovery
+ * still leaves the ledger promising a counterfactual score (cfScoreNS is
+ * derived from the FULL ddLoss) that the named card cannot deliver, which is
+ * the same lie in a smaller font.
  */
 async function sampleFindability(
   t: TournamentRow,
@@ -422,7 +477,8 @@ async function sampleFindability(
   contract: Contract,
   p: PlyAnalysis,
 ): Promise<PlyAnalysis['sampled']> {
-  const { legal, totals } = await scoreCardsSampled(deal, contract, b.plays.slice(0, p.ply), {
+  const prefix = b.plays.slice(0, p.ply);
+  const { legal, totals } = await scoreCardsSampled(deal, contract, prefix, {
     k: ANALYZE_K,
     // per-ply namespace: two opens of the same board must sample the same
     // layouts or the cache and a recompute would disagree (same
@@ -437,6 +493,13 @@ async function sampleFindability(
   for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
   const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(p.card) ?? 0)) / ANALYZE_K;
   if (deficit <= 0) return null;
+
+  // (2) above — the engine disagreed, but does its pick actually win the
+  // trick stage 1 is charging for? Same true-deal question the DD trace
+  // asked, re-asked about the card we are about to recommend.
+  const solve = await solveFutureTricks(deal, contract, prefix, 'background');
+  if ((solve.cardScores.get(bestCard) ?? -1) !== solve.bestScore) return null;
+
   return { bestCard, deficit, grade: gradeFromDeficit(deficit) };
 }
 
@@ -562,7 +625,9 @@ async function computeCore(t: TournamentRow, b: GameBoard): Promise<AnalysisCore
   // clear the floor here can still be judged later — see backfillDriftedPlies,
   // called from getBoardAnalysis on every serve — so this first pass is a
   // COST-SAVING filter (skip the expensive solve when the field obviously
-  // won't reward it), not the only chance a candidate gets.
+  // won't reward it), not the only chance a candidate gets. A candidate whose
+  // sampled pick would not have recovered the trick either is dropped by the
+  // same rule and for the same reason (sampleFindability's second excusal).
   const excusedPlies = new Set<number>();
   for (const p of plies) {
     const clears = p.mpCost === null ? p.ddLoss >= 1 : p.mpCost >= MOMENT_FLOOR;
