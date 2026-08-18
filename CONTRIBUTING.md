@@ -259,11 +259,27 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 roster and drafts the weekly player emails — see "Player outreach" below;
                 skills/own-the-fix/, the workflow skill that carries a described
                 change through PR, review and CI to merge-ready — see "Owning a change
-                end to end" below; and skills/find-skills, a third-party meta-skill
-                (vercel-labs/skills, installed via `npx skills add`) that discovers and
-                installs further skills on request — a symlink into ../.agents/skills/,
-                the CLI's own canonical, cross-agent storage location, tracked alongside
-                ../skills-lock.json
+                end to end" below; and four third-party skills installed individually via
+                `npx skills add` rather than as marketplace plugins — skills/find-skills
+                (vercel-labs/skills) discovers and installs further skills on request;
+                skills/grill-me + skills/grilling (mattpocock/skills) are the relentless
+                design-interview skill and the flow it delegates to (grill-me is a thin
+                `disable-model-invocation` pointer — "call the Skill tool with 'grilling'"
+                — so the two are always installed together); skills/responsive-design
+                (wshobson/agents) covers container queries, fluid typography and
+                mobile-first breakpoint strategy. Each is a symlink into
+                ../.agents/skills/, the CLI's own canonical, cross-agent storage location,
+                tracked alongside ../skills-lock.json. This per-skill install is the
+                deliberate replacement for `.claude/settings.json`'s short-lived
+                `extraKnownMarketplaces`/`enabledPlugins` blocks (PRs #186/#187): those
+                registered two whole marketplace plugins — `ui-design` (~dozens of UI/mobile
+                skills) and `mattpocock-skills` (~20 engineering-workflow skills) — for the
+                sake of one skill each, and only take effect for a human running Claude
+                Code locally who accepts the marketplace-trust prompt. A remote/web session
+                never sees a project's `enabledPlugins` at all, so grill-me and
+                responsive-design were unreachable from exactly the sessions meant to use
+                them. The individual-skill install has no such gap: it's just files under
+                version control, loaded by Claude Code's native skill reader everywhere
 ```
 
 ## Development workflow
@@ -2509,9 +2525,10 @@ weekly player-outreach routine (`.claude/skills/player-outreach/`) fires into a 
 non-interactive session, and a session that can't answer a permission prompt simply stalls at
 it. Every rule in those two blocks is scoped to that workflow. They are checked in so the
 routine behaves identically for anyone who runs it, rather than depending on one person's local
-approvals. (The file's `extraKnownMarketplaces`/`enabledPlugins` blocks are unrelated — they
-register optional Claude Code plugin marketplaces for contributors, not outreach permissions —
-see each entry's own PR for what it adds and why.)
+approvals. (The file briefly also carried `extraKnownMarketplaces`/`enabledPlugins` blocks
+registering two Claude Code plugin marketplaces for contributors — unrelated to outreach
+permissions, and since replaced by individually-installed skills; see the `.claude` repo-map
+entry above and each PR — #186/#187 added them, a later PR removed them.)
 
 Three groups, and the reasoning matters more than the list:
 
