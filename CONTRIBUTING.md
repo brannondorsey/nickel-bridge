@@ -1110,11 +1110,24 @@ about tricks the whole field also missed, which the MP-substitution design exist
 prevent, and give up the "opportunity relative to what really happened at the table"
 framing the ledger's `+N MP` figures depend on throughout.
 
-This bumped `ANALYZE_VERSION` (6): a cached analysis computed before it shipped could miss
+This bumped `ANALYZE_VERSION` (7): a cached analysis computed before it shipped could miss
 a combined moment that now exists.
 
+**A bid moment must never fire when the "better" call would have reached the exact same
+final contract you actually played.** `ddTableTricks` is a pure double-dummy fact about the
+deal, indexed only by (strain, declarer) — identical regardless of which auction route
+reached it (verified: it equals `analysePlayTricks`'s own ply-0 value for the same
+contract). So when `computePar`'s counterfactual auction lands on a contract equal to
+`core.contract` (same strain/declarer/level/doubled/redoubled, `contractsEqual`), the
+"gain" it would report is entirely a PLAY-quality gap — DD-optimal play of that contract vs.
+your actual play of it — with nothing a different bid could have changed; attributing that
+gap to the bid was a false accusation, not a finding. `computePar` now leaves `cf` null in
+that case, same as when the robot's own preferred call was the one played. This bumped
+`ANALYZE_VERSION` (6): a cached analysis computed before it shipped could carry a
+same-contract bid moment that should never have existed.
+
 The served `momentFloor`
-still backs one honest caption for the residual case that check can't close (Analyze.tsx's
+still backs one honest caption for the residual case backfillDriftedPlies can't close (Analyze.tsx's
 play-lens ribbon compares a ROUNDED figure for display; the raw, unrounded mpCost decides
 backfill, so a candidate sitting exactly on the rounding boundary can still read as
 "cleared" without having cleared the raw gate). The grading boundary is `boards.claimed_at_ply`

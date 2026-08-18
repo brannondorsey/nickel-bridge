@@ -145,7 +145,7 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-export const ANALYZE_VERSION = 6; // 6: added the stage-3.5 combined-candidate moment
+export const ANALYZE_VERSION = 7; // 7: added the stage-3.5 combined-candidate moment (6 was #184's same-contract bid-moment fix)
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
@@ -263,7 +263,12 @@ export interface CallAnalysis {
   callIndex: number;
   call: Call;
   bestCall: Call;
-  /** null when the robot's preferred call was the one played */
+  /**
+   * null when the robot's preferred call was the one played, OR when it
+   * would have reached the SAME final contract (strain/declarer/level/
+   * doubled/redoubled) you actually played — see contractsEqual's doc
+   * comment for why that case must never be shown as a bidding finding.
+   */
   cf: {
     /** the re-run auction from the substituted call on (the app's opinion, not a fact) */
     calls: Call[];
@@ -328,6 +333,25 @@ const stmtPutPar = db.prepare(`UPDATE board_analyses SET par = ?, updated_at = u
 /** N-S is the human's side; the human's side declares when declarer is N or S. */
 function humanSideDeclares(contract: Contract): boolean {
   return contract.declarer % 2 === HUMAN_SEAT % 2;
+}
+
+/**
+ * Is the counterfactual auction's contract THE SAME ONE actually played?
+ * ddTableTricks is a pure double-dummy fact about the deal, indexed only by
+ * (strain, declarer) — identical regardless of which auction route reached
+ * it (verified: it equals analysePlayTricks's own ply-0 value for the same
+ * contract). So when a "better" call leads to a contract that's otherwise
+ * identical to the one the human actually played, the resulting score gap
+ * is entirely a PLAY-quality difference — DD-optimal play of that contract
+ * vs. the human's actual (possibly imperfect) play of it — with nothing a
+ * different bid could have changed. Attributing that gap to the bid is a
+ * false accusation, not a finding: computePar must not construct a `cf` for
+ * it, and null/undefined declarers or doubling never count as equal to a
+ * real contract's.
+ */
+function contractsEqual(a: Contract | null, b: Contract | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.strain === b.strain && a.declarer === b.declarer && a.level === b.level && a.doubled === b.doubled && a.redoubled === b.redoubled;
 }
 
 /**
@@ -725,18 +749,25 @@ async function computePar(_t: TournamentRow, b: GameBoard, core: AnalysisCore): 
         cfCalls.push(bidder.chooseCall(deal, cfCalls));
       }
       const cfContract = finalContract(deal.dealer, cfCalls);
-      const ddTricks = cfContract ? ddTableTricks(table, cfContract.strain, cfContract.declarer) : null;
-      const scoreNS = cfContract ? boardScoreNS(cfContract, deal.vul, ddTricks!) : 0;
-      const cfPct = core.singleField ? null : substitutePct(scores, myIndex, scoreNS);
-      cf = {
-        calls: cfCalls,
-        contract: cfContract,
-        contractLabel: cfContract ? contractLabel(cfContract, ddTricks ?? undefined) : 'Passed out',
-        ddTricks,
-        scoreNS,
-        cfPct,
-        mpGain: cfPct === null || core.actualPct === null ? null : cfPct - core.actualPct,
-      };
+      // If the "better" call would have reached the SAME contract you
+      // actually played, there is nothing a different bid could have
+      // changed — any score gap here is a play-quality gap, not a bidding
+      // one (see contractsEqual's doc comment). Leave cf null: nothing to
+      // recommend.
+      if (!contractsEqual(cfContract, core.contract)) {
+        const ddTricks = cfContract ? ddTableTricks(table, cfContract.strain, cfContract.declarer) : null;
+        const scoreNS = cfContract ? boardScoreNS(cfContract, deal.vul, ddTricks!) : 0;
+        const cfPct = core.singleField ? null : substitutePct(scores, myIndex, scoreNS);
+        cf = {
+          calls: cfCalls,
+          contract: cfContract,
+          contractLabel: cfContract ? contractLabel(cfContract, ddTricks ?? undefined) : 'Passed out',
+          ddTricks,
+          scoreNS,
+          cfPct,
+          mpGain: cfPct === null || core.actualPct === null ? null : cfPct - core.actualPct,
+        };
+      }
     }
     calls.push({ callIndex: i, call: b.calls[i], bestCall: ev.bestCall, cf });
   }
