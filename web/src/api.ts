@@ -234,13 +234,15 @@ export interface AnalysisPly {
 }
 
 export interface AnalysisMoment {
-  kind: 'play' | 'bid';
+  kind: 'play' | 'bid' | 'combined';
   ply?: number;
   trick?: number;
   card?: number;
   grade?: 0 | 1 | 2 | 3;
   callIndex?: number;
   call?: number;
+  /** combined moments only: the plays[] indices of the contributing plies, ascending */
+  plies?: number[];
   mpCost: number;
 }
 

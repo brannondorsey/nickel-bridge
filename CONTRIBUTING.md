@@ -1075,7 +1075,45 @@ field that grows afterward doesn't leave a ply stuck below a floor it has since 
 giving any newly-over-the-floor ply its one stage-3 solve there and persisting the result
 (`sampleFindability`, extracted so `computeCore`'s first pass and this second chance can
 never judge a card two different ways) — so a moment that was invisible on first open can
-still surface on a later one without ever being recomputed twice. The served `momentFloor`
+still surface on a later one without ever being recomputed twice.
+
+**Stage 3 judges each human decision in ISOLATION, which has a real blind spot: a board
+whose deficit against the field is the SUM of several separate small mistakes never
+surfaces a single moment**, because no individual fix alone clears a field bunched above
+you — every candidate's `mpCost` lands at (or near) zero and nothing reaches stage 3, even
+though "Play From Here" on the whole line recovers the lot. Measured via a synthetic
+reproduction (a "plausible but imperfect" declarer against a DD-optimal field): boards with
+2-3 genuine one-trick losses landed every candidate at `mpCost: 0`, while a single
+concentrated blunder of the same total size fired correctly. **Stage 3.5** (inline in
+`computeCore`, right after the per-ply stage-3 loop) is the fix: sum the `ddLoss` of every
+candidate that did NOT individually clear the floor, substitute the combined result, and —
+only if THAT clears the floor — run the same per-candidate `sampleFindability` check on each
+contributor and keep only the survivors, recomputing the total from what's left. Reported as
+one additional `'combined'` ledger entry (`AnalysisCore.combined`, refreshed against the live
+field exactly like a play ply's `cfPct`/`mpCost` — see `refreshMatchpointLayer`) pointing at
+the whole set of plies rather than folded into any one of them; the web ledger (`Analyze.tsx`)
+renders it as a static finding, the same shape as a bid moment (no single ply to land a
+rehearsal or a replay jump on — "no single one moved the needle alone, but the whole line
+was there"). Never double-counts: only candidates that never individually became a moment
+are eligible, and a contributor later promoted to its own moment by `backfillDriftedPlies`
+(a rare field-growth edge case) causes `assembleMoments` to drop the combined entry for that
+one serve rather than double-count the ply — a conservative fallback rather than a second
+DDS-free recompute. This does NOT touch `PlyAnalysis.sampled` on a leftover contributor (a
+separate `CombinedMoment.contributors` list carries its findability instead), since the play
+lens's moment pager treats `sampled !== null` as "individually judged and charged."
+
+Considered and rejected: switching the whole gate from matchpoints to raw point difference,
+which WOULD catch these cases too (a point swing from a real DD-trick loss is essentially
+always nonzero, unlike matchpoint-substituted cost, which flattens to exactly zero when a
+partial fix still lands in the same clustered bucket) — but it would reintroduce nagging
+about tricks the whole field also missed, which the MP-substitution design exists to
+prevent, and give up the "opportunity relative to what really happened at the table"
+framing the ledger's `+N MP` figures depend on throughout.
+
+This bumped `ANALYZE_VERSION` (6): a cached analysis computed before it shipped could miss
+a combined moment that now exists.
+
+The served `momentFloor`
 still backs one honest caption for the residual case that check can't close (Analyze.tsx's
 play-lens ribbon compares a ROUNDED figure for display; the raw, unrounded mpCost decides
 backfill, so a candidate sitting exactly on the rounding boundary can still read as

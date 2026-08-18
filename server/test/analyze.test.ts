@@ -241,6 +241,44 @@ describe('the verdict matrix', () => {
     const view = await analyze.getBoardAnalysis(t, b, false);
     for (const p of view.plies) expect([0, 2]).toContain(p.seat);
   }, 240_000);
+
+  it('several small plays that never individually cleared the floor become one combined moment when their sum does', async () => {
+    // probed: three genuine ddLoss>0 candidates (2, 1 and 1 tricks), each
+    // landing at mpCost 0 in isolation against a field bunched well above
+    // -50 — but their sum (4 tricks) reaches the field's cluster, and all
+    // three survive their own stage-3 findability check.
+    const t = makeTournament('probe-combined-1');
+    const makeRival = (name: string) =>
+      (db.prepare(`INSERT INTO users (google_id, name, handle) VALUES (?, ?, ?) RETURNING id`).get(`module:${name}`, name, name) as { id: number })
+        .id;
+    const rival1 = makeRival('combined-rival1');
+    const rival2 = makeRival('combined-rival2');
+    const rival3 = makeRival('combined-rival3');
+    const bRival = await driveBoard(t, rival1, 1, optimalCard);
+    await driveBoard(t, rival2, 1, optimalCard);
+    await driveBoard(t, rival3, 1, optimalCard);
+    expect(bRival.contract!.declarer % 2).toBe(0);
+
+    const mediocreCard: CardChooser = async (b, view) => {
+      const legal = view.legalCards as number[];
+      const solve = await solveFutureTricks(b.deal, b.contract, b.plays);
+      const sorted = [...legal].sort((a, c) => (solve.cardScores.get(a) ?? 99) - (solve.cardScores.get(c) ?? 99));
+      return sorted.length > 1 && (solve.cardScores.get(sorted[1]) ?? 99) < solve.bestScore ? sorted[1] : sorted[0];
+    };
+    const b = await driveBoard(t, userId, 1, mediocreCard);
+
+    const view = await analyze.getBoardAnalysis(t, b, false);
+    // every individual candidate stayed under the floor...
+    for (const p of view.plies) expect(p.mpCost).toBeLessThan(analyze.MOMENT_FLOOR);
+    for (const p of view.plies) expect(p.sampled).toBeNull();
+    // ...but the combined moment exists, clears it, and lists all three
+    expect(view.combined).not.toBeNull();
+    expect(view.combined!.contributors).toHaveLength(3);
+    expect(view.combined!.mpCost).toBeGreaterThanOrEqual(analyze.MOMENT_FLOOR);
+    expect(view.moments).toHaveLength(1);
+    expect(view.moments[0]).toMatchObject({ kind: 'combined', mpCost: view.combined!.mpCost });
+    expect(view.moments[0].plies).toEqual(view.combined!.contributors.map((c) => c.ply));
+  }, 240_000);
 });
 
 describe('cache behaviour', () => {

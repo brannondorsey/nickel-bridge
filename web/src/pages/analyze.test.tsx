@@ -215,6 +215,30 @@ describe('the overview: bid moments and par', () => {
     expect(finding.textContent).toMatch(/did better than perfect bidding allows for either side/);
     expect(finding.textContent).not.toMatch(/not a target anyone missed/);
   });
+
+  it('a combined moment lists its contributing tricks and stays a static finding, like a bid moment', async () => {
+    apiMock.board.mockResolvedValue(donePlayed);
+    // two plies that never individually cleared the floor (server would
+    // never ship these WITH a combined moment unless their own mpCost was
+    // sub-floor — see analyze.ts's stage 3.5), whose sum did
+    const combinedPlies = [
+      { ply: 4, trick: 1, seat: 2 as const, card: allHands[2][0], ddLoss: 1, cfTricksDeclarer: 10, cfScoreNS: 100, cfPct: 20, mpCost: 3, sampled: null },
+      { ply: 20, trick: 5, seat: 2 as const, card: allHands[2][1], ddLoss: 1, cfTricksDeclarer: 10, cfScoreNS: 100, cfPct: 20, mpCost: 3, sampled: null },
+    ];
+    const combinedMoment = { kind: 'combined' as const, plies: [4, 20], mpCost: 30 };
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ plies: combinedPlies, moments: [combinedMoment], setAside: 0, par: parPayload }));
+    renderAnalyze();
+    await screen.findByText('WHERE IT TURNED');
+
+    // a static finding, exactly like a bid moment: no button role, no chevron
+    const row = document.querySelector('.moment-row-static')!;
+    expect(row).not.toBeNull();
+    expect(row.querySelector('.moment-chev')).toBeNull();
+    expect(row.textContent).toContain('Several plays');
+    expect(row.textContent).toMatch(/Tricks 1 and 5/);
+    expect(row.textContent).toMatch(/no single one moved the needle alone/);
+    expect(within(row as HTMLElement).getByText('+30 MP')).toBeInTheDocument();
+  });
 });
 
 describe('the play lens', () => {

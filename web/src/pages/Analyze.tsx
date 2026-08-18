@@ -44,14 +44,19 @@ import { railLayout } from './analyzeRail';
  * lying about it. Two lenses over one board (a URL search param, not a
  * stored preference — a reading position, and it makes a moment shareable):
  *
- *   THE OVERVIEW (default) — the WHERE IT TURNED moments ledger (play AND
- *   bid moments — the ledger is the only bidding surface; the Result's own
- *   YOUR BIDDING table already covers the call-by-call recap, so it is not
- *   repeated here) plus THE CARDS WERE WORTH (par with the field as its
- *   reality check). THE PLAY — the full replay of the play over the real
- *   board UI, all hands open, under the audit ribbon; reduced motion renders
- *   it as a static trick-by-trick list instead (a legitimate reading, not a
- *   fallback).
+ *   THE OVERVIEW (default) — the WHERE IT TURNED moments ledger (play, bid,
+ *   AND combined moments — the ledger is the only bidding surface; the
+ *   Result's own YOUR BIDDING table already covers the call-by-call recap,
+ *   so it is not repeated here) plus THE CARDS WERE WORTH (par with the
+ *   field as its reality check). THE PLAY — the full replay of the play
+ *   over the real board UI, all hands open, under the audit ribbon; reduced
+ *   motion renders it as a static trick-by-trick list instead (a legitimate
+ *   reading, not a fallback).
+ *
+ * A combined moment (server/src/analyze.ts's stage 3.5) is several small
+ * card decisions that only mattered TOGETHER — none moved your matchpoints
+ * alone, but the whole line did — and renders as a static row like a bid
+ * moment (no single ply to land a rehearsal or a replay jump on).
  *
  * All verdicts arrive pre-computed from GET .../analysis (the Compare
  * precedent — this screen re-derives no statistics), and stage 4 (par + the
@@ -311,7 +316,7 @@ function WhereItTurned({
         <>
           {moments.map((m) => (
             <MomentRow
-              key={m.kind === 'play' ? `p${m.ply}` : `b${m.callIndex}`}
+              key={m.kind === 'play' ? `p${m.ply}` : m.kind === 'bid' ? `b${m.callIndex}` : `c${m.plies!.join('-')}`}
               moment={m}
               analysis={analysis}
               onOpen={m.kind === 'play' ? () => onOpenPlay(m.ply!) : null}
@@ -341,6 +346,13 @@ function momentAside(m: AnalysisMoment, analysis: AnalysisView): string {
     }
     return 'The robot bid differently here.';
   }
+  if (m.kind === 'combined') {
+    const tricks = Array.from(
+      new Set((m.plies ?? []).map((ply) => analysis.plies.find((p) => p.ply === ply)?.trick).filter((t): t is number => t != null)),
+    ).sort((a, b) => a - b);
+    const where = tricks.length <= 1 ? `Trick ${tricks[0] ?? '?'}` : `Tricks ${tricks.slice(0, -1).join(', ')} and ${tricks[tricks.length - 1]}`;
+    return `${where} — no single one moved the needle alone, but the whole line was there to be found. See THE PLAY to walk through it.`;
+  }
   const ply = analysis.plies.find((p) => p.ply === m.ply);
   if (ply?.sampled) {
     return `The engine, from your seat, plays ${cardLabel(ply.sampled.bestCard)} — worth ${Math.round(ply.cfPct ?? 0)}% instead of ${Math.round(analysis.actualPct ?? 0)}%.`;
@@ -359,12 +371,14 @@ function MomentRow({
 }: {
   moment: AnalysisMoment;
   analysis: AnalysisView;
-  /** null = a finding with nowhere to go (bid moments — the auction has no replay) */
+  /** null = a finding with nowhere to go: bid moments (the auction has no
+   *  replay) and combined moments (no single ply to land a rehearsal on —
+   *  see THE PLAY lens instead) */
   onOpen: (() => void) | null;
-  /** null = no branch point here either (bid moments again — see onOpen) */
+  /** null = no branch point here either (bid and combined moments — see onOpen) */
   onRehearse: (() => void) | null;
   onDiscardRehearsal: (rehearsalTournamentId: number) => void;
-  /** past attempts branched from exactly this moment's ply — always [] on a bid moment */
+  /** past attempts branched from exactly this moment's ply — always [] on a bid or combined moment */
   rehearsals: RehearsalSummary[];
   /** your real table's score, for colouring each stub — see RehearsalRail */
   actualScoreNS: number | null;
@@ -373,11 +387,15 @@ function MomentRow({
   const name =
     m.kind === 'play'
       ? `Trick ${m.trick}, ${m.grade} of 3 stars, ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`
-      : `Your bid — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`;
+      : m.kind === 'bid'
+        ? `Your bid — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`
+        : `Several plays together — ${Math.round(m.mpCost)} more matchpoints were there. ${aside}`;
   const body = (
     <>
       <span className="moment-main" aria-hidden={onOpen ? 'true' : undefined}>
-        <b className="moment-where num">{m.kind === 'play' ? `Trick ${m.trick}` : <>Your <CallText call={m.call!} /></>}</b>
+        <b className="moment-where num">
+          {m.kind === 'play' ? `Trick ${m.trick}` : m.kind === 'bid' ? <>Your <CallText call={m.call!} /></> : 'Several plays'}
+        </b>
         {m.kind === 'play' ? <StarGrade stars={m.grade ?? 0} /> : null}
         <MpGain gain={m.mpCost} />
         {onOpen ? <span className="moment-chev">›</span> : null}
