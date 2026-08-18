@@ -13,7 +13,8 @@ import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
 import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { getBoardAnalysis } from './analyze.js';
-import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay } from './game.js';
+import { quizAnalyzeReveal } from './quiz.js';
+import { boardView, ensureAdvanced, loadBoard, submitCall, submitPlay, submitQuizAnswer } from './game.js';
 import { serializeRequestLog } from './logging.js';
 import { createRehearsal, discardRehearsal, listRehearsals } from './rehearsal.js';
 import { securityHeaders } from './security.js';
@@ -219,7 +220,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     // analyze an 'exhibit'-kind tournament.
     if (t.kind === 'rehearsal') return reply.code(404).send({ error: 'not analyzable' });
     if (t.ai_field) noteTournamentActivity(t.id);
-    return reply.send(await getBoardAnalysis(t, b, wantPar));
+    const analysis = await getBoardAnalysis(t, b, wantPar);
+    // Merged in at serve time, outside the board_analyses cache path — Pop-Up
+    // Quiz reveal data lives entirely in pop_quizzes and shares none of
+    // Analyze's DD/verdict scoring, so there's no ANALYZE_VERSION to bump.
+    return reply.send({ ...analysis, quiz: quizAnalyzeReveal(b.row.id) });
   });
 
   // "Play From Here" — branch a finished board's real play at `ply` into a
@@ -292,6 +297,29 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (typeof card !== 'number' || card < 0 || card > 51) return reply.code(400).send({ error: 'bad card' });
     if (t.ai_field) noteTournamentActivity(t.id);
     await submitPlay(b, card);
+    return reply.send({ board: boardView(t, b, user.elo) });
+  });
+
+  // Pop-Up Quiz answer — mirrors /call and /play exactly: validate, mutate,
+  // return the resulting board. Correctness is never revealed here either —
+  // boardView's `quiz` field never carries correctAnswer/reasoning, whether
+  // this is answering the same quiz again (rejected, see recordQuizAnswer)
+  // or a fresh one further down the board.
+  app.post('/api/tournaments/:id/boards/:no/quiz-answer', async (req, reply) => {
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    const { id, no } = req.params as { id: string; no: string };
+    const { quizId, answer } = (req.body ?? {}) as { quizId?: number; answer?: number[] };
+    const t = getTournament(Number(id));
+    const boardNo = boardNoParam(no);
+    if (!t || boardNo === null) return reply.code(404).send({ error: 'not found' });
+    const b = loadBoard(t, user.id, boardNo, false);
+    if (!b) return reply.code(404).send({ error: 'board not started' });
+    if (typeof quizId !== 'number' || !Array.isArray(answer) || !answer.every((n) => typeof n === 'number')) {
+      return reply.code(400).send({ error: 'bad answer' });
+    }
+    if (t.ai_field) noteTournamentActivity(t.id);
+    await submitQuizAnswer(b, quizId, answer);
     return reply.send({ board: boardView(t, b, user.elo) });
   });
 

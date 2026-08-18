@@ -38,6 +38,7 @@ const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE
 const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
 const stmtSetTrickClearMode = db.prepare(`UPDATE users SET trick_clear_mode = ? WHERE id = ?`);
 const stmtSetTrumpPlacement = db.prepare(`UPDATE users SET trump_placement = ? WHERE id = ?`);
+const stmtSetQuizFrequency = db.prepare(`UPDATE users SET quiz_frequency = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -220,6 +221,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             doubleTapBid: user.double_tap_bid !== 0,
             trickClearMode: user.trick_clear_mode,
             trumpPlacement: user.trump_placement,
+            // Pop-Up Quiz cadence — 'never' (default) | 'sometimes' | 'often'.
+            // See server/src/quiz.ts and CLAUDE.md's "Pop-Up Quiz" section.
+            quizFrequency: user.quiz_frequency,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
@@ -336,6 +340,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const enums: [key: string, values: string[], apply: (value: string) => void][] = [
       ['trickClearMode', ['auto', 'tap'], (v) => stmtSetTrickClearMode.run(v, user.id)],
       ['trumpPlacement', ['suit', 'left'], (v) => stmtSetTrumpPlacement.run(v, user.id)],
+      // Fails CLOSED like doubleTapBid (new opt-in behaviour), never read as
+      // `!== 'never'` — see the quiz_frequency migration in db.ts.
+      ['quizFrequency', ['never', 'sometimes', 'often'], (v) => stmtSetQuizFrequency.run(v, user.id)],
     ];
     const booleans = new Set(fields.map(([key]) => key));
     const choices = new Map(enums.map(([key, values]) => [key, values]));
@@ -365,6 +372,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       doubleTapBid: row.double_tap_bid !== 0,
       trickClearMode: row.trick_clear_mode,
       trumpPlacement: row.trump_placement,
+      quizFrequency: row.quiz_frequency,
     });
   });
 

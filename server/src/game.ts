@@ -38,6 +38,14 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
+import {
+  QuizGenerationContext,
+  hasPendingQuiz,
+  maybeGenerateQuiz,
+  pendingQuizView,
+  quizReportCard,
+  recordQuizAnswer,
+} from './quiz.js';
 import { boardDifficulty, claimRule, getTournament, recomputeElo } from './tournaments.js';
 
 export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
@@ -228,6 +236,19 @@ export function humanControls(hand: Seat, contract: Contract): boolean {
   return hand === partnerOf(HUMAN_SEAT) && contract.declarer % 2 === HUMAN_SEAT % 2;
 }
 
+/**
+ * Which seat's cards the human is actually controlling for this contract, and
+ * which seat is dummy — the "hand-flip subtlety": when the human's partner
+ * declares, control flips so the human plays THAT hand instead of sitting as
+ * a pure spectator dummy. `boardView` and the Pop-Up Quiz trigger-check
+ * (`advanceRobots`) both call this rather than each re-deriving it — that
+ * duplication is exactly the bug class this helper exists to close off.
+ */
+export function playingSeatFor(contract: Contract): { playingSeat: Seat; dummySeat: Seat } {
+  const flipped = contract.declarer === partnerOf(HUMAN_SEAT);
+  return { playingSeat: flipped ? contract.declarer : HUMAN_SEAT, dummySeat: partnerOf(contract.declarer) };
+}
+
 function finishBoard(b: GameBoard): void {
   if (b.contract) {
     const ps = playState(b.deal, b.contract, b.plays);
@@ -255,6 +276,12 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
   // prepared read, but the gate can be reached several times in one call and
   // a preference cannot change mid-request.
   let autoClaim: boolean | null = null;
+  // Pop-Up Quiz: how many completed tricks this CALL has already scanned for
+  // a trigger. Reinitialized every call, unlike hasPendingQuiz below (checked
+  // first, on every iteration) which is the authoritative, cross-call gate —
+  // see quiz.ts's doc comments and CLAUDE.md's "Pop-Up Quiz" section for why
+  // both are needed.
+  let quizCheckedThroughTrick: number | null = null;
   for (;;) {
     if (b.row.state === 'bidding') {
       const auction = auctionState(b.deal.dealer, b.calls);
@@ -277,7 +304,36 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
       continue;
     }
     if (b.row.state === 'playing') {
+      // The authoritative cross-call gate: a pending quiz freezes the board
+      // for its whole lifetime, not just within the call that generated it —
+      // this is what makes a reload/second-tab/ensureAdvanced call during an
+      // unanswered quiz a genuine no-op instead of sailing past it.
+      if (hasPendingQuiz(b.row.id)) return;
       const ps = playState(b.deal, b.contract!, b.plays);
+      if (quizCheckedThroughTrick === null) quizCheckedThroughTrick = ps.completedTricks.length;
+      if (ps.completedTricks.length > quizCheckedThroughTrick) {
+        // In practice always exactly one trick per iteration (each loop pass
+        // pushes one card, so completedTricks can only ever increment by one
+        // between checks) — looped defensively rather than assumed.
+        const { playingSeat, dummySeat } = playingSeatFor(b.contract!);
+        const quizCtx: QuizGenerationContext = {
+          boardId: b.row.id,
+          userId: b.row.user_id,
+          tournamentKind: b.tournament.kind,
+          tournamentSeed: b.tournament.seed,
+          boardNo: b.row.board_no,
+          claimedAtPly: b.row.claimed_at_ply,
+          deal: b.deal,
+          contract: b.contract!,
+          dealer: b.deal.dealer,
+          calls: b.calls,
+          plays: b.plays,
+        };
+        for (let k = quizCheckedThroughTrick + 1; k <= ps.completedTricks.length; k++) {
+          if (maybeGenerateQuiz(quizCtx, k, playingSeat, dummySeat)) return; // stop, exactly like a human decision point
+        }
+        quizCheckedThroughTrick = ps.completedTricks.length;
+      }
       if (ps.isOver) {
         finishBoard(b);
         return;
@@ -338,6 +394,14 @@ export async function advanceRobots(b: GameBoard, priority: SolvePriority = 'int
           // board: resolveClaim finishes it.
           b.row.claimed_at_ply = b.plays.length;
           b.plays.push(pickFromSolve(legal, solve));
+          // Everything from here to the end of the board is about to be
+          // decided by resolveClaim, not played — foreclose the re-entered
+          // iteration's quiz-boundary check from scanning the claimed tail
+          // for triggers (a trick the server decided unilaterally is not a
+          // trick a quiz can fire on). The trick that CAUSED this claim was
+          // already correctly checked above, before mayClaim was evaluated,
+          // so this only forecloses tricks AFTER it.
+          quizCheckedThroughTrick = 13;
           await resolveClaim(b, priority);
           continue;
         }
@@ -457,10 +521,41 @@ export async function submitPlay(b: GameBoard, card: Card, priority: SolvePriori
   return withBoardLock(b.row, async () => {
     refresh(b);
     if (b.row.state !== 'playing') throw httpError(409, 'not in play phase');
+    // Defense-in-depth, not the primary enforcement (that's advanceRobots'
+    // control flow above) — rejects a stale/racing client whose local state
+    // hasn't yet reflected a just-generated pending quiz.
+    if (hasPendingQuiz(b.row.id)) throw httpError(409, 'quiz pending — answer it first');
     const ps = playState(b.deal, b.contract!, b.plays);
     if (ps.isOver || !humanControls(ps.handToPlay, b.contract!)) throw httpError(409, 'not your turn');
     if (!legalCards(b.deal, ps).includes(card)) throw httpError(400, 'illegal card');
     b.plays.push(card);
+    await advanceRobots(b, priority);
+    save(b);
+    // see the matching comment in submitCall above
+    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
+  });
+}
+
+/**
+ * Answer a pending Pop-Up Quiz and resume play. Mirrors submitPlay/submitCall
+ * exactly: refresh, mutate, advanceRobots, save, Elo-check. Recording the
+ * answer happens BEFORE advanceRobots is called again, so the cross-call gate
+ * (hasPendingQuiz) sees false on this very call and genuinely resumes —
+ * picking back up in the same loop toward the next human decision, a claim,
+ * the board finishing, or (structurally handled the same way) another quiz
+ * further down the board. Correctness of the answer itself is never revealed
+ * — boardView's `quiz` field (the board's next pending quiz, if any, or
+ * absent) never carries correctAnswer/reasoning.
+ */
+export async function submitQuizAnswer(
+  b: GameBoard,
+  quizId: number,
+  answer: number[],
+  priority: SolvePriority = 'interactive',
+): Promise<void> {
+  return withBoardLock(b.row, async () => {
+    refresh(b);
+    recordQuizAnswer(b.row.id, quizId, answer);
     await advanceRobots(b, priority);
     save(b);
     // see the matching comment in submitCall above
@@ -562,11 +657,10 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
 
   if (b.row.state !== 'bidding' && b.contract) {
     const ps = playState(deal, b.contract, b.plays);
-    const dummy = partnerOf(b.contract.declarer);
     // When partner (North) declares, the human takes over the declarer hand
     // and the board flips: North's cards at the bottom, South face up as dummy.
+    const { playingSeat, dummySeat: dummy } = playingSeatFor(b.contract);
     const flipped = b.contract.declarer === partnerOf(HUMAN_SEAT);
-    const playingSeat = flipped ? b.contract.declarer : HUMAN_SEAT;
     view.contract = b.contract;
     view.contractLabel = contractLabel(b.contract);
     view.declarer = b.contract.declarer;
@@ -596,6 +690,20 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
       view.handToPlay = ps.handToPlay;
       view.legalCards = legalCards(deal, ps);
     }
+    // Pop-Up Quiz: a pending quiz presents this exactly like any other
+    // "locked" snapshot already used elsewhere in this codebase (the
+    // resync-on-reject path, staged robot-burst snapshots) — myTurn false,
+    // no legalCards — so the client's forced-single-legal-card auto-play
+    // effect is automatically inert whenever a quiz is pending, with no
+    // separate client-side guard needed.
+    if (b.row.state === 'playing') {
+      const pending = pendingQuizView(b.row.id);
+      if (pending) {
+        view.quiz = pending;
+        view.myTurn = false;
+        delete view.legalCards;
+      }
+    }
   }
 
   if (b.row.state === 'done') {
@@ -603,6 +711,8 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
     view.allHands = deal.hands;
     view.playHistory = b.contract ? playState(deal, b.contract, b.plays).completedTricks : [];
     if (b.claimed) view.claimed = true;
+    const report = quizReportCard(b.row.id);
+    if (report) view.quizReportCard = report;
     // The origin board's own real result, for the adjusted-receipt
     // comparison — sent inline so the client never needs a second fetch. A
     // rehearsal's own `result.pct`/`.field` are meaningless (matchpoints()

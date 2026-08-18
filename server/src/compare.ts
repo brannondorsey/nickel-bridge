@@ -37,6 +37,7 @@
  * So no new stats collection was needed for any of this.
  */
 
+import { QuestionType } from '@bridge/ai';
 import { BidCategory, ConventionFamily } from '@bridge/core';
 import {
   commonGround,
@@ -140,6 +141,26 @@ const FULL_TILT = {
   bidType: 15, //       widened from the pooled ★★+ share
   convention: 20, //    smaller samples again
   contract: 20,
+  /**
+   * Pop-Up Quiz's Card Counting row. Unlike every other value above, this is
+   * NOT measured against production — there is no quiz data yet to calibrate
+   * against (the feature is shipping alongside this constant). Ships as a
+   * documented launch estimate, the same way MOMENT_FLOOR and the difficulty
+   * split in packages/ai/src/quiz.ts shipped as judgment calls pending real
+   * telemetry — re-measure this the same way FULL_TILT's other rows were
+   * (p10-p90 spread among players clearing COMPARE_MIN_BOARDS with Pop
+   * Quizzes on) once there's a real population to measure.
+   *
+   * A badly-chosen value can't flip a verdict (classify()'s call/no-call
+   * split is driven by the Agresti-Coull gate vs. the margin, independent of
+   * fullTilt) — only over-suppress rows as "thin" or under-scale the bar. With
+   * nothing to calibrate against, err WIDE: a value that sets aside more
+   * borderline comparisons as inconclusive is the safer failure direction for
+   * a screen whose whole credibility rests on "this doesn't flatter." 15
+   * matches avgPct's spread (also a percentage-point rate over a comparable
+   * sample size) rather than the tighter bidAccuracy figure.
+   */
+  quizAccuracy: 15,
 } as const;
 
 /**
@@ -156,8 +177,12 @@ const GRADE_SCORE = { excellent: 1, good: 0.75, fair: 0.4, poor: 0 } as const;
 
 export type Verdict = 'you' | 'them' | 'level' | 'aside';
 
-/** Why a row was set aside, so the screen can say it rather than just omit. */
-export type AsideReason = 'thin' | 'provisional' | 'no-data';
+/** Why a row was set aside, so the screen can say it rather than just omit.
+ *  'disabled' is unique to the quiz-accuracy row: at least one side's CURRENT
+ *  Pop Quizzes setting is 'never', so there's nothing comparable — distinct
+ *  from 'no-data' (both have quizzing on, but the sample is too thin/absent
+ *  to say anything, which still goes through 'no-data'/'thin' as usual). */
+export type AsideReason = 'thin' | 'provisional' | 'no-data' | 'disabled';
 
 export type MeasurePanel = 'headline' | 'bidType' | 'convention' | 'contract';
 
@@ -187,6 +212,9 @@ export interface Measure {
   reason?: AsideReason;
   /** sample size behind each figure, for the row's sub-line */
   samples: [number, number];
+  /** quiz-accuracy row only: the "▾ BY QUESTION TYPE" disclosure — each
+   *  question type both players have answered at least once, rounded pcts */
+  breakdown?: { key: string; label: string; a: number; b: number }[];
 }
 
 export interface ContextRow {
@@ -339,6 +367,18 @@ const BID_TYPE_LABELS: Record<BidCategory, string> = {
   pass: 'PASSES',
 };
 
+/** Display names for Pop-Up Quiz's question types — mirrors web's
+ *  QUESTION_TYPE_LABELS in Player.tsx/Compare.tsx. */
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  'suit-count': 'SUIT LENGTH',
+  'opponent-length': 'OPPONENT LENGTH',
+  void: 'VOIDS',
+  'trump-count': 'TRUMP COUNT',
+  'honor-location': 'HONOR LOCATION',
+  'suit-exhaustion': 'SUIT EXHAUSTION',
+  'running-total': 'RUNNING TOTAL',
+};
+
 const CONVENTION_LABELS: Record<ConventionFamily, string> = {
   stayman: 'STAYMAN',
   jacobyTransfer: 'JACOBY TRANSFERS',
@@ -445,6 +485,45 @@ export function buildMeasures(a: PlayerStats, b: PlayerStats, provisionalMin: nu
       { made: ta.tops.count, n: ta.boardsCompleted },
       { made: tb.tops.count, n: tb.boardsCompleted }),
   );
+
+  // ---- Card Counting (Pop-Up Quiz accuracy) — gated on BOTH players
+  // currently having Pop Quizzes on. `quizStats` is null exactly when a
+  // player's current setting is 'never' (see quiz.ts's quizStatsForUser
+  // contract), so that null-ness alone is the gate — no second live column
+  // read, keeping this module a pure function of two PlayerStats objects.
+  if (a.quizStats && b.quizStats) {
+    const quizMeasure = rateMeasure('quizAccuracy', 'CARD COUNTING', 'headline', FULL_TILT.quizAccuracy,
+      { made: a.quizStats.totalCorrect, n: a.quizStats.totalAnswered },
+      { made: b.quizStats.totalCorrect, n: b.quizStats.totalAnswered });
+    const bByType = new Map(b.quizStats.byType.map((x) => [x.type, x]));
+    const breakdown = a.quizStats.byType
+      .filter((x) => bByType.has(x.type))
+      .map((x) => {
+        const y = bByType.get(x.type)!;
+        return {
+          key: x.type,
+          label: QUESTION_TYPE_LABELS[x.type],
+          a: Math.round((x.correct / x.total) * 100),
+          b: Math.round((y.correct / y.total) * 100),
+        };
+      });
+    out.push(breakdown.length ? { ...quizMeasure, breakdown } : quizMeasure);
+  } else {
+    out.push({
+      key: 'quizAccuracy',
+      label: 'CARD COUNTING',
+      panel: 'headline',
+      a: a.quizStats?.accuracyPct ?? null,
+      b: b.quizStats?.accuracyPct ?? null,
+      unit: 'pct',
+      margin: 0,
+      gate: null,
+      fullTilt: FULL_TILT.quizAccuracy,
+      verdict: 'aside',
+      reason: 'disabled',
+      samples: [a.quizStats?.totalAnswered ?? 0, b.quizStats?.totalAnswered ?? 0],
+    });
+  }
 
   // ---- bidding by type: the intersection, in the server's ranked order ----
   const bidB = new Map(b.bidTypes.map((x) => [x.category, x]));

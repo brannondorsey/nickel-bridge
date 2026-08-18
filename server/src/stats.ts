@@ -14,6 +14,7 @@ import {
   explainBid,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, db } from './db.js';
+import { CardCountingStats, quizStatsForUser } from './quiz.js';
 import { StandingDetail, standings } from './tournaments.js';
 
 const stmtUser = db.prepare(
@@ -250,6 +251,15 @@ export interface PlayerStats {
   dailyBoards: { date: string; count: number }[];
   /** other players ranked by shared-tournament count, most-crossed-paths first (max RIVAL_TOP_N) */
   rivals: Rival[];
+  /**
+   * Pop-Up Quiz's "Card Counting" panel — null ONLY when this player's
+   * CURRENT quiz_frequency setting is 'never' (see quiz.ts's
+   * quizStatsForUser); a real, possibly all-zero object otherwise. Also
+   * doubles as compare.ts's eligibility signal — "shown only because you
+   * both currently have Pop Quizzes on" reads this null-ness directly rather
+   * than a second live column read.
+   */
+  quizStats: CardCountingStats | null;
 }
 
 interface EvalRow {
@@ -915,6 +925,7 @@ export function playerStats(
     contractMix,
     dailyBoards,
     rivals,
+    quizStats: quizStatsForUser(userId),
   };
 }
 

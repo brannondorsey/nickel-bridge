@@ -71,6 +71,7 @@ function makeAnalysis(over: Partial<AnalysisView> = {}): AnalysisView {
     setAside: 0,
     par: null,
     momentFloor: 10,
+    quiz: null,
     ...over,
   };
 }

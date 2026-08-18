@@ -56,7 +56,10 @@ describe('Stats', () => {
     apiMock.playerStats.mockResolvedValue(playerStatsFull);
     renderStats();
     await screen.findByText('MATCHPOINTS — LAST 10 TOURNAMENTS');
-    const starts = Array.from(document.querySelectorAll('.sparkline-captions')).map(
+    // Scoped to the three tournament-history charts (.chart-panel) — Card
+    // Counting's own trend sparkline also renders a .sparkline-captions
+    // element, but its points are quiz-ordinal, not tournament dates.
+    const starts = Array.from(document.querySelectorAll('.chart-panel .sparkline-captions')).map(
       (el) => el.firstElementChild?.textContent ?? '',
     );
     expect(starts).toEqual([
@@ -215,8 +218,12 @@ describe('Stats', () => {
     expect(await screen.findByText('BIDDING — 214 CALLS GRADED')).toBeInTheDocument();
     expect(screen.getAllByRole('img', { name: /of 3 stars/ })).toHaveLength(4);
     expect(screen.getByText('✗')).toBeInTheDocument();
-    // 137/214 → 64%
-    expect(screen.getByText('64%')).toBeInTheDocument();
+    // 137/214 → 64% — scoped to the grade rows, since Card Counting's own
+    // medium-tier figure (also in the fixture) happens to round to the same
+    // 64% elsewhere on the page.
+    const grades = document.querySelector<HTMLElement>('.stats-grades');
+    expect(grades).not.toBeNull();
+    expect(within(grades!).getByText('64%')).toBeInTheDocument();
   });
 
   it('unfolds the bid-type ledger on tap, ranked best to worst, and folds it back', async () => {

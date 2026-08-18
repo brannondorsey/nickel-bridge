@@ -5847,3 +5847,491 @@ a.stat-tile:hover {
 .analyze-trick-verdict .moment-aside {
   margin-top: 0;
 }
+
+/* ============================================================
+   POP-UP QUIZ
+   Six surfaces: the in-play interrupt + minimize dock (this section), the
+   Quiz Report Card (board result screen), Card Counting stats (profile),
+   Card Counting reveal (Analyze Play), and Compare's disclosure row.
+   ============================================================ */
+
+/* ---- the in-play interrupt ---- */
+/* Same full-viewport dim as .claim-overlay — a claim and a quiz can never
+   coexist in one response (see server/src/game.ts's advanceRobots), so
+   there's no stacking question between the two, but z-index sits one above
+   it regardless for a defensive ordering. */
+.qz-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 20, 20, 0.34);
+}
+.qz-card {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  box-shadow: var(--ticket-shadow);
+  padding: 16px 18px 18px;
+}
+.qz-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.qz-chip {
+  display: inline-block;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  padding: 3px 8px;
+}
+.qz-min-btn {
+  appearance: none;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  width: 26px;
+  height: 26px;
+  line-height: 1;
+  font-size: 18px;
+  cursor: pointer;
+}
+.qz-min-btn:hover,
+.qz-min-btn:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.qz-subtitle {
+  margin: 10px 0 2px;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+}
+.qz-q {
+  margin: 8px 0 12px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.qz-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.qz-opt {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: inherit;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.qz-opt:hover:not(:disabled),
+.qz-opt:focus-visible:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+.qz-opt:disabled {
+  cursor: default;
+}
+.qz-opt.selected {
+  border-color: var(--ink);
+  border-width: 2px;
+  padding: 8px 11px;
+}
+.qz-opt .glyph {
+  font-size: 15px;
+  color: var(--muted);
+  margin-left: 10px;
+}
+.qz-opt.selected .glyph {
+  color: var(--ink);
+}
+.qz-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 9px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.qz-check:hover,
+.qz-check:focus-visible {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+.qz-check-locked {
+  cursor: default;
+}
+.qz-box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--line-dashed);
+  color: var(--panel);
+  font-size: 12px;
+}
+.qz-box.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--panel);
+}
+.qz-confirmbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.qz-btn {
+  appearance: none;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--btn-primary-fg);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.qz-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.qz-acktext {
+  margin: 12px 0 0;
+  text-align: center;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--verdigris);
+}
+
+/* Minimized dock — the table renders exactly as it would mid-play,
+   completely undimmed, so it's genuinely legible to inspect; the dock at the
+   bottom is the only sign anything's paused, and the only way back. */
+.resume-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  max-width: 430px;
+  margin: 0 auto;
+  background: var(--panel);
+  border-top: 1.5px solid var(--ink);
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.12);
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  cursor: pointer;
+}
+.qz-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-dashed);
+  margin: 0 auto 6px;
+}
+.resume-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.resume-label {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.resume-cta {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .qz-card {
+    opacity: 0;
+    animation: claim-ticket-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+}
+
+/* ---- the Quiz Report Card (board result screen) ---- */
+.qledger {
+  margin: 18px 12px 0;
+}
+.qcard-heading {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.qledger-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-top: 1px solid var(--line-quiet);
+  padding: 8px 0;
+}
+.qledger-row:first-of-type {
+  border-top: 0;
+}
+.qledger-main {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.qledger-type {
+  display: block;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1px;
+}
+.qledger-mark {
+  flex: none;
+  font-size: 15px;
+  font-weight: 800;
+}
+.qledger-mark.yes {
+  color: var(--positive);
+}
+.qledger-mark.no {
+  color: var(--negative);
+}
+.qledger-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1.5px dashed var(--ink);
+}
+.qcard-cta {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.qcard-cta:hover,
+.qcard-cta:focus-visible {
+  text-decoration: underline;
+}
+
+/* ---- Card Counting stats (player profile) ---- */
+.cc-panel {
+  margin: 16px 12px 0;
+}
+.stat-subtitle {
+  margin: 0 0 10px;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cc-headline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.stat-pct {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 34px;
+  flex: none;
+}
+.cc-trend {
+  flex: 1;
+  min-width: 0;
+}
+.cc-trend-lbl {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.cc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.cc-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.cc-row-lbl {
+  flex: 0 0 108px;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.cc-row-frac {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--muted);
+  min-width: 32px;
+  text-align: right;
+}
+.cc-tier-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  border-top: 1px solid var(--line-quiet);
+  padding-top: 10px;
+}
+.cc-tier-cell {
+  text-align: center;
+}
+.cc-tier-pct {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 17px;
+}
+.cc-tier-name {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 1px;
+  text-transform: capitalize;
+}
+.cc-tier-n {
+  font-size: 10px;
+  color: var(--muted);
+}
+.stat-empty {
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---- Analyze Play's Card Counting reveal ---- */
+.analyze-quiz {
+  margin: 16px 12px 0;
+}
+.an-subtitle {
+  margin: 0 0 8px;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+}
+.qq-row {
+  border-top: 1px solid var(--line-quiet);
+  padding: 10px 0;
+}
+.qq-row:first-of-type {
+  border-top: 0;
+}
+.qq-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.qq-mark {
+  flex: none;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.qq-mark.yes {
+  color: var(--positive);
+}
+.qq-mark.no {
+  color: var(--negative);
+}
+.qq-q {
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.qq-ans {
+  margin: 4px 0 0 23px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.qq-why {
+  margin: 6px 0 0 23px;
+  font-style: italic;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.qq-jump {
+  display: inline-block;
+  margin: 6px 0 0 23px;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Compare's Card Counting disclosure ---- */
+.cmp-toggle {
+  display: block;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 6px 0 0;
+  margin-top: 2px;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.cmp-toggle:hover,
+.cmp-toggle:focus-visible {
+  color: var(--ink);
+}
+.cmp-breakdown {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-quiet);
+}
+.cmp-b-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  padding: 3px 0;
+  color: var(--muted);
+}

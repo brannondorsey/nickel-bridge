@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMe } from '../App';
-import { BidTypeKey, COMPARE_MIN_BOARDS_FALLBACK, ConventionKey, PlayerStats, Rival, api } from '../api';
+import { BidTypeKey, CardCountingStats, COMPARE_MIN_BOARDS_FALLBACK, ConventionKey, PlayerStats, QuestionType, Rival, api } from '../api';
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
@@ -150,6 +150,17 @@ const CONVENTION_LABELS: Record<ConventionKey, string> = {
   michaels: 'MICHAELS',
 };
 
+/** Display names for Pop-Up Quiz's question types — mirrors server/src/compare.ts's QUESTION_TYPE_LABELS. */
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  'suit-count': 'SUIT LENGTH',
+  'opponent-length': 'OPPONENT LENGTH',
+  void: 'VOIDS',
+  'trump-count': 'TRUMP COUNT',
+  'honor-location': 'HONOR LOCATION',
+  'suit-exhaustion': 'SUIT EXHAUSTION',
+  'running-total': 'RUNNING TOTAL',
+};
+
 const CONTRACT_TIER_ROWS = [
   { key: 'partscore', label: 'PARTSCORE' },
   { key: 'game', label: 'GAME' },
@@ -210,6 +221,77 @@ function ChartPanel({ heading, figure, children }: { heading: string; figure?: s
       </div>
       {children}
     </div>
+  );
+}
+
+/**
+ * Card Counting — Pop-Up Quiz's stats panel ("A, the full panel" from the
+ * design review): headline accuracy + a running-accuracy trend, a per-type
+ * breakdown, and the easy/medium/hard tier row the recalibration process
+ * needs (see packages/ai/src/quiz.ts's DIFFICULTY_WEIGHTS doc comment).
+ * Rendered only when the server sends quizStats — already gated server-side
+ * on the player's CURRENT Pop Quizzes setting.
+ */
+function CardCountingPanel({ stats }: { stats: CardCountingStats }) {
+  // The raw trend is one 0/1 per quiz — too noisy to plot directly, so the
+  // line is a running (expanding-window) accuracy over the same points,
+  // matching how a player would actually read "am I improving".
+  let correctSoFar = 0;
+  const points = stats.trend.map((t, i) => {
+    if (t.correct) correctSoFar++;
+    return { label: `Quiz ${i + 1}`, value: Math.round((correctSoFar / (i + 1)) * 100) };
+  });
+  const direction =
+    points.length < 2
+      ? 'holding steady'
+      : points[points.length - 1].value > points[0].value
+        ? 'trending up'
+        : points[points.length - 1].value < points[0].value
+          ? 'trending down'
+          : 'holding steady';
+
+  return (
+    <PerforatedPanel heading="CARD COUNTING" className="cc-panel">
+      <p className="stat-subtitle">Built from your Pop Quiz answers.</p>
+      {stats.totalAnswered > 0 ? (
+        <>
+          <div className="cc-headline">
+            <div className="stat-pct num">{stats.accuracyPct}%</div>
+            <div className="cc-trend">
+              <Sparkline points={points} label="Card Counting accuracy trend" format={(v) => `${Math.round(v)}%`} />
+              <div className="cc-trend-lbl">
+                Last {points.length} quiz{points.length === 1 ? '' : 'zes'} · {direction}
+              </div>
+            </div>
+          </div>
+          <div className="cc-rows">
+            {stats.byType.map((t) => {
+              const pct = Math.round((t.correct / t.total) * 100);
+              return (
+                <div key={t.type} className="cc-row">
+                  <span className="label-caps cc-row-lbl">{QUESTION_TYPE_LABELS[t.type]}</span>
+                  <PctBar pct={pct} />
+                  <span className="cc-row-frac num">
+                    {t.correct}/{t.total}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="cc-tier-row">
+            {stats.byTier.map((t) => (
+              <div key={t.tier} className="cc-tier-cell">
+                <div className="cc-tier-pct num">{t.total ? Math.round((t.correct / t.total) * 100) : 0}%</div>
+                <div className="label-caps cc-tier-name">{t.tier}</div>
+                <div className="cc-tier-n num">{t.total}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="stat-empty">Pop Quizzes is on — nothing to show yet until one fires.</p>
+      )}
+    </PerforatedPanel>
   );
 }
 
@@ -702,6 +784,8 @@ export default function Player() {
               </div>
             </PerforatedPanel>
           ) : null}
+
+          {stats.quizStats ? <CardCountingPanel stats={stats.quizStats} /> : null}
 
           <div className="stats-tiles">
             <Tile

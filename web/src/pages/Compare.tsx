@@ -72,6 +72,7 @@ function reading(m: CompareMeasure, them: string, themIsHouse: boolean): string 
         : `${head}. Not compared: a rating needs more rated crossings first.`;
     }
     if (m.reason === 'no-data') return `${head}. Not compared: one of you has no record for this yet.`;
+    if (m.reason === 'disabled') return `${head}. Not compared: shown only when you both currently have Pop Quizzes on.`;
     return `${head}. Not compared: too few boards between you for any difference to mean anything.`;
   }
   // A null gate is unbounded and only ever reaches an `aside` row, handled
@@ -86,6 +87,10 @@ function reading(m: CompareMeasure, them: string, themIsHouse: boolean): string 
 }
 
 function MeasureRow({ m, them, themIsHouse }: { m: CompareMeasure; them: string; themIsHouse: boolean }) {
+  // Only the quiz-accuracy row ever carries a breakdown — nothing else on
+  // this screen expands, so this is a genuinely new interaction here, kept
+  // local to the one row that needs it.
+  const [open, setOpen] = useState(false);
   return (
     <li className="cmp-row">
       <span className="sr-only">{reading(m, them, themIsHouse)}</span>
@@ -105,6 +110,30 @@ function MeasureRow({ m, them, themIsHouse }: { m: CompareMeasure; them: string;
         <span>{m.samples[0]}</span>
         <span>{m.samples[1]}</span>
       </div>
+      {m.breakdown?.length ? (
+        <>
+          <button
+            type="button"
+            className="cmp-toggle"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+          >
+            {open ? '▴ BY QUESTION TYPE' : '▾ BY QUESTION TYPE'}
+          </button>
+          {open ? (
+            <div className="cmp-breakdown">
+              {m.breakdown.map((b) => (
+                <div key={b.key} className="cmp-b-row">
+                  <span>{b.label}</span>
+                  <span>
+                    {b.a}% · {b.b}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </li>
   );
 }

@@ -86,8 +86,11 @@ export class TestClient {
 /**
  * Drive a board to completion through the HTTP API, like a player would.
  * strategy.call picks the user's call from view state; strategy.card picks
- * the card. Defaults: always pass, always play the first legal card.
- * Returns every board payload seen along the way (for invariant checks).
+ * the card; strategy.quiz answers a pending Pop-Up Quiz (view.quiz), default
+ * always option index [0] — good enough to drive a test board forward when
+ * the correct answer isn't the point. Defaults: always pass, always play the
+ * first legal card. Returns every board payload seen along the way (for
+ * invariant checks).
  */
 export async function playBoard(
   client: TestClient,
@@ -96,16 +99,25 @@ export async function playBoard(
   strategy: {
     call?: (view: any) => number;
     card?: (view: any) => number;
+    quiz?: (view: any) => number[];
   } = {},
 ): Promise<any[]> {
   const chooseCall = strategy.call ?? (() => 0);
   const chooseCard = strategy.card ?? ((view: any) => view.legalCards[0]);
+  const chooseQuizAnswer = strategy.quiz ?? (() => [0]);
   const seen: any[] = [];
   let view = await client.get(`/api/tournaments/${tournamentId}/boards/${boardNo}`);
   seen.push(view);
   let safety = 250;
   while (view.state !== 'done' && safety-- > 0) {
-    if (view.state === 'bidding' && view.myTurn) {
+    if (view.state === 'playing' && view.quiz) {
+      view = (
+        await client.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/quiz-answer`, {
+          quizId: view.quiz.id,
+          answer: chooseQuizAnswer(view),
+        })
+      ).board;
+    } else if (view.state === 'bidding' && view.myTurn) {
       view = (await client.post(`/api/tournaments/${tournamentId}/boards/${boardNo}/call`, { call: chooseCall(view) }))
         .board;
     } else if (view.state === 'playing' && view.myTurn) {
