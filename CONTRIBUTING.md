@@ -2500,11 +2500,14 @@ gap, where a send happened but nothing was recorded.
 
 ## Unattended outreach permissions
 
-`.claude/settings.json` exists for exactly one reason: the weekly player-outreach routine
-(`.claude/skills/player-outreach/`) fires into a fresh, non-interactive session, and a session
-that can't answer a permission prompt simply stalls at it. Every rule in that file is scoped to
-that workflow. It is checked in so the routine behaves identically for anyone who runs it,
-rather than depending on one person's local approvals.
+`.claude/settings.json`'s `permissions`/`autoMode` blocks exist for exactly one reason: the
+weekly player-outreach routine (`.claude/skills/player-outreach/`) fires into a fresh,
+non-interactive session, and a session that can't answer a permission prompt simply stalls at
+it. Every rule in those two blocks is scoped to that workflow. They are checked in so the
+routine behaves identically for anyone who runs it, rather than depending on one person's local
+approvals. (The file's `extraKnownMarketplaces`/`enabledPlugins` blocks are unrelated — they
+register optional Claude Code plugin marketplaces for contributors, not outreach permissions —
+see each entry's own PR for what it adds and why.)
 
 Three groups, and the reasoning matters more than the list:
 
