@@ -15,6 +15,8 @@ export const DAYGRID_WEEKS = 18;
 const MS_PER_DAY = 86_400_000;
 const CELL_GAP = 3; // svg user units
 const DESIGN_W = 326; // matches Sparkline's W, same visual rhythm on the page
+/* The svg scales uniformly (see Sparkline's geometry note), so a wider panel
+ * makes the whole calendar bigger rather than making its days oblong. */
 
 function utcMidnight(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -105,7 +107,7 @@ export function DayGrid({
   return (
     <div className="daygrid">
       <div className="daygrid-plot">
-        <svg width="100%" height={H} viewBox={`0 0 ${DESIGN_W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        <svg width="100%" height={H} viewBox={`0 0 ${DESIGN_W} ${H}`} aria-hidden="true">
           {cells.map((c) => (
             <rect
               key={c.date}

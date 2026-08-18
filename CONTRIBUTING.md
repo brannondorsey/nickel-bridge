@@ -177,7 +177,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
                 the night token overrides; [data-suit-palette="colorblind"] + its
                 [data-theme="night"] and @media twins hold the colorblind suit-color
-                overrides — see "Night mode" below)
+                overrides — see "Night mode" below; and "the responsive ladder", the ONE
+                place the tablet/desktop breakpoints and the shell's own width live —
+                see "One sheet, three widths" below)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
@@ -209,6 +211,9 @@ tools           offline Python weight conversion + golden-fixture generation;
                 analyze_trace.mjs, see "Tuning Analyze's moment floor" below
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
+                responsive-check.mjs (the same walk shot at all four ladder viewports,
+                `<name>@<width>.png` — the review artifact for any breakpoint change,
+                see "One sheet, three widths" below),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
@@ -1891,6 +1896,66 @@ the human plays the North hand — see `humanControls` and the `flipped` handlin
 
 **better-sqlite3 is synchronous:** DB calls are not awaited; prepared statements live as
 module-level constants next to the functions that use them. Match that style.
+
+**One sheet, three widths.** The app was drawn for a 390px phone and `.shell` was a hard
+`max-width: 430px`, so on a tablet or a desktop it was a ribbon in an ocean of paper. It now
+steps, and the whole mechanism is one token plus three numbers, declared together under "the
+responsive ladder" at the top of `web/src/style.css`:
+
+- **`--shell-max` is the width of the sheet**, and `.shell` reads nothing else. The base is
+  430px — the phone, unchanged to the pixel — stepping to 600px at 720px of viewport and
+  680px at 1024px. A screen that wants a different measure overrides the TOKEN
+  (`:root:has(.board-page)`, `:root:has(.stats-page)`), never `max-width` somewhere the next
+  reader won't find it. Matched on `:root` rather than on `.shell` because `--card-h` is
+  declared there and is read by the card clones `TrickArea` appends to `<body>`, outside
+  `.shell` entirely. Where `:has()` is unsupported the overrides drop and every screen wears
+  the generic ladder — narrower, not broken, which is why the ladder holds the default and
+  `:has()` holds the exceptions.
+- **The three breakpoints are 720 / 1024 / 1400, and they are content breakpoints.** 720 is
+  where 430px of content starts reading as a ribbon; 1024 is where a second column of panels
+  is affordable; 1400 is where growing the measure only makes lines harder to read. There is
+  no CSS-native way to name a breakpoint, so those numbers appear literally in every `@media`
+  block in the file — `grep -n 'min-width: 720px'` finds every rule at a step. **Do not
+  introduce a fourth number** without adding it to the ladder's comment.
+- **Mobile-first, strictly.** Every rule outside a `min-width` query is the phone design,
+  untouched; every responsive rule is additive. That is what makes "did I regress the phone?"
+  answerable by reading a diff instead of by re-shooting every screen.
+
+**Cards size from the sheet, and from the viewport's HEIGHT.** `--card-h`'s fit formula now
+measures `min(100vw, var(--shell-max))` instead of a hardcoded 430px, so a wider sheet buys a
+bigger fan rather than a bigger empty gap; `--card-h-cap` goes 82.5px on the phone to 118px past 720. The `vh`
+term in that cap is the part worth understanding: phones are portrait and desktops are
+landscape, so the moment the app claims desktop the scarce axis flips from width to height.
+The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
+of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
+Sized on width alone, a wide-but-short window gets beautiful cards and a hand that scrolls off
+the bottom. `FAN_GAP` (`fanLayout.ts`) deliberately stays a fixed 6px at every size: it is the
+whitespace between two printed values rather than a share of the card, and scaling it would
+make the fit formula's own constant circular.
+
+**The board stays one centred column; the profile becomes a two-page spread.** Those are the
+two shapes, and which one a screen takes is a content decision, not a width decision. The
+board is auction over decision over hand at every size, so it caps everything — tray, notices,
+meaning panel, bid grid — at one 34rem column and gives the leftover width to the cards; its
+trick table caps at ~6.4 card widths, because the four seats are pinned to that box's own
+edges and a sheet-wide box would put East a hand's breadth from West. The profile is a dozen
+small panels, so at 1024 it becomes a grid with the masthead spanning both columns and the
+panels' own existing `margin: 12px 16px 0` doing the gutters. Two traps live in there, both
+recorded beside the rules: `.board-page .trick` beats a one-class `.trick { margin-inline:
+auto }` in the cascade, and a flex item whose cross size is `auto` is *stretched*, so auto
+margins have no free space to absorb until you give it `width: 100%`.
+
+**The three hand-rolled charts scale uniformly now.** `Sparkline`, `StemChart` and `DayGrid`
+were drawn against a 326-unit design width and stretched on x alone
+(`preserveAspectRatio="none"`), which is invisible at 326-in-330 and indefensible at
+326-in-960: the toll log's days became 3:1 lozenges and the stem chart's `<text>` labels were
+drawn stretched, since a non-uniform viewBox scales glyphs too. They now scale on both axes
+(`height: auto` in `style.css`), so a wider panel makes the whole drawing bigger.
+
+**Reviewing a breakpoint change:** `node scripts/responsive-check.mjs http://localhost:3000
+./shots` walks the app once against a `DEV_AUTH=1` server and shoots every screen at 390, 834,
+1194 and 1440, as `<name>@<width>.png`. The 390 column is the regression net — nothing in it
+may change.
 
 **Night mode is a token swap, not per-component dark styles.** `[data-theme="night"]` on
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
