@@ -1,0 +1,1605 @@
+<title>Foil Trumps</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&family=Besley:wght@600;700;800&family=Josefin+Sans:wght@600&display=swap"
+/>
+
+<style>
+  /* ============================================================
+     TOKENS — lifted from web/src/style.css so the board and the
+     app cannot disagree about a colour. Day is the base; night is
+     redefined in three places (the un-stamped OS default, the
+     explicit host stamp, and this board's own DAY/NIGHT lever).
+     ============================================================ */
+  :root {
+    --ink: #141414;
+    --paper: #fcfbf8;
+    --panel: #ffffff;
+    --surface: #f1efe9;
+    --line: #d8d5ce;
+    --line-quiet: #e4e1d8;
+    --line-dashed: #b9b4a9;
+    --muted: #6e6a62;
+    --verdigris: #6f8f68;
+    --suit-s: #141414;
+    --suit-h: #c22f21;
+    --suit-d: #9e6a00;
+    --suit-c: #00775a;
+    --cardface: #ffffff;
+    --cardface-ink: #141414;
+    --cardface-line: #b9b4a9;
+    --cardface-suit-s: #141414;
+    --cardface-suit-h: #c22f21;
+    --cardface-suit-d: #9e6a00;
+    --cardface-suit-c: #00775a;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+    --felt: #f1efe9;
+
+    --font-display: "Poiret One", "Crimson Pro", Georgia, serif;
+    --font-body: "Crimson Pro", Georgia, "Times New Roman", serif;
+    --font-label: "Besley", Georgia, serif;
+    --font-stamp: "Josefin Sans", "Besley", sans-serif;
+
+    --card-h: 78px;
+    --card-w: calc(var(--card-h) * 46 / 66);
+  }
+
+  /* the OS default, un-stamped state */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ece7dc;
+      --paper: #171512;
+      --panel: #1f1c18;
+      --surface: #262220;
+      --line: #35312a;
+      --line-quiet: #2b2823;
+      --line-dashed: #5c564c;
+      --muted: #a29a8d;
+      --verdigris: #8cab84;
+      --suit-s: #ece7dc;
+      --suit-h: #df8069;
+      --suit-d: #c49b52;
+      --suit-c: #55b896;
+      --cardface: #2b2620;
+      --cardface-line: #4d453a;
+      --cardface-ink: #ece7dc;
+      --cardface-suit-s: #ece7dc;
+      --cardface-suit-h: #df8069;
+      --cardface-suit-d: #c49b52;
+      --cardface-suit-c: #55b896;
+      --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+      --felt: #262220;
+    }
+  }
+  /* the explicit host stamp */
+  :root[data-theme="dark"] {
+    --ink: #ece7dc;
+    --paper: #171512;
+    --panel: #1f1c18;
+    --surface: #262220;
+    --line: #35312a;
+    --line-quiet: #2b2823;
+    --line-dashed: #5c564c;
+    --muted: #a29a8d;
+    --verdigris: #8cab84;
+    --suit-s: #ece7dc;
+    --suit-h: #df8069;
+    --suit-d: #c49b52;
+    --suit-c: #55b896;
+    --cardface: #2b2620;
+    --cardface-line: #4d453a;
+    --cardface-ink: #ece7dc;
+    --cardface-suit-s: #ece7dc;
+    --cardface-suit-h: #df8069;
+    --cardface-suit-d: #c49b52;
+    --cardface-suit-c: #55b896;
+    --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    --felt: #262220;
+  }
+  /* this board's own lever — it wins over both, in both directions */
+  body[data-plate="night"] {
+    --ink: #ece7dc;
+    --paper: #171512;
+    --panel: #1f1c18;
+    --surface: #262220;
+    --line: #35312a;
+    --line-quiet: #2b2823;
+    --line-dashed: #5c564c;
+    --muted: #a29a8d;
+    --verdigris: #8cab84;
+    --suit-s: #ece7dc;
+    --suit-h: #df8069;
+    --suit-d: #c49b52;
+    --suit-c: #55b896;
+    --cardface: #2b2620;
+    --cardface-line: #4d453a;
+    --cardface-ink: #ece7dc;
+    --cardface-suit-s: #ece7dc;
+    --cardface-suit-h: #df8069;
+    --cardface-suit-d: #c49b52;
+    --cardface-suit-c: #55b896;
+    --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    --felt: #262220;
+  }
+  body[data-plate="day"] {
+    --ink: #141414;
+    --paper: #fcfbf8;
+    --panel: #ffffff;
+    --surface: #f1efe9;
+    --line: #d8d5ce;
+    --line-quiet: #e4e1d8;
+    --line-dashed: #b9b4a9;
+    --muted: #6e6a62;
+    --verdigris: #6f8f68;
+    --suit-s: #141414;
+    --suit-h: #c22f21;
+    --suit-d: #9e6a00;
+    --suit-c: #00775a;
+    --cardface: #ffffff;
+    --cardface-line: #b9b4a9;
+    --cardface-ink: #141414;
+    --cardface-suit-s: #141414;
+    --cardface-suit-h: #c22f21;
+    --cardface-suit-d: #9e6a00;
+    --cardface-suit-c: #00775a;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+    --felt: #f1efe9;
+  }
+
+  /* ============================================================
+     PAGE
+     ============================================================ */
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px 96px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .label {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .label.quiet {
+    color: var(--muted);
+  }
+  .aside {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .num {
+    font-family: var(--font-label);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- masthead ---- */
+  .mast {
+    padding: 56px 0 28px;
+    border-bottom: 1px solid var(--ink);
+  }
+  .mast-mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+  .mast-mark svg {
+    flex: none;
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-size: 19px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .mast h1 {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: clamp(38px, 8vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+  }
+  .mast .deck {
+    margin: 18px 0 0;
+    max-width: 60ch;
+    font-size: 19px;
+  }
+  .mast-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin-top: 26px;
+  }
+
+  /* ---- generic section ---- */
+  section {
+    padding-top: 54px;
+  }
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 9px;
+    margin-bottom: 22px;
+  }
+  .sec-head h2 {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .sec-head .rule-no {
+    font-family: var(--font-label);
+    font-weight: 800;
+    font-size: 12px;
+    color: var(--verdigris);
+    letter-spacing: 0.1em;
+  }
+  p {
+    margin: 0 0 15px;
+    max-width: 68ch;
+  }
+
+  /* ---- the rig (controls) ---- */
+  .rig {
+    border: 1px solid var(--ink);
+    background: var(--panel);
+    padding: 16px 18px 18px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  }
+  .rig-row {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .rig-row .label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .rig-row .val {
+    font-family: var(--font-label);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* segmented lever — the app's .pref-switch */
+  .lever {
+    display: flex;
+    border: 1px solid var(--ink);
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .lever button {
+    flex: 1 1 0;
+    appearance: none;
+    border: 0;
+    border-left: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    padding: 9px 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .lever button:first-child {
+    border-left: 0;
+  }
+  .lever button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .lever button:focus-visible {
+    outline: 2px solid var(--verdigris);
+    outline-offset: -3px;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--verdigris);
+    height: 20px;
+  }
+  input[type="range"]:focus-visible {
+    outline: 2px solid var(--verdigris);
+    outline-offset: 3px;
+  }
+
+  /* ---- the table ---- */
+  .table {
+    position: relative;
+    margin-top: 20px;
+    border: 1px solid var(--ink);
+    background: var(--felt);
+    padding: 26px 12px 22px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .table .table-cap {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    z-index: 3;
+  }
+
+  /* the lamp marker sits above the foil canvas so it never blends */
+  .lamp {
+    position: fixed;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    border-radius: 50%;
+    border: 1px solid var(--verdigris);
+    pointer-events: none;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+  }
+  .lamp::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--verdigris);
+  }
+  .lamp span {
+    position: absolute;
+    top: 100%;
+    margin-top: 3px;
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--verdigris);
+    white-space: nowrap;
+  }
+  body[data-lamp-visible="0"] .lamp {
+    display: none;
+  }
+
+  /* ---- cards (geometry ported from web/src/style.css .pcard) ---- */
+  .fan {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 12px 8px 4px;
+  }
+  .pcard {
+    position: relative;
+    flex: none;
+    width: var(--card-w);
+    height: var(--card-h);
+    background: var(--cardface);
+    border: 1px solid var(--cardface-line);
+    border-radius: 3px;
+    box-shadow: var(--card-shadow);
+    padding: calc(var(--card-h) * 3 / 66) 0 0 calc(var(--card-h) * 5 / 66);
+    font-family: var(--font-label);
+    font-weight: 800;
+    text-align: left;
+    isolation: isolate;
+  }
+  .fan .pcard + .pcard {
+    margin-left: calc(var(--card-w) * -0.6);
+  }
+  .fan .pcard.suitgap {
+    margin-left: calc(var(--card-w) * -0.5);
+  }
+  .pcard .rank {
+    font-size: calc(var(--card-h) * 15 / 66);
+    line-height: 1;
+  }
+  .pcard .rank.ten {
+    letter-spacing: -0.09em;
+  }
+  .pcard .suit {
+    font-size: calc(var(--card-h) * 14 / 66);
+    line-height: 1.2;
+  }
+  .pcard.suit-s {
+    color: var(--cardface-suit-s);
+  }
+  .pcard.suit-h {
+    color: var(--cardface-suit-h);
+  }
+  .pcard.suit-d {
+    color: var(--cardface-suit-d);
+  }
+  .pcard.suit-c {
+    color: var(--cardface-suit-c);
+  }
+
+  /* the trick — four cards around a centre, as TrickArea lays them out */
+  .trick {
+    display: grid;
+    grid-template-columns: repeat(3, var(--card-w));
+    grid-template-rows: repeat(3, calc(var(--card-h) * 0.86));
+    justify-content: center;
+    align-items: center;
+    gap: 4px 14px;
+    margin: 10px auto 0;
+    width: max-content;
+  }
+  .trick .slot-n {
+    grid-area: 1 / 2;
+  }
+  .trick .slot-e {
+    grid-area: 2 / 3;
+  }
+  .trick .slot-s {
+    grid-area: 3 / 2;
+  }
+  .trick .slot-w {
+    grid-area: 2 / 1;
+  }
+  .seatmark {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 3px;
+  }
+
+  /* ---- variant panels ---- */
+  .variant {
+    border-top: 1px solid var(--line);
+    padding-top: 30px;
+    margin-top: 34px;
+  }
+  .variant:first-of-type {
+    border-top: 0;
+    padding-top: 4px;
+    margin-top: 0;
+  }
+  .v-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 4px;
+  }
+  .v-num {
+    font-family: var(--font-label);
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--verdigris);
+    min-width: 26px;
+  }
+  .v-head h3 {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .v-sub {
+    margin: 0 0 16px 40px;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .v-body {
+    display: grid;
+    gap: 22px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  @media (min-width: 760px) {
+    .v-body {
+      grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    }
+  }
+  .v-strip {
+    border: 1px solid var(--line);
+    background: var(--felt);
+    padding: 14px 6px 10px;
+  }
+  .v-notes p {
+    margin-bottom: 12px;
+  }
+  .v-notes p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ---- ledger ---- */
+  .ledger {
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .ledger-row {
+    display: grid;
+    grid-template-columns: minmax(0, 148px) minmax(0, 1fr);
+    gap: 6px 18px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line-quiet);
+  }
+  .ledger-row:last-child {
+    border-bottom: 0;
+  }
+  .ledger-row p {
+    margin: 0;
+    font-size: 16px;
+  }
+  @media (max-width: 560px) {
+    .ledger-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* ---- callout ---- */
+  .seal {
+    border: 1.5px dashed var(--line-dashed);
+    padding: 16px 18px;
+    margin: 22px 0 0;
+    background: transparent;
+  }
+  .seal .label {
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: block;
+  }
+  .seal p:last-child {
+    margin-bottom: 0;
+  }
+
+  code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-size: 0.86em;
+    background: var(--surface);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  a {
+    color: inherit;
+    text-underline-offset: 2px;
+  }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--ink);
+  }
+  .foot-marks {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  /* ============================================================
+     THE FOIL SURFACE — one canvas for the whole page.
+     hard-light with a mid-grey (128) clear is a no-op everywhere
+     it does not draw, so a single fixed canvas can light every
+     card on the board without tinting the page between them.
+     ============================================================ */
+  #foil {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 40;
+    mix-blend-mode: hard-light;
+  }
+  body[data-foil-ok="0"] #foil {
+    display: none;
+  }
+  .noglow {
+    position: relative;
+    z-index: 50;
+  }
+</style>
+
+<canvas id="foil" aria-hidden="true"></canvas>
+<div class="lamp" id="lamp" aria-hidden="true"><span>THE LAMP</span></div>
+
+<div class="wrap">
+  <header class="mast">
+    <div class="mast-mark">
+      <svg width="26" height="20" viewBox="0 0 26 20" fill="none" aria-hidden="true">
+        <path
+          d="M1 17h24M4 17V9a9 9 0 0 1 18 0v8M8 17v-6M13 17V6M18 17v-6"
+          stroke="var(--verdigris)"
+          stroke-width="1.3"
+          stroke-linecap="square"
+        />
+      </svg>
+      <span class="wordmark">Nickel Bridge</span>
+    </div>
+    <h1>Foil trumps</h1>
+    <p class="deck">
+      Four ways to make the trump suit catch the light — Balatro's own shader math, re-lit for a
+      hand of thirteen cards on a paper table. Every card on this page is live; drag the lamp.
+    </p>
+    <div class="mast-meta">
+      <span class="label quiet">Concept board</span>
+      <span class="label quiet">Four directions · one rig</span>
+      <span class="label quiet">Pick by numeral</span>
+    </div>
+  </header>
+
+  <!-- ==================== THE RIG ==================== -->
+  <section id="rig">
+    <div class="sec-head">
+      <span class="rule-no">§ 1</span>
+      <h2>The rig</h2>
+    </div>
+    <p>
+      Balatro seeds its shimmer <em>per card</em> — every foil card carries its own phase, so a
+      row of them twinkles independently. That is right for a game where cards arrive one at a
+      time. A bridge hand is thirteen cards held as one object, and thirteen independent
+      twinkles read as static rather than as a surface.
+    </p>
+    <p>
+      So the field here is anchored in <strong>page space</strong>, not card space: the
+      interference pattern is computed from where a pixel sits relative to one lamp, which means
+      it runs <em>continuously across the whole fan</em> and keeps running across the gap onto
+      the table. Cards near the lamp blaze, cards at the far end of the fan stay quiet, and the
+      band travels the hand as one thing. Variant <span class="num">II</span> keeps Balatro's
+      per-card seeding so you can see the difference.
+    </p>
+
+    <div class="rig noglow" role="group" aria-label="Light rig">
+      <div class="rig-row">
+        <span class="label" id="lbl-variant">Direction</span>
+        <div class="lever" role="group" aria-labelledby="lbl-variant" id="lever-variant">
+          <button type="button" data-v="1" aria-pressed="false">I</button>
+          <button type="button" data-v="2" aria-pressed="false">II</button>
+          <button type="button" data-v="3" aria-pressed="true">III</button>
+          <button type="button" data-v="4" aria-pressed="false">IV</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <span class="label" id="lbl-lamp">Lamp</span>
+        <div class="lever" role="group" aria-labelledby="lbl-lamp" id="lever-lamp">
+          <button type="button" data-l="fixed" aria-pressed="true">Placed</button>
+          <button type="button" data-l="pointer" aria-pressed="false">Pointer</button>
+          <button type="button" data-l="tilt" aria-pressed="false">Tilt</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <span class="label" id="lbl-plate">Card stock</span>
+        <div class="lever" role="group" aria-labelledby="lbl-plate" id="lever-plate">
+          <button type="button" data-p="auto" aria-pressed="true">System</button>
+          <button type="button" data-p="day" aria-pressed="false">Day</button>
+          <button type="button" data-p="night" aria-pressed="false">Night</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <span class="label" id="lbl-motion">Motion</span>
+        <div class="lever" role="group" aria-labelledby="lbl-motion" id="lever-motion">
+          <button type="button" data-m="1" aria-pressed="true">Running</button>
+          <button type="button" data-m="0" aria-pressed="false">Frozen</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-gain">
+          Intensity <span class="val" id="v-gain">1.00</span>
+        </label>
+        <input type="range" id="s-gain" min="0" max="2" step="0.05" value="1" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-curve">
+          Fan curvature <span class="val" id="v-curve">0.55</span>
+        </label>
+        <input type="range" id="s-curve" min="0" max="1" step="0.05" value="0.55" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-height">
+          Lamp height <span class="val" id="v-height">520</span>
+        </label>
+        <input type="range" id="s-height" min="120" max="1600" step="20" value="520" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-speed">
+          Drift <span class="val" id="v-speed">0.45</span>
+        </label>
+        <input type="range" id="s-speed" min="0" max="1.5" step="0.05" value="0.45" />
+      </div>
+    </div>
+    <p class="aside" style="margin-top: 10px">
+      Fan curvature is the one invented quantity. A fan is drawn flat but held curved, so each
+      card is given a surface normal that rotates with its place in the spread — at 0 the hand is
+      a flat sheet and the whole thing lights at once, which is the tell that the effect is
+      painted on rather than reflected.
+    </p>
+  </section>
+
+  <!-- ==================== THE TABLE ==================== -->
+  <section id="table">
+    <div class="sec-head">
+      <span class="rule-no">§ 2</span>
+      <h2>The table</h2>
+    </div>
+    <p>
+      Spades are trumps. Five of them in hand, one on the table where South ruffed the diamond
+      lead — so you can read the same treatment on a card lying flat under the lamp and on cards
+      held in a curve, at once.
+    </p>
+    <p>
+      One thing the fan's geometry decides for you. A card in hand is about sixty per cent
+      hidden behind the card to its right, so only the exposed sliver can carry foil — and that
+      turns out to be a gift rather than a limit. Trump placement already puts the trump block
+      at the <em>left</em> of the fan, so the slivers are contiguous and the whole suit reads as
+      one foil band down the edge of your hand. A card tabled to the trick, or lying in dummy,
+      gets its full face.
+    </p>
+
+    <div class="table" id="stage">
+      <span class="label quiet table-cap noglow">Board 3 · 4♠ by South · Trick 6</span>
+
+      <div class="seatmark noglow" style="margin-top: 18px">The trick</div>
+      <div class="trick" data-variant-host>
+        <div class="slot-n"><div class="pcard suit-d"><div class="rank">8</div><div class="suit">♦</div></div></div>
+        <div class="slot-e"><div class="pcard suit-d"><div class="rank">K</div><div class="suit">♦</div></div></div>
+        <div class="slot-s">
+          <div class="pcard suit-s" data-foil data-seed="7" data-fanx="0"><div class="rank">4</div><div class="suit">♠</div></div>
+        </div>
+        <div class="slot-w"><div class="pcard suit-d"><div class="rank">J</div><div class="suit">♦</div></div></div>
+      </div>
+
+      <div class="seatmark noglow" style="margin-top: 20px">Your hand — trumps to the left</div>
+      <div class="fan" id="hero-fan" data-variant-host></div>
+    </div>
+
+    <p class="aside" style="margin-top: 12px">
+      Drag anywhere on the table to move the lamp. On a phone, switch the lamp to TILT and the
+      hand lights from wherever the device is pointed.
+    </p>
+  </section>
+
+  <!-- ==================== THE DIRECTIONS ==================== -->
+  <section id="directions">
+    <div class="sec-head">
+      <span class="rule-no">§ 3</span>
+      <h2>Four directions</h2>
+    </div>
+    <p>
+      Each strip below runs its own variant regardless of the lever above, so they can be read
+      side by side. Three trumps and two plain cards in every strip — the contrast is the point.
+    </p>
+
+    <!-- I -->
+    <article class="variant">
+      <div class="v-head">
+        <span class="v-num">I</span>
+        <h3>The foil stamp</h3>
+      </div>
+      <p class="v-sub">Hot foil on card stock, 1926. The conservative reading.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="1"></div></div>
+        <div class="v-notes">
+          <p>
+            <code>foil.fs</code>'s two interference terms at low gain, with the rainbow thrown
+            away: the output is remapped onto a three-stop metal ramp — cool ink, verdigris,
+            pale gold — and confined to a stamped plate inset from the card's edges. It never
+            touches the corner index.
+          </p>
+          <p>
+            This is the only one of the four that is period-plausible. Hot foil stamping is a
+            real 1920s printing process, so a foiled trump reads as a differently
+            <em>printed</em> card rather than a magic one, which is the register the rest of the
+            app is in — flat ink on paper, no gradients, one accent colour.
+          </p>
+          <p class="aside">
+            Cost: it is quiet enough that at a glance across a 390px phone you may not be sure
+            which suit is trumps, which is the one job this feature has.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <!-- II -->
+    <article class="variant">
+      <div class="v-head">
+        <span class="v-num">II</span>
+        <h3>The hologram</h3>
+      </div>
+      <p class="v-sub">Balatro, straight — <code>polychrome.fs</code>, per-card seed, full saturation.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="2"></div></div>
+        <div class="v-notes">
+          <p>
+            The reference point, ported honestly: the HSL hue field from
+            <code>polychrome.fs</code>, hue rotated by a moving noise field, saturation floored
+            at 0.6, each card carrying its own phase offset exactly as the game does it.
+          </p>
+          <p>
+            Worth having on the board because it is what was asked for and because it makes the
+            per-card-seeding argument visible: watch the strip and the five cards read as five
+            separate objects that happen to be adjacent, not as one hand.
+          </p>
+          <p class="aside">
+            Cost: this is the variant that eats the ink. Rank and suit glyphs sit inside the
+            lit area and lose contrast on every bright pass — the knockout mask is deliberately
+            weak here so you can see the failure the other three are designed around.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <!-- III -->
+    <article class="variant">
+      <div class="v-head">
+        <span class="v-num">III</span>
+        <h3>The lamp</h3>
+      </div>
+      <p class="v-sub">
+        <code>foil.fs</code> intact, but lit by one source in the room. The recommendation.
+      </p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="3"></div></div>
+        <div class="v-notes">
+          <p>
+            Balatro's foil interference — the same four <code>fac</code> terms, the same blue
+            push — with two changes. The pattern's origin is the lamp rather than each card's own
+            centre, so it is one continuous field; and the whole thing is gated by a specular
+            term computed from the card's fan normal, so a card only ignites when it happens to
+            be facing the light.
+          </p>
+          <p>
+            The result is the thing that was actually asked for: move the lamp along the hand
+            and the shine walks the fan, two or three cards at a time. Cards on the table, lying
+            flat, catch it at a different moment from the ones in your hand.
+          </p>
+          <p class="aside">
+            Cost: the most expensive to reason about. The shine depends on lamp position, fan
+            position and time, so "why is that card dull" has three answers — and a screenshot
+            of it can look like nothing is happening.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <!-- IV -->
+    <article class="variant">
+      <div class="v-head">
+        <span class="v-num">IV</span>
+        <h3>The grating</h3>
+      </div>
+      <p class="v-sub"><code>holo.fs</code>'s ruled diffraction lines, ignited only on the specular band.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="4"></div></div>
+        <div class="v-notes">
+          <p>
+            <code>holo.fs</code> carries a term nothing else does: a set of ruled lines at three
+            angles that behave like a diffraction grating. Drawn in page space they run straight
+            across the whole hand, which is the strongest signal on this board that the thirteen
+            cards are one surface.
+          </p>
+          <p>
+            The hue field is inherited from <code>holo.fs</code> as well, but it is hard-gated by
+            the specular term — off everywhere except a narrow band, so the hand is mostly plain
+            paper with one bright rule sweeping across it.
+          </p>
+          <p class="aside">
+            Cost: fine lines on a phone at devicePixelRatio 3 alias badly when the band moves
+            slowly. Needs either a derivative-based width or a deliberate speed floor.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ==================== THE RULE ==================== -->
+  <section id="rule">
+    <div class="sec-head">
+      <span class="rule-no">§ 4</span>
+      <h2>The rule</h2>
+    </div>
+    <p>
+      Which cards foil, and when, is a separate decision from how they look — and it is the half
+      that has to be exactly right, because a card that shines when it is not trumps is worse
+      than no feature at all.
+    </p>
+    <div class="ledger">
+      <div class="ledger-row">
+        <span class="label">Which cards</span>
+        <p>
+          Every card of the trump suit, wherever a card face is drawn: your fan, a tabled dummy
+          fan, the trick. Trump comes from <code>trumpForDisplay</code> — the one place the app
+          already converts a strain to a suit — so foil and the trump-left sort can never
+          disagree about which suit it is.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">When it starts</span>
+        <p>
+          At the same beat the contract settles, which is the beat "The Draw" already owns. The
+          trumps are singled out and travel to the left of the fan; landing lit is one event
+          rather than two.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Never</span>
+        <p>
+          On a no-trump contract (there is no trump suit to mark), during the auction (the
+          contract is not settled), and on the E/W dummy rail, which prints ranks as text and has
+          no card face to light.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Off by default</span>
+        <p>
+          A new row on the settings gate — a two-segment lever beside Trump placement, the switch
+          it is a companion to. Purely a client treatment: the server never reads it, and nothing
+          about scoring, robots or replay changes either way.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== WHAT IT COSTS ==================== -->
+  <section id="costs">
+    <div class="sec-head">
+      <span class="rule-no">§ 5</span>
+      <h2>What it costs</h2>
+    </div>
+
+    <div class="ledger">
+      <div class="ledger-row">
+        <span class="label">The ink</span>
+        <p>
+          This is the real risk and it is not solvable by turning the gain down. The card is DOM
+          text under a blended canvas, so anything lit sits over the rank and suit. Every variant
+          here knocks the corner index out of the mask — which is also the honest period answer,
+          since a foil plate covers a field and not the type. Variant II shows what happens
+          without it.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Reduced motion</span>
+        <p>
+          A moving specular band is exactly what <code>prefers-reduced-motion</code> is about.
+          FROZEN above is the fallback: the field is evaluated once and held, so a foiled trump
+          still reads as a different surface without anything travelling. Not a degraded mode — a
+          still photograph of one.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Night stock</span>
+        <p>
+          The night card face is an ink-plate negative — dark stock, light glyphs — and it is
+          deliberately low-contrast against the panel. Foil there has to add light rather than
+          both add and subtract, or the card stops reading as a rectangle at all. Switch CARD
+          STOCK to NIGHT and check every direction; III and IV hold up best.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">The overlap</span>
+        <p>
+          One overlay canvas has no idea which card is painted on top of which. Left alone, a
+          trump's plate paints straight across the neighbour stacked above it — the ♠4's foil
+          landing on the K♥ beside it, which is exactly what the first build of this board did.
+          Each quad is clipped to the span between its own left edge and the next card's, which
+          is geometry <code>fanLayout.ts</code> already computes.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">One canvas</span>
+        <p>
+          One fixed <code>&lt;canvas&gt;</code> for the page, cleared to mid grey and composited
+          with <code>hard-light</code>, which is a no-op wherever nothing is drawn. That is why
+          the fan, the trick and all four strips can light from one context and one field. A
+          per-card layer would need thirteen contexts, or thirteen copies of a pattern that is
+          supposed to be continuous.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">The brand</span>
+        <p>
+          Stated plainly: the design system says flat printed paper, no gradients, almost no
+          shadow, max ink and minimum colour. Directions II and IV are arguing with that
+          directly. I is the one that does not — and the reason I is on the board is that "make
+          it look like foil" and "make it look like this app" have a real answer in 1926
+          printing, not only a compromise.
+        </p>
+      </div>
+    </div>
+
+    <div class="seal">
+      <span class="label">Open, for you</span>
+      <p>
+        Which numeral — and does the lamp belong to the room or to the device? PLACED and POINTER
+        are the same rig with a different input, but TILT changes what the feature is: the hand
+        stops being lit and starts being <em>held up to</em> a light, which is a stronger idea and
+        a permission prompt on iOS.
+      </p>
+    </div>
+  </section>
+
+  <!-- ==================== SOURCES ==================== -->
+  <section id="sources">
+    <div class="sec-head">
+      <span class="rule-no">§ 6</span>
+      <h2>Source material</h2>
+    </div>
+    <p>
+      The maths on this page is adapted from Balatro's own edition shaders — the LÖVE/GLSL files
+      shipped in the game's <code>resources/shaders/</code>. Variant I and III descend from
+      <code>foil.fs</code>, II from <code>polychrome.fs</code>, IV from <code>holo.fs</code>. The
+      <code>dissolve_mask</code> half of each file is card-destruction machinery with no
+      counterpart here and is dropped.
+    </p>
+    <ul class="aside" style="max-width: 68ch; padding-left: 20px">
+      <li>
+        <a href="https://github.com/balatro-src/balatro-src-reverse-engineering">balatro-src/balatro-src-reverse-engineering</a>
+        — <code>resources/shaders/{foil,holo,polychrome,negative_shine}.fs</code>
+      </li>
+      <li>
+        <a href="https://godotshaders.com/shader/balatro-foil-card-effect/">Balatro Foil card effect</a>
+        — a CC0 Godot 4.4 port of <code>foil.fs</code>, useful as a second reading of the same
+        expression
+      </li>
+      <li>
+        <a href="https://balatrowiki.org/w/Foil">Balatro Wiki — Foil</a> — what each edition is,
+        in the game's own terms
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <div class="foot-marks">
+      <svg width="120" height="26" viewBox="0 0 120 26" fill="none" aria-hidden="true">
+        <path
+          d="M2 22h116M10 22v-7a10 10 0 0 1 20 0v7M45 22v-7a10 10 0 0 1 20 0v7M80 22v-7a10 10 0 0 1 20 0v7"
+          stroke="var(--verdigris)"
+          stroke-width="1.1"
+          stroke-linecap="square"
+        />
+      </svg>
+    </div>
+    <p class="label quiet" style="text-align: center">
+      Nickel Bridge · Foil trumps · concept board
+    </p>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    /* ------------------------------------------------------------------
+       CARD DATA — a real 13-card hand, spades trumps, already sorted
+       trump-left the way "Trump placement · LEFT SIDE" leaves it.
+       ------------------------------------------------------------------ */
+    var HAND = [
+      ['A', 's'], ['K', 's'], ['Q', 's'], ['9', 's'], ['4', 's'],
+      ['K', 'h'], ['J', 'h'], ['7', 'h'],
+      ['Q', 'd'], ['8', 'd'], ['3', 'd'],
+      ['6', 'c'], ['2', 'c']
+    ];
+    var STRIP = [
+      ['A', 's'], ['K', 's'], ['9', 's'], ['J', 'h'], ['8', 'd']
+    ];
+    var GLYPH = { s: '♠', h: '♥', d: '♦', c: '♣' };
+    var TRUMP = 's';
+
+    function cardEl(rank, suit, foil, seed, fanx, gap) {
+      var d = document.createElement('div');
+      d.className = 'pcard suit-' + suit + (gap ? ' suitgap' : '');
+      if (foil) {
+        d.setAttribute('data-foil', '');
+        d.setAttribute('data-seed', String(seed));
+        d.setAttribute('data-fanx', fanx.toFixed(3));
+      }
+      var r = document.createElement('div');
+      r.className = 'rank' + (rank === '10' ? ' ten' : '');
+      r.textContent = rank;
+      var s = document.createElement('div');
+      s.className = 'suit';
+      s.textContent = GLYPH[suit];
+      d.appendChild(r);
+      d.appendChild(s);
+      return d;
+    }
+
+    function buildFan(host, cards) {
+      var n = cards.length;
+      cards.forEach(function (c, i) {
+        var fanx = n > 1 ? (i / (n - 1)) * 2 - 1 : 0;
+        var gap = i > 0 && cards[i - 1][1] !== c[1];
+        host.appendChild(cardEl(c[0], c[1], c[1] === TRUMP, i + 1, fanx, gap));
+      });
+    }
+
+    buildFan(document.getElementById('hero-fan'), HAND);
+    Array.prototype.forEach.call(document.querySelectorAll('[data-strip]'), function (host) {
+      buildFan(host, STRIP);
+    });
+
+    /* ------------------------------------------------------------------
+       STATE
+       ------------------------------------------------------------------ */
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var state = {
+      variant: 3,
+      lampMode: 'fixed',
+      motion: reduce.matches ? 0 : 1,
+      gain: 1.0,
+      curve: 0.55,
+      height: 520,
+      speed: 0.45,
+      lamp: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.3 }
+    };
+    if (reduce.matches) {
+      setPressed('lever-motion', 'm', '0');
+    }
+
+    /* ------------------------------------------------------------------
+       GL
+       ------------------------------------------------------------------ */
+    var canvas = document.getElementById('foil');
+    var gl = null;
+    try {
+      gl =
+        canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false }) ||
+        canvas.getContext('experimental-webgl', { alpha: true, antialias: false });
+    } catch (e) {
+      gl = null;
+    }
+    if (!gl) {
+      document.body.setAttribute('data-foil-ok', '0');
+      return;
+    }
+
+    var VERT = [
+      'attribute vec2 a_unit;',
+      'uniform vec2 u_res;',
+      'uniform vec4 u_rect;',
+      'varying vec2 v_uv;',
+      'void main() {',
+      '  v_uv = a_unit;',
+      '  vec2 px = u_rect.xy + a_unit * u_rect.zw;',
+      '  vec2 clip = vec2(px.x / u_res.x * 2.0 - 1.0, 1.0 - px.y / u_res.y * 2.0);',
+      '  gl_Position = vec4(clip, 0.0, 1.0);',
+      '}'
+    ].join('\n');
+
+    /* The fragment shader. Every variant writes a colour centred on 0.5 so
+       hard-light leaves the untouched page alone: below 0.5 darkens the card
+       stock, above 0.5 blows it out, and exactly 0.5 is invisible. */
+    /* The fragment shader.
+       The card face is a decision, not a detail. A day card is pure white
+       paper, and hard-light above 0.5 is a NO-OP on white — you cannot make
+       paper brighter than paper. So foil on the day stock is expressed as a
+       tinted PLATE: the value written is half the colour the card should
+       appear (hard-light doubles it against white), and the "shine" is where
+       the ramp returns toward paper. Night stock is the opposite problem — an
+       already-dark ink-plate negative — so there the same drive only ever
+       adds light. Both paths share one field, one ramp and one mask. */
+    var FRAG = [
+      'precision highp float;',
+      'varying vec2 v_uv;',
+      'uniform vec4 u_rect;',
+      'uniform vec2 u_light;',
+      'uniform float u_lightz;',
+      'uniform float u_time;',
+      'uniform float u_seed;',
+      'uniform float u_fanx;',
+      'uniform float u_curve;',
+      'uniform float u_gain;',
+      'uniform float u_night;',
+      'uniform int u_variant;',
+      'uniform vec2 u_clipx;',
+      '',
+      /* --- HSL -> RGB, lifted from Balatro's own hue()/RGB() --- */
+      'float hueTerm(float s, float t, float h) {',
+      '  float hs = mod(h, 1.0) * 6.0;',
+      '  if (hs < 1.0) return (t - s) * hs + s;',
+      '  if (hs < 3.0) return t;',
+      '  if (hs < 4.0) return (t - s) * (4.0 - hs) + s;',
+      '  return s;',
+      '}',
+      'vec3 hsl2rgb(vec3 c) {',
+      '  if (c.y < 0.0001) return vec3(c.z);',
+      '  float t = (c.z < 0.5) ? c.y * c.z + c.z : -c.y * c.z + (c.y + c.z);',
+      '  float s = 2.0 * c.z - t;',
+      '  return vec3(hueTerm(s, t, c.x + 1.0 / 3.0), hueTerm(s, t, c.x), hueTerm(s, t, c.x - 1.0 / 3.0));',
+      '}',
+      '',
+      /* --- the corner-index knockout. These cards are corner-indexed, so the
+             printed area is a small box at top-left and the rest of the face
+             is open field. A foil plate covers a field, never the type. --- */
+      'float plateMask(vec2 uv, float softness) {',
+      '  vec2 g = vec2(0.62, 0.46);',
+      '  vec2 d = max(vec2(0.0), (g - uv) / g);',
+      '  float corner = 1.0 - clamp(min(d.x, d.y) * 3.4, 0.0, 1.0);',
+      '  corner = mix(1.0, corner, softness);',
+      '  vec2 e = min(uv, 1.0 - uv);',
+      '  float edge = clamp(min(e.x, e.y) * 16.0, 0.0, 1.0);',
+      '  return corner * edge;',
+      '}',
+      '',
+      /* --- Balatro's moving noise field (shared core of holo/polychrome) --- */
+      'float field(vec2 p, float t) {',
+      '  vec2 a = p + 50.0 * vec2(sin(-t / 143.634), cos(-t / 99.4324));',
+      '  vec2 b = p + 50.0 * vec2(cos(t / 53.1532), cos(t / 61.4532));',
+      '  vec2 c = p + 50.0 * vec2(sin(-t / 87.53218), sin(-t / 49.0));',
+      '  return (1.0 + (cos(length(a) / 19.483) + sin(length(b) / 33.155) * cos(b.y / 15.73) +',
+      '          cos(length(c) / 27.193) * sin(c.x / 21.92))) / 2.0;',
+      '}',
+      '',
+      'void main() {',
+      '  vec2 uv = v_uv;',
+      '  vec2 px = u_rect.xy + uv * u_rect.zw;',
+      // a fanned card is 60% hidden behind the next one, and one overlay
+      // canvas has no way to know that — so each quad is clipped to the
+      // sliver of its card that is actually on screen.
+      '  if (px.x < u_clipx.x || px.x > u_clipx.y) discard;',
+      '',
+      /* the fan is drawn flat but held curved: each card gets a normal that
+         rotates with its place in the spread, so the specular band walks the
+         hand instead of lighting all thirteen at once */
+      '  float tilt = u_fanx * u_curve * 0.95;',
+      '  vec3 n = normalize(vec3(sin(tilt), 0.0, cos(tilt)));',
+      '  vec3 L = normalize(vec3(u_light - px, u_lightz));',
+      '  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));',
+      '  float spec = max(dot(n, H), 0.0);',
+      '',
+      /* page-space coordinates relative to the lamp — this is what makes the
+         interference field continuous across thirteen separate elements */
+      '  vec2 auv = (px - u_light) / 760.0;',
+      '  float dist = length(px - u_light);',
+      '  float phase = u_time + dist * 0.0035;',
+      '  float rings = 0.5 + 0.5 * sin(length(90.0 * auv) - phase * 2.0);',
+      '',
+      '  vec3 tint = vec3(1.0);',   /* the colour the card should APPEAR */
+      '  float mask = 0.0;',        /* how much of the plate is laid down */
+      '',
+      '  if (u_variant == 1) {',
+      /* ---- I · THE FOIL STAMP — foil.fs interference on a metal ramp ---- */
+      '    vec2 rot = vec2(cos(phase * 0.1221), sin(phase * 0.3512));',
+      '    float ang = dot(rot, auv) / max(length(rot) * length(auv), 1e-4);',
+      '    float f2 = max(min(5.0 * cos(phase * 0.3 + ang * 3.14 * (2.2 + 0.9 * sin(phase * 1.65))) - 4.0, 1.0), 0.0);',
+      '    float t = clamp(0.62 * rings + 0.55 * f2 + 0.30 * smoothstep(0.55, 1.0, spec), 0.0, 1.0);',
+      '    vec3 plate = vec3(0.85, 0.87, 0.82);',
+      '    vec3 mid = vec3(0.60, 0.72, 0.57);',
+      '    vec3 gold = vec3(0.97, 0.89, 0.66);',
+      '    tint = t < 0.5 ? mix(plate, mid, t / 0.5) : mix(mid, gold, (t - 0.5) / 0.5);',
+      '    mask = 0.92 * plateMask(uv, 1.0);',
+      '  } else if (u_variant == 2) {',
+      /* ---- II · THE HOLOGRAM — polychrome.fs, seeded PER CARD ---- */
+      '    vec2 cuv = (uv - 0.5) * 50.0;',
+      '    float t = u_seed * 2.221 + u_time * 6.0;',
+      '    float res = 0.5 + 0.5 * cos(u_seed * 2.612 + (field(cuv, t) - 0.5) * 3.14);',
+      '    tint = hsl2rgb(vec3(res + u_seed * 0.04 + u_time * 0.06, 0.62, 0.55));',
+      '    mask = 0.95 * plateMask(uv, 0.18);',
+      '  } else if (u_variant == 3) {',
+      /* ---- III · THE LAMP — foil.fs, one source, specular gate ---- */
+      '    float f1 = max(min(2.0 * sin((length(90.0 * auv) + phase * 2.0) + 3.0 * (1.0 + 0.8 *',
+      '        cos(length(113.1121 * auv) - phase * 3.121))) - 1.0, 1.0), 0.0);',
+      '    vec2 rot = vec2(cos(phase * 0.1221), sin(phase * 0.3512));',
+      '    float ang = dot(rot, auv) / max(length(rot) * length(auv), 1e-4);',
+      '    float f2 = max(min(5.0 * cos(phase * 0.21 + ang * 3.14 * (2.2 + 0.9 * sin(phase * 1.65))) - 4.0, 1.0), 0.0);',
+      '    float f3 = 0.3 * max(min(2.0 * sin(phase * 5.0 + uv.x * 3.0 + 3.0 * (1.0 + 0.5 * cos(phase * 7.0))) - 1.0, 1.0), -1.0);',
+      '    float f4 = 0.3 * max(min(2.0 * sin(phase * 6.66 + uv.y * 3.8 + 3.0 * (1.0 + 0.5 * cos(phase * 3.414))) - 1.0, 1.0), -1.0);',
+      '    float flare = clamp(0.45 * (f1 + f2) + 0.7 * (f3 + f4) + 0.30, 0.0, 1.0);',
+      '    float t = clamp(0.55 * rings + 0.75 * flare, 0.0, 1.0);',
+      '    vec3 plate = vec3(0.86, 0.90, 0.95);',
+      '    vec3 cyan = vec3(0.38, 0.78, 0.92);',
+      '    vec3 blaze = vec3(0.98, 0.99, 1.0);',
+      '    tint = t < 0.55 ? mix(plate, cyan, t / 0.55) : mix(cyan, blaze, (t - 0.55) / 0.45);',
+      '    float gate = 0.30 + 0.70 * smoothstep(0.40, 0.99, spec);',
+      '    mask = gate * plateMask(uv, 0.85);',
+      '  } else {',
+      /* ---- IV · THE GRATING — holo.fs ruled lines, hard specular gate ---- */
+      '    vec2 gp = px / 46.0;',
+      '    float g = 0.79;',
+      '    float lines = 0.5 * max(max(max(0.0, 7.0 * abs(cos(gp.x * g * 5.0)) - 6.0),',
+      '        max(0.0, 7.0 * cos(gp.y * g * 11.0 + gp.x * g * 5.0) - 6.0)),',
+      '        max(0.0, 7.0 * cos(gp.y * g * 11.0 - gp.x * g * 5.0) - 6.0));',
+      '    float res = 0.5 + 0.5 * cos(phase * 2.2 + (field((px - u_light) / 4.0, u_time * 7.0) - 0.5) * 3.14);',
+      '    tint = hsl2rgb(vec3(res + lines * 0.55, 0.60, 0.55));',
+      '    float gate = smoothstep(0.50, 0.99, spec);',
+      '    mask = clamp(0.22 + 1.5 * lines, 0.0, 1.0) * gate * plateMask(uv, 0.8);',
+      '  }',
+      '',
+      '  float a = clamp(mask * u_gain, 0.0, 1.0);',
+      /* DAY: write half the target colour — hard-light doubles it against
+         white paper, and anything at or above 0.5 simply stays paper.
+         NIGHT: the stock is already dark, so only add light. */
+      '  vec3 day = mix(vec3(0.5), tint * 0.5, a);',
+      '  vec3 night = mix(vec3(0.5), 0.5 + 0.5 * tint, a * 0.85);',
+      '  gl_FragColor = vec4(mix(day, night, u_night), 1.0);',
+      '}'
+    ].join('\n');
+
+    function compile(type, src) {
+      var sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(sh), src);
+        return null;
+      }
+      return sh;
+    }
+    var vs = compile(gl.VERTEX_SHADER, VERT);
+    var fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) {
+      document.body.setAttribute('data-foil-ok', '0');
+      return;
+    }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(prog));
+      document.body.setAttribute('data-foil-ok', '0');
+      return;
+    }
+    gl.useProgram(prog);
+
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1]), gl.STATIC_DRAW);
+    var aUnit = gl.getAttribLocation(prog, 'a_unit');
+    gl.enableVertexAttribArray(aUnit);
+    gl.vertexAttribPointer(aUnit, 2, gl.FLOAT, false, 0, 0);
+
+    var U = {};
+    ['u_res', 'u_rect', 'u_light', 'u_lightz', 'u_time', 'u_seed', 'u_fanx', 'u_curve', 'u_gain', 'u_night', 'u_variant', 'u_clipx'].forEach(
+      function (name) {
+        U[name] = gl.getUniformLocation(prog, name);
+      }
+    );
+
+    /* ------------------------------------------------------------------
+       REGISTRY — every foiled card on the page, with the variant it
+       belongs to. A card inside the hero table follows the lever; a card
+       inside a strip is pinned to that strip's numeral.
+       ------------------------------------------------------------------ */
+    var cards = [];
+    function collect() {
+      cards = Array.prototype.map.call(document.querySelectorAll('[data-foil]'), function (el) {
+        var strip = el.closest('[data-strip]');
+        return {
+          el: el,
+          fixedVariant: strip ? parseInt(strip.getAttribute('data-strip'), 10) : 0,
+          seed: parseFloat(el.getAttribute('data-seed')) || 1,
+          fanx: parseFloat(el.getAttribute('data-fanx')) || 0
+        };
+      });
+    }
+    collect();
+
+    var dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    /* ------------------------------------------------------------------
+       DRAW
+       ------------------------------------------------------------------ */
+    var t0 = performance.now();
+    var frozenTime = 3.2;
+
+    function isNight() {
+      var plate = document.body.getAttribute('data-plate');
+      if (plate === 'night') return 1;
+      if (plate === 'day') return 0;
+      var host = document.documentElement.getAttribute('data-theme');
+      if (host === 'dark') return 1;
+      if (host === 'light') return 0;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 1 : 0;
+    }
+
+    function frame(now) {
+      var t = state.motion ? ((now - t0) / 1000) * state.speed : frozenTime;
+      var night = isNight();
+
+      gl.clearColor(128 / 255, 128 / 255, 128 / 255, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.uniform2f(U.u_res, window.innerWidth, window.innerHeight);
+      gl.uniform2f(U.u_light, state.lamp.x, state.lamp.y);
+      gl.uniform1f(U.u_lightz, state.height);
+      gl.uniform1f(U.u_time, t);
+      gl.uniform1f(U.u_curve, state.curve);
+      gl.uniform1f(U.u_gain, state.gain);
+      gl.uniform1f(U.u_night, night);
+
+      var vh = window.innerHeight;
+      for (var i = 0; i < cards.length; i++) {
+        var c = cards[i];
+        var r = c.el.getBoundingClientRect();
+        if (r.bottom < -40 || r.top > vh + 40 || r.width === 0) continue;
+        var nxt = c.el.nextElementSibling;
+        var clipR = r.right;
+        if (nxt && nxt.classList.contains('pcard')) {
+          var nr = nxt.getBoundingClientRect();
+          if (nr.left > r.left) clipR = Math.min(clipR, nr.left);
+        }
+        gl.uniform2f(U.u_clipx, r.left, clipR);
+        gl.uniform4f(U.u_rect, r.left, r.top, r.width, r.height);
+        gl.uniform1f(U.u_seed, c.seed);
+        gl.uniform1f(U.u_fanx, c.fanx);
+        gl.uniform1i(U.u_variant, c.fixedVariant || state.variant);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      lampEl.style.left = state.lamp.x + 'px';
+      lampEl.style.top = state.lamp.y + 'px';
+      requestAnimationFrame(frame);
+    }
+
+    var lampEl = document.getElementById('lamp');
+    requestAnimationFrame(frame);
+
+    /* ------------------------------------------------------------------
+       CONTROLS
+       ------------------------------------------------------------------ */
+    function setPressed(groupId, attr, value) {
+      var g = document.getElementById(groupId);
+      if (!g) return;
+      Array.prototype.forEach.call(g.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-' + attr) === value));
+      });
+    }
+
+    function wireLever(groupId, attr, onPick) {
+      var g = document.getElementById(groupId);
+      g.addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        var v = b.getAttribute('data-' + attr);
+        setPressed(groupId, attr, v);
+        onPick(v);
+      });
+    }
+
+    wireLever('lever-variant', 'v', function (v) {
+      state.variant = parseInt(v, 10);
+    });
+    wireLever('lever-lamp', 'l', function (v) {
+      state.lampMode = v;
+      document.body.setAttribute('data-lamp-visible', v === 'tilt' ? '0' : '1');
+      if (v === 'tilt') startTilt();
+    });
+    wireLever('lever-plate', 'p', function (v) {
+      if (v === 'auto') document.body.removeAttribute('data-plate');
+      else document.body.setAttribute('data-plate', v);
+    });
+    wireLever('lever-motion', 'm', function (v) {
+      state.motion = parseInt(v, 10);
+    });
+
+    function wireSlider(id, valId, key, digits) {
+      var s = document.getElementById(id);
+      var out = document.getElementById(valId);
+      function sync() {
+        state[key] = parseFloat(s.value);
+        out.textContent = digits === 0 ? String(Math.round(state[key])) : state[key].toFixed(digits);
+      }
+      s.addEventListener('input', sync);
+      sync();
+    }
+    wireSlider('s-gain', 'v-gain', 'gain', 2);
+    wireSlider('s-curve', 'v-curve', 'curve', 2);
+    wireSlider('s-height', 'v-height', 'height', 0);
+    wireSlider('s-speed', 'v-speed', 'speed', 2);
+
+    /* drag the lamp anywhere on the table */
+    var stage = document.getElementById('stage');
+    function place(e) {
+      state.lamp.x = e.clientX;
+      state.lamp.y = e.clientY;
+    }
+    var dragging = false;
+    stage.addEventListener('pointerdown', function (e) {
+      if (state.lampMode === 'tilt') return;
+      dragging = true;
+      stage.setPointerCapture(e.pointerId);
+      place(e);
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (dragging || state.lampMode === 'pointer') place(e);
+    });
+    stage.addEventListener('pointerup', function () {
+      dragging = false;
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (state.lampMode === 'pointer') place(e);
+    });
+
+    /* device tilt — the lamp stops being in the room and starts being
+       something the hand is held up to */
+    var tiltOn = false;
+    function onTilt(e) {
+      var g = e.gamma == null ? 0 : e.gamma; /* left/right, -90..90 */
+      var b = e.beta == null ? 45 : e.beta; /* front/back, -180..180 */
+      state.lamp.x = window.innerWidth * (0.5 + Math.max(-1, Math.min(1, g / 45)) * 0.85);
+      state.lamp.y = window.innerHeight * (0.5 - Math.max(-1, Math.min(1, (b - 45) / 45)) * 0.85);
+    }
+    function startTilt() {
+      if (tiltOn) return;
+      var DOE = window.DeviceOrientationEvent;
+      if (!DOE) return;
+      if (typeof DOE.requestPermission === 'function') {
+        DOE.requestPermission()
+          .then(function (r) {
+            if (r === 'granted') {
+              window.addEventListener('deviceorientation', onTilt);
+              tiltOn = true;
+            }
+          })
+          .catch(function () {});
+      } else {
+        window.addEventListener('deviceorientation', onTilt);
+        tiltOn = true;
+      }
+    }
+
+    /* the board is shareable: ?v=3&plate=night opens on one direction, so a
+       preference can be sent as a link rather than as an instruction */
+    (function applyQuery() {
+      var q = new URLSearchParams(location.search);
+      var v = q.get('v');
+      if (v && /^[1-4]$/.test(v)) {
+        state.variant = parseInt(v, 10);
+        setPressed('lever-variant', 'v', v);
+      }
+      var plate = q.get('plate');
+      if (plate === 'day' || plate === 'night') {
+        document.body.setAttribute('data-plate', plate);
+        setPressed('lever-plate', 'p', plate);
+      }
+      var m = q.get('motion');
+      if (m === '0' || m === '1') {
+        state.motion = parseInt(m, 10);
+        setPressed('lever-motion', 'm', m);
+      }
+    })();
+
+    reduce.addEventListener('change', function (e) {
+      state.motion = e.matches ? 0 : 1;
+      setPressed('lever-motion', 'm', e.matches ? '0' : '1');
+    });
+  })();
+</script>
