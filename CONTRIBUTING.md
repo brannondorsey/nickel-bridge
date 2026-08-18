@@ -257,9 +257,29 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 the design-system skill — see "Design system" below; and
                 skills/player-outreach/, the operator skill that reads the production
                 roster and drafts the weekly player emails — see "Player outreach" below;
-                and skills/own-the-fix/, the workflow skill that carries a described
+                skills/own-the-fix/, the workflow skill that carries a described
                 change through PR, review and CI to merge-ready — see "Owning a change
-                end to end" below
+                end to end" below; and four third-party skills installed individually via
+                `npx skills add` rather than as marketplace plugins — skills/find-skills
+                (vercel-labs/skills) discovers and installs further skills on request;
+                skills/grill-me + skills/grilling (mattpocock/skills) are the relentless
+                design-interview skill and the flow it delegates to (grill-me is a thin
+                `disable-model-invocation` pointer — "call the Skill tool with 'grilling'"
+                — so the two are always installed together); skills/responsive-design
+                (wshobson/agents) covers container queries, fluid typography and
+                mobile-first breakpoint strategy. Each is a symlink into
+                ../.agents/skills/, the CLI's own canonical, cross-agent storage location,
+                tracked alongside ../skills-lock.json. This per-skill install is the
+                deliberate replacement for `.claude/settings.json`'s short-lived
+                `extraKnownMarketplaces`/`enabledPlugins` blocks (PRs #186/#187): those
+                registered two whole marketplace plugins — `ui-design` (~dozens of UI/mobile
+                skills) and `mattpocock-skills` (~20 engineering-workflow skills) — for the
+                sake of one skill each, and only take effect for a human running Claude
+                Code locally who accepts the marketplace-trust prompt. A remote/web session
+                never sees a project's `enabledPlugins` at all, so grill-me and
+                responsive-design were unreachable from exactly the sessions meant to use
+                them. The individual-skill install has no such gap: it's just files under
+                version control, loaded by Claude Code's native skill reader everywhere
 ```
 
 ## Development workflow
@@ -1090,8 +1110,27 @@ field that grows afterward doesn't leave a ply stuck below a floor it has since 
 giving any newly-over-the-floor ply its one stage-3 solve there and persisting the result
 (`sampleFindability`, extracted so `computeCore`'s first pass and this second chance can
 never judge a card two different ways) — so a moment that was invisible on first open can
-still surface on a later one without ever being recomputed twice. The served `momentFloor`
-still backs one honest caption for the residual case that check can't close (Analyze.tsx's
+still surface on a later one without ever being recomputed twice.
+
+**A bid moment must never fire when the "better" call would have reached the exact same
+final contract you actually played.** `ddTableTricks` is a pure double-dummy fact about the
+deal, indexed only by (strain, declarer) — identical regardless of which auction route
+reached it (verified: it equals `analysePlayTricks`'s own ply-0 value for the same
+contract). So when `computePar`'s counterfactual auction lands on a contract equal to
+`core.contract` (same strain/declarer/level/doubled/redoubled, `contractsEqual`), the
+"gain" it would report is entirely a PLAY-quality gap — DD-optimal play of that contract vs.
+your actual play of it — with nothing a different bid could have changed; attributing that
+gap to the bid was a false accusation, not a finding. `computePar` now leaves `cf` null in
+that case, same as when the robot's own preferred call was the one played. This bumped
+`ANALYZE_VERSION`: a cached analysis computed before it shipped could carry a
+same-contract bid moment that should never have existed. It landed as 6 and is now **7** —
+it and the stage-3 excusal above were written on separate branches and each bumped to 6, so
+merging them had to move past both: a shared version only means anything if it changes
+whenever the output can, and at 6 a cache written by either change alone would have looked
+current to code that is now stricter than it.
+
+The served `momentFloor`
+still backs one honest caption for the residual case backfillDriftedPlies can't close (Analyze.tsx's
 play-lens ribbon compares a ROUNDED figure for display; the raw, unrounded mpCost decides
 backfill, so a candidate sitting exactly on the rounding boundary can still read as
 "cleared" without having cleared the raw gate). The grading boundary is `boards.claimed_at_ply`
@@ -2515,11 +2554,15 @@ gap, where a send happened but nothing was recorded.
 
 ## Unattended outreach permissions
 
-`.claude/settings.json` exists for exactly one reason: the weekly player-outreach routine
-(`.claude/skills/player-outreach/`) fires into a fresh, non-interactive session, and a session
-that can't answer a permission prompt simply stalls at it. Every rule in that file is scoped to
-that workflow. It is checked in so the routine behaves identically for anyone who runs it,
-rather than depending on one person's local approvals.
+`.claude/settings.json`'s `permissions`/`autoMode` blocks exist for exactly one reason: the
+weekly player-outreach routine (`.claude/skills/player-outreach/`) fires into a fresh,
+non-interactive session, and a session that can't answer a permission prompt simply stalls at
+it. Every rule in those two blocks is scoped to that workflow. They are checked in so the
+routine behaves identically for anyone who runs it, rather than depending on one person's local
+approvals. (The file briefly also carried `extraKnownMarketplaces`/`enabledPlugins` blocks
+registering two Claude Code plugin marketplaces for contributors — unrelated to outreach
+permissions, and since replaced by individually-installed skills; see the `.claude` repo-map
+entry above and each PR — #186/#187 added them, a later PR removed them.)
 
 Three groups, and the reasoning matters more than the list:
 
