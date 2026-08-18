@@ -25,5 +25,16 @@
       "Reading Gmail to work out who has already been contacted for player outreach — search_threads (`in:sent subject:\"nickel bridge\"`, paginated), list_drafts, get_thread, get_message, list_labels. Read-only, and load-bearing for the skill's promise to email each player once: skipping it is what causes double-emailing, so it is safer to run than to skip.",
       "Creating and updating Gmail DRAFTS for player outreach (create_draft, update_draft). The Gmail connector exposes no send capability at all, so this cannot deliver mail to anyone — a human reviews every draft in Gmail and sends it themselves. That review step is the safety boundary for this workflow; keep it. Never treat this as permission to send, to trash or spam-label mail, or to draft outreach to anyone outside the roster the report script returned."
     ]
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "source": "github",
+        "repo": "wshobson/agents"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ui-design@claude-code-workflows": true
   }
 }
