@@ -32,9 +32,16 @@
         "source": "github",
         "repo": "wshobson/agents"
       }
+    },
+    "mattpocock": {
+      "source": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      }
     }
   },
   "enabledPlugins": {
-    "ui-design@claude-code-workflows": true
+    "ui-design@claude-code-workflows": true,
+    "mattpocock-skills@mattpocock": true
   }
 }
