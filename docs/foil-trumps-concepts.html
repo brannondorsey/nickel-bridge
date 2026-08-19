@@ -596,6 +596,36 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
+  .diag {
+    border: 1px solid var(--ink);
+    background: var(--surface);
+    padding: 12px 14px;
+    margin-top: 18px;
+    display: grid;
+    gap: 4px;
+    font-size: 15px;
+  }
+  .diag-row {
+    display: grid;
+    grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: baseline;
+  }
+  .diag-row span:first-child {
+    overflow-wrap: anywhere;
+  }
+  .diag-row span:last-child {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 520px) {
+    .diag-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .seal {
     border: 1.5px dashed var(--line-dashed);
     padding: 16px 18px;
@@ -794,8 +824,10 @@
       the same reading can be judged on a card lying flat and on cards held in a curve at once.
     </p>
     <p class="aside">
-      The lamp drifts over the table on its own until you take it — drag anywhere on the felt to
-      place it, and it stays where you put it.
+      Dragging the felt drives whatever DRIVES is set to: with THE LAMP it places the light,
+      which then stays where you put it; with THE HAND it tilts the cards, which is the
+      thumb-driven stand-in for the gyroscope. Until the lamp is placed by hand it drifts over
+      the table on its own, so nothing here is ever sitting dark.
     </p>
 
     <div class="table" id="stage">
@@ -824,8 +856,30 @@
     </div>
     <p>
       Your idea, and it turns out there are two ways to build it that feel completely different.
-      Set INPUT to DEVICE (a phone will ask permission on the first tap — that is iOS, not us)
-      and switch DRIVES between the two.
+      Set INPUT to DEVICE and switch DRIVES between the two.
+    </p>
+    <p>
+      <strong>On this page, on a phone, it will almost certainly do nothing — and that is not
+      your phone.</strong> An artifact renders inside a cross-origin frame, and the motion
+      sensors are gated by Permissions Policy: <code>gyroscope</code> and
+      <code>accelerometer</code> default to the top-level page only, so a framed document gets
+      no events unless the host frame opts it in. iOS is stricter still — Safari refuses
+      <code>requestPermission()</code> from a cross-origin frame outright ("Source frame did not
+      have the same security origin as the main page"), and WebKit has a standing bug where
+      third-party frames get no motion events even when the policy does allow them. Nothing
+      inside this document can grant itself the sensor.
+    </p>
+    <p>
+      So the board says which of those it is, live, on your device — rather than sitting there
+      quietly doing nothing:
+    </p>
+    <div class="diag" id="diag" aria-live="polite"></div>
+    <p style="margin-top: 15px">
+      <strong>The stand-in that does work on a phone: drag on the felt.</strong> With DRIVES set
+      to THE HAND, dragging a thumb across the table now rotates the cards exactly as the
+      gyroscope would — same code path, same uniforms, a finger instead of a sensor. It is
+      enough to judge whether the motion is right. To feel the real thing the board has to be
+      served from the app's own origin over HTTPS, which is a preview deploy, not an artifact.
     </p>
 
     <div class="ledger">
@@ -861,8 +915,11 @@
         <p>
           <code>deviceorientation</code> needs a user gesture and an explicit grant on iOS, so
           the setting has to survive being refused: no grant means the hand falls back to the
-          fixed curvature and still foils, just without the twist. Absolute orientation also
-          drifts, so this reads relative motion rather than trusting a heading.
+          fixed curvature and still foils, just without the twist — which is exactly what this
+          page is doing right now. Absolute orientation also drifts and means nothing indoors,
+          so the first reading is taken as the rest position and everything is reported relative
+          to it: the hand is flat wherever you happen to be holding the phone. In the app this
+          is same-origin and none of the frame problem applies.
         </p>
       </div>
     </div>
@@ -1632,7 +1689,7 @@
             h.h * (0.5 + 0.30 * Math.cos(o * 0.77))
           );
           gl.uniform1f(U.u_lightz, 150);
-          gl.uniform2f(U.u_tilt, 0, 0);
+          gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
         } else if (state.lampPlaced) {
           gl.uniform2f(U.u_light, state.lamp.x - hr.left, state.lamp.y - hr.top);
           gl.uniform1f(U.u_lightz, state.height);
@@ -1760,25 +1817,34 @@
       if (state.input === 'pointer') fromPointer(e);
     });
 
-    /* dragging the felt always places the lamp, whatever the input is —
-       it is the one direct manipulation on the page */
+    /* Dragging the felt drives whichever model is selected — the lamp when
+       DRIVES is THE LAMP, the hand's tilt when it is THE HAND. On a phone
+       this is the only stand-in for the gyroscope that works at all, since
+       an artifact runs in a cross-origin frame where the sensor is blocked
+       outright (see startTilt's diagnosis below). */
     var stage = document.getElementById('stage');
     var dragging = false;
+    function fromDrag(e) {
+      if (state.drives === 'lamp') {
+        state.lampPlaced = true;
+        document.body.setAttribute('data-lamp-placed', '');
+        state.lamp.x = e.clientX;
+        state.lamp.y = e.clientY;
+      } else {
+        var r = stage.getBoundingClientRect();
+        state.tilt.x = ((e.clientX - r.left) / r.width - 0.5) * 2 * state.tiltRange * 1.6;
+        state.tilt.y = ((e.clientY - r.top) / r.height - 0.5) * 2 * state.tiltRange * 1.6;
+      }
+    }
     stage.addEventListener('pointerdown', function (e) {
       dragging = true;
       try {
         stage.setPointerCapture(e.pointerId);
       } catch (err) {}
-      state.lampPlaced = true;
-      document.body.setAttribute('data-lamp-placed', '');
-      state.lamp.x = e.clientX;
-      state.lamp.y = e.clientY;
+      fromDrag(e);
     });
     stage.addEventListener('pointermove', function (e) {
-      if (dragging) {
-        state.lamp.x = e.clientX;
-        state.lamp.y = e.clientY;
-      }
+      if (dragging) fromDrag(e);
     });
     stage.addEventListener('pointerup', function () {
       dragging = false;
@@ -1793,7 +1859,15 @@
        it: the hand is flat wherever you happened to be holding the phone. */
     var tiltOn = false;
     var rest = null;
+    var samples = 0;
+    var diagNote = 'not asked yet';
     function onTilt(e) {
+      samples++;
+      if (e.beta == null && e.gamma == null) {
+        diagNote = 'events arriving, but with no angles in them';
+      } else {
+        diagNote = 'live';
+      }
       var g = e.gamma == null ? 0 : e.gamma;
       var b = e.beta == null ? 0 : e.beta;
       if (rest === null) rest = { g: g, b: b };
@@ -1809,25 +1883,97 @@
         state.tilt.y = db * state.tiltRange * 1.6;
       }
     }
+    function attachTilt() {
+      window.addEventListener('deviceorientation', onTilt);
+      /* some Android builds only populate the absolute variant */
+      window.addEventListener('deviceorientationabsolute', onTilt);
+      tiltOn = true;
+      /* if nothing has arrived after a second, the sensor is not coming */
+      window.setTimeout(function () {
+        if (samples === 0) {
+          diagNote = 'permission granted, but no events ever arrived — this is ' +
+            'what a blocked cross-origin frame looks like';
+        }
+      }, 1200);
+    }
+
     function startTilt() {
-      if (tiltOn) return;
-      var DOE = window.DeviceOrientationEvent;
-      if (!DOE) return;
       rest = null;
+      samples = 0;
+      if (tiltOn) {
+        diagNote = 'listening';
+        return;
+      }
+      var DOE = window.DeviceOrientationEvent;
+      if (!DOE) {
+        diagNote = 'this browser has no DeviceOrientationEvent at all';
+        return;
+      }
       if (typeof DOE.requestPermission === 'function') {
+        diagNote = 'asking permission…';
         DOE.requestPermission()
           .then(function (r) {
             if (r === 'granted') {
-              window.addEventListener('deviceorientation', onTilt);
-              tiltOn = true;
+              diagNote = 'permission granted, waiting for the first reading…';
+              attachTilt();
+            } else {
+              diagNote = 'permission refused (' + r + ')';
             }
           })
-          .catch(function () {});
+          .catch(function (err) {
+            /* iOS refuses the call outright from a cross-origin frame:
+               "Source frame did not have the same security origin as the
+               main page." That is this page's situation exactly. */
+            diagNote = 'the browser refused the request: ' + (err && err.message ? err.message : err);
+          });
       } else {
-        window.addEventListener('deviceorientation', onTilt);
-        tiltOn = true;
+        diagNote = 'no permission prompt needed, listening…';
+        attachTilt();
       }
     }
+
+    /* ---- the readout ----
+       A sensor that silently does nothing is the worst possible thing to
+       hand someone for review, so the board says out loud which of the
+       failure modes it is in on THIS device. */
+    var diagEl = document.getElementById('diag');
+    function policyAllows(feature) {
+      try {
+        var fp = document.featurePolicy || document.permissionsPolicy;
+        if (fp && typeof fp.allowsFeature === 'function') {
+          return fp.allowsFeature(feature) ? 'yes' : 'no';
+        }
+      } catch (e) {}
+      return 'unknown';
+    }
+    function paintDiag() {
+      if (!diagEl) return;
+      var framed = false;
+      try {
+        framed = window.self !== window.top;
+      } catch (e) {
+        framed = true;
+      }
+      var rows = [
+        ['In a frame', framed ? 'yes — sensors are policy-gated here' : 'no'],
+        ['Gyroscope allowed', policyAllows('gyroscope')],
+        ['Accelerometer allowed', policyAllows('accelerometer')],
+        ['Orientation API', window.DeviceOrientationEvent ? 'present' : 'missing'],
+        ['Permission prompt', window.DeviceOrientationEvent &&
+          typeof window.DeviceOrientationEvent.requestPermission === 'function' ? 'yes (iOS)' : 'no'],
+        ['Readings received', String(samples)],
+        ['Status', diagNote],
+        ['Tilt now', state.tilt.x.toFixed(2) + ', ' + state.tilt.y.toFixed(2)]
+      ];
+      diagEl.innerHTML = rows
+        .map(function (r) {
+          return '<div class="diag-row"><span class="label quiet">' + r[0] +
+            '</span><span>' + r[1] + '</span></div>';
+        })
+        .join('');
+    }
+    window.setInterval(paintDiag, 400);
+    paintDiag();
 
     /* the board is shareable: ?v=4&plate=night opens on one reading, so a
        preference can be sent as a link rather than as an instruction */
