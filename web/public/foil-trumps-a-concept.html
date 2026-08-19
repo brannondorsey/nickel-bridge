@@ -868,12 +868,12 @@
         <input type="range" id="s-gain" min="0" max="2" step="0.05" value="1" />
       </div>
       <div class="rig-row">
-        <label class="label" for="s-curve">Fan curvature <span class="val" id="v-curve">0.55</span></label>
-        <input type="range" id="s-curve" min="0" max="1" step="0.05" value="0.55" />
+        <label class="label" for="s-curve">Fan curvature <span class="val" id="v-curve">0.38</span></label>
+        <input type="range" id="s-curve" min="0" max="1" step="0.02" value="0.38" />
       </div>
       <div class="rig-row">
-        <label class="label" for="s-tilt">Tilt range <span class="val" id="v-tilt">0.55</span></label>
-        <input type="range" id="s-tilt" min="0" max="1.2" step="0.05" value="0.55" />
+        <label class="label" for="s-tilt">Tilt range <span class="val" id="v-tilt">0.75</span></label>
+        <input type="range" id="s-tilt" min="0" max="1.2" step="0.05" value="0.75" />
       </div>
       <div class="rig-row">
         <label class="label" for="s-lineweight">
@@ -959,7 +959,9 @@
     </div>
     <p>
       Your idea, and it turns out there are two ways to build it that feel completely different.
-      Set INPUT to DEVICE and switch DRIVES between the two.
+      Set INPUT to DEVICE and switch DRIVES between the two. <strong>Everything on this page
+      answers it</strong> — the table, the reference strips and all 123 tiles of the contact
+      sheet, which take the same tilt so the grid stays a fair comparison.
     </p>
     <p>
       <strong>On this page, on a phone, it will almost certainly do nothing — and that is not
@@ -1003,6 +1005,32 @@
           the fan. Now the shine crosses the hand as you twist, one card catches it before its
           neighbour, and holding the phone still holds the highlight still. This is the one that
           behaves like a real card, and it is the default.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">The rest pose</span>
+        <p>
+          The first reading is a calibration, not just a zero. It sets the flat pose
+          <em>and</em> retires every self-demo orbit on the page, putting the lamp square over
+          each hand and far enough back that every card sees it from nearly the same angle —
+          the placement that maximises the dimmest card rather than the brightest. So the phone
+          at rest is the <strong>well-lit</strong> pose, and tilting redistributes the highlight
+          instead of hunting for it. Fan curvature came down to 0.38 to make that literally
+          true: a card lights within about 0.485&nbsp;rad of the lamp and its angle is at most
+          <code>curve × 0.95</code>, so above ~0.5 the ends of the fan sit dark wherever you put
+          the light. Add <code>?device=1</code> to see that pose on a desktop.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Smoothing</span>
+        <p>
+          Raw <code>deviceorientation</code> is unusable here and it is worth saying why: the
+          shine is a <em>derivative</em> of the angle, so hand tremor and sensor noise you
+          cannot see in the phone's position are plainly visible in the light. The reading now
+          feeds a target and the frame loop eases toward it on a 190&nbsp;ms time constant —
+          expressed as time rather than a per-frame blend, so it filters identically at 30, 60
+          and 120&nbsp;Hz instead of twice as hard on a fast display. The cost is about a fifth
+          of a second of lag, which nobody notices, against flicker everybody does.
         </p>
       </div>
       <div class="ledger-row">
@@ -1613,8 +1641,16 @@
       drives: 'hand',
       motion: reduce.matches ? 0 : 1,
       gain: 1.0,
-      curve: 0.55,
-      tiltRange: 0.55,
+      /* Curvature and the sweep's gate are coupled, and this is where they
+         are reconciled. A card lights when its normal is within about
+         acos(0.885) = 0.485 rad of the lamp, and a card's angle is at most
+         curve * 0.95 — so above ~0.5 the ends of the fan fall outside the
+         band and sit dark no matter where the light is. At 0.38 the whole
+         hand is inside it (min spec 0.936), which is what makes the rest
+         pose the WELL-LIT pose and leaves tilting to redistribute the
+         highlight rather than to go looking for it. */
+      curve: 0.38,
+      tiltRange: 0.75,
       lineWeight: 0.6,
       lineCount: 1.0,
       sat: 0.34,
@@ -1626,7 +1662,15 @@
          to the viewport — a hand scrolled away from a fixed light never catches
          it, so the board would sit dark until someone happened to drag */
       lampPlaced: false,
-      tilt: { x: 0, y: 0 }
+      /* `tilt` is what the shader sees; `tiltTarget` is what the sensor
+         last said. Every input writes the target and the frame loop eases
+         toward it — see TILT_TAU_MS. */
+      tilt: { x: 0, y: 0 },
+      tiltTarget: { x: 0, y: 0 },
+      lampTarget: { x: 0, y: 0 },
+      /* set once the device is actually delivering readings: it retires the
+         self-demo orbits so the phone is the only thing moving the light */
+      deviceLit: false
     };
 
     /* ------------------------------------------------------------------
@@ -2026,6 +2070,28 @@
        stays flat however long the sheet gets. The table, the strips and
        anything else interactive are exempt — they are what the reader is
        actually looking at. */
+    /* How hard the sensor is filtered, as a time constant rather than a
+       blend factor. deviceorientation arrives around 60Hz carrying real
+       hand tremor and real sensor noise, and feeding it straight to a
+       specular term makes the highlight flicker — the shine is a derivative
+       of the angle, so a jitter you cannot see in the phone's position is
+       plainly visible in the light. Easing toward the reading instead of
+       snapping to it costs a fifth of a second of lag, which nobody
+       notices, and removes all of it.
+
+       Expressed as a TIME constant so the filter behaves the same at 120Hz
+       as at 30: alpha is derived per frame from the real elapsed time, not
+       assumed. A fixed per-frame blend would smooth twice as hard on a
+       120Hz phone as on a 60Hz one. */
+    /* Far enough back that L is near-constant across a hand: at this range
+       a card's spec is essentially cos(its own angle), so the fan's own
+       curvature is the only differential and no card is dark merely for
+       sitting at one end. */
+    var LAMP_REST_Z = 900;
+
+    var TILT_TAU_MS = 190;
+    var LAMP_TAU_MS = 150;
+
     var SHEET_TILES_PER_FRAME = 32;
     var sheetCursor = 0;
     var lampEl = document.getElementById('lamp');
@@ -2042,7 +2108,23 @@
 
     gl.enable(gl.SCISSOR_TEST);
 
+    var lastFrame = 0;
+
     function frame(now) {
+      /* dt-correct exponential smoothing. First frame has no previous
+         timestamp, and a stall (a backgrounded tab) must not be allowed to
+         produce an alpha above 1 — hence the clamp. */
+      var dt = lastFrame ? Math.min(now - lastFrame, 100) : 16;
+      lastFrame = now;
+      var aTilt = 1 - Math.exp(-dt / TILT_TAU_MS);
+      var aLamp = 1 - Math.exp(-dt / LAMP_TAU_MS);
+      state.tilt.x += (state.tiltTarget.x - state.tilt.x) * aTilt;
+      state.tilt.y += (state.tiltTarget.y - state.tilt.y) * aTilt;
+      if (state.lampTarget.x || state.lampTarget.y) {
+        state.lamp.x += (state.lampTarget.x - state.lamp.x) * aLamp;
+        state.lamp.y += (state.lampTarget.y - state.lamp.y) * aLamp;
+      }
+
       var t = state.motion ? ((now - t0) / 1000) * state.speed : FROZEN_T;
       var night = isNight();
       var vh = window.innerHeight;
@@ -2113,23 +2195,45 @@
              its own shape inside one tile. */
           gl.uniform2f(U.u_light, h.w * 0.5, h.h * 0.42);
           gl.uniform1f(U.u_lightz, 22);
-          gl.uniform2f(U.u_tilt, 0, 0);
+          /* the sheet answers the phone too. Every tile takes the SAME tilt,
+             so the grid stays a fair comparison — the axis being compared is
+             still the only thing that differs between two of them. */
+          gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
         } else if (h.pinned) {
-          /* a reference strip lights itself: one lamp per strip, orbiting
-             slowly, so each reading demonstrates its own shape whether or
-             not the reader is pointing at it */
-          var o = state.motion ? ((now - t0) / 1000) * 0.5 : 1.9;
-          gl.uniform2f(
-            U.u_light,
-            h.w * (0.5 + 0.46 * Math.sin(o)),
-            h.h * (0.5 + 0.30 * Math.cos(o * 0.77))
-          );
-          gl.uniform1f(U.u_lightz, 150);
+          /* A reference strip lights itself while nothing else is driving it:
+             one lamp per strip, orbiting slowly, so each reading demonstrates
+             its own shape whether or not the reader is pointing at it. Once
+             the device IS delivering, the orbit retires and the lamp goes
+             overhead — with two things moving the light you cannot tell which
+             one is yours. */
+          if (state.deviceLit) {
+            gl.uniform2f(U.u_light, h.w * 0.5, h.h * 0.45);
+            gl.uniform1f(U.u_lightz, LAMP_REST_Z);
+          } else {
+            var o = state.motion ? ((now - t0) / 1000) * 0.5 : 1.9;
+            gl.uniform2f(
+              U.u_light,
+              h.w * (0.5 + 0.46 * Math.sin(o)),
+              h.h * (0.5 + 0.30 * Math.cos(o * 0.77))
+            );
+            gl.uniform1f(U.u_lightz, 150);
+          }
           gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
         } else if (state.lampPlaced) {
           gl.uniform2f(U.u_light, state.lamp.x - hr.left, state.lamp.y - hr.top);
           gl.uniform1f(U.u_lightz, state.height);
           gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
+        } else if (state.deviceLit) {
+          /* The calibrated rest pose: lamp square over the hand and far
+             enough back that every card sees it from nearly the same angle,
+             which is the placement that maximises the DIMMEST card. From
+             here tilting redistributes the highlight instead of hunting for
+             it. */
+          gl.uniform2f(U.u_light, hr.width * 0.5, hr.height * 0.45);
+          gl.uniform1f(U.u_lightz, LAMP_REST_Z);
+          gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
+          markX = hr.left + hr.width * 0.5;
+          markY = hr.top + hr.height * 0.45;
         } else {
           var oh = state.motion ? ((now - t0) / 1000) * 0.34 : 2.35;
           var lx = hr.width * (0.5 + 0.55 * Math.sin(oh));
@@ -2211,11 +2315,15 @@
       state.input = v;
       document.body.setAttribute('data-lamp-visible', v === 'device' ? '0' : '1');
       if (v === 'device') startTilt();
-      if (v === 'placed') state.tilt.x = state.tilt.y = 0;
+      if (v === 'placed') {
+        state.tilt.x = state.tilt.y = 0;
+        state.tiltTarget.x = state.tiltTarget.y = 0;
+      }
     });
     wireLever('lever-model', 'd', function (v) {
       state.drives = v;
       state.tilt.x = state.tilt.y = 0;
+      state.tiltTarget.x = state.tiltTarget.y = 0;
     });
     wireLever('lever-plate', 'p', function (v) {
       if (v === 'auto') document.body.removeAttribute('data-plate');
@@ -2248,13 +2356,13 @@
     /* ---- pointer: drives whichever model is selected ---- */
     function fromPointer(e) {
       if (state.drives === 'lamp') {
-        state.lamp.x = e.clientX;
-        state.lamp.y = e.clientY;
+        state.lampTarget.x = e.clientX;
+        state.lampTarget.y = e.clientY;
         state.lampPlaced = true;
         document.body.setAttribute('data-lamp-placed', '');
       } else {
-        state.tilt.x = (e.clientX / window.innerWidth - 0.5) * 2 * state.tiltRange;
-        state.tilt.y = (e.clientY / window.innerHeight - 0.5) * 2 * state.tiltRange;
+        state.tiltTarget.x = (e.clientX / window.innerWidth - 0.5) * 2 * state.tiltRange;
+        state.tiltTarget.y = (e.clientY / window.innerHeight - 0.5) * 2 * state.tiltRange;
       }
     }
     window.addEventListener('pointermove', function (e) {
@@ -2272,12 +2380,12 @@
       if (state.drives === 'lamp') {
         state.lampPlaced = true;
         document.body.setAttribute('data-lamp-placed', '');
-        state.lamp.x = e.clientX;
-        state.lamp.y = e.clientY;
+        state.lampTarget.x = e.clientX;
+        state.lampTarget.y = e.clientY;
       } else {
         var r = stage.getBoundingClientRect();
-        state.tilt.x = ((e.clientX - r.left) / r.width - 0.5) * 2 * state.tiltRange * 1.6;
-        state.tilt.y = ((e.clientY - r.top) / r.height - 0.5) * 2 * state.tiltRange * 1.6;
+        state.tiltTarget.x = ((e.clientX - r.left) / r.width - 0.5) * 2 * state.tiltRange * 1.6;
+        state.tiltTarget.y = ((e.clientY - r.top) / r.height - 0.5) * 2 * state.tiltRange * 1.6;
       }
     }
     stage.addEventListener('pointerdown', function (e) {
@@ -2317,14 +2425,19 @@
       if (rest === null) rest = { g: g, b: b };
       var dg = Math.max(-45, Math.min(45, g - rest.g)) / 45;
       var db = Math.max(-45, Math.min(45, b - rest.b)) / 45;
+      /* The first sample is the rest pose in more than one sense: it zeroes
+         the tilt AND retires every self-demo orbit on the page, so from here
+         the lamp is overhead, the whole hand is lit, and the phone is the
+         only thing that moves anything. */
+      state.deviceLit = true;
       if (state.drives === 'lamp') {
         state.lampPlaced = true;
         document.body.setAttribute('data-lamp-placed', '');
-        state.lamp.x = window.innerWidth * (0.5 + dg * 0.85);
-        state.lamp.y = window.innerHeight * (0.5 + db * 0.85);
+        state.lampTarget.x = window.innerWidth * (0.5 + dg * 0.85);
+        state.lampTarget.y = window.innerHeight * (0.5 + db * 0.85);
       } else {
-        state.tilt.x = dg * state.tiltRange * 1.6;
-        state.tilt.y = db * state.tiltRange * 1.6;
+        state.tiltTarget.x = dg * state.tiltRange * 1.6;
+        state.tiltTarget.y = db * state.tiltRange * 1.6;
       }
     }
     function attachTilt() {
@@ -2454,10 +2567,15 @@
         el.value = String(n);
         el.dispatchEvent(new Event('input'));
       });
+      /* `device` stands the page up in the pose a phone sees at rest — lamp
+         overhead, orbits retired — so the calibration is reviewable without
+         a phone in hand. A tilt has to set the TARGET as well as the value,
+         or the smoother below eases it straight back to zero. */
+      if (q.get('device') === '1') state.deviceLit = true;
       var tx = parseFloat(q.get('tiltx'));
       var ty = parseFloat(q.get('tilty'));
-      if (!isNaN(tx)) state.tilt.x = tx;
-      if (!isNaN(ty)) state.tilt.y = ty;
+      if (!isNaN(tx)) state.tilt.x = state.tiltTarget.x = tx;
+      if (!isNaN(ty)) state.tilt.y = state.tiltTarget.y = ty;
     })();
 
     if (reduce.matches) setPressed('lever-motion', 'm', '0');
