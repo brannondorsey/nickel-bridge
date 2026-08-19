@@ -50,7 +50,9 @@
  *   asks for (camera, microphone, geolocation, …). Nothing here would prompt
  *   for them today; the header means injected or third-party code in this
  *   document cannot prompt for them either, and a permission the page cannot
- *   request is one a visitor can never be tricked into granting.
+ *   request is one a visitor can never be tricked into granting. The three
+ *   motion sensors are the exception and are scoped to `(self)`; see
+ *   `SELF_ONLY` below for what reads them and why the distinction matters.
  * - **Strict-Transport-Security** — tells the browser to remember, for a year,
  *   that this origin is HTTPS-only, so it upgrades `http://` internally instead
  *   of sending a plaintext request that can be intercepted. `force_https` in
@@ -90,22 +92,47 @@ const HSTS = 'max-age=31536000';
  * Capabilities this app never uses, switched off for the whole document.
  * An empty allowlist `()` means "no origin, including this one".
  */
-const PERMISSIONS = [
-  'accelerometer',
+const DENIED = [
   'autoplay',
   'camera',
   'display-capture',
   'encrypted-media',
   'geolocation',
-  'gyroscope',
-  'magnetometer',
   'microphone',
   'midi',
   'payment',
   'usb',
-]
-  .map((feature) => `${feature}=()`)
-  .join(', ');
+];
+
+/**
+ * The motion sensors, allowed to THIS ORIGIN and nowhere else.
+ *
+ * These three sat in the denied list above, which was right while nothing
+ * read them and is the reason this needed a deliberate edit rather than a
+ * silent one. `deviceorientation` — the event behind the "foil trumps" tilt
+ * treatment (web/public/foil-trumps-a-concept.html) — is gated on
+ * `accelerometer` and `gyroscope`, and on `magnetometer` for the absolute
+ * variant some Android builds populate instead. Denied, the events simply
+ * never arrive: no error, no prompt, no console warning, which is a
+ * genuinely miserable thing to debug and cost a round of it here.
+ *
+ * `(self)` rather than `*` is the whole point of spending the header at all.
+ * The default allowlist for these features is already `self`, so writing it
+ * out changes nothing a browser does today — what it does is state the
+ * decision where the next person looking at this list will see it, and keep
+ * a cross-origin iframe embedded in one of our pages from inheriting them.
+ * Note the inverse of that rule is why the concept board cannot work as a
+ * hosted artifact and has to be served from here: a cross-origin frame is
+ * denied these by default, and no markup inside the frame can grant them.
+ *
+ * If the tilt is cut, move these three back to DENIED in the same change.
+ */
+const SELF_ONLY = ['accelerometer', 'gyroscope', 'magnetometer'];
+
+const PERMISSIONS = [
+  ...DENIED.map((feature) => `${feature}=()`),
+  ...SELF_ONLY.map((feature) => `${feature}=(self)`),
+].join(', ');
 
 /**
  * The Content-Security-Policy — the RULES half only, with no allowlist.

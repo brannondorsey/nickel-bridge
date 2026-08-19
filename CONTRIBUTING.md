@@ -240,6 +240,14 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
+                foil-trumps: the concept board is NOT here — it is
+                web/public/foil-trumps-a-concept.html, served by the app, because
+                the tilt treatment reads deviceorientation and that needs a
+                secure, top-level, SAME-ORIGIN context. A docs/ file opened over
+                file:// has a null origin and iOS refuses requestPermission()
+                outright, and a hosted artifact is a cross-origin frame where the
+                sensors are policy-denied with no way for the frame to grant
+                itself them. A PR preview URL is the review surface;
                 trump-placement-concepts.html — the concept-exploration board for the
                 "trump suit to the left of the fan" request: three live, replayable
                 motions over the real fan geometry, plus the re-sort rule and which
@@ -777,6 +785,20 @@ it are decisions rather than defaults:
   back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
   preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
   and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
+
+**The three motion sensors are the one `(self)` in Permissions-Policy**, and the only
+capability this app grants rather than denies. `accelerometer`/`gyroscope`/`magnetometer`
+gate `deviceorientation`, which the foil-trumps tilt treatment reads
+(`web/public/foil-trumps-a-concept.html`); denied — as they were — the events never arrive
+at all: no error, no prompt, nothing in the console, so it presents as the feature being
+broken rather than as a header being wrong. `(self)` is deliberately not `*`: the default
+allowlist for these is already `self`, so writing it out changes nothing a browser does
+and instead states the decision where the next reader of that list will find it, while
+keeping a cross-origin iframe embedded in one of our pages from inheriting them. That same
+rule cuts the other way and is why the board has to be served from here rather than hosted
+as an artifact — a cross-origin frame is denied these by default and nothing inside the
+frame can grant them. `server/test/security.test.ts` pins both halves; if the tilt is cut,
+move the three back to `DENIED` in the same change.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
