@@ -41,7 +41,6 @@
     --font-display: "Poiret One", "Crimson Pro", Georgia, serif;
     --font-body: "Crimson Pro", Georgia, "Times New Roman", serif;
     --font-label: "Besley", Georgia, serif;
-    --font-stamp: "Josefin Sans", "Besley", sans-serif;
 
     --card-h: 78px;
     --card-w: calc(var(--card-h) * 46 / 66);
@@ -169,14 +168,12 @@
     margin: 0 auto;
     padding: 0 20px 96px;
   }
-
   h1,
   h2,
   h3 {
     margin: 0;
     text-wrap: balance;
   }
-
   .label {
     font-family: var(--font-label);
     font-weight: 700;
@@ -238,7 +235,6 @@
     margin-top: 26px;
   }
 
-  /* ---- generic section ---- */
   section {
     padding-top: 54px;
   }
@@ -269,7 +265,7 @@
     max-width: 68ch;
   }
 
-  /* ---- the rig (controls) ---- */
+  /* ---- the rig ---- */
   .rig {
     border: 1px solid var(--ink);
     background: var(--panel);
@@ -296,8 +292,6 @@
     color: var(--muted);
     letter-spacing: 0.04em;
   }
-
-  /* segmented lever — the app's .pref-switch */
   .lever {
     display: flex;
     border: 1px solid var(--ink);
@@ -314,9 +308,9 @@
     font-family: var(--font-label);
     font-weight: 700;
     font-size: 10.5px;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.11em;
     text-transform: uppercase;
-    padding: 9px 4px;
+    padding: 9px 3px;
     cursor: pointer;
     white-space: nowrap;
   }
@@ -331,7 +325,6 @@
     outline: 2px solid var(--verdigris);
     outline-offset: -3px;
   }
-
   input[type="range"] {
     width: 100%;
     accent-color: var(--verdigris);
@@ -360,7 +353,9 @@
     z-index: 3;
   }
 
-  /* the lamp marker sits above the foil canvas so it never blends */
+  /* The lamp marker is fixed to the viewport because the lamp is a light in
+     the room, not a thing printed on the page. It sits above every foil
+     layer so it is never itself blended. */
   .lamp {
     position: fixed;
     width: 40px;
@@ -391,7 +386,8 @@
     color: var(--verdigris);
     white-space: nowrap;
   }
-  body[data-lamp-visible="0"] .lamp {
+  body[data-lamp-visible="0"] .lamp,
+  body:not([data-lamp-placed]) .lamp {
     display: none;
   }
 
@@ -447,7 +443,6 @@
     color: var(--cardface-suit-c);
   }
 
-  /* the trick — four cards around a centre, as TrickArea lays them out */
   .trick {
     display: grid;
     grid-template-columns: repeat(3, var(--card-w));
@@ -480,11 +475,31 @@
     margin-bottom: 3px;
   }
 
+  /* ============================================================
+     THE FOIL LAYER — one <canvas> per host, INSIDE the scrolling
+     content. See §8: a viewport-fixed layer is composited on its
+     own and lags the cards during an async scroll.
+     ============================================================ */
+  [data-foil-host] {
+    position: relative;
+  }
+  .foil-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    mix-blend-mode: hard-light;
+  }
+  body[data-foil-ok="0"] .foil-layer {
+    display: none;
+  }
+
   /* ---- variant panels ---- */
   .variant {
     border-top: 1px solid var(--line);
-    padding-top: 30px;
-    margin-top: 34px;
+    padding-top: 28px;
+    margin-top: 30px;
   }
   .variant:first-of-type {
     border-top: 0;
@@ -494,16 +509,16 @@
   .v-head {
     display: flex;
     align-items: baseline;
-    gap: 14px;
-    margin-bottom: 4px;
+    gap: 12px;
+    margin-bottom: 3px;
   }
   .v-num {
     font-family: var(--font-label);
     font-weight: 800;
     font-size: 13px;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     color: var(--verdigris);
-    min-width: 26px;
+    min-width: 30px;
   }
   .v-head h3 {
     font-family: var(--font-label);
@@ -513,7 +528,7 @@
     text-transform: uppercase;
   }
   .v-sub {
-    margin: 0 0 16px 40px;
+    margin: 0 0 14px 42px;
     font-style: italic;
     color: var(--muted);
     font-size: 16px;
@@ -534,11 +549,27 @@
     background: var(--felt);
     padding: 14px 6px 10px;
   }
+  .v-strip.ref {
+    border-style: dashed;
+    border-color: var(--line-dashed);
+  }
   .v-notes p {
     margin-bottom: 12px;
   }
   .v-notes p:last-child {
     margin-bottom: 0;
+  }
+  .refline {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    margin-bottom: 30px;
+  }
+  @media (min-width: 760px) {
+    .refline {
+      grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    }
   }
 
   /* ---- ledger ---- */
@@ -565,13 +596,10 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
-
-  /* ---- callout ---- */
   .seal {
     border: 1.5px dashed var(--line-dashed);
     padding: 16px 18px;
     margin: 22px 0 0;
-    background: transparent;
   }
   .seal .label {
     color: var(--muted);
@@ -581,19 +609,20 @@
   .seal p:last-child {
     margin-bottom: 0;
   }
-
   code {
     font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
     font-size: 0.86em;
     background: var(--surface);
     padding: 1px 4px;
     border-radius: 2px;
+    /* a shader path is one unbreakable token and will push the page sideways
+       on a phone if it is not allowed to break */
+    overflow-wrap: anywhere;
   }
   a {
     color: inherit;
     text-underline-offset: 2px;
   }
-
   footer {
     margin-top: 64px;
     padding-top: 20px;
@@ -604,32 +633,8 @@
     justify-content: center;
     margin-bottom: 14px;
   }
-
-  /* ============================================================
-     THE FOIL SURFACE — one canvas for the whole page.
-     hard-light with a mid-grey (128) clear is a no-op everywhere
-     it does not draw, so a single fixed canvas can light every
-     card on the board without tinting the page between them.
-     ============================================================ */
-  #foil {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 40;
-    mix-blend-mode: hard-light;
-  }
-  body[data-foil-ok="0"] #foil {
-    display: none;
-  }
-  .noglow {
-    position: relative;
-    z-index: 50;
-  }
 </style>
 
-<canvas id="foil" aria-hidden="true"></canvas>
 <div class="lamp" id="lamp" aria-hidden="true"><span>THE LAMP</span></div>
 
 <div class="wrap">
@@ -647,53 +652,91 @@
     </div>
     <h1>Foil trumps</h1>
     <p class="deck">
-      Four ways to make the trump suit catch the light — Balatro's own shader math, re-lit for a
-      hand of thirteen cards on a paper table. Every card on this page is live; drag the lamp.
+      Round two. The stamp and the lamp are cut; the hologram and the grating each get three
+      new readings, and the light now answers to the phone you are holding.
     </p>
     <div class="mast-meta">
-      <span class="label quiet">Concept board</span>
-      <span class="label quiet">Four directions · one rig</span>
-      <span class="label quiet">Pick by numeral</span>
+      <span class="label quiet">Concept board · second pass</span>
+      <span class="label quiet">Six directions</span>
+      <span class="label quiet">Tilt your phone</span>
     </div>
   </header>
 
-  <!-- ==================== THE RIG ==================== -->
-  <section id="rig">
+  <!-- ==================== §1 WHAT CHANGED ==================== -->
+  <section id="changed">
     <div class="sec-head">
       <span class="rule-no">§ 1</span>
+      <h2>What changed</h2>
+    </div>
+    <p>
+      <strong>The bleed is fixed, and it was not a tuning problem.</strong> Round one painted
+      every card from one canvas pinned to the viewport. A viewport-fixed layer is composited
+      on its own thread, so during a scroll the browser moves the cards immediately and
+      repaints the foil only on the next frame — the colour visibly slid off the cards and onto
+      the felt. No amount of redrawing faster fixes that, because the two layers are not moving
+      together. The foil layer now lives <em>inside</em> each fan and each trick, so it scrolls
+      with the cards natively and there is nothing left to lag.
+    </p>
+    <p>
+      <strong>The hologram is quieter.</strong> Saturation is down from 0.62 to 0.34, the
+      polychrome field's spatial frequency is down by more than half, and each reading now sits
+      on a pale base wash rather than on bare paper — so it reads as tinted stock that happens
+      to be iridescent, instead of as a rainbow.
+    </p>
+    <p>
+      <strong>The grating keeps its lines and changes its reflection.</strong> The ruled
+      diffraction is untouched; what varies across the three is the <em>shape of the light
+      that ignites them</em> — a travelling band, a pool, or a hard blade.
+    </p>
+    <p>
+      <strong>And the light answers to the device.</strong> §4 has the accelerometer, in two
+      models — and only one of them behaves like a real card.
+    </p>
+  </section>
+
+  <!-- ==================== §2 THE RIG ==================== -->
+  <section id="rig">
+    <div class="sec-head">
+      <span class="rule-no">§ 2</span>
       <h2>The rig</h2>
     </div>
     <p>
-      Balatro seeds its shimmer <em>per card</em> — every foil card carries its own phase, so a
-      row of them twinkles independently. That is right for a game where cards arrive one at a
-      time. A bridge hand is thirteen cards held as one object, and thirteen independent
-      twinkles read as static rather than as a surface.
-    </p>
-    <p>
-      So the field here is anchored in <strong>page space</strong>, not card space: the
-      interference pattern is computed from where a pixel sits relative to one lamp, which means
-      it runs <em>continuously across the whole fan</em> and keeps running across the gap onto
-      the table. Cards near the lamp blaze, cards at the far end of the fan stay quiet, and the
-      band travels the hand as one thing. Variant <span class="num">II</span> keeps Balatro's
-      per-card seeding so you can see the difference.
+      Two levers choose what the big table below is running; the strips further down each stay
+      pinned to their own reading so they can be compared side by side. On a desktop the input
+      defaults to <strong>pointer</strong> driving <strong>hand</strong>, so moving the mouse
+      across the page tilts the cards exactly as twisting a phone would.
     </p>
 
-    <div class="rig noglow" role="group" aria-label="Light rig">
+    <div class="rig" role="group" aria-label="Light rig">
       <div class="rig-row">
-        <span class="label" id="lbl-variant">Direction</span>
-        <div class="lever" role="group" aria-labelledby="lbl-variant" id="lever-variant">
-          <button type="button" data-v="1" aria-pressed="false">I</button>
-          <button type="button" data-v="2" aria-pressed="false">II</button>
-          <button type="button" data-v="3" aria-pressed="true">III</button>
-          <button type="button" data-v="4" aria-pressed="false">IV</button>
+        <span class="label" id="lbl-holo">Hologram</span>
+        <div class="lever" role="group" aria-labelledby="lbl-holo" id="lever-holo">
+          <button type="button" data-v="1" aria-pressed="true">Blue</button>
+          <button type="button" data-v="2" aria-pressed="false">Rose</button>
+          <button type="button" data-v="3" aria-pressed="false">Duo</button>
         </div>
       </div>
       <div class="rig-row">
-        <span class="label" id="lbl-lamp">Lamp</span>
-        <div class="lever" role="group" aria-labelledby="lbl-lamp" id="lever-lamp">
-          <button type="button" data-l="fixed" aria-pressed="true">Placed</button>
-          <button type="button" data-l="pointer" aria-pressed="false">Pointer</button>
-          <button type="button" data-l="tilt" aria-pressed="false">Tilt</button>
+        <span class="label" id="lbl-grat">Grating</span>
+        <div class="lever" role="group" aria-labelledby="lbl-grat" id="lever-grat">
+          <button type="button" data-v="4" aria-pressed="false">Sweep</button>
+          <button type="button" data-v="5" aria-pressed="false">Pool</button>
+          <button type="button" data-v="6" aria-pressed="false">Blade</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <span class="label" id="lbl-input">Input</span>
+        <div class="lever" role="group" aria-labelledby="lbl-input" id="lever-input">
+          <button type="button" data-i="placed" aria-pressed="false">Placed</button>
+          <button type="button" data-i="pointer" aria-pressed="true">Pointer</button>
+          <button type="button" data-i="device" aria-pressed="false">Device</button>
+        </div>
+      </div>
+      <div class="rig-row">
+        <span class="label" id="lbl-model">Drives</span>
+        <div class="lever" role="group" aria-labelledby="lbl-model" id="lever-model">
+          <button type="button" data-d="hand" aria-pressed="true">The hand</button>
+          <button type="button" data-d="lamp" aria-pressed="false">The lamp</button>
         </div>
       </div>
       <div class="rig-row">
@@ -712,63 +755,54 @@
         </div>
       </div>
       <div class="rig-row">
-        <label class="label" for="s-gain">
-          Intensity <span class="val" id="v-gain">1.00</span>
-        </label>
+        <label class="label" for="s-gain">Intensity <span class="val" id="v-gain">1.00</span></label>
         <input type="range" id="s-gain" min="0" max="2" step="0.05" value="1" />
       </div>
       <div class="rig-row">
-        <label class="label" for="s-curve">
-          Fan curvature <span class="val" id="v-curve">0.55</span>
-        </label>
+        <label class="label" for="s-curve">Fan curvature <span class="val" id="v-curve">0.55</span></label>
         <input type="range" id="s-curve" min="0" max="1" step="0.05" value="0.55" />
       </div>
       <div class="rig-row">
-        <label class="label" for="s-height">
-          Lamp height <span class="val" id="v-height">520</span>
-        </label>
-        <input type="range" id="s-height" min="120" max="1600" step="20" value="520" />
+        <label class="label" for="s-tilt">Tilt range <span class="val" id="v-tilt">0.55</span></label>
+        <input type="range" id="s-tilt" min="0" max="1.2" step="0.05" value="0.55" />
       </div>
       <div class="rig-row">
-        <label class="label" for="s-speed">
-          Drift <span class="val" id="v-speed">0.45</span>
-        </label>
+        <label class="label" for="s-height">Lamp height <span class="val" id="v-height">320</span></label>
+        <input type="range" id="s-height" min="120" max="1600" step="20" value="320" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-speed">Drift <span class="val" id="v-speed">0.45</span></label>
         <input type="range" id="s-speed" min="0" max="1.5" step="0.05" value="0.45" />
       </div>
     </div>
     <p class="aside" style="margin-top: 10px">
-      Fan curvature is the one invented quantity. A fan is drawn flat but held curved, so each
-      card is given a surface normal that rotates with its place in the spread — at 0 the hand is
-      a flat sheet and the whole thing lights at once, which is the tell that the effect is
-      painted on rather than reflected.
+      Fan curvature is the one invented quantity: a fan is drawn flat but held curved, so each
+      card is given a surface normal that rotates with its place in the spread. At 0 the hand is
+      a flat sheet and every card lights at once, which is the tell that an effect is painted on
+      rather than reflected.
     </p>
   </section>
 
-  <!-- ==================== THE TABLE ==================== -->
+  <!-- ==================== §3 THE TABLE ==================== -->
   <section id="table">
     <div class="sec-head">
-      <span class="rule-no">§ 2</span>
+      <span class="rule-no">§ 3</span>
       <h2>The table</h2>
     </div>
     <p>
-      Spades are trumps. Five of them in hand, one on the table where South ruffed the diamond
-      lead — so you can read the same treatment on a card lying flat under the lamp and on cards
-      held in a curve, at once.
+      Spades are trumps. Five in hand, one on the table where South ruffed the diamond lead — so
+      the same reading can be judged on a card lying flat and on cards held in a curve at once.
     </p>
-    <p>
-      One thing the fan's geometry decides for you. A card in hand is about sixty per cent
-      hidden behind the card to its right, so only the exposed sliver can carry foil — and that
-      turns out to be a gift rather than a limit. Trump placement already puts the trump block
-      at the <em>left</em> of the fan, so the slivers are contiguous and the whole suit reads as
-      one foil band down the edge of your hand. A card tabled to the trick, or lying in dummy,
-      gets its full face.
+    <p class="aside">
+      The lamp drifts over the table on its own until you take it — drag anywhere on the felt to
+      place it, and it stays where you put it.
     </p>
 
     <div class="table" id="stage">
-      <span class="label quiet table-cap noglow">Board 3 · 4♠ by South · Trick 6</span>
+      <span class="label quiet table-cap">Board 3 · 4♠ by South · Trick 6</span>
 
-      <div class="seatmark noglow" style="margin-top: 18px">The trick</div>
-      <div class="trick" data-variant-host>
+      <div class="seatmark" style="margin-top: 18px">The trick</div>
+      <div class="trick" data-foil-host>
         <div class="slot-n"><div class="pcard suit-d"><div class="rank">8</div><div class="suit">♦</div></div></div>
         <div class="slot-e"><div class="pcard suit-d"><div class="rank">K</div><div class="suit">♦</div></div></div>
         <div class="slot-s">
@@ -777,159 +811,229 @@
         <div class="slot-w"><div class="pcard suit-d"><div class="rank">J</div><div class="suit">♦</div></div></div>
       </div>
 
-      <div class="seatmark noglow" style="margin-top: 20px">Your hand — trumps to the left</div>
-      <div class="fan" id="hero-fan" data-variant-host></div>
+      <div class="seatmark" style="margin-top: 20px">Your hand — trumps to the left</div>
+      <div class="fan" id="hero-fan" data-foil-host></div>
     </div>
-
-    <p class="aside" style="margin-top: 12px">
-      Drag anywhere on the table to move the lamp. On a phone, switch the lamp to TILT and the
-      hand lights from wherever the device is pointed.
-    </p>
   </section>
 
-  <!-- ==================== THE DIRECTIONS ==================== -->
-  <section id="directions">
+  <!-- ==================== §4 THE TILT ==================== -->
+  <section id="tilt">
     <div class="sec-head">
-      <span class="rule-no">§ 3</span>
-      <h2>Four directions</h2>
+      <span class="rule-no">§ 4</span>
+      <h2>The tilt</h2>
     </div>
     <p>
-      Each strip below runs its own variant regardless of the lever above, so they can be read
-      side by side. Three trumps and two plain cards in every strip — the contrast is the point.
+      Your idea, and it turns out there are two ways to build it that feel completely different.
+      Set INPUT to DEVICE (a phone will ask permission on the first tap — that is iOS, not us)
+      and switch DRIVES between the two.
     </p>
 
-    <!-- I -->
-    <article class="variant">
-      <div class="v-head">
-        <span class="v-num">I</span>
-        <h3>The foil stamp</h3>
+    <div class="ledger">
+      <div class="ledger-row">
+        <span class="label">The lamp</span>
+        <p>
+          Tilting moves the light around the room while the cards stay put. It is the easy build
+          and it is subtly wrong: the whole hand brightens and dims together, because every card
+          keeps facing you and only the distance to the lamp changes. It reads like a torch being
+          waved at a photograph.
+        </p>
       </div>
-      <p class="v-sub">Hot foil on card stock, 1926. The conservative reading.</p>
+      <div class="ledger-row">
+        <span class="label">The hand</span>
+        <p>
+          The lamp is nailed to the room and tilting rotates the <em>cards</em> — every surface
+          normal turns together, on top of the curvature each card already has from its place in
+          the fan. Now the shine crosses the hand as you twist, one card catches it before its
+          neighbour, and holding the phone still holds the highlight still. This is the one that
+          behaves like a real card, and it is the default.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">On a desktop</span>
+        <p>
+          POINTER feeds the same two models from the mouse, so the whole idea is judgeable
+          without picking up a phone. It is a stand-in for review, not a shipping input — a
+          board you have to hover to light is a board that is dark whenever you are reading it.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">What it costs</span>
+        <p>
+          <code>deviceorientation</code> needs a user gesture and an explicit grant on iOS, so
+          the setting has to survive being refused: no grant means the hand falls back to the
+          fixed curvature and still foils, just without the twist. Absolute orientation also
+          drifts, so this reads relative motion rather than trusting a heading.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== §5 THE HOLOGRAM ==================== -->
+  <section id="holo">
+    <div class="sec-head">
+      <span class="rule-no">§ 5</span>
+      <h2>The hologram — three washes</h2>
+    </div>
+    <p>
+      Same engine as before —
+      <code>polychrome.fs</code>'s HSL hue field, seeded per card, which is the part that made
+      you like it. What is different is that the rainbow is now a <em>tint on a base</em> rather
+      than the base itself. The wash is what the eye lands on; the iridescence is what it notices
+      second.
+    </p>
+
+    <div class="refline">
+      <div class="v-strip ref"><div class="fan" data-strip="0"></div></div>
+      <p class="aside" style="margin: 0">
+        Round one for reference, unchanged: saturation 0.62, full-frequency field, no base. Every
+        strip below is the same maths at saturation 0.34 and a little under half the frequency.
+      </p>
+    </div>
+
+    <article class="variant">
+      <div class="v-head"><span class="v-num">A · i</span><h3>Blue wash</h3></div>
+      <p class="v-sub">Pale stamp-blue stock, iridescing.</p>
       <div class="v-body">
         <div class="v-strip"><div class="fan" data-strip="1"></div></div>
         <div class="v-notes">
           <p>
-            <code>foil.fs</code>'s two interference terms at low gain, with the rainbow thrown
-            away: the output is remapped onto a three-stop metal ramp — cool ink, verdigris,
-            pale gold — and confined to a stamped plate inset from the card's edges. It never
-            touches the corner index.
-          </p>
-          <p>
-            This is the only one of the four that is period-plausible. Hot foil stamping is a
-            real 1920s printing process, so a foiled trump reads as a differently
-            <em>printed</em> card rather than a magic one, which is the register the rest of the
-            app is in — flat ink on paper, no gradients, one accent colour.
+            The base is a pale blue close to the colourblind palette's stamp-ink, so the card
+            reads as cool paper first. It is the calmest of the three and the one that survives
+            being next to a red suit without arguing with it.
           </p>
           <p class="aside">
-            Cost: it is quiet enough that at a glance across a 390px phone you may not be sure
-            which suit is trumps, which is the one job this feature has.
+            The wash sits under the corner index too, which is the only place any of these three
+            costs legibility: a black ♠ pip on faint blue is fine, a red ♥ on it is worse.
           </p>
         </div>
       </div>
     </article>
 
-    <!-- II -->
     <article class="variant">
-      <div class="v-head">
-        <span class="v-num">II</span>
-        <h3>The hologram</h3>
-      </div>
-      <p class="v-sub">Balatro, straight — <code>polychrome.fs</code>, per-card seed, full saturation.</p>
+      <div class="v-head"><span class="v-num">A · ii</span><h3>Rose wash</h3></div>
+      <p class="v-sub">Warm, and closer to the paper the rest of the app is printed on.</p>
       <div class="v-body">
         <div class="v-strip"><div class="fan" data-strip="2"></div></div>
         <div class="v-notes">
           <p>
-            The reference point, ported honestly: the HSL hue field from
-            <code>polychrome.fs</code>, hue rotated by a moving noise field, saturation floored
-            at 0.6, each card carrying its own phase offset exactly as the game does it.
-          </p>
-          <p>
-            Worth having on the board because it is what was asked for and because it makes the
-            per-card-seeding argument visible: watch the strip and the five cards read as five
-            separate objects that happen to be adjacent, not as one hand.
-          </p>
-          <p class="aside">
-            Cost: this is the variant that eats the ink. Rank and suit glyphs sit inside the
-            lit area and lose contrast on every bright pass — the knockout mask is deliberately
-            weak here so you can see the failure the other three are designed around.
+            The same field over a pale rose. Warmer stock sits more naturally against
+            <code>--paper</code> than the blue does, so this is the one that looks least like a
+            visitor from another app — but it is also the one nearest the ♥ and ♦ inks, so a
+            heart-suit trump contract would be a foiled red card on a red-ish wash.
           </p>
         </div>
       </div>
     </article>
 
-    <!-- III -->
     <article class="variant">
-      <div class="v-head">
-        <span class="v-num">III</span>
-        <h3>The lamp</h3>
-      </div>
-      <p class="v-sub">
-        <code>foil.fs</code> intact, but lit by one source in the room. The recommendation.
-      </p>
+      <div class="v-head"><span class="v-num">A · iii</span><h3>Duotone</h3></div>
+      <p class="v-sub">Hue clamped to the cyan–magenta arc — what holographic film actually does.</p>
       <div class="v-body">
         <div class="v-strip"><div class="fan" data-strip="3"></div></div>
         <div class="v-notes">
           <p>
-            Balatro's foil interference — the same four <code>fac</code> terms, the same blue
-            push — with two changes. The pattern's origin is the lamp rather than each card's own
-            centre, so it is one continuous field; and the whole thing is gated by a specular
-            term computed from the card's fan normal, so a card only ignites when it happens to
-            be facing the light.
+            Real holographic film is not a full spectrum; it is dominated by a cyan-to-magenta
+            sweep with the greens and yellows largely absent. This clamps the hue term to that
+            arc and lets it drift over a lilac base.
           </p>
           <p>
-            The result is the thing that was actually asked for: move the lamp along the hand
-            and the shine walks the fan, two or three cards at a time. Cards on the table, lying
-            flat, catch it at a different moment from the ones in your hand.
-          </p>
-          <p class="aside">
-            Cost: the most expensive to reason about. The shine depends on lamp position, fan
-            position and time, so "why is that card dull" has three answers — and a screenshot
-            of it can look like nothing is happening.
-          </p>
-        </div>
-      </div>
-    </article>
-
-    <!-- IV -->
-    <article class="variant">
-      <div class="v-head">
-        <span class="v-num">IV</span>
-        <h3>The grating</h3>
-      </div>
-      <p class="v-sub"><code>holo.fs</code>'s ruled diffraction lines, ignited only on the specular band.</p>
-      <div class="v-body">
-        <div class="v-strip"><div class="fan" data-strip="4"></div></div>
-        <div class="v-notes">
-          <p>
-            <code>holo.fs</code> carries a term nothing else does: a set of ruled lines at three
-            angles that behave like a diffraction grating. Drawn in page space they run straight
-            across the whole hand, which is the strongest signal on this board that the thirteen
-            cards are one surface.
-          </p>
-          <p>
-            The hue field is inherited from <code>holo.fs</code> as well, but it is hard-gated by
-            the specular term — off everywhere except a narrow band, so the hand is mostly plain
-            paper with one bright rule sweeping across it.
-          </p>
-          <p class="aside">
-            Cost: fine lines on a phone at devicePixelRatio 3 alias badly when the band moves
-            slowly. Needs either a derivative-based width or a deliberate speed floor.
+            It is the most convincing of the three as an <em>object</em>, and the most colourful
+            of the three on screen — which are the two halves of the same decision.
           </p>
         </div>
       </div>
     </article>
   </section>
 
-  <!-- ==================== THE RULE ==================== -->
+  <!-- ==================== §6 THE GRATING ==================== -->
+  <section id="grating">
+    <div class="sec-head">
+      <span class="rule-no">§ 6</span>
+      <h2>The grating — three reflections</h2>
+    </div>
+    <p>
+      The ruled diffraction from <code>holo.fs</code> is untouched in all three: three sets of
+      lines at fixed angles, drawn in page space so they run straight across the whole hand.
+      What changes is the shape of the light that ignites them — which was the one thing you
+      wanted moved.
+    </p>
+
+    <div class="refline">
+      <div class="v-strip ref"><div class="fan" data-strip="7"></div></div>
+      <p class="aside" style="margin: 0">
+        Round one for reference: a broad specular lobe, which is the softest and vaguest shape
+        available and the reason the whole card glowed rather than a part of it.
+      </p>
+    </div>
+
+    <article class="variant">
+      <div class="v-head"><span class="v-num">B · i</span><h3>The sweep</h3></div>
+      <p class="v-sub">A narrow band that crosses the hand. Ruled lines, three angles.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="4"></div></div>
+        <div class="v-notes">
+          <p>
+            The specular lobe is squeezed to a narrow travelling band — a gaussian on the
+            specular term rather than a soft ramp — so at any moment two or three cards are lit
+            and the rest are plain. Tilt the phone and the band walks the fan.
+          </p>
+          <p>
+            This is the closest to holding a real foil card under a ceiling light, and the one I
+            would put money on.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <article class="variant">
+      <div class="v-head"><span class="v-num">B · ii</span><h3>The pool</h3></div>
+      <p class="v-sub">A spill of light on the table. Concentric rules, struck from the lamp.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="5"></div></div>
+        <div class="v-notes">
+          <p>
+            Distance from the lamp does the gating instead of angle, so the cards nearest the
+            light blaze and the far end of the hand goes dark. The rules are concentric here
+            rather than straight — struck from the lamp, so the geometry agrees with the light
+            rather than cutting across it.
+          </p>
+          <p class="aside">
+            The one shape that reads more like the <em>table</em> is lit than like the cards are.
+            Lovely on the trick, weaker in the hand.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <article class="variant">
+      <div class="v-head"><span class="v-num">B · iii</span><h3>The blade</h3></div>
+      <p class="v-sub">One hard edge, high contrast. A single dense set of rules.</p>
+      <div class="v-body">
+        <div class="v-strip"><div class="fan" data-strip="6"></div></div>
+        <div class="v-notes">
+          <p>
+            A step rather than a ramp, with a thin overshoot right at the boundary: mostly plain
+            paper, then a bright edge, then plain paper again. The rules are a single dense set
+            at one angle, so what catches reads as a machined surface rather than a printed one.
+          </p>
+          <p class="aside">
+            The most dramatic and the most fragile — a hard edge on fine lines is exactly what
+            aliases on a phone. It wants a derivative-based line width before it could ship.
+          </p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ==================== §7 THE RULE ==================== -->
   <section id="rule">
     <div class="sec-head">
-      <span class="rule-no">§ 4</span>
+      <span class="rule-no">§ 7</span>
       <h2>The rule</h2>
     </div>
     <p>
-      Which cards foil, and when, is a separate decision from how they look — and it is the half
-      that has to be exactly right, because a card that shines when it is not trumps is worse
-      than no feature at all.
+      Unchanged from round one, and still the half that has to be exactly right: a card that
+      shines when it is not trumps is worse than no feature at all.
     </p>
     <div class="ledger">
       <div class="ledger-row">
@@ -944,94 +1048,101 @@
       <div class="ledger-row">
         <span class="label">When it starts</span>
         <p>
-          At the same beat the contract settles, which is the beat "The Draw" already owns. The
-          trumps are singled out and travel to the left of the fan; landing lit is one event
+          At the beat the contract settles, which is the beat "The Draw" already owns: the
+          trumps are singled out and travel to the left of the fan. Landing lit is one event
           rather than two.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">In the hand</span>
+        <p>
+          A fanned card is about sixty per cent hidden behind the card to its right, so only the
+          exposed sliver carries foil — and because trumps sort left, the slivers are contiguous
+          and the suit reads as one band down the edge of your hand. Tabled and dummy cards get
+          the full face.
         </p>
       </div>
       <div class="ledger-row">
         <span class="label">Never</span>
         <p>
-          On a no-trump contract (there is no trump suit to mark), during the auction (the
-          contract is not settled), and on the E/W dummy rail, which prints ranks as text and has
-          no card face to light.
+          On a no-trump contract, during the auction, and on the E/W dummy rail, which prints
+          ranks as text and has no card face to light.
         </p>
       </div>
       <div class="ledger-row">
         <span class="label">Off by default</span>
         <p>
-          A new row on the settings gate — a two-segment lever beside Trump placement, the switch
-          it is a companion to. Purely a client treatment: the server never reads it, and nothing
-          about scoring, robots or replay changes either way.
+          A new row on the settings gate beside Trump placement, the switch it is a companion
+          to — and, if the tilt ships, a second segment for whether the device drives it. Purely
+          a client treatment: the server never reads it and nothing about scoring, robots or
+          replay changes either way.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- ==================== WHAT IT COSTS ==================== -->
+  <!-- ==================== §8 WHAT IT COSTS ==================== -->
   <section id="costs">
     <div class="sec-head">
-      <span class="rule-no">§ 5</span>
+      <span class="rule-no">§ 8</span>
       <h2>What it costs</h2>
     </div>
-
     <div class="ledger">
+      <div class="ledger-row">
+        <span class="label">The scroll</span>
+        <p>
+          The bug you caught, and what it taught: a <code>position: fixed</code> layer with
+          <code>mix-blend-mode</code> gets its own compositor layer, and an async scroll moves
+          the page under it before script runs. The foil layer has to be a child of the thing it
+          is lighting. That is now one canvas per fan and per trick — which in the real app is
+          two or three elements on the board screen, not a page full.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">One context</span>
+        <p>
+          Nine canvases would be nine WebGL contexts, and browsers evict them at around sixteen.
+          There is exactly one context here, rendering off-screen; each host blits its own region
+          out of it with <code>drawImage</code>. One shader, one field, N cheap copies.
+        </p>
+      </div>
       <div class="ledger-row">
         <span class="label">The ink</span>
         <p>
-          This is the real risk and it is not solvable by turning the gain down. The card is DOM
-          text under a blended canvas, so anything lit sits over the rank and suit. Every variant
-          here knocks the corner index out of the mask — which is also the honest period answer,
-          since a foil plate covers a field and not the type. Variant II shows what happens
-          without it.
+          Still the real risk. The card is DOM text under a blended canvas, so anything lit sits
+          over the rank and suit. Every reading here knocks the corner index out of the mask,
+          which is also the honest period answer — a foil plate covers a field, never the type.
+          The hologram's base wash is the one thing that deliberately crosses that line, since a
+          wash with a hole in it is not a wash.
         </p>
       </div>
       <div class="ledger-row">
         <span class="label">Reduced motion</span>
         <p>
-          A moving specular band is exactly what <code>prefers-reduced-motion</code> is about.
-          FROZEN above is the fallback: the field is evaluated once and held, so a foiled trump
-          still reads as a different surface without anything travelling. Not a degraded mode — a
-          still photograph of one.
+          FROZEN is the fallback, and with the tilt it gets more interesting: a device-driven
+          highlight is not an animation, it is a response. Under
+          <code>prefers-reduced-motion</code> the drift stops but the twist could reasonably
+          stay — worth a decision rather than a default.
         </p>
       </div>
       <div class="ledger-row">
         <span class="label">Night stock</span>
         <p>
-          The night card face is an ink-plate negative — dark stock, light glyphs — and it is
-          deliberately low-contrast against the panel. Foil there has to add light rather than
-          both add and subtract, or the card stops reading as a rectangle at all. Switch CARD
-          STOCK to NIGHT and check every direction; III and IV hold up best.
-        </p>
-      </div>
-      <div class="ledger-row">
-        <span class="label">The overlap</span>
-        <p>
-          One overlay canvas has no idea which card is painted on top of which. Left alone, a
-          trump's plate paints straight across the neighbour stacked above it — the ♠4's foil
-          landing on the K♥ beside it, which is exactly what the first build of this board did.
-          Each quad is clipped to the span between its own left edge and the next card's, which
-          is geometry <code>fanLayout.ts</code> already computes.
-        </p>
-      </div>
-      <div class="ledger-row">
-        <span class="label">One canvas</span>
-        <p>
-          One fixed <code>&lt;canvas&gt;</code> for the page, cleared to mid grey and composited
-          with <code>hard-light</code>, which is a no-op wherever nothing is drawn. That is why
-          the fan, the trick and all four strips can light from one context and one field. A
-          per-card layer would need thirteen contexts, or thirteen copies of a pattern that is
-          supposed to be continuous.
+          The night card face is an ink-plate negative and deliberately low-contrast against the
+          panel, so foil there may only add light — and a pale wash added to dark stock is not a
+          tint, it is a bright rectangle. Left alone the washes blew the trumps into pale slabs
+          and undid exactly the contrast the night card is designed for, so group A's night
+          amplitude is damped to 40% while the gratings keep theirs. Switch CARD STOCK to NIGHT
+          and the gratings are plainly the stronger half — they were already made of light, so
+          the dark plate flatters them.
         </p>
       </div>
       <div class="ledger-row">
         <span class="label">The brand</span>
         <p>
-          Stated plainly: the design system says flat printed paper, no gradients, almost no
-          shadow, max ink and minimum colour. Directions II and IV are arguing with that
-          directly. I is the one that does not — and the reason I is on the board is that "make
-          it look like foil" and "make it look like this app" have a real answer in 1926
-          printing, not only a compromise.
+          Both survivors argue with "flat printed paper, no gradients, max ink and minimum
+          colour". Worth saying plainly rather than pretending otherwise: this is a deliberate
+          exception, opt-in, on exactly thirteen cards of one suit.
         </p>
       </div>
     </div>
@@ -1039,26 +1150,23 @@
     <div class="seal">
       <span class="label">Open, for you</span>
       <p>
-        Which numeral — and does the lamp belong to the room or to the device? PLACED and POINTER
-        are the same rig with a different input, but TILT changes what the feature is: the hand
-        stops being lit and starts being <em>held up to</em> a light, which is a stronger idea and
-        a permission prompt on iOS.
+        A wash and a reflection are not mutually exclusive — the duotone base under the sweep's
+        band is a seventh reading nobody has drawn yet. Say the word and it is the next strip.
       </p>
     </div>
   </section>
 
-  <!-- ==================== SOURCES ==================== -->
+  <!-- ==================== §9 SOURCES ==================== -->
   <section id="sources">
     <div class="sec-head">
-      <span class="rule-no">§ 6</span>
+      <span class="rule-no">§ 9</span>
       <h2>Source material</h2>
     </div>
     <p>
-      The maths on this page is adapted from Balatro's own edition shaders — the LÖVE/GLSL files
-      shipped in the game's <code>resources/shaders/</code>. Variant I and III descend from
-      <code>foil.fs</code>, II from <code>polychrome.fs</code>, IV from <code>holo.fs</code>. The
-      <code>dissolve_mask</code> half of each file is card-destruction machinery with no
-      counterpart here and is dropped.
+      Adapted from Balatro's own edition shaders, the LÖVE/GLSL files in the game's
+      <code>resources/shaders/</code>. Group A descends from <code>polychrome.fs</code>, group B
+      from <code>holo.fs</code>. The <code>dissolve_mask</code> half of each file is
+      card-destruction machinery with no counterpart here and is dropped.
     </p>
     <ul class="aside" style="max-width: 68ch; padding-left: 20px">
       <li>
@@ -1067,13 +1175,9 @@
       </li>
       <li>
         <a href="https://godotshaders.com/shader/balatro-foil-card-effect/">Balatro Foil card effect</a>
-        — a CC0 Godot 4.4 port of <code>foil.fs</code>, useful as a second reading of the same
-        expression
+        — a CC0 Godot port, useful as a second reading of the same expression
       </li>
-      <li>
-        <a href="https://balatrowiki.org/w/Foil">Balatro Wiki — Foil</a> — what each edition is,
-        in the game's own terms
-      </li>
+      <li><a href="https://balatrowiki.org/w/Foil">Balatro Wiki — Foil</a></li>
     </ul>
   </section>
 
@@ -1089,7 +1193,7 @@
       </svg>
     </div>
     <p class="label quiet" style="text-align: center">
-      Nickel Bridge · Foil trumps · concept board
+      Nickel Bridge · Foil trumps · concept board, second pass
     </p>
   </footer>
 </div>
@@ -1099,7 +1203,7 @@
     'use strict';
 
     /* ------------------------------------------------------------------
-       CARD DATA — a real 13-card hand, spades trumps, already sorted
+       CARDS — a real 13-card hand, spades trumps, already sorted
        trump-left the way "Trump placement · LEFT SIDE" leaves it.
        ------------------------------------------------------------------ */
     var HAND = [
@@ -1108,9 +1212,7 @@
       ['Q', 'd'], ['8', 'd'], ['3', 'd'],
       ['6', 'c'], ['2', 'c']
     ];
-    var STRIP = [
-      ['A', 's'], ['K', 's'], ['9', 's'], ['J', 'h'], ['8', 'd']
-    ];
+    var STRIP = [['A', 's'], ['K', 's'], ['9', 's'], ['J', 'h'], ['8', 'd']];
     var GLYPH = { s: '♠', h: '♥', d: '♦', c: '♣' };
     var TRUMP = 's';
 
@@ -1145,6 +1247,7 @@
     buildFan(document.getElementById('hero-fan'), HAND);
     Array.prototype.forEach.call(document.querySelectorAll('[data-strip]'), function (host) {
       buildFan(host, STRIP);
+      host.setAttribute('data-foil-host', '');
     });
 
     /* ------------------------------------------------------------------
@@ -1152,28 +1255,37 @@
        ------------------------------------------------------------------ */
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
     var state = {
-      variant: 3,
-      lampMode: 'fixed',
+      variant: 1,
+      input: 'pointer',
+      drives: 'hand',
       motion: reduce.matches ? 0 : 1,
       gain: 1.0,
       curve: 0.55,
-      height: 520,
+      tiltRange: 0.55,
+      height: 320,
       speed: 0.45,
-      lamp: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.3 }
+      lamp: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.3 },
+      /* until the reader places it, the lamp belongs to the table rather than
+         to the viewport — a hand scrolled away from a fixed light never catches
+         it, so the board would sit dark until someone happened to drag */
+      lampPlaced: false,
+      tilt: { x: 0, y: 0 }
     };
-    if (reduce.matches) {
-      setPressed('lever-motion', 'm', '0');
-    }
 
     /* ------------------------------------------------------------------
-       GL
+       GL — ONE context, rendered off-screen. Each host blits its own
+       region out of it, so nine hosts cost nine drawImage calls rather
+       than nine WebGL contexts (browsers evict at ~16).
        ------------------------------------------------------------------ */
-    var canvas = document.getElementById('foil');
+    var glc = document.createElement('canvas');
     var gl = null;
     try {
       gl =
-        canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false }) ||
-        canvas.getContext('experimental-webgl', { alpha: true, antialias: false });
+        glc.getContext('webgl', {
+          alpha: false,
+          antialias: false,
+          preserveDrawingBuffer: true
+        }) || glc.getContext('experimental-webgl', { alpha: false, preserveDrawingBuffer: true });
     } catch (e) {
       gl = null;
     }
@@ -1195,18 +1307,13 @@
       '}'
     ].join('\n');
 
-    /* The fragment shader. Every variant writes a colour centred on 0.5 so
-       hard-light leaves the untouched page alone: below 0.5 darkens the card
-       stock, above 0.5 blows it out, and exactly 0.5 is invisible. */
-    /* The fragment shader.
-       The card face is a decision, not a detail. A day card is pure white
+    /* The card face is a decision, not a detail. A day card is pure white
        paper, and hard-light above 0.5 is a NO-OP on white — you cannot make
-       paper brighter than paper. So foil on the day stock is expressed as a
-       tinted PLATE: the value written is half the colour the card should
-       appear (hard-light doubles it against white), and the "shine" is where
-       the ramp returns toward paper. Night stock is the opposite problem — an
-       already-dark ink-plate negative — so there the same drive only ever
-       adds light. Both paths share one field, one ramp and one mask. */
+       paper brighter than paper. So foil on day stock is a tinted PLATE: the
+       value written is half the colour the card should appear, since
+       hard-light doubles it against white. Night stock is the opposite
+       problem, an already-dark ink-plate negative, so there the same drive
+       only ever adds light. One field, one ramp, one mask, both paths. */
     var FRAG = [
       'precision highp float;',
       'varying vec2 v_uv;',
@@ -1219,10 +1326,10 @@
       'uniform float u_curve;',
       'uniform float u_gain;',
       'uniform float u_night;',
-      'uniform int u_variant;',
+      'uniform vec2 u_tilt;',
       'uniform vec2 u_clipx;',
+      'uniform int u_variant;',
       '',
-      /* --- HSL -> RGB, lifted from Balatro's own hue()/RGB() --- */
       'float hueTerm(float s, float t, float h) {',
       '  float hs = mod(h, 1.0) * 6.0;',
       '  if (hs < 1.0) return (t - s) * hs + s;',
@@ -1237,20 +1344,18 @@
       '  return vec3(hueTerm(s, t, c.x + 1.0 / 3.0), hueTerm(s, t, c.x), hueTerm(s, t, c.x - 1.0 / 3.0));',
       '}',
       '',
-      /* --- the corner-index knockout. These cards are corner-indexed, so the
-             printed area is a small box at top-left and the rest of the face
-             is open field. A foil plate covers a field, never the type. --- */
+      /* the corner-index knockout. These cards are corner-indexed, so the
+         printed area is a small box at top-left and the rest is open field. */
       'float plateMask(vec2 uv, float softness) {',
       '  vec2 g = vec2(0.62, 0.46);',
       '  vec2 d = max(vec2(0.0), (g - uv) / g);',
       '  float corner = 1.0 - clamp(min(d.x, d.y) * 3.4, 0.0, 1.0);',
       '  corner = mix(1.0, corner, softness);',
       '  vec2 e = min(uv, 1.0 - uv);',
-      '  float edge = clamp(min(e.x, e.y) * 16.0, 0.0, 1.0);',
-      '  return corner * edge;',
+      '  return corner * clamp(min(e.x, e.y) * 16.0, 0.0, 1.0);',
       '}',
       '',
-      /* --- Balatro's moving noise field (shared core of holo/polychrome) --- */
+      /* Balatro's moving noise field (shared core of holo/polychrome) */
       'float field(vec2 p, float t) {',
       '  vec2 a = p + 50.0 * vec2(sin(-t / 143.634), cos(-t / 99.4324));',
       '  vec2 b = p + 50.0 * vec2(cos(t / 53.1532), cos(t / 61.4532));',
@@ -1259,87 +1364,113 @@
       '          cos(length(c) / 27.193) * sin(c.x / 21.92))) / 2.0;',
       '}',
       '',
+      /* holo.fs ruled diffraction, three angles */
+      'float ruled3(vec2 gp, float g) {',
+      '  return 0.5 * max(max(max(0.0, 7.0 * abs(cos(gp.x * g * 5.0)) - 6.0),',
+      '      max(0.0, 7.0 * cos(gp.y * g * 11.0 + gp.x * g * 5.0) - 6.0)),',
+      '      max(0.0, 7.0 * cos(gp.y * g * 11.0 - gp.x * g * 5.0) - 6.0));',
+      '}',
+      /* the same rules struck concentrically from the lamp */
+      'float ruledRings(float d) {',
+      '  return 0.5 * max(0.0, 7.0 * abs(cos(d * 0.16)) - 6.0);',
+      '}',
+      /* one dense set at a single angle — a machined edge */
+      'float ruled1(vec2 gp, float g) {',
+      '  return 0.5 * max(0.0, 7.0 * abs(cos((gp.x * 0.62 + gp.y * 0.78) * g * 13.0)) - 6.0);',
+      '}',
+      '',
       'void main() {',
       '  vec2 uv = v_uv;',
       '  vec2 px = u_rect.xy + uv * u_rect.zw;',
-      // a fanned card is 60% hidden behind the next one, and one overlay
-      // canvas has no way to know that — so each quad is clipped to the
-      // sliver of its card that is actually on screen.
+      /* a fanned card is ~60% hidden behind the next one, and one canvas has
+         no way to know that — clip each quad to the sliver actually on screen */
       '  if (px.x < u_clipx.x || px.x > u_clipx.y) discard;',
       '',
-      /* the fan is drawn flat but held curved: each card gets a normal that
-         rotates with its place in the spread, so the specular band walks the
-         hand instead of lighting all thirteen at once */
-      '  float tilt = u_fanx * u_curve * 0.95;',
-      '  vec3 n = normalize(vec3(sin(tilt), 0.0, cos(tilt)));',
+      /* the surface normal: the fan's own curvature, plus whatever the device
+         is doing to the whole hand at once */
+      '  float ax = u_fanx * u_curve * 0.95 + u_tilt.x;',
+      '  float ay = u_tilt.y;',
+      '  vec3 n = normalize(vec3(sin(ax) * cos(ay), -sin(ay), cos(ax) * cos(ay)));',
       '  vec3 L = normalize(vec3(u_light - px, u_lightz));',
       '  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));',
       '  float spec = max(dot(n, H), 0.0);',
-      '',
-      /* page-space coordinates relative to the lamp — this is what makes the
-         interference field continuous across thirteen separate elements */
-      '  vec2 auv = (px - u_light) / 760.0;',
       '  float dist = length(px - u_light);',
       '  float phase = u_time + dist * 0.0035;',
-      '  float rings = 0.5 + 0.5 * sin(length(90.0 * auv) - phase * 2.0);',
       '',
-      '  vec3 tint = vec3(1.0);',   /* the colour the card should APPEAR */
-      '  float mask = 0.0;',        /* how much of the plate is laid down */
+      '  vec3 tint = vec3(1.0);',
+      '  float mask = 0.0;',
+      // how much of the drive is allowed to become LIGHT on night stock.
+      // A pale wash doubled against white paper is a tint; the same value
+      // added to a dark ink-plate is a bright rectangle, which is exactly
+      // the contrast the night card is designed not to have.
+      '  float nightAmp = 0.9;',
       '',
-      '  if (u_variant == 1) {',
-      /* ---- I · THE FOIL STAMP — foil.fs interference on a metal ramp ---- */
-      '    vec2 rot = vec2(cos(phase * 0.1221), sin(phase * 0.3512));',
-      '    float ang = dot(rot, auv) / max(length(rot) * length(auv), 1e-4);',
-      '    float f2 = max(min(5.0 * cos(phase * 0.3 + ang * 3.14 * (2.2 + 0.9 * sin(phase * 1.65))) - 4.0, 1.0), 0.0);',
-      '    float t = clamp(0.62 * rings + 0.55 * f2 + 0.30 * smoothstep(0.55, 1.0, spec), 0.0, 1.0);',
-      '    vec3 plate = vec3(0.85, 0.87, 0.82);',
-      '    vec3 mid = vec3(0.60, 0.72, 0.57);',
-      '    vec3 gold = vec3(0.97, 0.89, 0.66);',
-      '    tint = t < 0.5 ? mix(plate, mid, t / 0.5) : mix(mid, gold, (t - 0.5) / 0.5);',
-      '    mask = 0.92 * plateMask(uv, 1.0);',
-      '  } else if (u_variant == 2) {',
-      /* ---- II · THE HOLOGRAM — polychrome.fs, seeded PER CARD ---- */
+      '  if (u_variant == 0) {',
+      /* round-one hologram, kept verbatim as the reference strip */
       '    vec2 cuv = (uv - 0.5) * 50.0;',
       '    float t = u_seed * 2.221 + u_time * 6.0;',
       '    float res = 0.5 + 0.5 * cos(u_seed * 2.612 + (field(cuv, t) - 0.5) * 3.14);',
       '    tint = hsl2rgb(vec3(res + u_seed * 0.04 + u_time * 0.06, 0.62, 0.55));',
       '    mask = 0.95 * plateMask(uv, 0.18);',
-      '  } else if (u_variant == 3) {',
-      /* ---- III · THE LAMP — foil.fs, one source, specular gate ---- */
-      '    float f1 = max(min(2.0 * sin((length(90.0 * auv) + phase * 2.0) + 3.0 * (1.0 + 0.8 *',
-      '        cos(length(113.1121 * auv) - phase * 3.121))) - 1.0, 1.0), 0.0);',
-      '    vec2 rot = vec2(cos(phase * 0.1221), sin(phase * 0.3512));',
-      '    float ang = dot(rot, auv) / max(length(rot) * length(auv), 1e-4);',
-      '    float f2 = max(min(5.0 * cos(phase * 0.21 + ang * 3.14 * (2.2 + 0.9 * sin(phase * 1.65))) - 4.0, 1.0), 0.0);',
-      '    float f3 = 0.3 * max(min(2.0 * sin(phase * 5.0 + uv.x * 3.0 + 3.0 * (1.0 + 0.5 * cos(phase * 7.0))) - 1.0, 1.0), -1.0);',
-      '    float f4 = 0.3 * max(min(2.0 * sin(phase * 6.66 + uv.y * 3.8 + 3.0 * (1.0 + 0.5 * cos(phase * 3.414))) - 1.0, 1.0), -1.0);',
-      '    float flare = clamp(0.45 * (f1 + f2) + 0.7 * (f3 + f4) + 0.30, 0.0, 1.0);',
-      '    float t = clamp(0.55 * rings + 0.75 * flare, 0.0, 1.0);',
-      '    vec3 plate = vec3(0.86, 0.90, 0.95);',
-      '    vec3 cyan = vec3(0.38, 0.78, 0.92);',
-      '    vec3 blaze = vec3(0.98, 0.99, 1.0);',
-      '    tint = t < 0.55 ? mix(plate, cyan, t / 0.55) : mix(cyan, blaze, (t - 0.55) / 0.45);',
-      '    float gate = 0.30 + 0.70 * smoothstep(0.40, 0.99, spec);',
-      '    mask = gate * plateMask(uv, 0.85);',
+      '    nightAmp = 0.40;',
+      '  } else if (u_variant <= 3) {',
+      /* ============ GROUP A · THE HOLOGRAM ============
+         polychrome.fs, per-card seed, at a little under half the old spatial
+         frequency and roughly half the saturation, over a pale base wash. */
+      '    vec2 cuv = (uv - 0.5) * 22.0;',
+      '    float t = u_seed * 2.221 + u_time * 3.4;',
+      '    float res = 0.5 + 0.5 * cos(u_seed * 2.612 + (field(cuv, t) - 0.5) * 3.14);',
+      '    float hue = res + u_seed * 0.04 + u_time * 0.05;',
+      '    vec3 wash;',
+      '    if (u_variant == 1) {',
+      '      wash = vec3(0.812, 0.878, 0.949);',   /* pale stamp-blue */
+      '      hue = 0.45 + 0.33 * fract(hue);',     /* cyan -> violet only */
+      '    } else if (u_variant == 2) {',
+      '      wash = vec3(0.965, 0.847, 0.871);',   /* pale rose */
+      '      hue = 0.86 + 0.26 * fract(hue);',     /* magenta -> warm only */
+      '    } else {',
+      '      wash = vec3(0.871, 0.831, 0.941);',   /* pale lilac */
+      '      hue = 0.47 + 0.41 * fract(hue);',     /* clamp to the cyan-magenta arc */
+      '    }',
+      '    vec3 iris = hsl2rgb(vec3(hue, 0.34, 0.60));',
+      '    tint = mix(wash, iris, 0.32 + 0.12 * smoothstep(0.5, 1.0, spec));',
+      '    mask = 0.95 * plateMask(uv, 0.10);',
+      '    nightAmp = 0.40;',
       '  } else {',
-      /* ---- IV · THE GRATING — holo.fs ruled lines, hard specular gate ---- */
+      /* ============ GROUP B · THE GRATING ============
+         holo.fs's ruled diffraction is identical across all of these; only
+         the SHAPE of the light that ignites it changes. */
       '    vec2 gp = px / 46.0;',
-      '    float g = 0.79;',
-      '    float lines = 0.5 * max(max(max(0.0, 7.0 * abs(cos(gp.x * g * 5.0)) - 6.0),',
-      '        max(0.0, 7.0 * cos(gp.y * g * 11.0 + gp.x * g * 5.0) - 6.0)),',
-      '        max(0.0, 7.0 * cos(gp.y * g * 11.0 - gp.x * g * 5.0) - 6.0));',
+      '    float lines;',
+      '    float gate;',
+      '    if (u_variant == 4) {',
+      /* B·i THE SWEEP — the specular lobe squeezed to a travelling band */
+      '      lines = ruled3(gp, 0.79);',
+      '      float d = (1.0 - spec) / 0.115;',
+      '      gate = exp(-d * d);',
+      '    } else if (u_variant == 5) {',
+      /* B·ii THE POOL — distance gates instead of angle; rules struck from the lamp */
+      '      lines = ruledRings(dist);',
+      '      float r = clamp(dist / 340.0, 0.0, 1.0);',
+      '      gate = (1.0 - r * r) * (0.42 + 0.58 * smoothstep(0.30, 0.95, spec));',
+      '    } else if (u_variant == 6) {',
+      /* B·iii THE BLADE — a step with a thin overshoot at the boundary */
+      '      lines = ruled1(gp, 0.79);',
+      '      float e = (spec - 0.885) / 0.022;',
+      '      gate = 0.40 * smoothstep(0.855, 0.905, spec) + 0.80 * exp(-e * e);',
+      '    } else {',
+      /* round-one grating, kept verbatim as the reference strip */
+      '      lines = ruled3(gp, 0.79);',
+      '      gate = smoothstep(0.50, 0.99, spec);',
+      '    }',
       '    float res = 0.5 + 0.5 * cos(phase * 2.2 + (field((px - u_light) / 4.0, u_time * 7.0) - 0.5) * 3.14);',
-      '    tint = hsl2rgb(vec3(res + lines * 0.55, 0.60, 0.55));',
-      '    float gate = smoothstep(0.50, 0.99, spec);',
-      '    mask = clamp(0.22 + 1.5 * lines, 0.0, 1.0) * gate * plateMask(uv, 0.8);',
+      '    tint = hsl2rgb(vec3(res + lines * 0.55, 0.58, 0.55));',
+      '    mask = clamp(0.20 + 1.5 * lines, 0.0, 1.0) * clamp(gate, 0.0, 1.0) * plateMask(uv, 0.8);',
       '  }',
       '',
       '  float a = clamp(mask * u_gain, 0.0, 1.0);',
-      /* DAY: write half the target colour — hard-light doubles it against
-         white paper, and anything at or above 0.5 simply stays paper.
-         NIGHT: the stock is already dark, so only add light. */
       '  vec3 day = mix(vec3(0.5), tint * 0.5, a);',
-      '  vec3 night = mix(vec3(0.5), 0.5 + 0.5 * tint, a * 0.85);',
+      '  vec3 night = mix(vec3(0.5), 0.5 + 0.5 * tint, a * 0.85 * nightAmp);',
       '  gl_FragColor = vec4(mix(day, night, u_night), 1.0);',
       '}'
     ].join('\n');
@@ -1349,7 +1480,7 @@
       gl.shaderSource(sh, src);
       gl.compileShader(sh);
       if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-        console.error(gl.getShaderInfoLog(sh), src);
+        console.error(gl.getShaderInfoLog(sh));
         return null;
       }
       return sh;
@@ -1379,46 +1510,71 @@
     gl.vertexAttribPointer(aUnit, 2, gl.FLOAT, false, 0, 0);
 
     var U = {};
-    ['u_res', 'u_rect', 'u_light', 'u_lightz', 'u_time', 'u_seed', 'u_fanx', 'u_curve', 'u_gain', 'u_night', 'u_variant', 'u_clipx'].forEach(
-      function (name) {
-        U[name] = gl.getUniformLocation(prog, name);
-      }
-    );
+    ['u_res', 'u_rect', 'u_light', 'u_lightz', 'u_time', 'u_seed', 'u_fanx', 'u_curve',
+     'u_gain', 'u_night', 'u_tilt', 'u_clipx', 'u_variant'].forEach(function (name) {
+      U[name] = gl.getUniformLocation(prog, name);
+    });
 
     /* ------------------------------------------------------------------
-       REGISTRY — every foiled card on the page, with the variant it
-       belongs to. A card inside the hero table follows the lever; a card
-       inside a strip is pinned to that strip's numeral.
+       HOSTS — one foil layer per fan / trick, INSIDE the scrolling content
        ------------------------------------------------------------------ */
-    var cards = [];
-    function collect() {
-      cards = Array.prototype.map.call(document.querySelectorAll('[data-foil]'), function (el) {
-        var strip = el.closest('[data-strip]');
+    var hosts = [];
+    Array.prototype.forEach.call(document.querySelectorAll('[data-foil-host]'), function (el) {
+      var cards = Array.prototype.map.call(el.querySelectorAll('[data-foil]'), function (c) {
         return {
-          el: el,
-          fixedVariant: strip ? parseInt(strip.getAttribute('data-strip'), 10) : 0,
-          seed: parseFloat(el.getAttribute('data-seed')) || 1,
-          fanx: parseFloat(el.getAttribute('data-fanx')) || 0
+          el: c,
+          seed: parseFloat(c.getAttribute('data-seed')) || 1,
+          fanx: parseFloat(c.getAttribute('data-fanx')) || 0
         };
       });
-    }
-    collect();
+      if (!cards.length) return;
+      var strip = el.getAttribute('data-strip');
+      var cv = document.createElement('canvas');
+      cv.className = 'foil-layer';
+      cv.setAttribute('aria-hidden', 'true');
+      el.appendChild(cv);
+      hosts.push({
+        el: el,
+        canvas: cv,
+        ctx: cv.getContext('2d'),
+        cards: cards,
+        fixedVariant: strip === null ? 0 : parseInt(strip, 10),
+        pinned: strip !== null,
+        w: 0,
+        h: 0
+      });
+    });
 
     var dpr = 1;
-    function resize() {
+    function sizeAll() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(window.innerWidth * dpr);
-      canvas.height = Math.floor(window.innerHeight * dpr);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      var maxW = 1;
+      var maxH = 1;
+      hosts.forEach(function (h) {
+        var r = h.el.getBoundingClientRect();
+        h.w = Math.max(1, Math.round(r.width));
+        h.h = Math.max(1, Math.round(r.height));
+        if (h.canvas.width !== Math.round(h.w * dpr) || h.canvas.height !== Math.round(h.h * dpr)) {
+          h.canvas.width = Math.round(h.w * dpr);
+          h.canvas.height = Math.round(h.h * dpr);
+        }
+        maxW = Math.max(maxW, h.canvas.width);
+        maxH = Math.max(maxH, h.canvas.height);
+      });
+      if (glc.width !== maxW || glc.height !== maxH) {
+        glc.width = maxW;
+        glc.height = maxH;
+      }
     }
-    resize();
-    window.addEventListener('resize', resize);
+    sizeAll();
+    window.addEventListener('resize', sizeAll);
 
     /* ------------------------------------------------------------------
        DRAW
        ------------------------------------------------------------------ */
     var t0 = performance.now();
-    var frozenTime = 3.2;
+    var FROZEN_T = 3.2;
+    var lampEl = document.getElementById('lamp');
 
     function isNight() {
       var plate = document.body.getAttribute('data-plate');
@@ -1430,46 +1586,98 @@
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 1 : 0;
     }
 
+    gl.enable(gl.SCISSOR_TEST);
+
     function frame(now) {
-      var t = state.motion ? ((now - t0) / 1000) * state.speed : frozenTime;
+      var t = state.motion ? ((now - t0) / 1000) * state.speed : FROZEN_T;
       var night = isNight();
+      var vh = window.innerHeight;
+      var markX = state.lamp.x;
+      var markY = state.lamp.y;
 
-      gl.clearColor(128 / 255, 128 / 255, 128 / 255, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      gl.uniform2f(U.u_res, window.innerWidth, window.innerHeight);
-      gl.uniform2f(U.u_light, state.lamp.x, state.lamp.y);
-      gl.uniform1f(U.u_lightz, state.height);
       gl.uniform1f(U.u_time, t);
       gl.uniform1f(U.u_curve, state.curve);
       gl.uniform1f(U.u_gain, state.gain);
       gl.uniform1f(U.u_night, night);
 
-      var vh = window.innerHeight;
-      for (var i = 0; i < cards.length; i++) {
-        var c = cards[i];
-        var r = c.el.getBoundingClientRect();
-        if (r.bottom < -40 || r.top > vh + 40 || r.width === 0) continue;
-        var nxt = c.el.nextElementSibling;
-        var clipR = r.right;
-        if (nxt && nxt.classList.contains('pcard')) {
-          var nr = nxt.getBoundingClientRect();
-          if (nr.left > r.left) clipR = Math.min(clipR, nr.left);
+      for (var i = 0; i < hosts.length; i++) {
+        var h = hosts[i];
+        var hr = h.el.getBoundingClientRect();
+        if (hr.bottom < -80 || hr.top > vh + 80 || hr.width === 0) continue;
+
+        var cw = h.canvas.width;
+        var ch = h.canvas.height;
+        if (Math.round(hr.width) !== h.w || Math.round(hr.height) !== h.h) {
+          sizeAll();
+          cw = h.canvas.width;
+          ch = h.canvas.height;
         }
-        gl.uniform2f(U.u_clipx, r.left, clipR);
-        gl.uniform4f(U.u_rect, r.left, r.top, r.width, r.height);
-        gl.uniform1f(U.u_seed, c.seed);
-        gl.uniform1f(U.u_fanx, c.fanx);
-        gl.uniform1i(U.u_variant, c.fixedVariant || state.variant);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        gl.viewport(0, 0, cw, ch);
+        gl.scissor(0, 0, cw, ch);
+        gl.clearColor(128 / 255, 128 / 255, 128 / 255, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        /* everything below is in host-local CSS pixels: the foil layer moves
+           with its host, so nothing here depends on the scroll offset */
+        gl.uniform2f(U.u_res, h.w, h.h);
+        if (h.pinned) {
+          /* a reference strip lights itself: one lamp per strip, orbiting
+             slowly, so each reading demonstrates its own shape whether or
+             not the reader is pointing at it */
+          var o = state.motion ? ((now - t0) / 1000) * 0.5 : 1.9;
+          gl.uniform2f(
+            U.u_light,
+            h.w * (0.5 + 0.46 * Math.sin(o)),
+            h.h * (0.5 + 0.30 * Math.cos(o * 0.77))
+          );
+          gl.uniform1f(U.u_lightz, 150);
+          gl.uniform2f(U.u_tilt, 0, 0);
+        } else if (state.lampPlaced) {
+          gl.uniform2f(U.u_light, state.lamp.x - hr.left, state.lamp.y - hr.top);
+          gl.uniform1f(U.u_lightz, state.height);
+          gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
+        } else {
+          var oh = state.motion ? ((now - t0) / 1000) * 0.34 : 2.35;
+          var lx = hr.width * (0.5 + 0.55 * Math.sin(oh));
+          var ly = hr.height * (0.32 + 0.30 * Math.cos(oh * 0.8));
+          gl.uniform2f(U.u_light, lx, ly);
+          gl.uniform1f(U.u_lightz, 220);
+          gl.uniform2f(U.u_tilt, state.tilt.x, state.tilt.y);
+          markX = hr.left + lx;
+          markY = hr.top + ly;
+        }
+
+        var variant = h.pinned ? h.fixedVariant : state.variant;
+        gl.uniform1i(U.u_variant, variant);
+
+        for (var j = 0; j < h.cards.length; j++) {
+          var c = h.cards[j];
+          var r = c.el.getBoundingClientRect();
+          var nxt = c.el.nextElementSibling;
+          var clipR = r.right;
+          if (nxt && nxt.classList && nxt.classList.contains('pcard')) {
+            var nr = nxt.getBoundingClientRect();
+            if (nr.left > r.left) clipR = Math.min(clipR, nr.left);
+          }
+          gl.uniform2f(U.u_clipx, r.left - hr.left, clipR - hr.left);
+          gl.uniform4f(U.u_rect, r.left - hr.left, r.top - hr.top, r.width, r.height);
+          gl.uniform1f(U.u_seed, c.seed);
+          gl.uniform1f(U.u_fanx, c.fanx);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        /* the GL canvas is sized to the LARGEST host and every pass renders
+           into its bottom-left corner (WebGL's origin), so the blit reads
+           from the bottom of it rather than the top */
+        h.ctx.clearRect(0, 0, cw, ch);
+        h.ctx.drawImage(glc, 0, glc.height - ch, cw, ch, 0, 0, cw, ch);
       }
 
-      lampEl.style.left = state.lamp.x + 'px';
-      lampEl.style.top = state.lamp.y + 'px';
+      lampEl.style.left = markX + 'px';
+      lampEl.style.top = markY + 'px';
       requestAnimationFrame(frame);
     }
-
-    var lampEl = document.getElementById('lamp');
     requestAnimationFrame(frame);
 
     /* ------------------------------------------------------------------
@@ -1482,10 +1690,8 @@
         b.setAttribute('aria-pressed', String(b.getAttribute('data-' + attr) === value));
       });
     }
-
     function wireLever(groupId, attr, onPick) {
-      var g = document.getElementById(groupId);
-      g.addEventListener('click', function (e) {
+      document.getElementById(groupId).addEventListener('click', function (e) {
         var b = e.target.closest('button');
         if (!b) return;
         var v = b.getAttribute('data-' + attr);
@@ -1494,13 +1700,25 @@
       });
     }
 
-    wireLever('lever-variant', 'v', function (v) {
+    /* the two variant levers are one choice between them: picking a grating
+       releases the hologram and the other way round */
+    function pickVariant(v) {
       state.variant = parseInt(v, 10);
+      setPressed('lever-holo', 'v', v);
+      setPressed('lever-grat', 'v', v);
+    }
+    wireLever('lever-holo', 'v', pickVariant);
+    wireLever('lever-grat', 'v', pickVariant);
+
+    wireLever('lever-input', 'i', function (v) {
+      state.input = v;
+      document.body.setAttribute('data-lamp-visible', v === 'device' ? '0' : '1');
+      if (v === 'device') startTilt();
+      if (v === 'placed') state.tilt.x = state.tilt.y = 0;
     });
-    wireLever('lever-lamp', 'l', function (v) {
-      state.lampMode = v;
-      document.body.setAttribute('data-lamp-visible', v === 'tilt' ? '0' : '1');
-      if (v === 'tilt') startTilt();
+    wireLever('lever-model', 'd', function (v) {
+      state.drives = v;
+      state.tilt.x = state.tilt.y = 0;
     });
     wireLever('lever-plate', 'p', function (v) {
       if (v === 'auto') document.body.removeAttribute('data-plate');
@@ -1522,45 +1740,80 @@
     }
     wireSlider('s-gain', 'v-gain', 'gain', 2);
     wireSlider('s-curve', 'v-curve', 'curve', 2);
+    wireSlider('s-tilt', 'v-tilt', 'tiltRange', 2);
     wireSlider('s-height', 'v-height', 'height', 0);
     wireSlider('s-speed', 'v-speed', 'speed', 2);
 
-    /* drag the lamp anywhere on the table */
-    var stage = document.getElementById('stage');
-    function place(e) {
-      state.lamp.x = e.clientX;
-      state.lamp.y = e.clientY;
+    /* ---- pointer: drives whichever model is selected ---- */
+    function fromPointer(e) {
+      if (state.drives === 'lamp') {
+        state.lamp.x = e.clientX;
+        state.lamp.y = e.clientY;
+        state.lampPlaced = true;
+        document.body.setAttribute('data-lamp-placed', '');
+      } else {
+        state.tilt.x = (e.clientX / window.innerWidth - 0.5) * 2 * state.tiltRange;
+        state.tilt.y = (e.clientY / window.innerHeight - 0.5) * 2 * state.tiltRange;
+      }
     }
+    window.addEventListener('pointermove', function (e) {
+      if (state.input === 'pointer') fromPointer(e);
+    });
+
+    /* dragging the felt always places the lamp, whatever the input is —
+       it is the one direct manipulation on the page */
+    var stage = document.getElementById('stage');
     var dragging = false;
     stage.addEventListener('pointerdown', function (e) {
-      if (state.lampMode === 'tilt') return;
       dragging = true;
-      stage.setPointerCapture(e.pointerId);
-      place(e);
+      try {
+        stage.setPointerCapture(e.pointerId);
+      } catch (err) {}
+      state.lampPlaced = true;
+      document.body.setAttribute('data-lamp-placed', '');
+      state.lamp.x = e.clientX;
+      state.lamp.y = e.clientY;
     });
     stage.addEventListener('pointermove', function (e) {
-      if (dragging || state.lampMode === 'pointer') place(e);
+      if (dragging) {
+        state.lamp.x = e.clientX;
+        state.lamp.y = e.clientY;
+      }
     });
     stage.addEventListener('pointerup', function () {
       dragging = false;
     });
-    window.addEventListener('pointermove', function (e) {
-      if (state.lampMode === 'pointer') place(e);
+    stage.addEventListener('pointercancel', function () {
+      dragging = false;
     });
 
-    /* device tilt — the lamp stops being in the room and starts being
-       something the hand is held up to */
+    /* ---- device orientation ----
+       Absolute heading drifts and means nothing indoors, so this reads the
+       first sample as the rest position and reports everything relative to
+       it: the hand is flat wherever you happened to be holding the phone. */
     var tiltOn = false;
+    var rest = null;
     function onTilt(e) {
-      var g = e.gamma == null ? 0 : e.gamma; /* left/right, -90..90 */
-      var b = e.beta == null ? 45 : e.beta; /* front/back, -180..180 */
-      state.lamp.x = window.innerWidth * (0.5 + Math.max(-1, Math.min(1, g / 45)) * 0.85);
-      state.lamp.y = window.innerHeight * (0.5 - Math.max(-1, Math.min(1, (b - 45) / 45)) * 0.85);
+      var g = e.gamma == null ? 0 : e.gamma;
+      var b = e.beta == null ? 0 : e.beta;
+      if (rest === null) rest = { g: g, b: b };
+      var dg = Math.max(-45, Math.min(45, g - rest.g)) / 45;
+      var db = Math.max(-45, Math.min(45, b - rest.b)) / 45;
+      if (state.drives === 'lamp') {
+        state.lampPlaced = true;
+        document.body.setAttribute('data-lamp-placed', '');
+        state.lamp.x = window.innerWidth * (0.5 + dg * 0.85);
+        state.lamp.y = window.innerHeight * (0.5 + db * 0.85);
+      } else {
+        state.tilt.x = dg * state.tiltRange * 1.6;
+        state.tilt.y = db * state.tiltRange * 1.6;
+      }
     }
     function startTilt() {
       if (tiltOn) return;
       var DOE = window.DeviceOrientationEvent;
       if (!DOE) return;
+      rest = null;
       if (typeof DOE.requestPermission === 'function') {
         DOE.requestPermission()
           .then(function (r) {
@@ -1576,15 +1829,12 @@
       }
     }
 
-    /* the board is shareable: ?v=3&plate=night opens on one direction, so a
+    /* the board is shareable: ?v=4&plate=night opens on one reading, so a
        preference can be sent as a link rather than as an instruction */
     (function applyQuery() {
       var q = new URLSearchParams(location.search);
       var v = q.get('v');
-      if (v && /^[1-4]$/.test(v)) {
-        state.variant = parseInt(v, 10);
-        setPressed('lever-variant', 'v', v);
-      }
+      if (v && /^[1-6]$/.test(v)) pickVariant(v);
       var plate = q.get('plate');
       if (plate === 'day' || plate === 'night') {
         document.body.setAttribute('data-plate', plate);
@@ -1595,8 +1845,13 @@
         state.motion = parseInt(m, 10);
         setPressed('lever-motion', 'm', m);
       }
+      var tx = parseFloat(q.get('tiltx'));
+      var ty = parseFloat(q.get('tilty'));
+      if (!isNaN(tx)) state.tilt.x = tx;
+      if (!isNaN(ty)) state.tilt.y = ty;
     })();
 
+    if (reduce.matches) setPressed('lever-motion', 'm', '0');
     reduce.addEventListener('change', function (e) {
       state.motion = e.matches ? 0 : 1;
       setPressed('lever-motion', 'm', e.matches ? '0' : '1');
