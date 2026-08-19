@@ -485,9 +485,21 @@
   }
   .foil-layer {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    /* deliberately OVERHANGING the host. A trick card is taller than the
+       grid row that holds it, so it spills past the host box — pinned to
+       inset 0 the layer stopped a few pixels short of the card's foot and
+       left a bare white band there. The overhang paints neutral grey, which
+       hard-light ignores, so it costs nothing where there is no card.
+
+       The size is spelled out rather than left to `inset: -16px` alone: a
+       <canvas> is a REPLACED element, so an absolutely positioned one with
+       `width: auto` takes its INTRINSIC size (the 300x150 default drawing
+       buffer) and quietly ignores the opposing offset. That is what makes
+       this look like the shader broke rather than like a layout mistake. */
+    top: -16px;
+    left: -16px;
+    width: calc(100% + 32px);
+    height: calc(100% + 32px);
     pointer-events: none;
     mix-blend-mode: hard-light;
   }
@@ -923,6 +935,18 @@
         </p>
       </div>
       <div class="ledger-row">
+        <span class="label">Downloading it</span>
+        <p>
+          Saving this page and opening it from Files will not help, and it is worth knowing why
+          rather than trying it: a <code>file://</code> document has a <em>null</em> origin, and
+          <code>requestPermission()</code> is specified to need a secure context plus a real
+          user gesture. Null origin fails the first test, so iOS refuses before the prompt can
+          appear. Android's Chrome does treat <code>file://</code> as trustworthy, so it may
+          work there — but the only surface that works everywhere is the app's own origin over
+          HTTPS, top-level, which is a preview deploy.
+        </p>
+      </div>
+      <div class="ledger-row">
         <span class="label">What it costs</span>
         <p>
           <code>deviceorientation</code> needs a user gesture and an explicit grant on iOS, so
@@ -1198,6 +1222,32 @@
         </p>
       </div>
       <div class="ledger-row">
+        <span class="label">The edges</span>
+        <p>
+          Foil now runs to the trim. It used to stop a few pixels short on every side, because
+          the mask feathered over a sixteenth of each dimension — 3px across, 5px down, and
+          worse than it sounds in the hand, where a fanned card shows a ~21px sliver and the
+          fade ate a sixth of it. The fade is gone; what bounds the plate now is the card's own
+          outline, a rounded rect measured in <em>pixels</em> against
+          <code>border-radius</code>, holding back three-quarters of one pixel so the hairline
+          still reads against the felt. Pixels rather than uv is the point — proportional insets
+          feather a small card harder than a large one, and these cards are fluid.
+        </p>
+      </div>
+      <div class="ledger-row">
+        <span class="label">The overhang</span>
+        <p>
+          That exposed a second one: a trick card is taller than the grid row holding it, so it
+          spills past the host the foil layer was pinned to and its foot came back bare. The
+          layer now overhangs its host by 16px on every side, painting neutral grey where there
+          is no card, which <code>hard-light</code> ignores. Spelling out that size is not
+          decoration — a <code>&lt;canvas&gt;</code> is a REPLACED element, so an absolutely
+          positioned one with <code>width: auto</code> silently takes its intrinsic 300×150
+          drawing buffer and ignores the opposing offset. It reads as the shader having broken
+          rather than as a layout mistake.
+        </p>
+      </div>
+      <div class="ledger-row">
         <span class="label">The ink</span>
         <p>
           Still the real risk. The card is DOM text under a blended canvas, so anything lit sits
@@ -1441,13 +1491,31 @@
       '',
       /* the corner-index knockout. These cards are corner-indexed, so the
          printed area is a small box at top-left and the rest is open field. */
+      /* The card's own outline, in card pixels — a rounded rect matching
+         border-radius, holding back just enough for the 1px hairline to
+         still read against the felt.
+
+         This replaced a linear fade over 1/16th of each side, which cost
+         3-5px of pale halo inset from every edge: obvious on a tabled card
+         and worse in the hand, where a fanned card shows a ~21px sliver and
+         the fade ate a sixth of it. Working in PIXELS rather than uv is the
+         point — uv makes the inset proportional, so the same rule feathered
+         a small card harder than a large one. */
+      'float cardMask(vec2 uv) {',
+      '  vec2 size = u_rect.zw;',
+      '  vec2 h = size * 0.5;',
+      '  float inset = 0.75;',
+      '  float radius = 2.5;',
+      '  vec2 q = abs(uv * size - h) - (h - vec2(inset)) + vec2(radius);',
+      '  float d = min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - radius;',
+      '  return 1.0 - smoothstep(-0.75, 0.35, d);',
+      '}',
       'float plateMask(vec2 uv, float softness) {',
       '  vec2 g = vec2(0.62, 0.46);',
       '  vec2 d = max(vec2(0.0), (g - uv) / g);',
       '  float corner = 1.0 - clamp(min(d.x, d.y) * 3.4, 0.0, 1.0);',
       '  corner = mix(1.0, corner, softness);',
-      '  vec2 e = min(uv, 1.0 - uv);',
-      '  return corner * clamp(min(e.x, e.y) * 16.0, 0.0, 1.0);',
+      '  return corner * cardMask(uv);',
       '}',
       '',
       /* Balatro's moving noise field (shared core of holo/polychrome) */
@@ -1666,7 +1734,7 @@
       var maxW = 1;
       var maxH = 1;
       hosts.forEach(function (h) {
-        var r = h.el.getBoundingClientRect();
+        var r = h.canvas.getBoundingClientRect();
         h.w = Math.max(1, Math.round(r.width));
         h.h = Math.max(1, Math.round(r.height));
         if (h.canvas.width !== Math.round(h.w * dpr) || h.canvas.height !== Math.round(h.h * dpr)) {
@@ -1721,7 +1789,7 @@
 
       for (var i = 0; i < hosts.length; i++) {
         var h = hosts[i];
-        var hr = h.el.getBoundingClientRect();
+        var hr = h.canvas.getBoundingClientRect();
         if (hr.bottom < -80 || hr.top > vh + 80 || hr.width === 0) continue;
 
         var cw = h.canvas.width;
