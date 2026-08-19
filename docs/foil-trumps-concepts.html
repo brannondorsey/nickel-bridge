@@ -797,6 +797,18 @@
         <input type="range" id="s-tilt" min="0" max="1.2" step="0.05" value="0.55" />
       </div>
       <div class="rig-row">
+        <label class="label" for="s-lineweight">
+          Line weight <span class="val" id="v-lineweight">0.60</span>
+        </label>
+        <input type="range" id="s-lineweight" min="0" max="1" step="0.02" value="0.6" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-linecount">
+          Line count <span class="val" id="v-linecount">1.00</span>
+        </label>
+        <input type="range" id="s-linecount" min="0.15" max="2.2" step="0.05" value="1" />
+      </div>
+      <div class="rig-row">
         <label class="label" for="s-height">Lamp height <span class="val" id="v-height">320</span></label>
         <input type="range" id="s-height" min="120" max="1600" step="20" value="320" />
       </div>
@@ -1009,10 +1021,23 @@
       <h2>The grating — three reflections</h2>
     </div>
     <p>
-      The ruled diffraction from <code>holo.fs</code> is untouched in all three: three sets of
-      lines at fixed angles, drawn in page space so they run straight across the whole hand.
-      What changes is the shape of the light that ignites them — which was the one thing you
-      wanted moved.
+      The ruled diffraction from <code>holo.fs</code> runs in all three, drawn in page space so
+      the lines carry straight across the whole hand. What changes between the readings is the
+      shape of the light that ignites them.
+    </p>
+    <p>
+      <strong>Two of the rig's sliders now govern the rules themselves.</strong> LINE WEIGHT
+      goes from hairline to fat band; LINE COUNT from a handful across the hand to a dense
+      screen. They fall out of the shaping term rather than being bolted on: holo.fs draws a
+      rule as <code>k·|cos| − (k−1)</code>, which is non-zero only where the cosine clears
+      <code>(k−1)/k</code> — and whose <em>peak is 1 whatever k is</em>. So k widens or narrows
+      the rule without changing how much light reaches the card, which is exactly what a weight
+      knob should do, and the reason this needed no new maths.
+    </p>
+    <p class="aside">
+      The two levers move all three readings, so you can see what fat rules do to a sweep and a
+      pool as well. The dashed round-one strips stay deaf to them — a reference that moves is
+      not a reference.
     </p>
 
     <div class="refline">
@@ -1070,12 +1095,21 @@
         <div class="v-notes">
           <p>
             A step rather than a ramp, with a thin overshoot right at the boundary: mostly plain
-            paper, then a bright edge, then plain paper again. The rules are a single dense set
-            at one angle, so what catches reads as a machined surface rather than a printed one.
+            paper, then a bright edge, then plain paper again. The rules are a single set at one
+            angle, so what catches reads as a machined surface rather than a printed one.
+          </p>
+          <p>
+            This one carries its own bias on top of the sliders — half the k, so a distinctly
+            fatter rule, against a base frequency cut from thirteen to five and a half, so far
+            fewer of them. That is the reading as asked for; LINE WEIGHT and LINE COUNT move it
+            from there in both directions, and at the fat end the blade stops being ruled at all
+            and becomes one broad bar of light crossing the hand.
           </p>
           <p class="aside">
             The most dramatic and the most fragile — a hard edge on fine lines is exactly what
-            aliases on a phone. It wants a derivative-based line width before it could ship.
+            aliases on a phone — though fattening the rules is itself most of the cure, since a
+            wide band has far less to alias against. It still wants a derivative-based width at
+            the fine end before it could ship.
           </p>
         </div>
       </div>
@@ -1319,6 +1353,8 @@
       gain: 1.0,
       curve: 0.55,
       tiltRange: 0.55,
+      lineWeight: 0.6,
+      lineCount: 1.0,
       height: 320,
       speed: 0.45,
       lamp: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.3 },
@@ -1385,6 +1421,8 @@
       'uniform float u_night;',
       'uniform vec2 u_tilt;',
       'uniform vec2 u_clipx;',
+      'uniform float u_lineK;',
+      'uniform float u_lineFreq;',
       'uniform int u_variant;',
       '',
       'float hueTerm(float s, float t, float h) {',
@@ -1421,19 +1459,32 @@
       '          cos(length(c) / 27.193) * sin(c.x / 21.92))) / 2.0;',
       '}',
       '',
+      /* Balatro's line shaper, opened up. k*|cos| - (k-1) is non-zero only
+         where |cos| clears (k-1)/k, and its PEAK is 1 whatever k is — so k
+         changes the rule's width and nothing else. That makes k an honest
+         weight knob: k=16 is a hairline, k=2 is a fat band, and the light
+         reaching the card is identical either way. */
+      'float rule(float x, float k) {',
+      '  return max(0.0, k * abs(cos(x)) - (k - 1.0));',
+      '}',
+      /* the diagonals keep holo.fs's unsigned cos, which halves their
+         effective count against the axis-aligned set */
+      'float ruleSigned(float x, float k) {',
+      '  return max(0.0, k * cos(x) - (k - 1.0));',
+      '}',
       /* holo.fs ruled diffraction, three angles */
-      'float ruled3(vec2 gp, float g) {',
-      '  return 0.5 * max(max(max(0.0, 7.0 * abs(cos(gp.x * g * 5.0)) - 6.0),',
-      '      max(0.0, 7.0 * cos(gp.y * g * 11.0 + gp.x * g * 5.0) - 6.0)),',
-      '      max(0.0, 7.0 * cos(gp.y * g * 11.0 - gp.x * g * 5.0) - 6.0));',
+      'float ruled3(vec2 gp, float g, float k, float f) {',
+      '  return 0.5 * max(max(rule(gp.x * g * 5.0 * f, k),',
+      '      ruleSigned((gp.y * 11.0 + gp.x * 5.0) * g * f, k)),',
+      '      ruleSigned((gp.y * 11.0 - gp.x * 5.0) * g * f, k));',
       '}',
       /* the same rules struck concentrically from the lamp */
-      'float ruledRings(float d) {',
-      '  return 0.5 * max(0.0, 7.0 * abs(cos(d * 0.16)) - 6.0);',
+      'float ruledRings(float d, float k, float f) {',
+      '  return 0.5 * rule(d * 0.16 * f, k);',
       '}',
-      /* one dense set at a single angle — a machined edge */
-      'float ruled1(vec2 gp, float g) {',
-      '  return 0.5 * max(0.0, 7.0 * abs(cos((gp.x * 0.62 + gp.y * 0.78) * g * 13.0)) - 6.0);',
+      /* one set at a single angle — a machined edge */
+      'float ruled1(vec2 gp, float freq, float k) {',
+      '  return 0.5 * rule((gp.x * 0.62 + gp.y * 0.78) * freq, k);',
       '}',
       '',
       'void main() {',
@@ -1502,22 +1553,28 @@
       '    float gate;',
       '    if (u_variant == 4) {',
       /* B·i THE SWEEP — the specular lobe squeezed to a travelling band */
-      '      lines = ruled3(gp, 0.79);',
+      '      lines = ruled3(gp, 0.79, u_lineK, u_lineFreq);',
       '      float d = (1.0 - spec) / 0.115;',
       '      gate = exp(-d * d);',
       '    } else if (u_variant == 5) {',
       /* B·ii THE POOL — distance gates instead of angle; rules struck from the lamp */
-      '      lines = ruledRings(dist);',
+      '      lines = ruledRings(dist, u_lineK, u_lineFreq);',
       '      float r = clamp(dist / 340.0, 0.0, 1.0);',
       '      gate = (1.0 - r * r) * (0.42 + 0.58 * smoothstep(0.30, 0.95, spec));',
       '    } else if (u_variant == 6) {',
       /* B·iii THE BLADE — a step with a thin overshoot at the boundary */
-      '      lines = ruled1(gp, 0.79);',
+      // the blade wears its OWN bias on top of the sliders: half the k
+      // (so a fatter rule) against a much lower base frequency (so far
+      // fewer of them), which is the reading it was asked for. The
+      // sliders then move it from there, in both directions.
+      '      lines = ruled1(gp, 0.79 * 5.5 * u_lineFreq, max(1.6, u_lineK * 0.5));',
       '      float e = (spec - 0.885) / 0.022;',
       '      gate = 0.40 * smoothstep(0.855, 0.905, spec) + 0.80 * exp(-e * e);',
       '    } else {',
       /* round-one grating, kept verbatim as the reference strip */
-      '      lines = ruled3(gp, 0.79);',
+      /* the round-one reference is deliberately deaf to the sliders —
+         a reference that moves is not one */
+      '      lines = ruled3(gp, 0.79, 7.0, 1.0);',
       '      gate = smoothstep(0.50, 0.99, spec);',
       '    }',
       '    float res = 0.5 + 0.5 * cos(phase * 2.2 + (field((px - u_light) / 4.0, u_time * 7.0) - 0.5) * 3.14);',
@@ -1568,7 +1625,8 @@
 
     var U = {};
     ['u_res', 'u_rect', 'u_light', 'u_lightz', 'u_time', 'u_seed', 'u_fanx', 'u_curve',
-     'u_gain', 'u_night', 'u_tilt', 'u_clipx', 'u_variant'].forEach(function (name) {
+     'u_gain', 'u_night', 'u_tilt', 'u_clipx', 'u_variant',
+     'u_lineK', 'u_lineFreq'].forEach(function (name) {
       U[name] = gl.getUniformLocation(prog, name);
     });
 
@@ -1656,6 +1714,10 @@
       gl.uniform1f(U.u_curve, state.curve);
       gl.uniform1f(U.u_gain, state.gain);
       gl.uniform1f(U.u_night, night);
+      /* weight runs backwards on purpose: the slider reads left-to-right
+         as hairline-to-fat, while k runs the other way */
+      gl.uniform1f(U.u_lineK, 16.0 - 14.0 * state.lineWeight);
+      gl.uniform1f(U.u_lineFreq, state.lineCount);
 
       for (var i = 0; i < hosts.length; i++) {
         var h = hosts[i];
@@ -1798,6 +1860,8 @@
     wireSlider('s-gain', 'v-gain', 'gain', 2);
     wireSlider('s-curve', 'v-curve', 'curve', 2);
     wireSlider('s-tilt', 'v-tilt', 'tiltRange', 2);
+    wireSlider('s-lineweight', 'v-lineweight', 'lineWeight', 2);
+    wireSlider('s-linecount', 'v-linecount', 'lineCount', 2);
     wireSlider('s-height', 'v-height', 'height', 0);
     wireSlider('s-speed', 'v-speed', 'speed', 2);
 
@@ -1991,6 +2055,23 @@
         state.motion = parseInt(m, 10);
         setPressed('lever-motion', 'm', m);
       }
+      /* the sliders are shareable too, so a setting can be sent as a link
+         rather than described: ?v=6&weight=0.9&count=0.4 */
+      [
+        ['weight', 's-lineweight'],
+        ['count', 's-linecount'],
+        ['gain', 's-gain'],
+        ['curve', 's-curve']
+      ].forEach(function (pair) {
+        var raw = q.get(pair[0]);
+        if (raw === null) return;
+        var n = parseFloat(raw);
+        if (isNaN(n)) return;
+        var el = document.getElementById(pair[1]);
+        if (!el) return;
+        el.value = String(n);
+        el.dispatchEvent(new Event('input'));
+      });
       var tx = parseFloat(q.get('tiltx'));
       var ty = parseFloat(q.get('tilty'));
       if (!isNaN(tx)) state.tilt.x = tx;
