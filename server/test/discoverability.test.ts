@@ -93,6 +93,11 @@ describe('robots.txt', () => {
       '/tour',
       '/activity',
       '/settings',
+      // Not a route at all — a static page under web/public/. Its own
+      // noindex meta keeps it out of the index; this line is what keeps a
+      // crawler from FETCHING it, which is the half that costs a machine
+      // wake (CLAUDE.md, "Machine time is bought by the request").
+      '/foil-trumps-a-concept.html',
     ]) {
       expect(body, path).toContain(`Disallow: ${path}`);
     }

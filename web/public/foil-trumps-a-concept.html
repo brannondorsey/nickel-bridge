@@ -589,6 +589,66 @@
     }
   }
 
+  /* ---- the contact sheet ---- */
+  .sheet {
+    /* smaller stock than the table's: the point here is density, and the
+       shader's card mask is measured in pixels so it holds at any size */
+    --card-h: 56px;
+  }
+  .sheet-block {
+    margin-top: 30px;
+  }
+  .sheet-block h3 {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .sheet-block .axis {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .sheet-grid {
+    display: grid;
+    gap: 5px;
+    align-items: center;
+    justify-items: center;
+    border: 1px solid var(--line);
+    background: var(--felt);
+    padding: 10px 8px;
+    overflow-x: auto;
+  }
+  .sheet-grid .corner,
+  .sheet-grid .hdr-col,
+  .sheet-grid .hdr-row {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .sheet-grid .corner {
+    font-size: 8px;
+    line-height: 1.15;
+  }
+  .sheet-grid .hdr-row {
+    justify-self: end;
+    padding-right: 2px;
+  }
+  .tile-card {
+    width: var(--card-w);
+    height: var(--card-h);
+  }
+  .tile-card .pcard {
+    box-shadow: none;
+  }
+
   /* ---- ledger ---- */
   .ledger {
     border: 1px solid var(--line);
@@ -826,6 +886,18 @@
           Line count <span class="val" id="v-linecount">1.00</span>
         </label>
         <input type="range" id="s-linecount" min="0.15" max="2.2" step="0.05" value="1" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-sat">
+          Saturation <span class="val" id="v-sat">0.34</span>
+        </label>
+        <input type="range" id="s-sat" min="0" max="1" step="0.02" value="0.34" />
+      </div>
+      <div class="rig-row">
+        <label class="label" for="s-freq">
+          Field frequency <span class="val" id="v-freq">22</span>
+        </label>
+        <input type="range" id="s-freq" min="6" max="60" step="1" value="22" />
       </div>
       <div class="rig-row">
         <label class="label" for="s-height">Lamp height <span class="val" id="v-height">320</span></label>
@@ -1147,10 +1219,37 @@
     </article>
   </section>
 
-  <!-- ==================== §7 THE RULE ==================== -->
-  <section id="rule">
+  <!-- ==================== §7 THE CONTACT SHEET ==================== -->
+  <section id="sheet">
     <div class="sec-head">
       <span class="rule-no">§ 7</span>
+      <h2>The contact sheet</h2>
+    </div>
+    <p>
+      Every reading at every setting, laid out so it can be judged by scrolling rather than by
+      moving a slider and trying to remember what the last one looked like. One card per tile,
+      full face, <strong>same lamp, same angle, same clock in all of them</strong> — the only
+      thing that differs between two tiles is the axis they sit on, which is the whole
+      discipline of a contact sheet.
+    </p>
+    <p>
+      A true cross-product of every control would be tens of thousands of tiles and useless, so
+      each group varies the two dials that actually move it and inherits the rest from the rig
+      above. Change INTENSITY or CARD STOCK up there and the whole sheet follows, which is the
+      cheapest way to see all of this at night.
+    </p>
+    <div class="sheet" id="sheet-holo"></div>
+    <div class="sheet" id="sheet-grating"></div>
+    <p class="aside" style="margin-top: 18px">
+      Tiles render only while they are on screen, so the sheet costs about what one strip does
+      however far it runs. Hover a tile for its exact numbers.
+    </p>
+  </section>
+
+  <!-- ==================== §8 THE RULE ==================== -->
+  <section id="rule">
+    <div class="sec-head">
+      <span class="rule-no">§ 8</span>
       <h2>The rule</h2>
     </div>
     <p>
@@ -1203,10 +1302,10 @@
     </div>
   </section>
 
-  <!-- ==================== §8 WHAT IT COSTS ==================== -->
+  <!-- ==================== §9 WHAT IT COSTS ==================== -->
   <section id="costs">
     <div class="sec-head">
-      <span class="rule-no">§ 8</span>
+      <span class="rule-no">§ 9</span>
       <h2>What it costs</h2>
     </div>
     <div class="ledger">
@@ -1304,10 +1403,10 @@
     </div>
   </section>
 
-  <!-- ==================== §9 SOURCES ==================== -->
+  <!-- ==================== §10 SOURCES ==================== -->
   <section id="sources">
     <div class="sec-head">
-      <span class="rule-no">§ 9</span>
+      <span class="rule-no">§ 10</span>
       <h2>Source material</h2>
     </div>
     <p>
@@ -1399,6 +1498,112 @@
     });
 
     /* ------------------------------------------------------------------
+       THE CONTACT SHEET
+
+       123 tiles across two groups. Each varies the two dials that actually
+       move its group and inherits everything else from the rig, because the
+       real cross-product of every control is five figures of tiles and
+       answers nothing. Built here rather than written out as markup for the
+       obvious reason, and because the axis values then exist as data — the
+       captions cannot drift from what the tiles are actually rendering.
+       ------------------------------------------------------------------ */
+    var SHEETS = [
+      {
+        host: 'sheet-holo',
+        blocks: [
+          { name: 'A · i — Blue wash', variant: 1 },
+          { name: 'A · ii — Rose wash', variant: 2 },
+          { name: 'A · iii — Duotone', variant: 3 }
+        ],
+        rows: { key: 'sat', label: 'Saturation', values: [0.16, 0.34, 0.52, 0.72], digits: 2 },
+        cols: { key: 'freq', label: 'Field freq.', values: [10, 22, 38, 56], digits: 0 }
+      },
+      {
+        host: 'sheet-grating',
+        blocks: [
+          { name: 'B · i — The sweep', variant: 4 },
+          { name: 'B · ii — The pool', variant: 5 },
+          { name: 'B · iii — The blade', variant: 6 }
+        ],
+        rows: { key: 'weight', label: 'Line weight', values: [0.15, 0.35, 0.55, 0.75, 0.95], digits: 2 },
+        cols: { key: 'count', label: 'Line count', values: [0.3, 0.6, 1.0, 1.5, 2.2], digits: 2 }
+      }
+    ];
+
+    function fmt(v, digits) {
+      return digits === 0 ? String(Math.round(v)) : v.toFixed(digits);
+    }
+
+    function sheetTile(variant, rowKey, rowVal, colKey, colVal, rows, cols) {
+      var host = document.createElement('div');
+      host.className = 'tile-card';
+      host.setAttribute('data-foil-host', '');
+      host.setAttribute('data-sheet', '');
+      host.setAttribute('data-strip', String(variant));
+      host.setAttribute('data-p-' + rowKey, String(rowVal));
+      host.setAttribute('data-p-' + colKey, String(colVal));
+      host.title =
+        rows.label + ' ' + fmt(rowVal, rows.digits) + ' · ' + cols.label + ' ' + fmt(colVal, cols.digits);
+      /* every tile carries the SAME seed: the hologram's field is seeded per
+         card, and a different seed per tile would show up as a difference the
+         axes did not cause */
+      host.appendChild(cardEl('A', 's', true, 3, 0, false));
+      return host;
+    }
+
+    function buildSheets() {
+      SHEETS.forEach(function (sheet) {
+        var mount = document.getElementById(sheet.host);
+        if (!mount) return;
+        sheet.blocks.forEach(function (block) {
+          var wrap = document.createElement('div');
+          wrap.className = 'sheet-block';
+
+          var h3 = document.createElement('h3');
+          h3.textContent = block.name;
+          var axis = document.createElement('p');
+          axis.className = 'axis';
+          axis.textContent =
+            sheet.rows.label.toLowerCase() + ' down, ' + sheet.cols.label.toLowerCase() + ' across';
+          wrap.appendChild(h3);
+          wrap.appendChild(axis);
+
+          var grid = document.createElement('div');
+          grid.className = 'sheet-grid';
+          grid.style.gridTemplateColumns =
+            'minmax(0, 52px) repeat(' + sheet.cols.values.length + ', minmax(0, 1fr))';
+
+          var corner = document.createElement('div');
+          corner.className = 'corner';
+          corner.textContent = sheet.rows.label + ' ↓';
+          grid.appendChild(corner);
+          sheet.cols.values.forEach(function (cv) {
+            var hd = document.createElement('div');
+            hd.className = 'hdr-col';
+            hd.textContent = fmt(cv, sheet.cols.digits);
+            grid.appendChild(hd);
+          });
+
+          sheet.rows.values.forEach(function (rv) {
+            var hd = document.createElement('div');
+            hd.className = 'hdr-row';
+            hd.textContent = fmt(rv, sheet.rows.digits);
+            grid.appendChild(hd);
+            sheet.cols.values.forEach(function (cv) {
+              grid.appendChild(
+                sheetTile(block.variant, sheet.rows.key, rv, sheet.cols.key, cv, sheet.rows, sheet.cols)
+              );
+            });
+          });
+
+          wrap.appendChild(grid);
+          mount.appendChild(wrap);
+        });
+      });
+    }
+    buildSheets();
+
+    /* ------------------------------------------------------------------
        STATE
        ------------------------------------------------------------------ */
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1412,6 +1617,8 @@
       tiltRange: 0.55,
       lineWeight: 0.6,
       lineCount: 1.0,
+      sat: 0.34,
+      fieldFreq: 22,
       height: 320,
       speed: 0.45,
       lamp: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.3 },
@@ -1480,6 +1687,8 @@
       'uniform vec2 u_clipx;',
       'uniform float u_lineK;',
       'uniform float u_lineFreq;',
+      'uniform float u_sat;',
+      'uniform float u_fieldFreq;',
       'uniform int u_variant;',
       '',
       'float hueTerm(float s, float t, float h) {',
@@ -1600,7 +1809,7 @@
       /* ============ GROUP A · THE HOLOGRAM ============
          polychrome.fs, per-card seed, at a little under half the old spatial
          frequency and roughly half the saturation, over a pale base wash. */
-      '    vec2 cuv = (uv - 0.5) * 22.0;',
+      '    vec2 cuv = (uv - 0.5) * u_fieldFreq;',
       '    float t = u_seed * 2.221 + u_time * 3.4;',
       '    float res = 0.5 + 0.5 * cos(u_seed * 2.612 + (field(cuv, t) - 0.5) * 3.14);',
       '    float hue = res + u_seed * 0.04 + u_time * 0.05;',
@@ -1615,7 +1824,7 @@
       '      wash = vec3(0.871, 0.831, 0.941);',   /* pale lilac */
       '      hue = 0.47 + 0.41 * fract(hue);',     /* clamp to the cyan-magenta arc */
       '    }',
-      '    vec3 iris = hsl2rgb(vec3(hue, 0.34, 0.60));',
+      '    vec3 iris = hsl2rgb(vec3(hue, u_sat, 0.60));',
       '    tint = mix(wash, iris, 0.32 + 0.12 * smoothstep(0.5, 1.0, spec));',
       '    mask = 0.95 * plateMask(uv, 0.10);',
       '    nightAmp = 0.40;',
@@ -1701,7 +1910,7 @@
     var U = {};
     ['u_res', 'u_rect', 'u_light', 'u_lightz', 'u_time', 'u_seed', 'u_fanx', 'u_curve',
      'u_gain', 'u_night', 'u_tilt', 'u_clipx', 'u_variant',
-     'u_lineK', 'u_lineFreq'].forEach(function (name) {
+     'u_lineK', 'u_lineFreq', 'u_sat', 'u_fieldFreq'].forEach(function (name) {
       U[name] = gl.getUniformLocation(prog, name);
     });
 
@@ -1719,6 +1928,15 @@
       });
       if (!cards.length) return;
       var strip = el.getAttribute('data-strip');
+      /* A contact-sheet tile carries its own settings on the element, so one
+         shader and one context can render a hundred different combinations
+         without a hundred copies of the state. Anything absent falls through
+         to the rig. */
+      var params = {};
+      ['weight', 'count', 'sat', 'freq', 'gain'].forEach(function (k) {
+        var raw = el.getAttribute('data-p-' + k);
+        if (raw !== null) params[k] = parseFloat(raw);
+      });
       var cv = document.createElement('canvas');
       cv.className = 'foil-layer';
       cv.setAttribute('aria-hidden', 'true');
@@ -1730,6 +1948,11 @@
         cards: cards,
         fixedVariant: strip === null ? 0 : parseInt(strip, 10),
         pinned: strip !== null,
+        sheet: el.hasAttribute('data-sheet'),
+        params: params,
+        /* every tile starts visible; the observer below corrects it on its
+           first callback, which fires as soon as the host is registered */
+        onScreen: true,
         w: 0,
         h: 0
       });
@@ -1759,11 +1982,52 @@
     sizeAll();
     window.addEventListener('resize', sizeAll);
 
+    /* getBoundingClientRect on every host every frame is a layout read, and
+       the contact sheet pushes the host count past a hundred. An observer
+       keeps the visible set instead, so a frame measures only the handful of
+       tiles actually on screen and the rest cost nothing at all. */
+    if (typeof IntersectionObserver === 'function') {
+      var io = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (e) {
+            for (var k = 0; k < hosts.length; k++) {
+              if (hosts[k].el === e.target) {
+                hosts[k].onScreen = e.isIntersecting;
+                break;
+              }
+            }
+          });
+        },
+        { rootMargin: '200px 0px' }
+      );
+      hosts.forEach(function (h) {
+        io.observe(h.el);
+      });
+    }
+
     /* ------------------------------------------------------------------
        DRAW
        ------------------------------------------------------------------ */
+    /* a tile's own setting, or the rig's if it has none. Named rather than
+       a closure so it is not rebuilt for every host on every frame. */
+    function pick(P, key, fallback) {
+      var v = P[key];
+      return v === undefined || isNaN(v) ? fallback : v;
+    }
+
     var t0 = performance.now();
     var FROZEN_T = 3.2;
+
+    /* How many CONTACT-SHEET tiles may be redrawn in one frame.
+       On a phone a screenful of the sheet is a few dozen tiles, and drawing
+       every one of them every frame is a lot of work for a shimmer nobody is
+       studying frame by frame. The cursor below rotates through the visible
+       ones, so each still updates several times a second and the frame cost
+       stays flat however long the sheet gets. The table, the strips and
+       anything else interactive are exempt — they are what the reader is
+       actually looking at. */
+    var SHEET_TILES_PER_FRAME = 32;
+    var sheetCursor = 0;
     var lampEl = document.getElementById('lamp');
 
     function isNight() {
@@ -1787,17 +2051,33 @@
 
       gl.uniform1f(U.u_time, t);
       gl.uniform1f(U.u_curve, state.curve);
-      gl.uniform1f(U.u_gain, state.gain);
       gl.uniform1f(U.u_night, night);
-      /* weight runs backwards on purpose: the slider reads left-to-right
-         as hairline-to-fat, while k runs the other way */
-      gl.uniform1f(U.u_lineK, 16.0 - 14.0 * state.lineWeight);
-      gl.uniform1f(U.u_lineFreq, state.lineCount);
 
-      for (var i = 0; i < hosts.length; i++) {
-        var h = hosts[i];
+      /* the sheet's share of this frame, taken in rotation from wherever the
+         last frame stopped so no tile is starved */
+      var sheetBudget = SHEET_TILES_PER_FRAME;
+      var drawnSheet = 0;
+      var seenSheet = 0;
+
+      for (var n = 0; n < hosts.length; n++) {
+        var h = hosts[n];
+        if (!h.onScreen) continue;
+        if (h.sheet) {
+          /* rotate: skip tiles until this frame's window, then take a run */
+          var slot = seenSheet++;
+          if (drawnSheet >= sheetBudget) continue;
+          if (slot < sheetCursor) continue;
+          drawnSheet++;
+        }
         var hr = h.canvas.getBoundingClientRect();
         if (hr.bottom < -80 || hr.top > vh + 80 || hr.width === 0) continue;
+
+        var P = h.params;
+        gl.uniform1f(U.u_lineK, 16.0 - 14.0 * pick(P, 'weight', state.lineWeight));
+        gl.uniform1f(U.u_lineFreq, pick(P, 'count', state.lineCount));
+        gl.uniform1f(U.u_sat, pick(P, 'sat', state.sat));
+        gl.uniform1f(U.u_fieldFreq, pick(P, 'freq', state.fieldFreq));
+        gl.uniform1f(U.u_gain, pick(P, 'gain', state.gain));
 
         var cw = h.canvas.width;
         var ch = h.canvas.height;
@@ -1815,7 +2095,26 @@
         /* everything below is in host-local CSS pixels: the foil layer moves
            with its host, so nothing here depends on the scroll offset */
         gl.uniform2f(U.u_res, h.w, h.h);
-        if (h.pinned) {
+        if (h.sheet) {
+          /* Fixed lamp, fixed angle, shared clock. A contact sheet is only
+             worth scrolling if everything except the axis being compared is
+             held still — an orbiting lamp would make two tiles differ for a
+             reason that has nothing to do with their settings.
+
+             The lamp sits CLOSE (z=22 against a ~56px card) and that height
+             is load-bearing rather than taste. Far away, every point on the
+             card sees the light from nearly the same angle, so `spec` lands
+             between 0.98 and 1.0 across the whole tile — which flattens
+             precisely what separates these readings: the sweep's narrow peak
+             and the blade's band both sit at a specific spec value, and at
+             90 they were either fully open everywhere (sweep) or never
+             reached at all (blade, whose rim is centred at 0.885). A near
+             lamp spreads spec across roughly 0.85-1.0, so each gate finds
+             its own shape inside one tile. */
+          gl.uniform2f(U.u_light, h.w * 0.5, h.h * 0.42);
+          gl.uniform1f(U.u_lightz, 22);
+          gl.uniform2f(U.u_tilt, 0, 0);
+        } else if (h.pinned) {
           /* a reference strip lights itself: one lamp per strip, orbiting
              slowly, so each reading demonstrates its own shape whether or
              not the reader is pointing at it */
@@ -1867,6 +2166,10 @@
         h.ctx.clearRect(0, 0, cw, ch);
         h.ctx.drawImage(glc, 0, glc.height - ch, cw, ch, 0, 0, cw, ch);
       }
+
+      /* advance the rotation, wrapping once every visible tile has had a turn */
+      sheetCursor = drawnSheet >= sheetBudget ? sheetCursor + sheetBudget : 0;
+      if (sheetCursor >= seenSheet) sheetCursor = 0;
 
       lampEl.style.left = markX + 'px';
       lampEl.style.top = markY + 'px';
@@ -1935,6 +2238,8 @@
     wireSlider('s-gain', 'v-gain', 'gain', 2);
     wireSlider('s-curve', 'v-curve', 'curve', 2);
     wireSlider('s-tilt', 'v-tilt', 'tiltRange', 2);
+    wireSlider('s-sat', 'v-sat', 'sat', 2);
+    wireSlider('s-freq', 'v-freq', 'fieldFreq', 0);
     wireSlider('s-lineweight', 'v-lineweight', 'lineWeight', 2);
     wireSlider('s-linecount', 'v-linecount', 'lineCount', 2);
     wireSlider('s-height', 'v-height', 'height', 0);
@@ -2133,6 +2438,8 @@
       /* the sliders are shareable too, so a setting can be sent as a link
          rather than described: ?v=6&weight=0.9&count=0.4 */
       [
+        ['sat', 's-sat'],
+        ['freq', 's-freq'],
         ['weight', 's-lineweight'],
         ['count', 's-linecount'],
         ['gain', 's-gain'],
