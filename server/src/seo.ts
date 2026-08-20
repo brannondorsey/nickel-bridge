@@ -152,6 +152,8 @@ export const STATIC_DISALLOW: readonly string[] = [
   // only because its tilt treatment reads deviceorientation, which needs a
   // secure, top-level, same-origin context — see security.ts's SELF_ONLY.
   '/foil-trumps-a-concept.html',
+  // Board B: the same, narrowed to one reading. Same reasoning as above.
+  '/foil-trumps-b-blade.html',
 ];
 
 /**

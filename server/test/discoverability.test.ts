@@ -98,6 +98,7 @@ describe('robots.txt', () => {
       // crawler from FETCHING it, which is the half that costs a machine
       // wake (CLAUDE.md, "Machine time is bought by the request").
       '/foil-trumps-a-concept.html',
+      '/foil-trumps-b-blade.html',
     ]) {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
