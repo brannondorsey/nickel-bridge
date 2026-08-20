@@ -33,7 +33,7 @@ export interface Me {
     doubleTapBid: boolean;
     /** how a completed trick leaves the table (settings: "Trick clearing") — 'auto' times out on its own, 'tap' holds until the trick area is tapped */
     trickClearMode: 'auto' | 'tap';
-    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'suit' is always ♠♥♦♣, 'left' promotes the trump block */
+    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'left' (default) promotes the trump block, 'suit' is always ♠♥♦♣ */
     trumpPlacement: 'suit' | 'left';
     /**
      * Opt in to features still being tried out before a general release —
@@ -742,9 +742,9 @@ export function boardConditions(boardNo: number): { dealer: number; vul: { ns: b
 }
 
 /**
- * The suits, in the order a hand is laid out: ♠ ♥ ♦ ♣ normally, and with the
- * trump suit promoted to the front when the reader has asked for that
- * ("Trump placement · LEFT SIDE", users.trump_placement).
+ * The suits, in the order a hand is laid out: the trump suit promoted to the
+ * front ("Trump placement · LEFT SIDE", users.trump_placement — the default),
+ * or plain ♠ ♥ ♦ ♣ for a reader who has asked for SUIT ORDER instead.
  *
  * The other three keep their relative order behind it rather than rotating —
  * a player reads the fan by colour as much as by glyph, and rotating would
@@ -785,8 +785,8 @@ export function displaySort(hand: number[], trump?: number | null): number[] {
  * other way (0=♠ 1=♥ 2=♦ 3=♣), so the conversion is `3 - strain`; getting
  * that backwards promotes the wrong suit rather than failing, which is why
  * it lives here once instead of at each call site. No-trump has no trump
- * suit, an unsettled auction has no contract, and the default preference
- * leaves every hand in suit order — all three answer null.
+ * suit, an unsettled auction has no contract, and SUIT ORDER leaves every
+ * hand in ♠♥♦♣ — all three answer null.
  */
 export function trumpForDisplay(
   contract: { strain: number } | undefined,

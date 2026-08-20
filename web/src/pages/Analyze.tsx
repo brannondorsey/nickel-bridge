@@ -806,7 +806,9 @@ function ReplayLens({
   // screen for the hand to have moved from — and re-sorting on every step
   // would be a motion that says nothing about the play being reviewed.
   const { me } = useMe();
-  const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'left' ? 'left' : 'suit');
+  // Trump-left is the default, so only an explicit 'suit' opts out of it —
+  // the same fallback Board.tsx reads the preference through.
+  const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left');
   const totalPlies = views.length - 1;
   const flat = useMemo(() => board.playHistory?.flat() ?? [], [board]);
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));

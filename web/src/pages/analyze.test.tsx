@@ -393,7 +393,9 @@ describe('the play lens', () => {
   // other thing strain decides.
   describe('trump placement', () => {
     const heartsBoard = { ...donePlayed, contract: { ...donePlayed.contract!, strain: 2 } };
-    const meLeft: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } };
+    // meFixture is already trump-left — the account default — so the override
+    // is the OTHER end: a reader who has opted back into ♠♥♦♣.
+    const meSuit: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'suit' } };
     /** the suits of a fan, left to right */
     const fanSuits = (fan: Element) =>
       [...fan.querySelectorAll<HTMLElement>('.cardbtn')].map((el) => Math.floor(Number(el.dataset.card) / 13));
@@ -414,8 +416,8 @@ describe('the play lens', () => {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     });
 
-    it('lays the fans and the suit-line rails out trump-first for a reader who asked for it', async () => {
-      await openPlayLens(meLeft);
+    it('lays the fans and the suit-line rails out trump-first by default', async () => {
+      await openPlayLens(meFixture);
       // every fan on the lens — the player's own and the hand across — leads
       // with hearts, and every card is still there
       const fans = [...document.querySelectorAll('.board-fan')];
@@ -439,8 +441,8 @@ describe('the play lens', () => {
       }
     });
 
-    it('leaves them in ♠♥♦♣ for the default preference', async () => {
-      await openPlayLens(meFixture);
+    it('leaves them in ♠♥♦♣ for a reader who asked for suit order', async () => {
+      await openPlayLens(meSuit);
       for (const fan of document.querySelectorAll('.board-fan')) {
         const suits = fanSuits(fan);
         expect(suits).toEqual([...suits].sort((a, b) => a - b));

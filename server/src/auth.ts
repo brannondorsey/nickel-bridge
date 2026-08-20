@@ -310,9 +310,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   out on its own, the shipped behaviour) or 'tap' (holds until the
    *   player taps the trick area).
    * - trumpPlacement — where the trump suit sits in a hand once a trump
-   *   contract is settled: 'suit' (always ♠♥♦♣, the shipped behaviour) or
-   *   'left' (the trump block moves to the front). Client-side ordering
-   *   only — see the trump_placement migration in db.ts.
+   *   contract is settled: 'left' (the trump block moves to the front, the
+   *   default) or 'suit' (always ♠♥♦♣, how every hand was laid out before
+   *   this setting existed). Client-side ordering only — see the
+   *   trump_placement migration in db.ts, and the one below it for why
+   *   existing accounts were moved onto the new default rather than left
+   *   holding the old one.
    *
    * The last two are TEXT enums rather than booleans (each names a MODE, not
    * a yes/no — see their migrations in db.ts), so they live in `enums` below
