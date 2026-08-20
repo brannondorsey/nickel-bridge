@@ -38,7 +38,11 @@ export const meFixture: Me = {
     betaFeatures: true,
     doubleTapBid: false,
     trickClearMode: 'auto',
-    trumpPlacement: 'suit',
+    // Both enums as a real account gets them: 'auto' preserves the pacing
+    // that predates its setting, while 'left' is the placement players asked
+    // for and every account defaults to (see the trump_placement migrations
+    // in server/src/db.ts). A suite that wants ♠♥♦♣ overrides this one.
+    trumpPlacement: 'left',
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,

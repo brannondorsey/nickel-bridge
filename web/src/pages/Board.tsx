@@ -117,10 +117,13 @@ export default function Board() {
   const trickClearMode = me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto';
   // "Trump placement" (settings gate) — 'left' lays every hand on the play
   // screen out with the trump suit first, and animates the re-sort once, as
-  // the auction settles (trumpDraw.ts). Defaults to 'suit', the shipped
-  // ♠♥♦♣; see the trump_placement migration in db.ts. Purely how the cards
-  // are drawn — nothing here reaches the server or changes what is legal.
-  const trumpPlacement = me?.user?.trumpPlacement === 'left' ? 'left' : 'suit';
+  // the auction settles (trumpDraw.ts). It is the DEFAULT, so an absent or
+  // unrecognised value reads as 'left' and only an explicit 'suit' opts back
+  // into ♠♥♦♣ — the opposite fallback to the one this shipped with, and the
+  // reason it is spelled as a test for 'suit'; see the trump_placement
+  // migrations in db.ts. Purely how the cards are drawn — nothing here
+  // reaches the server or changes what is legal.
+  const trumpPlacement = me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left';
 
   const [board, setBoard] = useState<BoardView | null>(null);
   /**
@@ -1103,9 +1106,11 @@ export function PlayPhase({
   onClearTrick?: () => void;
   /**
    * "Trump placement" (users.trump_placement): 'left' lays every hand on this
-   * screen out trump-first. Defaults to 'suit' — the shipped ♠♥♦♣ — so the
-   * tour and Analyze, which mount this component without passing it, are
-   * unaffected exactly as they are by doubleTapBid.
+   * screen out trump-first, and is what the ACCOUNT defaults to — but this
+   * prop still defaults to 'suit', because its one caller that omits it is
+   * the tour, which reads no preference at all (the doubleTapBid precedent)
+   * and teaches on the plain ♠♥♦♣ hand. Board.tsx resolves the real
+   * preference and always passes it.
    */
   trumpPlacement?: 'suit' | 'left';
   /**

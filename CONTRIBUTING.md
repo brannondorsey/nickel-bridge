@@ -2109,11 +2109,30 @@ already settled inside the first trick — which is exactly why it went unnotice
   the response landed, same as `auto` (actually faster, since even `auto`'s timed hold is
   skipped under reduced motion) — which directly contradicts the setting's own purpose for
   exactly the population likeliest to want a manual, unhurried pause.
-- **Trump placement** (`users.trump_placement`, TEXT `'suit'`/`'left'`, default `'suit'`)
-  decides whether a hand always reads ♠♥♦♣ or promotes the trump suit's block to the
-  front once the contract is settled. Repeatedly requested by players, and a genuine
+- **Trump placement** (`users.trump_placement`, TEXT `'left'`/`'suit'`, default `'left'`)
+  decides whether a hand promotes the trump suit's block to the front once the contract
+  is settled or always reads ♠♥♦♣. Repeatedly requested by players, and a genuine
   playing aid rather than decoration — the suit you are counting is the one your eye
-  should land on first. `api.ts`'s `suitDisplayOrder`/`displaySort`/`trumpForDisplay`
+  should land on first, which is why it is the DEFAULT rather than an opt-in.
+  It shipped (#180) defaulting to `'suit'`, preserving prior behaviour like every
+  other row here; a second migration in `db.ts` then made `'left'` the default AND
+  moved existing accounts onto it, since a default nobody holds is a default for
+  future signups only. That migration is the one place in `db.ts` that discards data
+  and the only one whose guard is the schema TEXT rather than a missing column:
+  SQLite cannot re-default a column in place, so it DROPs and re-ADDs it (every
+  existing row re-created at the new default, and every future `INSERT` too, in one
+  transaction) and reads the recorded default back out of `sqlite_master` to know it
+  has already run — unguarded it would re-flip the column on every boot and no player
+  could ever hold `'suit'` again. It cannot tell an account that CHOSE ♠♥♦♣ from one
+  that never opened the settings gate, so it overrides both: a deliberate trade, taken
+  because the column was a week old and the setting is one tap to put back.
+  `server/test/trump-placement-default.test.ts` pins both halves. Note the client reads
+  the preference as `=== 'suit' ? 'suit' : 'left'` — an absent value now falls to
+  `'left'`, the opposite way round from every switch that preserves prior behaviour —
+  and that `PlayPhase`'s own `trumpPlacement` PROP still defaults to `'suit'`, because
+  its one caller that omits it is the tour, which reads no preference at all (the
+  `doubleTapBid` precedent) and teaches on a plain ♠♥♦♣ hand.
+  `api.ts`'s `suitDisplayOrder`/`displaySort`/`trumpForDisplay`
   are the whole of the ordering, in one place, because the fan, a partner's dummy fan,
   the E/W `DummyRail` and Analyze's suit lines all have to agree: a hand that reads
   trump-left in the fan and ♠♥♦♣ in the rail beside it is worse than either alone. The

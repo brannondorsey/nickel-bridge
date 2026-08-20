@@ -249,17 +249,19 @@ if (!userColumns.has('trick_clear_mode')) {
   db.exec(`ALTER TABLE users ADD COLUMN trick_clear_mode TEXT NOT NULL DEFAULT 'auto'`);
 }
 // Migration: `trump_placement` — where the trump suit sits in a hand once a
-// trump contract is settled: 'suit' (the shipped behaviour — every hand reads
-// ♠♥♦♣, always) or 'left' (the trump suit's block moves to the front, the
-// other three keeping their relative order behind it). Asked for repeatedly
-// by players, and it is a real playing aid rather than decoration: the suit
-// you are counting is the one your eye should land on first.
+// trump contract is settled: 'left' (the trump suit's block moves to the
+// front, the other three keeping their relative order behind it) or 'suit'
+// (every hand reads ♠♥♦♣, always). Asked for repeatedly by players, and it
+// is a real playing aid rather than decoration: the suit you are counting is
+// the one your eye should land on first — which is why it now DEFAULTS to
+// 'left' rather than to the ♠♥♦♣ this app laid every hand out in before the
+// setting existed. See the re-default migration immediately below for what
+// that meant for accounts that already existed.
 //
 // TEXT rather than an INTEGER boolean for the same reason as
 // trick_clear_mode above: it names a PLACEMENT, and the two obvious future
 // values ('right', or trump-left-with-alternating-colours) extend this
-// column instead of needing a second one. Defaults to 'suit', preserving
-// prior behaviour for every existing account.
+// column instead of needing a second one.
 //
 // Account state, not localStorage: how someone wants to READ a hand belongs
 // to the person, not the device — and unlike appearance/suit colours there
@@ -269,7 +271,43 @@ if (!userColumns.has('trick_clear_mode')) {
 // cards, scoring or robot play depends on it — two players on the same board
 // with opposite settings still hold identical hands.
 if (!userColumns.has('trump_placement')) {
-  db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'suit'`);
+  db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'left'`);
+}
+
+// Migration: trumps-left becomes the DEFAULT placement, on databases where
+// the column above already exists carrying the old 'suit' default.
+//
+// SQLite cannot re-default a column in place, and the default is only half
+// of what has to move anyway: a default nobody already holds is a default
+// for future signups only, and on a week-old setting that is nearly nobody.
+// Dropping the column and adding it back does both at once — every existing
+// row is re-created holding the new default, and so is every future INSERT
+// that doesn't name the column — atomically, inside one transaction.
+//
+// It cannot tell an account that CHOSE ♠♥♦♣ from one that merely never
+// opened the settings gate, so it overrides both. That is the deliberate
+// trade, taken because the column is one week old (#180), the setting is one
+// tap to put back, and the alternative leaves "the default" describing only
+// accounts that don't exist yet. It is also why this is the one migration in
+// this file that discards data, and why it is written to run exactly once:
+// left unguarded it would re-flip the column on every boot and no player
+// could ever hold 'suit' again.
+//
+// The guard is the schema itself rather than a PRAGMA user_version stamp
+// (see the tournaments.number migration below for why this file avoids
+// those): sqlite_master records the column definition verbatim, so the
+// default in force IS the marker. A fresh database gets 'left' from the
+// block above and skips this one; a database already re-defaulted skips it
+// too, whichever route it took there.
+const usersTableSql =
+  (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'`).get() as
+    | { sql: string }
+    | undefined)?.sql ?? '';
+if (!/trump_placement TEXT NOT NULL DEFAULT 'left'/.test(usersTableSql)) {
+  db.transaction(() => {
+    db.exec(`ALTER TABLE users DROP COLUMN trump_placement`);
+    db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'left'`);
+  })();
 }
 
 // Migration: `beta_features` — opt in to features still being tried out
@@ -509,7 +547,7 @@ export interface UserRow {
   double_tap_bid: number;
   /** how a completed trick leaves the table: 'auto' (default, times out on its own) or 'tap' (holds until the player taps the trick area) */
   trick_clear_mode: 'auto' | 'tap';
-  /** where the trump suit sits in a hand once a trump contract is settled: 'suit' (default, always ♠♥♦♣) or 'left' (trump block first) */
+  /** where the trump suit sits in a hand once a trump contract is settled: 'left' (default, trump block first) or 'suit' (always ♠♥♦♣) */
   trump_placement: 'suit' | 'left';
   elo: number;
   created_at: number;
