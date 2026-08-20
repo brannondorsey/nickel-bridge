@@ -214,13 +214,18 @@
     pointer-events: none;
     mix-blend-mode: multiply;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .foil-layer { mix-blend-mode: screen; }
-  }
-  :root[data-theme="dark"] .foil-layer { mix-blend-mode: screen; }
-  /* the board's own lever wins over both, in both directions */
+  /* The blend and the SHADER have to agree about which stock this is, and
+     the first pass let them disagree. The night overrides were written as
+     `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`,
+     which outranks `body[data-plate="day"]` on specificity — so a phone in
+     OS dark mode with the lever on DAY drew the day image (built around
+     WHITE, for multiply) and then SCREENED it, which cannot darken: the
+     card, the pips and the rank all blew out to near-white together. It
+     read as "the shader is wrong for light" and it was the CSS.
+     So the attribute is the only thing consulted here, and `resolvePlate`
+     below guarantees it is always set to a real value — AUTO is resolved in
+     script rather than by a second, competing rule. */
   body[data-plate="night"] .foil-layer { mix-blend-mode: screen; }
-  body[data-plate="day"] .foil-layer { mix-blend-mode: multiply; }
   body[data-foil-ok="0"] .foil-layer { display: none; }
 
   /* ---- the gallery ---- */
@@ -331,6 +336,26 @@
       so nothing on the page can go dark at any angle — the blade keeps a visible bright edge,
       but its dark side is now a lit sheen rather than bare paper.
     </p>
+    <p>
+      <strong>The twist is now rate-limited, which it badly needed.</strong> The first pass
+      pushed the grain through some twenty stripe periods across a wrist's worth of rotation, so
+      a small tilt strobed. A full sweep of the phone now travels the pattern a little under one
+      period, and on top of that the tilt reading is capped at a fixed distance per second: no
+      matter how hard the phone is moved, the shine crosses the hand at walking pace and gets
+      there a moment after you do. The ambient drift with the phone held still was slowed to
+      match.
+    </p>
+    <p>
+      <strong>The lever is the only thing that decides which stock this is.</strong> That
+      sentence was untrue until now, and it is what the last round of screenshots caught: the
+      night blend rule was written against <code>prefers-color-scheme</code>, which outranks the
+      DAY lever on specificity. A phone in OS dark mode with the lever on DAY therefore drew the
+      day plate — built around white, for <code>multiply</code> — and then <em>screened</em> it,
+      and screen cannot darken: card, pips and rank blew out to near-white together. It read as
+      the shader being wrong for light, and it was one CSS selector. AUTO is resolved in script
+      now and written back to the attribute, so the tokens, the blend and the shader all read
+      one answer. §4's readout names it.
+    </p>
   </section>
 
   <!-- ==================== §2 ==================== -->
@@ -436,15 +461,21 @@
     <div class="sec-head"><span class="rule-no">§ 4</span><h2>The tilt</h2></div>
     <p>
       Set INPUT to DEVICE. The first reading is the rest pose — hold the phone however is
-      comfortable and that becomes centre. From there, twisting rotates the rules by up to about
-      twenty degrees and slides them roughly a card's width. <strong>Nothing dims.</strong>
+      comfortable and that becomes centre. From there, twisting rotates the rules by about
+      sixteen degrees and slides them roughly a card's width. <strong>Nothing dims.</strong>
       Every card on this page is lit at every angle; what the phone changes is which way the
       grain runs.
     </p>
     <p>
-      Smoothing is a 190&nbsp;ms time constant, derived per frame from real elapsed time so it
-      filters the same at 30, 60 and 120&nbsp;Hz. The shine is a derivative of the angle, so
-      tremor invisible in the phone's position is very visible in the light without it.
+      Two separate things keep it slow, and the first one alone was not enough. Smoothing is a
+      420&nbsp;ms time constant, derived per frame from real elapsed time so it filters the same
+      at 30, 60 and 120&nbsp;Hz — but a time constant bounds <em>lag</em>, not <em>speed</em>:
+      hand it a target a full sweep away and its first frame still moves four per cent of that,
+      which at 60&nbsp;Hz is a shine crossing the hand in a fifth of a second. So the step is
+      also capped at 0.75 of the tilt range per second. Gentle movement is governed by the
+      filter alone and feels immediate; a flick is governed by the cap and takes about two
+      seconds to arrive. The cap sits on the smoothed value, never on the raw reading, so it
+      cannot build a backlog it then has to sprint through.
     </p>
     <div class="diag" id="diag" aria-live="polite"></div>
     <p class="aside" style="margin-top: 14px">
@@ -714,6 +745,25 @@
       'uniform float u_night;',
       'uniform int u_palette;',
       '',
+      /* HOW FAR THE TWIST TRAVELS. These four are the whole answer to "the
+         shine moves at a very high frequency if I tilt even a little", and
+         the offender was TILT_PHASE, which used to be 90. u_tilt.y runs
+         +/-0.8 at the default range, so 90 pushed the grain through +/-72
+         radians — about 23 full stripe periods across a wrist's worth of
+         rotation, i.e. a strobe. At 7.5 the same rotation moves the stripes
+         through slightly under ONE period: the pattern visibly answers the
+         phone without ever racing it. TILT_SLIDE (pixels the bright band
+         travels) and TILT_ANGLE (radians the grain rotates) were already
+         gentle and are trimmed for company; DRIFT is the ambient crawl with
+         the phone held still, which is now slow enough to read as breathing
+         rather than as scrolling. The frame loop clamps the RATE on top of
+         this — see TILT_MAX_RATE — because a small gain still snaps if the
+         input jumps. */
+      'const float TILT_PHASE = 7.5;',
+      'const float TILT_SLIDE = 48.0;',
+      'const float TILT_ANGLE = 0.28;',
+      'const float DRIFT = 2.2;',
+      '',
       'float hueTerm(float s, float t, float h) {',
       '  float hs = mod(h, 1.0) * 6.0;',
       '  if (hs < 1.0) return (t - s) * hs + s;',
@@ -767,19 +817,19 @@
       /* The grain. Its ANGLE and PHASE are what the phone moves — with one
          normal per card, tilting can no longer light one card more than its
          neighbour, so brightness is the wrong thing to hand the sensor. */
-      '  float ang = 0.9 + u_tilt.x * 0.45;',
+      '  float ang = 0.9 + u_tilt.x * TILT_ANGLE;',
       '  vec2 dir = vec2(cos(ang), sin(ang));',
       '  float d = dot(px, dir);',
-      '  float phase = u_tilt.y * 90.0 + u_time * 6.0;',
+      '  float phase = u_tilt.y * TILT_PHASE + u_time * DRIFT;',
       '  float lines = rule(d * u_lineFreq + phase, u_lineK);',
       '',
       /* The edge: one broad band, its width the lamp's apparent size and
          its position the lamp projected onto the grain's own axis. The
          floor is what keeps the dark side lit at every angle. */
-      '  float band = exp(-pow((d - dot(u_light, dir) - u_tilt.y * 70.0) / u_size, 2.0));',
+      '  float band = exp(-pow((d - dot(u_light, dir) - u_tilt.y * TILT_SLIDE) / u_size, 2.0));',
       '  float lit = u_floor + (1.0 - u_floor) * band;',
       '',
-      '  float t = 0.5 + 0.5 * sin(d * 0.012 + u_time * 0.5) + lines * 0.5 + u_tilt.x * 0.12;',
+      '  float t = 0.5 + 0.5 * sin(d * 0.012 + u_time * 0.22) + lines * 0.5 + u_tilt.x * 0.12;',
       '  vec3 tint = palette(t);',
       /* Day and night need very different amounts of the same tint, and
          this is where board A got it wrong in the other direction. Under
@@ -893,9 +943,22 @@
        a derivative of the angle — so it is filtered as a TIME constant,
        with alpha derived per frame from real elapsed time rather than a
        fixed per-frame blend that would bite twice as hard at 120Hz. */
-    var TILT_TAU_MS = 190;
+    var TILT_TAU_MS = 420;
     var LAMP_TAU_MS = 150;
+    /* A time constant alone does not bound SPEED — it bounds lag. Hand the
+       filter a target 1.6 units away (a phone flicked from flat to upright)
+       and the first frame still moves ~4% of that, which at 60Hz is a shine
+       crossing the hand in a fifth of a second. So the step is also capped
+       at a fixed distance per second: however violently the phone is moved,
+       the pattern travels at walking pace and arrives a moment later. The
+       cap is on the smoothed value rather than the raw reading, so it can
+       never accumulate a backlog it then has to sprint through. */
+    var TILT_MAX_RATE = 0.75;
     var GALLERY_TILES_PER_FRAME = 28;
+
+    function clampStep(step, cap) {
+      return step > cap ? cap : (step < -cap ? -cap : step);
+    }
 
     function pick(P, key, fallback) {
       var v = P[key];
@@ -908,13 +971,7 @@
     var FROZEN_T = 3.2;
 
     function isNight() {
-      var plate = document.body.getAttribute('data-plate');
-      if (plate === 'night') return 1;
-      if (plate === 'day') return 0;
-      var host = document.documentElement.getAttribute('data-theme');
-      if (host === 'dark') return 1;
-      if (host === 'light') return 0;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 1 : 0;
+      return document.body.getAttribute('data-plate') === 'night' ? 1 : 0;
     }
 
     gl.enable(gl.SCISSOR_TEST);
@@ -924,8 +981,9 @@
       lastFrame = now;
       var aT = 1 - Math.exp(-dt / TILT_TAU_MS);
       var aL = 1 - Math.exp(-dt / LAMP_TAU_MS);
-      state.tilt.x += (state.tiltTarget.x - state.tilt.x) * aT;
-      state.tilt.y += (state.tiltTarget.y - state.tilt.y) * aT;
+      var cap = TILT_MAX_RATE * dt / 1000;
+      state.tilt.x += clampStep((state.tiltTarget.x - state.tilt.x) * aT, cap);
+      state.tilt.y += clampStep((state.tiltTarget.y - state.tilt.y) * aT, cap);
       if (state.lampPlaced) {
         state.lamp.x += (state.lampTarget.x - state.lamp.x) * aL;
         state.lamp.y += (state.lampTarget.y - state.lamp.y) * aL;
@@ -1027,16 +1085,30 @@
         onPick(v);
       });
     }
+    /* AUTO used to mean "take the attribute off and let the media query
+       decide", which put TWO rules in charge of one question and let them
+       answer it differently for the tokens and for the blend mode. It now
+       means "resolve it here, once, and write the answer down": every other
+       consumer — the token blocks, the .foil-layer blend, isNight() — reads
+       the same attribute, so they cannot disagree. */
+    var plateChoice = 'auto';
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    function resolvePlate() {
+      var resolved = plateChoice === 'auto'
+        ? (darkQuery.matches ? 'night' : 'day')
+        : plateChoice;
+      document.body.setAttribute('data-plate', resolved);
+    }
+    resolvePlate();
+    darkQuery.addEventListener('change', resolvePlate);
+
     wireLever('lever-pal', 'p', function (v) { state.palette = parseInt(v, 10); });
     wireLever('lever-input', 'i', function (v) {
       state.input = v;
       if (v === 'device') startTilt();
       if (v === 'placed') state.tiltTarget.x = state.tiltTarget.y = 0;
     });
-    wireLever('lever-plate', 's', function (v) {
-      if (v === 'auto') document.body.removeAttribute('data-plate');
-      else document.body.setAttribute('data-plate', v);
-    });
+    wireLever('lever-plate', 's', function (v) { plateChoice = v; resolvePlate(); });
     wireLever('lever-motion', 'm', function (v) { state.motion = parseInt(v, 10); });
 
     function wireSlider(id, valId, key, digits) {
@@ -1145,7 +1217,9 @@
         ['Orientation API', window.DeviceOrientationEvent ? 'present' : 'missing'],
         ['Readings received', String(samples)],
         ['Status', diagNote],
-        ['Tilt now', state.tilt.x.toFixed(2) + ', ' + state.tilt.y.toFixed(2)]
+        ['Tilt now', state.tilt.x.toFixed(2) + ', ' + state.tilt.y.toFixed(2)],
+        ['Stock / blend', document.body.getAttribute('data-plate') + ' · ' +
+          getComputedStyle(document.querySelector('.foil-layer') || document.body).mixBlendMode]
       ];
       diagEl.innerHTML = rows.map(function (r) {
         return '<div class="diag-row"><span class="label quiet">' + r[0] +
@@ -1163,7 +1237,8 @@
       if (pal && /^[0-3]$/.test(pal)) { state.palette = parseInt(pal, 10); setPressed('lever-pal', 'p', pal); }
       var plate = q.get('plate');
       if (plate === 'day' || plate === 'night') {
-        document.body.setAttribute('data-plate', plate);
+        plateChoice = plate;
+        resolvePlate();
         setPressed('lever-plate', 's', plate);
       }
       var m = q.get('motion');
