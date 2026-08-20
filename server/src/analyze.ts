@@ -105,14 +105,35 @@ export const ANALYZE_K = 8;
  * too quiet on boards with real, findable mistakes (lower it); re-run the
  * two scripts above and record the date and n when you do.
  *
- * STALE CAVEAT on the excusal figures above (not on the floor itself): that
- * sweep ran while stage 3 excused only `deficit <= 0`. sampleFindability now
- * also excuses a candidate whose sampled pick isn't DD-optimal, so the real
- * excusal rate is higher than 21.9% and the 486-board "ceiling" is an upper
- * bound rather than today's figure. The floor is a matchpoint-SIZE gate and
- * the excusal a findability gate — orthogonal, which is why 5 was left alone
- * rather than re-guessed — but re-run the pair before quoting these numbers
- * or moving the floor on them.
+ * RE-MEASURED 2026-08-20, after sampleFindability gained its second excusal
+ * (the engine's own pick must actually recover the loss). Same two scripts,
+ * n=1575 human-owned finished boards — a larger population than the 1237
+ * above, so read the counts as a fresh sample rather than a diff of the old
+ * one. 945 boards carried at least one real DD-loss candidate, 1645
+ * candidates in all, and stage 3 disposed of them in the order it applies:
+ *
+ *   362 (22.0%)  the engine would have played the card itself (deficit <= 0)
+ *   127 ( 7.7%)  the engine disagreed but its own pick recovers nothing
+ *  1156 (70.3%)  genuinely chargeable and findable
+ *
+ * That first figure landing on 22.0% against the older sweep's 21.9% is the
+ * useful cross-check: the reimplementation in calibrate_moment_floor.mjs is
+ * still faithful to computeCore, so the 7.7% is a real second population and
+ * not the first one re-counted.
+ *
+ * Effect at the shipped floor: 586 of the 945 graded boards (62.0%) show a
+ * moment, where the old rule showed one on 637 (67.4%) — 51 boards, 5.4
+ * points, that now come back clean because every moment they had was a card
+ * nobody could have found. Against ALL 1575 boards that is 37.2% with
+ * something to say, down from 40.4%. Roughly a tenth of all moments shown
+ * were retired (mean 1.06 -> 0.95 per graded board).
+ *
+ * THE FLOOR ITSELF DID NOT MOVE, and the sweep says it should not: counts are
+ * identical at floors 2, 3, 4 and 5 under both rules, easing only at 6 — the
+ * same flat band the 2026-08-13 sweep found, so 5 remains the cleanest round
+ * number inside it. The two gates stay orthogonal (matchpoint SIZE vs
+ * findability), which is why tightening one left the other where it was.
+ * No ANALYZE_VERSION bump for this note: nothing here changes output.
  */
 export const MOMENT_FLOOR = 5;
 

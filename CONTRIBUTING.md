@@ -1231,6 +1231,21 @@ was no coverage or meaningful compute reason to sit above it. `MOMENT_FLOOR` is 
 cleanest round number inside the flat 2-5 band; re-run both scripts and record a fresh date + n
 if the population's field sizes or mistake rate drift.
 
+**Re-measured 2026-08-20**, once stage 3 gained its second excusal (the engine's own pick must
+recover the loss — see "Analyze" above). `calibrate_moment_floor.mjs` now sweeps BOTH rules side
+by side off one `scoreCardsSampled` draw per candidate, so the gap between them is the rule and
+not sampling noise; the old column is kept as a baseline, never as something production can
+select. n=1575 boards (a larger population than the 1237 above, so these are a fresh sample
+rather than a diff): 945 boards carried a real DD-loss candidate, 1645 candidates in all, of
+which 362 (22.0%) were excused because the engine would have played the card itself, 127 (7.7%)
+because its own pick recovers nothing, and 1156 (70.3%) were genuinely chargeable. **That 22.0%
+against the earlier 21.9% is the cross-check** — the reimplementation is still faithful, so the
+7.7% is a real second population rather than the first re-counted. At the shipped floor the new
+rule shows a moment on 586 of the 945 graded boards (62.0%) where the old showed one on 637
+(67.4%): 51 boards, 5.4 points, now come back clean, and about a tenth of all moments shown were
+retired. The floor itself did not move and should not — counts are identical at floors 2-5 under
+both rules, the same flat band as before.
+
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
 the overview: a `PLAY FROM HERE →` action beside WHERE IT TURNED's existing `WATCH IT`
