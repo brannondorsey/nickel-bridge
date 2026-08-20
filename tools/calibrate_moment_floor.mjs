@@ -34,8 +34,24 @@
  * already scored against its real field (house personas included) — not a
  * synthetic deal. A "moment" at floor F is a ply where mpCost >= F (or,
  * on the rare single-field board, ddLoss >= 1 — the same fallback gate
- * computeCore uses) AND the sampled engine's own deficit is positive (a
- * genuine, findable fault, never an excused double-dummy-only insight).
+ * computeCore uses) AND stage 3 finds a genuine, findable fault.
+ *
+ * TWO STAGE-3 RULES ARE SWEPT SIDE BY SIDE, over the same candidates and the
+ * same sampled draw:
+ *
+ *   OLD — the sampled engine merely DISAGREED with the card played
+ *         (deficit > 0). This is what shipped until the excusal below.
+ *   NEW — and the engine's own pick is DD-optimal at that node, i.e. it
+ *         actually recovers the trick stage 1 is charging for. This is what
+ *         sampleFindability ships today.
+ *
+ * The old column is not a setting production can choose; it is kept so the
+ * cost of that tightening stays a measured number rather than an assertion.
+ * Because both verdicts come off one scoreCardsSampled call per candidate,
+ * the difference between the columns is purely the rule — not sampling
+ * noise between two runs. The extra true-deal solve the new rule needs is
+ * paid only on candidates that clear the free deficit test, matching
+ * sampleFindability's own ordering, so the cost here mirrors production's.
  *
  * Usage (after `npm run build`):
  *   node .claude/skills/player-outreach/scripts/analyze_trace.mjs "$SCRATCH/analyze-trace.json"
@@ -127,7 +143,20 @@ async function candidatesFor(b) {
     const played = b.plays[ply];
     const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(played) ?? 0)) / ANALYZE_K;
 
-    candidates.push({ ddLoss, mpCost, deficit, singleField });
+    // Stage 3's SECOND excusal: does the sampled engine's own pick actually
+    // recover the trick stage 1 is charging for? Only meaningful once the
+    // free deficit test has passed, and ordered after it exactly as
+    // sampleFindability orders them, so the extra true-deal solve is paid
+    // on the same candidates production pays it on. Both verdicts come off
+    // ONE sampled draw, which is what makes the old-vs-new comparison below
+    // a like-for-like measurement rather than two independent sweeps.
+    let ddOptimalBest = false;
+    if (deficit > 0) {
+      const solve = await ai.solveFutureTricks(deal, contract, prefix, 'background');
+      ddOptimalBest = (solve.cardScores.get(bestCard) ?? -1) === solve.bestScore;
+    }
+
+    candidates.push({ ddLoss, mpCost, deficit, ddOptimalBest, singleField });
   }
   return candidates;
 }
@@ -158,32 +187,63 @@ for (const b of trace.boards) {
 
 // ---- sweep floors -----------------------------------------------------
 const graded = perBoard.filter((cs) => !cs[0].singleField); // singleField boards never surface a moment regardless of floor (mpCost stays null) — see analyze.ts's assembleMoments
+// Two stage-3 rules, swept side by side over the SAME candidates:
+//   OLD — the engine merely DISAGREED with the card played (deficit > 0).
+//   NEW — and its own pick actually recovers the loss (ddOptimalBest), the
+//         rule sampleFindability ships today.
+// The old column is kept so the cost of that tightening stays measurable
+// rather than asserted; it is not a configuration production can select.
+const overFloor = (c, floor) => c.mpCost !== null && c.mpCost >= floor;
 const results = [];
 for (const floor of FLOORS) {
-  const momentsPerBoard = graded.map(
-    (cs) => cs.filter((c) => c.deficit > 0 && c.mpCost !== null && c.mpCost >= floor).length,
-  );
-  const boardsWithAMoment = momentsPerBoard.filter((n) => n > 0).length;
+  const oldPerBoard = graded.map((cs) => cs.filter((c) => c.deficit > 0 && overFloor(c, floor)).length);
+  const newPerBoard = graded.map((cs) => cs.filter((c) => c.deficit > 0 && c.ddOptimalBest && overFloor(c, floor)).length);
+  const boardsOld = oldPerBoard.filter((n) => n > 0).length;
+  const boardsWithAMoment = newPerBoard.filter((n) => n > 0).length;
   results.push({
     floor,
+    boardsOld,
+    pctOld: (100 * boardsOld) / graded.length,
     boardsWithAMoment,
     pctWithAMoment: (100 * boardsWithAMoment) / graded.length,
-    meanMoments: mean(momentsPerBoard),
-    medianMomentsAmongShown: median(momentsPerBoard.filter((n) => n > 0)),
+    meanMomentsOld: mean(oldPerBoard),
+    meanMoments: mean(newPerBoard),
+    medianMomentsAmongShown: median(newPerBoard.filter((n) => n > 0)),
   });
 }
 
 // ---- report -----------------------------------------------------------
 const totalCandidates = perBoard.reduce((s, cs) => s + cs.length, 0);
-const excused = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit <= 0).length, 0);
+const excusedDeficit = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit <= 0).length, 0);
+const excusedDead = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit > 0 && !c.ddOptimalBest).length, 0);
+const chargeable = totalCandidates - excusedDeficit - excusedDead;
 console.log(`\n${trace.boards.length} human-owned finished boards captured ${trace.capturedOn}`);
 console.log(`  ${boardsPassedOut} passed out, ${singleFieldBoards} single-field, ${boardsWithNoDdLoss} with zero real DD-loss candidates`);
-console.log(`  ${perBoard.length} boards had >=1 DD-loss candidate (${totalCandidates} candidates total, ${excused} excused as unfindable — ${((100 * excused) / totalCandidates).toFixed(1)}%)`);
+console.log(`  ${perBoard.length} boards had >=1 DD-loss candidate (${totalCandidates} candidates total)`);
+console.log(`  stage 3 excusals, in the order sampleFindability applies them:`);
+console.log(
+  `    ${excusedDeficit} (${((100 * excusedDeficit) / totalCandidates).toFixed(1)}%) the engine would have played the card itself (deficit <= 0)`,
+);
+console.log(
+  `    ${excusedDead} (${((100 * excusedDead) / totalCandidates).toFixed(1)}%) the engine disagreed but its own pick does NOT recover the loss`,
+);
+console.log(`    ${chargeable} (${((100 * chargeable) / totalCandidates).toFixed(1)}%) genuinely chargeable and findable`);
 console.log(`  ${graded.length} of those boards had a real (non-single-field) field to grade against — the floor sweep below is over these`);
-console.log(`\n floor | boards w/ a moment | % of graded boards | mean moments/board | median moments (when >0)`);
+console.log(`\n       |            OLD rule (disagreed only) |            NEW rule (must recover)   |`);
+console.log(` floor | boards |      % | mean/board | boards |      % | mean/board | median (>0)`);
 for (const r of results) {
   console.log(
-    `${String(r.floor).padStart(6)} | ${String(r.boardsWithAMoment).padStart(19)} | ${r.pctWithAMoment.toFixed(1).padStart(18)}% | ${r.meanMoments.toFixed(2).padStart(18)} | ${r.medianMomentsAmongShown.toFixed(1).padStart(24)}`,
+    `${String(r.floor).padStart(6)} | ${String(r.boardsOld).padStart(6)} | ${r.pctOld.toFixed(1).padStart(5)}% | ${r.meanMomentsOld.toFixed(2).padStart(10)} | ` +
+      `${String(r.boardsWithAMoment).padStart(6)} | ${r.pctWithAMoment.toFixed(1).padStart(5)}% | ${r.meanMoments.toFixed(2).padStart(10)} | ${r.medianMomentsAmongShown.toFixed(1).padStart(11)}`,
+  );
+}
+const atShipped = results.find((r) => r.floor === MOMENT_FLOOR);
+if (atShipped) {
+  console.log(
+    `\nAt the shipped MOMENT_FLOOR=${MOMENT_FLOOR}: ${atShipped.boardsOld} boards would have shown a moment under the OLD rule, ` +
+      `${atShipped.boardsWithAMoment} under the NEW one` +
+      ` — ${(atShipped.pctOld - atShipped.pctWithAMoment).toFixed(1)} percentage points of graded boards ` +
+      `(${atShipped.boardsOld - atShipped.boardsWithAMoment} boards) lose every moment they had, as false accusations.`,
   );
 }
 console.log(
