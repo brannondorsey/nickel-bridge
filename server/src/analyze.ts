@@ -106,27 +106,38 @@ export const ANALYZE_K = 8;
  * two scripts above and record the date and n when you do.
  *
  * RE-MEASURED 2026-08-20, after sampleFindability gained its second excusal
- * (the engine's own pick must actually recover the loss). Same two scripts,
- * n=1575 human-owned finished boards — a larger population than the 1237
- * above, so read the counts as a fresh sample rather than a diff of the old
- * one. 945 boards carried at least one real DD-loss candidate, 1645
- * candidates in all, and stage 3 disposed of them in the order it applies:
+ * (nothing the engine rated top recovers the loss). Same two scripts, and
+ * calibrate_moment_floor.mjs now sweeps the OLD and NEW stage-3 rules side by
+ * side off ONE scoreCardsSampled draw per candidate, so the gap between the
+ * columns is the rule and not sampling noise between two runs.
  *
- *   362 (22.0%)  the engine would have played the card itself (deficit <= 0)
- *   127 ( 7.7%)  the engine disagreed but its own pick recovers nothing
- *  1156 (70.3%)  genuinely chargeable and findable
+ * n=1579 human-owned finished boards — a larger population than the 1237
+ * above, so read these as a fresh sample rather than a diff of the old one.
+ * 26 were passed out and 606 carried no real DD-loss candidate at all, so 947
+ * boards and 1649 candidates reached stage 3, which disposed of them in the
+ * order it applies:
+ *
+ *   363 (22.0%)  the engine would have played the card itself (deficit <= 0)
+ *    93 ( 5.6%)  it disagreed, but nothing it rated top recovers ANY of the loss
+ *     9 ( 0.5%)  ...recovers SOME of it, but not the whole charged loss
+ *  1184 (71.8%)  genuinely chargeable and findable
  *
  * That first figure landing on 22.0% against the older sweep's 21.9% is the
  * useful cross-check: the reimplementation in calibrate_moment_floor.mjs is
- * still faithful to computeCore, so the 7.7% is a real second population and
- * not the first one re-counted.
+ * still faithful to computeCore, so the 6.2% below it is a real second
+ * population and not the first one re-counted. Its two halves are reported
+ * apart because they are different findings — a pick that recovers nothing is
+ * the false accusation this rule was written for, while one that recovers
+ * part of a multi-trick loss was a real if smaller improvement, dropped
+ * because cfScoreNS promises the whole loss back (see sampleFindability).
  *
- * Effect at the shipped floor: 586 of the 945 graded boards (62.0%) show a
- * moment, where the old rule showed one on 637 (67.4%) — 51 boards, 5.4
- * points, that now come back clean because every moment they had was a card
- * nobody could have found. Against ALL 1575 boards that is 37.2% with
- * something to say, down from 40.4%. Roughly a tenth of all moments shown
- * were retired (mean 1.06 -> 0.95 per graded board).
+ * EFFECT AT THE SHIPPED FLOOR, which is the number to quote: 1003 moments
+ * would have been shown under the old rule and 921 are shown under this one —
+ * 8.2% FEWER MOMENTS, 82 retired. Per board, 639 of the 947 graded boards
+ * (67.5%) showed at least one and 594 (62.7%) do now, so 45 boards — 4.8
+ * points — lose every moment they had and come back clean. Against all 1579,
+ * 37.6% have something to say, down from 40.5%. Mean moments per graded board
+ * 1.06 -> 0.97.
  *
  * THE FLOOR ITSELF DID NOT MOVE, and the sweep says it should not: counts are
  * identical at floors 2, 3, 4 and 5 under both rules, easing only at 6 — the
@@ -134,17 +145,6 @@ export const ANALYZE_K = 8;
  * number inside it. The two gates stay orthogonal (matchpoint SIZE vs
  * findability), which is why tightening one left the other where it was.
  * No ANALYZE_VERSION bump for this note: nothing here changes output.
- *
- * ONE CAVEAT ON THOSE COUNTS, and it only ever falls one way. They were taken
- * before sampleFindability started breaking a tie in the sampled totals with
- * the solve rather than with legalCards' order. The new rule excuses a strict
- * SUBSET of what the old one did — a tie the old rule excused is re-charged
- * only when some card the engine liked equally recovers, and a candidate the
- * old rule charged is never newly excused — so 127 (7.7%) is an UPPER bound
- * on today's second excusal, and the 586/62.0% below is a lower bound on the
- * boards that show a moment. Re-run the sweep (it mirrors the tie handling)
- * for exact figures when there is a fresh trace; the floor's flat band is a
- * property of the matchpoint distribution and is not disturbed by either.
  */
 export const MOMENT_FLOOR = 5;
 

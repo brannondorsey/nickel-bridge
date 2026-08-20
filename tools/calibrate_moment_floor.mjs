@@ -216,12 +216,21 @@ for (const floor of FLOORS) {
   const newPerBoard = graded.map((cs) => cs.filter((c) => c.deficit > 0 && c.ddOptimalBest && overFloor(c, floor)).length);
   const boardsOld = oldPerBoard.filter((n) => n > 0).length;
   const boardsWithAMoment = newPerBoard.filter((n) => n > 0).length;
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  const momentsOld = sum(oldPerBoard);
+  const moments = sum(newPerBoard);
   results.push({
     floor,
     boardsOld,
     pctOld: (100 * boardsOld) / graded.length,
     boardsWithAMoment,
     pctWithAMoment: (100 * boardsWithAMoment) / graded.length,
+    // The headline this sweep exists to produce: how much QUIETER the screen
+    // gets. Boards-with-a-moment understates it — a board keeps its row when
+    // one of its three moments is retired — so count the moments themselves.
+    momentsOld,
+    moments,
+    pctMomentsRetired: momentsOld === 0 ? 0 : (100 * (momentsOld - moments)) / momentsOld,
     meanMomentsOld: mean(oldPerBoard),
     meanMoments: mean(newPerBoard),
     medianMomentsAmongShown: median(newPerBoard.filter((n) => n > 0)),
@@ -263,10 +272,14 @@ for (const r of results) {
 const atShipped = results.find((r) => r.floor === MOMENT_FLOOR);
 if (atShipped) {
   console.log(
-    `\nAt the shipped MOMENT_FLOOR=${MOMENT_FLOOR}: ${atShipped.boardsOld} boards would have shown a moment under the OLD rule, ` +
-      `${atShipped.boardsWithAMoment} under the NEW one` +
-      ` — ${(atShipped.pctOld - atShipped.pctWithAMoment).toFixed(1)} percentage points of graded boards ` +
-      `(${atShipped.boardsOld - atShipped.boardsWithAMoment} boards) lose every moment they had, as false accusations.`,
+    `\nAt the shipped MOMENT_FLOOR=${MOMENT_FLOOR}: ${atShipped.momentsOld} moments would have been shown under the OLD rule, ` +
+      `${atShipped.moments} under the NEW one — ${atShipped.pctMomentsRetired.toFixed(1)}% FEWER MOMENTS ` +
+      `(${atShipped.momentsOld - atShipped.moments} retired).`,
+  );
+  console.log(
+    `  Per board: ${atShipped.boardsOld} of ${graded.length} graded boards showed at least one, now ${atShipped.boardsWithAMoment}` +
+      ` — ${(atShipped.pctOld - atShipped.pctWithAMoment).toFixed(1)} points (${atShipped.boardsOld - atShipped.boardsWithAMoment} boards)` +
+      ` lose every moment they had.`,
   );
 }
 console.log(
