@@ -109,6 +109,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('the screen header', () => {
+  it('names the crossing by its DISPLAY number, never the row id in the URL', async () => {
+    // Production's tournament id 126 is the crossing players know as #105 —
+    // two separate sequences (CONTRIBUTING's "the id stays the ADDRESS"). This
+    // header used to interpolate the route param, so it announced "CROSSING
+    // 126" on a board every other screen called #105. The numbers here are
+    // that exact pair, so an accidental return to the id is unmistakable.
+    apiMock.board.mockResolvedValue({ ...donePlayed, tournamentId: 126, tournamentNumber: 105 });
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    renderAnalyze('/t/126/b/2/analyze');
+
+    expect(await screen.findByText('CROSSING 105 — BOARD 2')).toBeInTheDocument();
+    expect(screen.queryByText(/CROSSING 126/)).not.toBeInTheDocument();
+    // the id remains the ADDRESS: fetches and the back link still use it
+    expect(apiMock.analysis).toHaveBeenCalledWith(126, 2, true);
+  });
+});
+
 describe('the moments ledger (THE CROSSING)', () => {
   it('requests par for the crossing lens and renders the charged row, with the overflow counted', async () => {
     apiMock.board.mockResolvedValue(donePlayed);

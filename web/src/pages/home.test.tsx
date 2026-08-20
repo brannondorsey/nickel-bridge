@@ -41,7 +41,10 @@ describe('Home', () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentInProgress, tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
     const row = (await screen.findByText('61%')).closest('a')!;
+    // the row is ADDRESSED by id and NAMED by the display number — the two
+    // differ in the fixture, so a regression to the id would show up here
     expect(row).toHaveAttribute('href', '/t/11');
+    expect(within(row).getByText('8')).toHaveClass('tolls-no');
     expect(within(row).getByText(/· 3 players/)).toBeInTheDocument();
     expect(within(row).getByText('2ND')).toHaveClass('quiet');
   });

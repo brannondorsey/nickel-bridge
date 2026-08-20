@@ -157,6 +157,8 @@ interface Contract {
 export interface BoardView {
   tournamentId: number;
   tournamentName: string;
+  /** the crossing's DISPLAY number; null on a rehearsal/exhibit — see format.ts's tournamentNo */
+  tournamentNumber: number | null;
   boardNo: number;
   totalBoards: number;
   state: 'bidding' | 'playing' | 'done';
@@ -192,7 +194,7 @@ export interface BoardView {
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
   /** present only when this board is a "Play From Here" rehearsal — never scored, see server/src/rehearsal.ts */
-  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
+  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number; originNumber: number | null };
   /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
   originResult?: BoardResult;
   /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
@@ -315,6 +317,8 @@ interface MyBoardSummary {
 export interface TournamentInfo {
   id: number;
   name: string;
+  /** the crossing's DISPLAY number; null on non-standard kinds — see format.ts's tournamentNo */
+  number: number | null;
   myDone?: number;
   createdAt?: number;
   /** unix seconds of my last completed board, null if I've finished none */
@@ -539,6 +543,8 @@ export type ActivityEvent =
       at: number;
       tournamentId: number;
       tournamentName: string;
+      /** display number; null falls back to the id — see format.ts's tournamentNo */
+      tournamentNumber: number | null;
       pct: number;
       rank: number;
       of: number;

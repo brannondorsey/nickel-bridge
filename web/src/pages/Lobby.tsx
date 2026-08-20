@@ -10,7 +10,7 @@ import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { TicketStub } from '../components/ds/TicketStub';
 import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 
-const tourneyNo = (t: TournamentInfo) => tournamentNo(t.name, t.id);
+const tourneyNo = (t: TournamentInfo) => tournamentNo(t.number, t.id);
 
 /**
  * Home ("the bridge is open"): one live crossing at a time. The current

@@ -58,7 +58,7 @@ import { drawDuration } from '../components/game/trumpDraw';
 import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
-import { signedScore, vulLabel } from '../format';
+import { signedScore, tournamentNo, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
@@ -911,8 +911,12 @@ export default function Board() {
  * stamp). A rehearsal (board.rehearsal set) is the ONE thing that changes
  * this screen from an ordinary live board — everything below this header,
  * PlayPhase/BiddingPhase included, is untouched. Two swaps: the name slot
- * reads "REHEARSAL — Board N, from Trick M" instead of the tournament name,
- * and the right-hand slot trades the vulnerability chip for an END action
+ * reads "REHEARSAL — Crossing N, Board M, from Trick T" instead of the
+ * tournament name — naming the ORIGIN's display number, since that is the
+ * crossing being rehearsed and a rehearsal has no number of its own, and the
+ * branch point, since which trick you took the cards at is the whole subject
+ * of the screen — and the right-hand slot trades the vulnerability chip for
+ * an END action
  * (live play has nowhere to go mid-board; a rehearsal does, since leaving
  * loses nothing — it persists, resumable from Analyze's history surfaces).
  */
@@ -924,7 +928,9 @@ function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean })
       <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
       <div className="board-head-mid">
         <div className="board-head-name">
-          {r ? `REHEARSAL — Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}` : board.tournamentName}
+          {r
+            ? `REHEARSAL — Crossing ${tournamentNo(r.originNumber, r.originTournamentId)}, Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}`
+            : board.tournamentName}
         </div>
         <div className="board-head-sub num">
           Dealer {SEAT_SHORT[board.dealer]}

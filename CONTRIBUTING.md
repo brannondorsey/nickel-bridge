@@ -1074,12 +1074,31 @@ human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for th
 converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
 (`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
 insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
-seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
-would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault is DROPPED before the
+response is built,
 not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
 just because an omniscient trace prefers something else, and a well-played board comes back
 with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
-when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
+when this shipped, so every cached analysis recomputes). **"No fault" is TWO tests, and the
+second one is easy to leave out** — `sampleFindability` excuses a candidate when the sampled
+engine would also have played the card (`deficit <= 0`), *and* when nothing the sampled engine
+rated top is DD-optimal at that node. The second is not a refinement of the first: comparing
+the played card against the sampled engine's pick only asks whether the engine DISAGREES, and
+an engine that disagrees while being just as wrong is not evidence of a findable trick. Note
+"rated top" is a TIED SET, not one card off an argmax scan: sampled totals are sums of whole
+tricks over k layouts, so ties are ordinary, and resolving one by `legalCards` order would let
+card ordering decide whether a moment exists at all. The tie is left open for the solve to
+break, so the named card is a card the engine liked *and* one that works.
+Shipped after production tournament id 126 board 1 (5♣ by W) came back with two moments,
+both false — trick 4 charged 100 MP naming ♠K (only ♠6 recovers), trick 10 charged 100 MP
+naming ♣T (only ♥A/♥K recover) — and the player's three "Play From Here" rehearsals of the
+trick-10 advice all returned the identical −400, which is what surfaced it. Costs one extra
+true-deal `solveFutureTricks` per candidate that clears the first test, ordered after it so
+the free check runs first. The payoff beyond fairness: a surviving verdict's `bestCard` is
+now guaranteed to recover the loss, so the play lens's "the engine, from your seat, plays X"
+and the ledger's "worth N% instead of M%" describe the same reachable outcome — before, the
+named card and the promised percentage came from two different engines and could disagree.
+`server/test/analyze.test.ts` pins that exact board, raw-seeded. Stage order is load-bearing: the DD trace is the cheap filter, the
 sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
 counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
 Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
@@ -1107,8 +1126,14 @@ contract). So when `computePar`'s counterfactual auction lands on a contract equ
 your actual play of it — with nothing a different bid could have changed; attributing that
 gap to the bid was a false accusation, not a finding. `computePar` now leaves `cf` null in
 that case, same as when the robot's own preferred call was the one played. This bumped
-`ANALYZE_VERSION` (6): a cached analysis computed before it shipped could carry a
-same-contract bid moment that should never have existed.
+`ANALYZE_VERSION`: a cached analysis computed before it shipped could carry a
+same-contract bid moment that should never have existed. It landed as 6 and went to **7** —
+it and the stage-3 excusal above were written on separate branches and each bumped to 6, so
+merging them had to move past both: a shared version only means anything if it changes
+whenever the output can, and at 6 a cache written by either change alone would have looked
+current to code that is now stricter than it. It is **8** today: the tie-break above changes
+which card a surviving verdict names, and whether a tied candidate survives at all, so it
+falls under the same rule.
 
 The served `momentFloor`
 still backs one honest caption for the residual case backfillDriftedPlies can't close (Analyze.tsx's
@@ -1211,6 +1236,26 @@ excusal was already doing the "don't nag on noise" work well inside that flat ba
 was no coverage or meaningful compute reason to sit above it. `MOMENT_FLOOR` is now 5 — the
 cleanest round number inside the flat 2-5 band; re-run both scripts and record a fresh date + n
 if the population's field sizes or mistake rate drift.
+
+**Re-measured 2026-08-20**, once stage 3 gained its second excusal (nothing the engine rated
+top recovers the loss — see "Analyze" above). `calibrate_moment_floor.mjs` now sweeps BOTH rules
+side by side off one `scoreCardsSampled` draw per candidate, so the gap between them is the rule
+and not sampling noise; the old column is kept as a baseline, never as something production can
+select. n=1579 boards (a larger population than the 1237 above, so these are a fresh sample
+rather than a diff): 26 passed out and 606 carried no real DD-loss candidate, leaving 947 boards
+and 1649 candidates for stage 3, which excused 363 (22.0%) because the engine would have played
+the card itself, 93 (5.6%) because nothing it rated top recovers any of the loss and 9 (0.5%)
+because what it rated top recovers only part of one, leaving 1184 (71.8%) genuinely chargeable.
+**That 22.0% against the earlier 21.9% is the cross-check** — the reimplementation is still
+faithful, so the 6.2% is a real second population rather than the first re-counted.
+
+**The number to quote is 8.2% fewer moments.** At the shipped floor the old rule showed 1003
+moments and this one shows 921 — 82 retired. Per board, 639 of the 947 graded boards (67.5%) had
+at least one and 594 (62.7%) do now, so 45 boards lose every moment they had and come back clean;
+across all 1579 that is 37.6% of boards with something to say, down from 40.5%. Boards-with-a-
+moment understates the change, since a board keeps its row when one of its three moments is
+retired — count the moments themselves. The floor did not move and should not: counts are
+identical at floors 2-5 under both rules, the same flat band as before.
 
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
@@ -1365,9 +1410,27 @@ Bundled, the row and its number commit together or not at all, and "create a cro
 no spelling that skips the numbering. A raw INSERT elsewhere could still bypass it; an
 `AFTER INSERT` trigger is what would make that impossible, and is deliberately not done —
 this codebase has no triggers and an invisible rewrite of a row's name is a poor thing to
-discover. `web/src/format.ts`'s `tournamentNo()` still parses the number back out of `name`
-and needed no change; sending `number` over the API and retiring both client-side regexes is
-the natural follow-up, not done here.
+discover.
+
+**The API sends `number`, and no client re-derives it.** `boardView` (as `tournamentNumber`),
+both `/api/tournaments` routes and the activity feed's crossing events all carry the column,
+and `web/src/format.ts`'s `tournamentNo(number, id)` is the ONE place deciding how a crossing
+is named. It used to regex `#(\d+)` back out of `name`, with a second copy of that regex in
+`pages/activityFeed.ts` — wrong in the direction that fails silently, since any name without a
+`#` fell through to the raw id. Not hypothetical: a rehearsal is named "Rehearsal — Board 1,
+from Trick 10", and `pages/Analyze.tsx`'s header skipped the helper entirely to interpolate the
+route param, so production's crossing **#105 announced itself as "CROSSING 126"** — its row id.
+The id fallback survives only for rows that genuinely carry no number (rehearsal and exhibit
+kinds are NULL by design); a standard crossing reaching it is a `createCrossing` bug, not a
+display case.
+
+A rehearsal has no number of its own, so `boardView`'s `rehearsal` field carries `originNumber`
+— the ORIGIN crossing's display number, since that is the crossing being rehearsed — and
+`BoardHead` renders `REHEARSAL — Crossing N, Board M, from Trick T` — the branch point stays in
+the header, since which trick you took the cards at is the subject of the screen. The web
+fixtures deliberately give that origin id 20 and number 18, so a return to the id cannot pass
+unnoticed, and the `TournamentInfo` fixtures do the same (id 12/11 wearing numbers 9/8) so the
+lobby and tournament surfaces can't pass on the id fallback either.
 
 **`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
 choice.** A count is a re-derivation, so it is stable only while no earlier standard row

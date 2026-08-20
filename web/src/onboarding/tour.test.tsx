@@ -278,6 +278,11 @@ describe('the first crossing (Tour)', () => {
 
       // the tail finishes to the real receipt…
       await screen.findByRole('button', { name: /see the field/i }, { timeout: 15000 });
+      // …postmarked with the practice CROSSING's number, №0 like the board.
+      // The capture predates boardView's `tournamentNumber`, so without
+      // board0.ts stamping it this reads "Nº1" — the capture's row id, on a
+      // newcomer's first receipt (see TOUR_CROSSING_NO).
+      expect(screen.getByText('TOURNAMENT Nº0')).toBeInTheDocument();
       // …whose "Back to lobby" is the tour's own exit, not the live board's
       // <Link to="/"> (which would change the URL and leave the newcomer on
       // this very screen, since the tour renders in place of the routes)

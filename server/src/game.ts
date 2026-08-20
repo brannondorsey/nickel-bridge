@@ -522,6 +522,11 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
   const view: Record<string, unknown> = {
     tournamentId: t.id,
     tournamentName: t.name,
+    // The crossing's DISPLAY number, sent rather than left for the client to
+    // regex back out of `name` — see db.ts's `number` column. NULL on every
+    // non-standard kind (a rehearsal/exhibit wears no crossing number), which
+    // is why the client's tournamentNo() still keeps an id fallback.
+    tournamentNumber: t.number,
     difficulty: boardDifficulty(t, b.row.board_no),
     boardNo: b.row.board_no,
     totalBoards: BOARDS_PER_TOURNAMENT,
@@ -546,6 +551,15 @@ export function boardView(t: TournamentRow, b: GameBoard, viewerElo: number): Re
       originTournamentId: t.origin_tournament_id,
       originBoardNo: t.origin_board_no,
       branchPly: t.branch_ply,
+      // The ORIGIN's display number, because that is the crossing the player
+      // is actually rehearsing — a rehearsal's own `number` is NULL and its
+      // own id is a row address nobody has ever been shown. Without this the
+      // header could only fall back to an id, which is precisely the drift
+      // this field exists to stop. One extra primary-key lookup; the
+      // state === 'done' branch below re-fetches the origin for its own
+      // (heavier) result comparison, which is a different question and only
+      // arises once the board is finished.
+      originNumber: getTournament(t.origin_tournament_id)?.number ?? null,
     };
   }
 
