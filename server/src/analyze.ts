@@ -134,6 +134,17 @@ export const ANALYZE_K = 8;
  * number inside it. The two gates stay orthogonal (matchpoint SIZE vs
  * findability), which is why tightening one left the other where it was.
  * No ANALYZE_VERSION bump for this note: nothing here changes output.
+ *
+ * ONE CAVEAT ON THOSE COUNTS, and it only ever falls one way. They were taken
+ * before sampleFindability started breaking a tie in the sampled totals with
+ * the solve rather than with legalCards' order. The new rule excuses a strict
+ * SUBSET of what the old one did — a tie the old rule excused is re-charged
+ * only when some card the engine liked equally recovers, and a candidate the
+ * old rule charged is never newly excused — so 127 (7.7%) is an UPPER bound
+ * on today's second excusal, and the 586/62.0% below is a lower bound on the
+ * boards that show a moment. Re-run the sweep (it mirrors the tie handling)
+ * for exact figures when there is a fresh trace; the floor's flat band is a
+ * property of the matchpoint distribution and is not disturbed by either.
  */
 export const MOMENT_FLOOR = 5;
 
@@ -161,14 +172,17 @@ export const MAX_MOMENTS = 5;
  * The precondition is that immutability. Anything that ever flips claim_rule
  * on an existing tournament must delete that tournament's board_analyses rows.
  */
-// 7, not 6, and the reason is worth keeping: #184 (bid moments) and the
-// stage-3 excusal below landed on separate branches and BOTH bumped this to
-// 6. Merging them at 6 would leave a cache written by either one alone
-// looking current to code that is now strictly stricter than it — so the
-// analyses #184 wrote would never recompute for the stage-3 change, and vice
-// versa. A shared version number is only meaningful if it moves whenever the
-// output can, which after a merge means past both sides.
-export const ANALYZE_VERSION = 7; // 7: merges 6a (bid moments never fire when the "better" call reaches the identical contract) and 6b (stage 3 also excuses a candidate whose sampled pick doesn't recover the DD loss)
+// It went 6 -> 7 rather than staying at 6, and the reason is worth keeping:
+// #184 (bid moments) and the stage-3 excusal below landed on separate
+// branches and BOTH bumped this to 6. Merging them at 6 would leave a cache
+// written by either one alone looking current to code that is now strictly
+// stricter than it — so the analyses #184 wrote would never recompute for the
+// stage-3 change, and vice versa. A shared version number is only meaningful
+// if it moves whenever the output can, which after a merge means past both
+// sides. 8 is the tie-break refinement that followed in review: it changes
+// which card a surviving verdict names, and whether some candidates survive
+// at all, so the same rule applies to it.
+export const ANALYZE_VERSION = 8; // 8: stage 3 breaks a tie in the sampled totals with the true-deal solve instead of legalCards' order (7 merged 6a — bid moments never fire when the "better" call reaches the identical contract — with 6b, stage 3's excusal of a sampled pick that doesn't recover the DD loss)
 
 export type CardGrade = 0 | 1 | 2 | 3;
 
@@ -216,11 +230,12 @@ export interface PlyAnalysis {
    */
   sampled: {
     /**
-     * The card the sampled engine plays from the player's seat. Guaranteed
-     * DD-optimal at this node — sampleFindability excuses the candidate
-     * outright when its pick doesn't recover the trick — so naming it to
-     * the player as the better card is a claim that holds up when they
-     * replay it ("Play From Here").
+     * What the sampled engine would have played from the player's seat —
+     * specifically, a card it rates top (its own top is often a tie) that is
+     * also DD-optimal at this node. Guaranteed to recover the loss:
+     * sampleFindability excuses the candidate outright when nothing the
+     * engine liked does. So naming it to the player as the better card is a
+     * claim that holds up when they replay it ("Play From Here").
      */
     bestCard: Card;
     /** average tricks the played card gave up across the k sampled layouts */
@@ -491,12 +506,12 @@ function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCo
  *
  *  1. `deficit <= 0` — the sampled engine would have played the card itself.
  *     The original excusal, and the obvious one.
- *  2. The sampled engine's own pick DOESN'T RECOVER THE DD LOSS. This is the
+ *  2. NOTHING THE SAMPLED ENGINE PREFERRED RECOVERS THE DD LOSS. This is the
  *     case that used to slip through and produce false accusations, so it is
  *     worth being precise about. Stage 1 flags a ply because the omniscient
  *     trace says a *different* card was worth a trick; stage 3 is supposed to
  *     ask whether that trick was findable from the player's own seat. But
- *     comparing the played card against the sampled engine's argmax only
+ *     comparing the played card against the sampled engine's pick only
  *     asks whether the engine DISAGREES — and an engine that disagrees while
  *     being just as wrong is not evidence of a findable trick. Measured on
  *     production board 1 of tournament 126 (5♣ by W): at trick 10 South led
@@ -507,9 +522,15 @@ function refreshMatchpointLayer(t: TournamentRow, b: GameBoard, core: AnalysisCo
  *     returned the identical −400. Same board, trick 4: engine picked ♠K,
  *     also DD-worthless, only ♠6 recovers.
  *
+ *     "Preferred" is the tied top of the sampled totals, not one card off an
+ *     argmax scan — see the body. The engine is genuinely indifferent across
+ *     that set, so a trick one of them wins WAS findable from the seat, and
+ *     letting legalCards' order decide which one gets tested would decide
+ *     whether the moment exists at all.
+ *
  * Testing (2) against the true-deal solve is what makes the response's own
  * claim true rather than merely plausible: a surviving verdict's `bestCard`
- * is now guaranteed to be a card that genuinely recovers the loss, so the
+ * is guaranteed to be a card that genuinely recovers the loss, so the
  * play lens's "the engine, from your seat, plays X" and the ledger's
  * "worth N% instead of M%" describe the same reachable outcome. It costs one
  * extra DD solve per candidate that clears (1) — deliberately ordered after
@@ -541,16 +562,28 @@ async function sampleFindability(
     useAuction: true,
     priority: 'background',
   });
-  let bestCard = legal[0];
-  for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
-  const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(p.card) ?? 0)) / ANALYZE_K;
+  // The sampled engine's own preference is a SET, not a card: totals are sums
+  // of whole tricks over k layouts, so ties at the top are ordinary rather
+  // than exotic. Which of them gets named used to fall out of legalCards'
+  // order — fine while any disagreement charged the player, but excusal (2)
+  // below turns that arbitrary pick into the whole verdict, and a moment
+  // would survive or vanish on card order alone. So the tie is kept open
+  // until the solve can break it.
+  const top = Math.max(...legal.map((c) => totals.get(c) ?? 0));
+  const tied = legal.filter((c) => (totals.get(c) ?? 0) === top);
+  const deficit = (top - (totals.get(p.card) ?? 0)) / ANALYZE_K;
   if (deficit <= 0) return null;
 
-  // (2) above — the engine disagreed, but does its pick actually win the
-  // trick stage 1 is charging for? Same true-deal question the DD trace
-  // asked, re-asked about the card we are about to recommend.
+  // (2) above — the engine disagreed, but does anything it was willing to
+  // play actually win the trick stage 1 is charging for? Same true-deal
+  // question the DD trace asked, re-asked about the card we are about to
+  // recommend. Excused when nothing in the tied set recovers; otherwise the
+  // recommendation is the first card that does, so `legal` order still
+  // decides between two cards the engine and DD both like equally (stable,
+  // and it can no longer decide whether the moment exists at all).
   const solve = await solveFutureTricks(deal, contract, prefix, 'background');
-  if ((solve.cardScores.get(bestCard) ?? -1) !== solve.bestScore) return null;
+  const bestCard = tied.find((c) => (solve.cardScores.get(c) ?? -1) === solve.bestScore);
+  if (bestCard === undefined) return null;
 
   return { bestCard, deficit, grade: gradeFromDeficit(deficit) };
 }

@@ -318,7 +318,7 @@ export interface TournamentInfo {
   id: number;
   name: string;
   /** the crossing's DISPLAY number; null on non-standard kinds — see format.ts's tournamentNo */
-  number?: number | null;
+  number: number | null;
   myDone?: number;
   createdAt?: number;
   /** unix seconds of my last completed board, null if I've finished none */

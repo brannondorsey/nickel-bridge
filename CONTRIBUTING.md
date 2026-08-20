@@ -1081,10 +1081,14 @@ just because an omniscient trace prefers something else, and a well-played board
 with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
 when this shipped, so every cached analysis recomputes). **"No fault" is TWO tests, and the
 second one is easy to leave out** — `sampleFindability` excuses a candidate when the sampled
-engine would also have played the card (`deficit <= 0`), *and* when the sampled engine's own
-pick is not DD-optimal at that node. The second is not a refinement of the first: comparing
-the played card against the sampled argmax only asks whether the engine DISAGREES, and an
-engine that disagrees while being just as wrong is not evidence of a findable trick.
+engine would also have played the card (`deficit <= 0`), *and* when nothing the sampled engine
+rated top is DD-optimal at that node. The second is not a refinement of the first: comparing
+the played card against the sampled engine's pick only asks whether the engine DISAGREES, and
+an engine that disagrees while being just as wrong is not evidence of a findable trick. Note
+"rated top" is a TIED SET, not one card off an argmax scan: sampled totals are sums of whole
+tricks over k layouts, so ties are ordinary, and resolving one by `legalCards` order would let
+card ordering decide whether a moment exists at all. The tie is left open for the solve to
+break, so the named card is a card the engine liked *and* one that works.
 Shipped after production tournament id 126 board 1 (5♣ by W) came back with two moments,
 both false — trick 4 charged 100 MP naming ♠K (only ♠6 recovers), trick 10 charged 100 MP
 naming ♣T (only ♥A/♥K recover) — and the player's three "Play From Here" rehearsals of the
@@ -1123,11 +1127,13 @@ your actual play of it — with nothing a different bid could have changed; attr
 gap to the bid was a false accusation, not a finding. `computePar` now leaves `cf` null in
 that case, same as when the robot's own preferred call was the one played. This bumped
 `ANALYZE_VERSION`: a cached analysis computed before it shipped could carry a
-same-contract bid moment that should never have existed. It landed as 6 and is now **7** —
+same-contract bid moment that should never have existed. It landed as 6 and went to **7** —
 it and the stage-3 excusal above were written on separate branches and each bumped to 6, so
 merging them had to move past both: a shared version only means anything if it changes
 whenever the output can, and at 6 a cache written by either change alone would have looked
-current to code that is now stricter than it.
+current to code that is now stricter than it. It is **8** today: the tie-break above changes
+which card a surviving verdict names, and whether a tied candidate survives at all, so it
+falls under the same rule.
 
 The served `momentFloor`
 still backs one honest caption for the residual case backfillDriftedPlies can't close (Analyze.tsx's
@@ -1245,6 +1251,17 @@ rule shows a moment on 586 of the 945 graded boards (62.0%) where the old showed
 (67.4%): 51 boards, 5.4 points, now come back clean, and about a tenth of all moments shown were
 retired. The floor itself did not move and should not — counts are identical at floors 2-5 under
 both rules, the same flat band as before.
+
+**Read those counts as a bound, not a reading of today's rule.** They were taken before stage 3
+started breaking a tie in the sampled totals with the solve instead of `legalCards` order (see
+"Analyze" above). That refinement can only ever excuse FEWER candidates — a tie is re-charged
+only when some card the engine liked equally recovers, and nothing previously charged becomes
+excused — so 7.7% is an upper bound on the second excusal and 62.0% a lower bound on the boards
+that show a moment. The sweep mirrors the tie handling, so a re-run against a fresh trace gives
+exact figures; it also now splits the excused population into picks that recover NOTHING (the
+false accusation this rule was written for) and picks that recover SOME of a multi-trick loss
+(a real but partial improvement, dropped because the ledger's `cfScoreNS` promises the whole
+loss back) — one number for both would quietly overstate how many retired moments were false.
 
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
@@ -1415,8 +1432,11 @@ display case.
 
 A rehearsal has no number of its own, so `boardView`'s `rehearsal` field carries `originNumber`
 — the ORIGIN crossing's display number, since that is the crossing being rehearsed — and
-`BoardHead` renders `REHEARSAL — Crossing N, Board M`. The web fixtures deliberately give that
-origin id 20 and number 18, so a return to the id cannot pass unnoticed.
+`BoardHead` renders `REHEARSAL — Crossing N, Board M, from Trick T` — the branch point stays in
+the header, since which trick you took the cards at is the subject of the screen. The web
+fixtures deliberately give that origin id 20 and number 18, so a return to the id cannot pass
+unnoticed, and the `TournamentInfo` fixtures do the same (id 12/11 wearing numbers 9/8) so the
+lobby and tournament surfaces can't pass on the id fallback either.
 
 **`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
 choice.** A count is a re-derivation, so it is stable only while no earlier standard row

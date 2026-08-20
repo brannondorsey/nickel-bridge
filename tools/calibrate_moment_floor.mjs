@@ -41,9 +41,10 @@
  *
  *   OLD — the sampled engine merely DISAGREED with the card played
  *         (deficit > 0). This is what shipped until the excusal below.
- *   NEW — and the engine's own pick is DD-optimal at that node, i.e. it
- *         actually recovers the trick stage 1 is charging for. This is what
- *         sampleFindability ships today.
+ *   NEW — and something the engine rated top is DD-optimal at that node, i.e.
+ *         actually recovers the trick stage 1 is charging for. Its top is a
+ *         TIED SET, read the way sampleFindability reads it. This is what
+ *         ships today.
  *
  * The old column is not a setting production can choose; it is kept so the
  * cost of that tightening stays a measured number rather than an assertion.
@@ -138,25 +139,40 @@ async function candidatesFor(b) {
       useAuction: true,
       priority: 'background',
     });
-    let bestCard = legal[0];
-    for (const c of legal) if ((totals.get(c) ?? 0) > (totals.get(bestCard) ?? 0)) bestCard = c;
+    // The engine's preference is the TIED top of the sampled totals, exactly
+    // as sampleFindability reads it — see its comment on why the tie is left
+    // open for the solve to break rather than resolved by legalCards' order.
+    const top = Math.max(...legal.map((c) => totals.get(c) ?? 0));
+    const tied = legal.filter((c) => (totals.get(c) ?? 0) === top);
     const played = b.plays[ply];
-    const deficit = ((totals.get(bestCard) ?? 0) - (totals.get(played) ?? 0)) / ANALYZE_K;
+    const deficit = (top - (totals.get(played) ?? 0)) / ANALYZE_K;
 
-    // Stage 3's SECOND excusal: does the sampled engine's own pick actually
-    // recover the trick stage 1 is charging for? Only meaningful once the
-    // free deficit test has passed, and ordered after it exactly as
-    // sampleFindability orders them, so the extra true-deal solve is paid
-    // on the same candidates production pays it on. Both verdicts come off
-    // ONE sampled draw, which is what makes the old-vs-new comparison below
-    // a like-for-like measurement rather than two independent sweeps.
+    // Stage 3's SECOND excusal: does anything the sampled engine was willing
+    // to play actually recover the trick stage 1 is charging for? Only
+    // meaningful once the free deficit test has passed, and ordered after it
+    // exactly as sampleFindability orders them, so the extra true-deal solve
+    // is paid on the same candidates production pays it on. Both verdicts
+    // come off ONE sampled draw, which is what makes the old-vs-new
+    // comparison below a like-for-like measurement rather than two runs.
+    //
+    // `partial` splits the excused population in two, because they are not
+    // the same finding: a pick that recovers NOTHING is the false accusation
+    // this rule was written for, while one that recovers SOME of a multi-trick
+    // loss was a real (if smaller) improvement, dropped because the ledger's
+    // cfScoreNS promises the whole loss back. Reporting them as one number
+    // would let "every retired moment was a false accusation" go unchecked.
     let ddOptimalBest = false;
+    let partial = false;
     if (deficit > 0) {
       const solve = await ai.solveFutureTricks(deal, contract, prefix, 'background');
-      ddOptimalBest = (solve.cardScores.get(bestCard) ?? -1) === solve.bestScore;
+      ddOptimalBest = tied.some((c) => (solve.cardScores.get(c) ?? -1) === solve.bestScore);
+      if (!ddOptimalBest) {
+        const bestTied = Math.max(...tied.map((c) => solve.cardScores.get(c) ?? -1));
+        partial = bestTied > (solve.cardScores.get(played) ?? -1);
+      }
     }
 
-    candidates.push({ ddLoss, mpCost, deficit, ddOptimalBest, singleField });
+    candidates.push({ ddLoss, mpCost, deficit, ddOptimalBest, partial, singleField });
   }
   return candidates;
 }
@@ -215,8 +231,12 @@ for (const floor of FLOORS) {
 // ---- report -----------------------------------------------------------
 const totalCandidates = perBoard.reduce((s, cs) => s + cs.length, 0);
 const excusedDeficit = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit <= 0).length, 0);
-const excusedDead = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit > 0 && !c.ddOptimalBest).length, 0);
-const chargeable = totalCandidates - excusedDeficit - excusedDead;
+const excusedDead = perBoard.reduce(
+  (s, cs) => s + cs.filter((c) => c.deficit > 0 && !c.ddOptimalBest && !c.partial).length,
+  0,
+);
+const excusedPartial = perBoard.reduce((s, cs) => s + cs.filter((c) => c.deficit > 0 && c.partial).length, 0);
+const chargeable = totalCandidates - excusedDeficit - excusedDead - excusedPartial;
 console.log(`\n${trace.boards.length} human-owned finished boards captured ${trace.capturedOn}`);
 console.log(`  ${boardsPassedOut} passed out, ${singleFieldBoards} single-field, ${boardsWithNoDdLoss} with zero real DD-loss candidates`);
 console.log(`  ${perBoard.length} boards had >=1 DD-loss candidate (${totalCandidates} candidates total)`);
@@ -225,7 +245,10 @@ console.log(
   `    ${excusedDeficit} (${((100 * excusedDeficit) / totalCandidates).toFixed(1)}%) the engine would have played the card itself (deficit <= 0)`,
 );
 console.log(
-  `    ${excusedDead} (${((100 * excusedDead) / totalCandidates).toFixed(1)}%) the engine disagreed but its own pick does NOT recover the loss`,
+  `    ${excusedDead} (${((100 * excusedDead) / totalCandidates).toFixed(1)}%) the engine disagreed but nothing it preferred recovers ANY of the loss`,
+);
+console.log(
+  `    ${excusedPartial} (${((100 * excusedPartial) / totalCandidates).toFixed(1)}%) ...recovers SOME of it, but not the whole charged loss (see sampleFindability)`,
 );
 console.log(`    ${chargeable} (${((100 * chargeable) / totalCandidates).toFixed(1)}%) genuinely chargeable and findable`);
 console.log(`  ${graded.length} of those boards had a real (non-single-field) field to grade against — the floor sweep below is over these`);
