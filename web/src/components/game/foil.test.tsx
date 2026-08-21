@@ -2,7 +2,7 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { SUIT_SYMBOLS, cardSuit, foilForDisplay, trumpForDisplay, trumpSuit } from '../../api';
 import { boardPlaying, southHand } from '../../test/fixtures';
-import { stepTilt } from './foil';
+import { foilAnchor, stepTilt } from './foil';
 import { HandFan } from './HandFan';
 import { TrickArea } from './TrickArea';
 
@@ -104,6 +104,39 @@ describe('the flight layer', () => {
     expect(document.querySelector('.foil-layer-flight')).toBeNull();
     render(<TrickArea board={boardPlaying} />);
     expect(document.querySelector('.foil-layer-flight')).toBeNull();
+  });
+});
+
+describe('where a flying card takes its patch from', () => {
+  /**
+   * A trick slot is centred with `transform: translate(-50%)`, so a trick card
+   * is DRAWN up to half a slot from where its own foil is sampled. The clone
+   * TrickArea flies has to be anchored at the sampled point, not the drawn
+   * one, or the last frame of the glide and the card that replaces it sit on
+   * different patches of sheet — which reads as the holo snapping on landing.
+   */
+  function stub(el: HTMLElement, rect: { left: number; top: number }, lay: { x: number; y: number }, parent: HTMLElement) {
+    el.getBoundingClientRect = () => new DOMRect(rect.left, rect.top, 43, 61);
+    Object.defineProperty(el, 'offsetLeft', { value: lay.x, configurable: true });
+    Object.defineProperty(el, 'offsetTop', { value: lay.y, configurable: true });
+    Object.defineProperty(el, 'offsetParent', { value: parent, configurable: true });
+  }
+
+  it('reports the layout position, not the rect a transform moved the card to', () => {
+    const host = document.createElement('div');
+    const seat = document.createElement('div');
+    const card = document.createElement('div');
+    host.append(seat);
+    seat.append(card);
+    host.getBoundingClientRect = () => new DOMRect(100, 200, 326, 265);
+    // the seat sits at (30, 40) in the host and is pulled 21px left by its
+    // own centring transform; the card fills the seat
+    stub(seat, { left: 100 + 30 - 21, top: 200 + 40 }, { x: 30, y: 40 }, host);
+    stub(card, { left: 100 + 30 - 21, top: 200 + 40 }, { x: 0, y: 0 }, seat);
+
+    expect(foilAnchor(card, host)).toEqual({ x: 130, y: 240 });
+    // ...which is deliberately NOT where it is drawn
+    expect(card.getBoundingClientRect().left).toBe(109);
   });
 });
 

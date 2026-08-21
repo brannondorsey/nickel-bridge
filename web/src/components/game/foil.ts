@@ -100,9 +100,11 @@ precision highp float;
 varying vec2 v_uv;
 uniform vec4 u_rect;
 uniform vec2 u_light;
+uniform vec2 u_origin;
 uniform vec2 u_clipx;
 uniform float u_clipTop;
 uniform vec2 u_shift;
+uniform float u_scale;
 uniform vec2 u_tilt;
 uniform float u_gain;
 uniform float u_night;
@@ -170,7 +172,23 @@ void main() {
      rules are ~440px apart — enough to take the line term from 1 to 0 and drop
      the foil off that one card while its neighbours kept theirs, which reads as
      the sheet tearing rather than as a card being picked up. */
-  vec2 pat = px - u_shift;
+  /* ...and in PAGE coordinates, not this canvas's. Each layer used to sample
+     the sheet in its own local space, which quietly made one sheet into three:
+     the same card came up gold in the hand and blue on the table, because the
+     fan's canvas and the trick's canvas start counting from different places.
+     Adding the canvas's own page offset puts every layer — both fans, the
+     trick, and the flight layer that carries a card between them — on one
+     continuous sheet, so a card's patch depends only on where it is on the
+     page. That is what makes the glide from hand to table continuous at both
+     ends rather than a cut to a different part of the pattern. */
+  /* ...and at the card's own printed size. A card in flight is SCALED (a fan
+     card is a quarter wider than a table slot), and a quad sampled at the
+     drawn size would enlarge the pattern with it — the foil zooming out over
+     the glide while the card shrinks. Dividing the offset within the quad by
+     that scale prints the sheet at 1:1 whatever size the card is drawn at.
+     u_scale is 1 everywhere else, where this is exactly px again.
+     (No backticks in here: this string is a JS template literal.) */
+  vec2 pat = u_rect.xy + v_uv * u_rect.zw / u_scale + u_origin - u_shift;
 
   /* The grain. Its ANGLE and PHASE are what the device moves — every card
      shares one normal, so tilting cannot light one card more than its
@@ -246,7 +264,8 @@ class FoilSurface {
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     for (const name of [
-      'u_res', 'u_rect', 'u_light', 'u_clipx', 'u_clipTop', 'u_shift', 'u_tilt', 'u_gain', 'u_night', 'u_palette',
+      'u_res', 'u_rect', 'u_light', 'u_origin', 'u_clipx', 'u_clipTop', 'u_shift',
+      'u_tilt', 'u_gain', 'u_night', 'u_palette', 'u_scale',
     ]) {
       this.u[name] = gl.getUniformLocation(program, name);
     }
@@ -296,11 +315,13 @@ class FoilSurface {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.uniform2f(this.u.u_res, box.width, box.height);
-    gl.uniform2f(this.u.u_light, box.width * 0.5, box.height * 0.45);
+    setSheet(gl, this.u, box);
     gl.uniform2f(this.u.u_tilt, tiltX, tiltY);
     gl.uniform1f(this.u.u_gain, night ? GAIN_NIGHT : GAIN_DAY);
     gl.uniform1f(this.u.u_night, night ? 1 : 0);
     gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
+    // a card in a container is drawn at its printed size; only flights scale
+    gl.uniform1f(this.u.u_scale, 1);
 
     /* Every card face in the host, in document order, so a foiled card can be
        clipped against whichever card overlaps it next — foiled or not. The
@@ -350,10 +371,30 @@ class FoilSurface {
    * reach them — and without this a trump simply lost its foil for the length
    * of the glide, which is exactly when it is most looked at.
    *
-   * `u_shift` is zero here on purpose. A clone has no layout position to carry
-   * a patch of sheet from, and a card genuinely travelling across the table
-   * SHOULD pass through the light rather than hold one frozen highlight — the
-   * opposite of the lifted card above, which is not moving at all.
+   * The sheet is held STILL on a flying card, anchored to where it is going
+   * (`data-foil-at`), and both halves of that are the answer to a real
+   * complaint: the holo changed during the glide and changed back on landing.
+   *
+   * Why not simply let the clone travel through the sheet? Measured: over one
+   * glide the patch swept green → cyan → blue. The rules are ~440px apart and
+   * a card crosses ~200px, so "smoothly continuous" is still a card visibly
+   * changing colour in mid air, which is the thing being complained about.
+   *
+   * Why the destination rather than where it took off? Because two things
+   * cannot both be true: that the hand reads as ONE SHEET (a card's patch
+   * depends on where it sits, so neighbours line up) and that a card's patch
+   * never changes as it is played (the patch belongs to the card). The hand is
+   * the whole look, so the sheet wins — and a card's patch at the table is
+   * therefore genuinely not its patch in the hand. Something has to change
+   * once; the only question is when. Anchoring to the destination spends it at
+   * the moment of the tap, when the card is leaving the fan anyway, and leaves
+   * the glide and the landing identical — so nothing changes *during* the
+   * animation and nothing snaps at the end of it.
+   *
+   * None of this would hold without the sheet being in PAGE space (u_origin):
+   * while each layer counted from its own corner, the three phases were three
+   * unrelated patches, which is what made one card come up gold in the hand
+   * and blue on the table.
    */
   renderFlights(now: number, tiltX: number, tiltY: number): boolean {
     const gl = this.gl;
@@ -367,18 +408,40 @@ class FoilSurface {
     gl.clearColor(night ? 0 : 1, night ? 0 : 1, night ? 0 : 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(this.u.u_res, box.width, box.height);
-    gl.uniform2f(this.u.u_light, box.width * 0.5, box.height * 0.45);
+    setSheet(gl, this.u, box);
     gl.uniform2f(this.u.u_tilt, tiltX, tiltY);
-    gl.uniform2f(this.u.u_shift, 0, 0);
     gl.uniform1f(this.u.u_gain, night ? GAIN_NIGHT : GAIN_DAY);
     gl.uniform1f(this.u.u_night, night ? 1 : 0);
     gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
+    // this layer's own lamp, for a clone anchored somewhere no layer covers
+    const own = lampOf(box);
     for (const el of clones) {
       const r = el.getBoundingClientRect();
       if (r.width < 1) continue;
       // a clone in flight is over everything, so nothing clips it
       gl.uniform2f(this.u.u_clipx, r.left - box.left, r.right - box.left);
       gl.uniform1f(this.u.u_clipTop, 1e6);
+      const at = (el.getAttribute('data-foil-at') ?? '').split(',');
+      const anchorX = parseFloat(at[0]);
+      const anchorY = parseFloat(at[1]);
+      const printed = parseFloat(at[2]);
+      const anchored = Number.isFinite(anchorX) && Number.isFinite(anchorY);
+      // how far this card is blown up from its printed size right now
+      gl.uniform1f(this.u.u_scale, Number.isFinite(printed) && printed > 0 ? r.width / printed : 1);
+      gl.uniform2f(
+        this.u.u_shift,
+        anchored ? r.left - anchorX : 0,
+        anchored ? r.top - anchorY : 0,
+      );
+      /* Lit by the layer that owns where it is anchored, not by this one —
+         see lampFor(). Measured from the anchor's CENTRE rather than its
+         corner, so a card whose top-left lands a pixel outside the box still
+         resolves to the lamp it is plainly under. */
+      const lamp = anchored
+        ? lampFor(anchorX + window.scrollX + r.width * 0.5, anchorY + window.scrollY + r.height * 0.5)
+        : null;
+      const lit = lamp ?? own;
+      gl.uniform2f(this.u.u_light, lit.x, lit.y);
       gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
@@ -400,6 +463,11 @@ class FoilSurface {
 
   setVisible(on: boolean) {
     this.canvas.style.visibility = on ? 'visible' : 'hidden';
+  }
+
+  /** This layer's own box, for the flight lamp lookup — see lampFor(). */
+  canvasBox(): DOMRect {
+    return this.canvas.getBoundingClientRect();
   }
 
   /** Only the flight layer owns its own element; a FoilLayer's is React's. */
@@ -434,6 +502,82 @@ function layoutOffset(el: HTMLElement, host: HTMLElement): { x: number; y: numbe
     n = n.offsetParent as HTMLElement | null;
   }
   return { x, y };
+}
+
+/**
+ * Where an element's foil is sampled from, in viewport coordinates: its LAYOUT
+ * position inside `host`, with every transform between the two taken back off
+ * — the same point render() shifts the sheet to (see u_shift beside it).
+ *
+ * TrickArea needs this to anchor a flying clone, and the rendered rect is NOT
+ * it. The four trick slots are centred with `transform: translate(-50%)`, so a
+ * trick card is drawn up to half a slot away from where its own foil comes
+ * from; a clone anchored to the rect therefore lands on a different patch of
+ * sheet from the card that replaces it, which is exactly the change-at-the-end
+ * of the glide the destination anchor exists to remove.
+ *
+ * (That centring transform also means the four cards of a trick sit on patches
+ * pulled apart by up to half a slot — measured 21px in x for N/S and 40px in y
+ * for E/W, against rules ~440px apart, so under a tenth of a period. Visible
+ * as a slight difference in tint between seats at most, and left alone: the
+ * two cases genuinely want opposite treatment, since the fan's lift is a
+ * transform on an ancestor too and stripping it is the whole point there.)
+ */
+export function foilAnchor(el: HTMLElement, host: HTMLElement): { x: number; y: number } {
+  const hostBox = host.getBoundingClientRect();
+  const lay = layoutOffset(el, host);
+  return { x: hostBox.left + lay.x, y: hostBox.top + lay.y };
+}
+
+/**
+ * Put this layer on the one page-space sheet, and its lamp in the same space.
+ *
+ * The lamp stays at the CENTRE OF THIS CONTAINER rather than becoming a single
+ * light over the whole page: that is the framing every value on board B was
+ * chosen against (a lamp over the hand), and a global lamp would leave the fan
+ * — which sits at the bottom of the screen — mostly at ambient. Only the
+ * PATTERN is shared. So a card keeps its colour and its rules across the glide
+ * while each container keeps the brightness it was tuned with.
+ */
+function setSheet(gl: WebGLRenderingContext, u: Uniforms, box: DOMRect) {
+  const origin = sheetOrigin(box);
+  const lamp = lampOf(box);
+  gl.uniform2f(u.u_origin, origin.x, origin.y);
+  gl.uniform2f(u.u_light, lamp.x, lamp.y);
+}
+
+/** Where a layer's own corner sits on the shared page-space sheet. */
+function sheetOrigin(box: DOMRect): { x: number; y: number } {
+  return { x: box.left + window.scrollX, y: box.top + window.scrollY };
+}
+
+/** A layer's lamp, in that same space. */
+function lampOf(box: DOMRect): { x: number; y: number } {
+  const origin = sheetOrigin(box);
+  return { x: origin.x + box.width * 0.5, y: origin.y + box.height * 0.45 };
+}
+
+/**
+ * Which lamp a flying card should be lit by: the one belonging to the layer
+ * that owns the place it is anchored to.
+ *
+ * The pattern is shared but the lamp is per container (see setSheet), so a
+ * flight layer lighting its clones from its own viewport-wide centre would
+ * hand the last frame of a glide a different BRIGHTNESS from the card that
+ * replaces it — the same snap the destination anchor exists to remove, one
+ * term further down the shader. Borrowing the destination's lamp closes it:
+ * the final frame and the landed card then agree in every term.
+ */
+function lampFor(px: number, py: number): { x: number; y: number } | null {
+  for (const s of surfaces) {
+    const box = s.canvasBox();
+    if (!box || box.width < 1 || box.height < 1) continue;
+    const origin = sheetOrigin(box);
+    if (px < origin.x || px > origin.x + box.width) continue;
+    if (py < origin.y || py > origin.y + box.height) continue;
+    return lampOf(box);
+  }
+  return null;
 }
 
 function link(gl: WebGLRenderingContext): WebGLProgram | null {

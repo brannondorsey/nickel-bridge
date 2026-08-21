@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RANK_CHARS, SEAT_SHORT, SUIT_SYMBOLS, cardRank, cardSuit, suitClass, type BoardView } from '../../api';
 import { FoilLayer } from './FoilLayer';
+import { foilAnchor } from './foil';
 import { COLLECT_MS, GLIDE_MS, motionOK, takePlayOrigin, trickWinner } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
@@ -220,7 +221,7 @@ function winnerOf(trick: { seat: number; card: number }[], board: BoardView): nu
  * sweep of unmarked clones would drop the foil off the trumps for the length
  * of the collect — see foil.ts's flight layer, which paints them.
  */
-function makeCardEl(card: number, from: DOMRect, foil: boolean): HTMLElement {
+function makeCardEl(card: number, from: DOMRect, foil: boolean, anchor: { x: number; y: number } | null): HTMLElement {
   const el = document.createElement('div');
   el.className = `pcard small ${suitClass(cardSuit(card))} pcard-flight`;
   if (foil) el.setAttribute('data-foil', '');
@@ -232,6 +233,9 @@ function makeCardEl(card: number, from: DOMRect, foil: boolean): HTMLElement {
   suitEl.className = 'suit';
   suitEl.textContent = SUIT_SYMBOLS[cardSuit(card)];
   el.append(rankEl, suitEl);
+  // a swept card is already at its slot, so that slot's own sampling point is
+  // its anchor — see foilAnchor for why that is not the rect it is drawn at
+  if (foil && anchor) el.setAttribute('data-foil-at', `${anchor.x},${anchor.y},${from.width}`);
   el.style.left = `${from.left}px`;
   el.style.top = `${from.top}px`;
   el.style.width = `${from.width}px`;
@@ -277,6 +281,19 @@ function glideIn(
   // origin size at the start of the flight (fan cards are bigger than slots)
   const clone = cardEl.cloneNode(true) as HTMLElement;
   clone.classList.add('pcard-flight');
+  /* Where this card is going, for Foil Trumps: the foil layer holds the sheet
+     still on a flying card, and it anchors it to the DESTINATION so the last
+     frame of the glide is already the card's table look — see foil.ts. The
+     anchor is foilAnchor's point and NOT `to`: a trick slot is centred with a
+     transform, so the card is drawn up to half a slot from where its foil is
+     sampled, and anchoring to the drawn rect leaves the landing snapping to a
+     different patch — the very thing this is for. */
+  if (clone.hasAttribute('data-foil')) {
+    const anchor = foilAnchor(cardEl, box);
+    // x, y, and the card's PRINTED width — the clone flies scaled up from the
+    // fan, and the third number is what lets the sheet stay printed at 1:1
+    clone.setAttribute('data-foil-at', `${anchor.x},${anchor.y},${to.width}`);
+  }
   clone.style.left = `${from.left}px`;
   clone.style.top = `${from.top}px`;
   clone.style.width = `${to.width}px`;
@@ -315,9 +332,14 @@ function collectSweep(
   if (!target || target.width === 0) return;
   const jitter = [-3, 2, -1, 3];
   trick.forEach((t, i) => {
-    const from = slots.get(t.seat)?.getBoundingClientRect();
-    if (!from || from.width === 0) return;
-    const clone = makeCardEl(t.card, from, foil !== null && cardSuit(t.card) === foil);
+    const slotEl = slots.get(t.seat);
+    const from = slotEl?.getBoundingClientRect();
+    if (!slotEl || !from || from.width === 0) return;
+    const isFoil = foil !== null && cardSuit(t.card) === foil;
+    /* The card that was here filled its slot exactly, so the slot's own
+       sampling point is the card's — and the card element is already gone by
+       the time this layout effect runs. */
+    const clone = makeCardEl(t.card, from, isFoil, isFoil ? foilAnchor(slotEl, box) : null);
     document.body.appendChild(clone);
     flights.add(clone);
     const anim = clone.animate(

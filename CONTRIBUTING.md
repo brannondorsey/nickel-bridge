@@ -2364,9 +2364,43 @@ Four details are load-bearing:
   Without it, selecting a card slid it 14px through a grating whose rules are ~440px
   apart — enough to take the line term from 1 to 0 and drop the foil off that one card
   while its neighbours kept theirs, which reads as the sheet tearing rather than as a card
-  being picked up. It covers the Draw's slide for free. The flight clones are the
-  deliberate exception (`u_shift` zero): a card genuinely travelling across the table
-  should pass through the light rather than hold one frozen highlight.
+  being picked up. It covers the Draw's slide for free.
+- **...and the sheet is one PAGE-space field, not one per layer.** Each canvas used to
+  count from its own corner, which quietly made one sheet into three: the same card came
+  up gold in the hand and blue on the table, because the fan's canvas and the trick's
+  start at different places. `u_origin` adds each layer's own page offset, so a card's
+  patch depends only on where it is on the page. The LAMP stays per container, though
+  (`setSheet`) — every value on board B was chosen against a lamp over the hand, and one
+  light over the whole page would leave the fan, which sits at the bottom of the screen,
+  mostly at ambient. Only the pattern is shared.
+- **A card in flight holds still, anchored to where it is GOING.** Letting the clone
+  travel through the sheet was tried and measured: over one glide the patch swept green →
+  cyan → blue. The rules are ~440px apart and a card crosses ~200px, so "smoothly
+  continuous" is still a card visibly changing colour in mid air, which is what the
+  complaint was. Two things cannot both be true — that the hand reads as one sheet (a
+  card's patch depends on where it sits, so neighbours line up) and that a card's patch
+  never changes as it is played (the patch belongs to the card). The hand is the whole
+  look, so the sheet wins, and something has to change once; anchoring to the destination
+  spends it at the moment of the tap, when the card is leaving the fan anyway, and leaves
+  the glide and the landing identical. Three parts, all of them load-bearing and each one
+  the difference between "identical" and "nearly":
+  - **The anchor is the destination's LAYOUT point, not the rect it is drawn at**
+    (`foilAnchor`). A trick slot is centred with `transform: translate(-50%)`, and
+    `u_shift` takes that back off like any other transform — so a trick card's foil is
+    sampled up to half a slot from where the card appears (measured: 21px in x for N/S,
+    40px in y for E/W). Anchoring to the drawn rect put the last frame of the glide 40px
+    along the sheet from the card replacing it, which is exactly the snap this exists to
+    remove. (That centring also means the four cards of a trick sit on patches pulled
+    apart by those same amounts — under a tenth of a rule period, a slight difference in
+    tint between seats at most, and left alone: the fan's lift is a transform on an
+    ancestor too, and stripping it is the whole point there.)
+  - **The clone borrows the lamp of the layer it is going to** (`lampFor`), since the
+    lamp is per container. Lit by the viewport-wide flight layer's own centre instead, the
+    hue matched and the brightness still stepped on landing.
+  - **A scaled clone samples at 1:1** (`u_scale`). A fan card is a quarter wider than a
+    table slot and the glide scales it down, so a quad sampled at its drawn size would
+    zoom the pattern with it. `u_scale` is 1 for every laid-out card, where the shader
+    reduces to what it was.
 - **The flight clones need their own layer, and it is the only one not inside a card
   container.** `TrickArea` animates a `position: fixed` clone on `document.body` between
   the fan and the table, so nothing scoped to a host can reach it and a trump simply lost
@@ -2376,7 +2410,9 @@ Four details are load-bearing:
   `display: none` canvas has no box, so its own `getBoundingClientRect` comes back zeroed,
   the zero-size guard bails, and it can never make itself visible again — hidden forever,
   in silence. `collectSweep`'s clones are built from scratch rather than cloned, so
-  `makeCardEl` has to be told which are trumps.
+  `makeCardEl` has to be told which are trumps — and, since the card element is already
+  gone by the time that layout effect runs, its anchor comes from the slot the card
+  filled rather than from the card.
 - **Nothing moves on its own.** The phase was once advanced by a clock so a device with no
   sensors still had something to look at; on a real phone that read as the foil crawling by
   itself, and a card sitting on the table is not moving. The tilt is now the only thing

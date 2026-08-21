@@ -130,9 +130,14 @@ export function HandFan({
             onClick={
               playable
                 ? (e) => {
-                    // second tap plays: remember where the card left the fan
-                    // so TrickArea can glide it into the trick slot from here
-                    if (selected === c) capturePlayOrigin(c, e.currentTarget.getBoundingClientRect());
+                    /* Second tap plays: remember where the card left the fan so
+                       TrickArea can glide it into the trick slot from here.
+                       The LIFT is taken back off first (a selected card sits
+                       ~14px high): the glide should start from where the card
+                       rests, and Foil Trumps samples its sheet at that resting
+                       position too, so a raised origin made the flight's first
+                       frame a different patch from the hand it just left. */
+                    if (selected === c) capturePlayOrigin(c, restingRect(e.currentTarget));
                     onSelect!(c);
                   }
                 : undefined
@@ -153,6 +158,18 @@ export function HandFan({
       {foil !== null ? <FoilLayer /> : null}
     </div>
   );
+}
+
+/**
+ * A card button's box with its own transform taken back off — for a selected
+ * card that is the ~14px lift, which is the only transform a resting fan card
+ * ever has. Returned as a plain rect so callers can treat it like any other.
+ */
+function restingRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const dy = r.top - (el.offsetTop + (el.offsetParent?.getBoundingClientRect().top ?? 0));
+  const dx = r.left - (el.offsetLeft + (el.offsetParent?.getBoundingClientRect().left ?? 0));
+  return new DOMRect(r.left - dx, r.top - dy, r.width, r.height);
 }
 
 /**
