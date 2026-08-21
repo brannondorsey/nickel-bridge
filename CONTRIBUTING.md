@@ -2454,7 +2454,15 @@ Four details are load-bearing:
   since a cap in normalised units would otherwise cross the now-shorter range faster and
   hand back the calm the shorter range buys. Without a
   sensor the pattern simply holds still — nothing looks broken because a still card having
-  a still shine is what a card does. This matters because iOS grants the sensors only from
+  a still shine is what a card does. **Two events are listened for, not one**:
+  `deviceorientation` everywhere it exists, and `deviceorientationabsolute`, which some
+  Android builds populate INSTEAD — that is the case `magnetometer` is granted for in
+  `security.ts`'s `SELF_ONLY`, and a device firing only the sibling would otherwise hold
+  the permission while the pattern never moved. Both concept boards listen for both; the
+  port to the app dropped one and it had to be put back. The pair is detached again when
+  the last foiled surface unmounts, or the browser keeps sampling motion hardware for the
+  rest of the tab's life — on Settings, the ladder, everywhere — once tilt has ever
+  attached once. This matters because iOS grants the sensors only from
   a user gesture and does not persist the grant across page loads. The ask therefore lives on the settings lever, and a player who
   has already said yes once (`nb:foilTilt`) gets it re-made silently on their first tap of
   the session. Under `prefers-reduced-motion` the clock and the tilt freeze but the layer
