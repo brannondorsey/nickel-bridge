@@ -63,16 +63,15 @@ const TRICK_CLEAR_OPTIONS: { value: 'auto' | 'tap'; label: string }[] = [
 ];
 
 // Named for where the cards end up, not for on/off: both ends are a real
-// way to hold a hand, and "SUIT ORDER" says what today's behaviour actually
-// is rather than calling it the absence of the other one — the same reason
+// way to hold a hand, and "SUIT ORDER" says what the other end actually is
+// rather than calling it the absence of the first one — the same reason
 // SETTLED_TRICK_OPTIONS above names both of its ends.
 //
-// LEFT SIDE reads first even though SUIT ORDER is the default. Segment order
-// here is presentation, not precedence — `value` alone decides which end is
-// lit — and this row is the one on the panel a player arrives at wanting the
-// OTHER end: nobody opens the settings gate to ask for the layout they
-// already have. The aside above still explains both, in the same order the
-// switch shows them.
+// LEFT SIDE reads first because it is now the default, which is also the
+// order every other row on this panel happens to show. Segment order here is
+// presentation, not precedence — `value` alone decides which end is lit —
+// and the aside above explains both in the same order the switch shows
+// them.
 const TRUMP_PLACEMENT_OPTIONS: { value: 'suit' | 'left'; label: string }[] = [
   { value: 'left', label: 'LEFT SIDE' },
   { value: 'suit', label: 'SUIT ORDER' },
@@ -114,8 +113,10 @@ export default function Settings() {
     // Fail to 'auto' — the shipped behaviour before this setting existed —
     // rather than assuming the field is always present.
     trickClearMode: me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto',
-    // ...and to 'suit', the ♠♥♦♣ every hand has always been laid out in.
-    trumpPlacement: me?.user?.trumpPlacement === 'left' ? 'left' : 'suit',
+    // ...and to 'left', which unlike the two above is the DEFAULT rather
+    // than the preserved old behaviour, so only an explicit 'suit' reads as
+    // the ♠♥♦♣ this app laid every hand out in before the setting existed.
+    trumpPlacement: me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left',
     // Fails closed, like doubleTapBid: this one is off by default too.
     foilTrumps: me?.user?.foilTrumps === true,
   });

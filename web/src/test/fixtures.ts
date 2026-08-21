@@ -38,7 +38,12 @@ export const meFixture: Me = {
     betaFeatures: true,
     doubleTapBid: false,
     trickClearMode: 'auto',
-    trumpPlacement: 'suit',
+    // Both enums as a real account gets them: 'auto' preserves the pacing
+    // that predates its setting, while 'left' is the placement players asked
+    // for and every account defaults to (see the trump_placement migrations
+    // in server/src/db.ts). A suite that wants ♠♥♦♣ overrides this one.
+    trumpPlacement: 'left',
+    // ...and foil, which defaults off for everyone.
     foilTrumps: false,
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
@@ -152,6 +157,7 @@ const legalCalls = [0, ...Array.from({ length: 30 }, (_, i) => i + 8)]; // Pass 
 const base = {
   tournamentId: 12,
   tournamentName: 'Tournament #12',
+  tournamentNumber: 12,
   boardNo: 2,
   totalBoards: 4,
   dealer: 0,
@@ -342,7 +348,7 @@ export const boardPlayingWestDummy: BoardView = {
  *  board_no is always copied verbatim from the board it branched from. */
 export const boardPlayingRehearsal: BoardView = {
   ...boardPlaying,
-  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24, originNumber: 18 },
 };
 
 // ---- done ----
@@ -420,7 +426,7 @@ export const boardDoneLow: BoardView = {
  *  receipt and the positive delta framing in the VS YOUR REAL TABLE panel. */
 export const boardDoneRehearsal: BoardView = {
   ...boardDone,
-  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24 },
+  rehearsal: { originTournamentId: 20, originBoardNo: 2, branchPly: 24, originNumber: 18 },
   result: {
     ...boardDone.result!,
     contractLabel: '4♠+1 by S',
@@ -452,7 +458,12 @@ export const boardDoneRehearsal: BoardView = {
 
 export const tournamentInProgress: TournamentInfo = {
   id: 12,
-  name: 'Tournament #12',
+  name: 'Tournament #9',
+  // id and DISPLAY number deliberately differ (the boardPlayingRehearsal
+  // precedent): every crossing number on screen comes from `number`, so a
+  // regression that fell back to the row id would otherwise pass unnoticed
+  // in a fixture where the two coincide.
+  number: 9,
   myDone: 1,
   createdAt: 1_781_000_000,
   myLastPlayedAt: 1_781_050_000,
@@ -471,7 +482,8 @@ export const tournamentInProgress: TournamentInfo = {
 
 export const tournamentComplete: TournamentInfo = {
   id: 11,
-  name: 'Tournament #11',
+  name: 'Tournament #8',
+  number: 8,
   myDone: 4,
   createdAt: 1_780_400_000,
   myLastPlayedAt: 1_780_500_000,
@@ -714,6 +726,7 @@ export const activityResponse = {
       at: at(23, 20, 5),
       tournamentId: 40,
       tournamentName: 'Tournament #40',
+      tournamentNumber: 40,
       pct: 55.5,
       rank: 3,
       of: 5,
@@ -725,6 +738,7 @@ export const activityResponse = {
       at: at(23, 21, 41),
       tournamentId: 41,
       tournamentName: 'Tournament #41',
+      tournamentNumber: 41,
       pct: 62,
       rank: 2,
       of: 5,
@@ -744,6 +758,7 @@ export const activityResponse = {
       at: at(23, 16, 38),
       tournamentId: 39,
       tournamentName: 'Tournament #39',
+      tournamentNumber: 39,
       pct: 47,
       rank: 4,
       of: 5,
@@ -761,6 +776,7 @@ export const activityResponse = {
       at: at(22, 7, 58),
       tournamentId: 38,
       tournamentName: 'Tournament #38',
+      tournamentNumber: 38,
       pct: 68,
       rank: 1,
       of: 4,

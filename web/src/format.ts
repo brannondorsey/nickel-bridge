@@ -47,9 +47,25 @@ export function postmarkDate(unixSeconds: number): string {
     .toUpperCase();
 }
 
-/** "Tournament #12" → "12"; falls back to the id for unnumbered names. */
-export function tournamentNo(name: string, id: number): string {
-  return name.match(/#(\d+)/)?.[1] ?? String(id);
+/**
+ * How a crossing is NAMED to a player, and the one place that decides it.
+ *
+ * `tournaments.number` is the display sequence and `tournaments.id` is the row
+ * address — deliberately different values (see CONTRIBUTING's "A crossing's
+ * number is its own sequence, not its row id"), so production's id 126 wears
+ * "#105". This used to regex `#(\d+)` back out of the tournament NAME, which
+ * was wrong in the direction that fails silently: any name without a `#` —
+ * every rehearsal, whose name reads "Rehearsal — Board 1, from Trick 10" —
+ * fell through to the raw id and printed an address where a number belonged.
+ * The server now sends the column, so the derivation is gone.
+ *
+ * The id fallback survives for rows that genuinely carry no number (rehearsal
+ * and exhibit kinds are NULL by design). Nothing standard should reach it: a
+ * standard crossing missing its number is a bug in createCrossing, not a
+ * display case, and printing its id is the least-worst way to still render.
+ */
+export function tournamentNo(number: number | null | undefined, id: number): string {
+  return number != null ? String(number) : String(id);
 }
 
 /** NS-perspective score with an explicit sign: 620 → "+620", -100 → "−100" */

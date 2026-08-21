@@ -1082,7 +1082,9 @@ describe('Board — trump placement', () => {
     vi.unstubAllGlobals();
   });
 
-  const meLeft: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } };
+  // meFixture is already trump-left — the account default — so the override
+  // here is the OTHER end: a player who has opted back into ♠♥♦♣.
+  const meSuit: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'suit' } };
   /**
    * A fan's cards as suit indices, left to right — the one thing this whole
    * feature changes. `which` picks between the two fans a declared board can
@@ -1104,9 +1106,11 @@ describe('Board — trump placement', () => {
 
     vi.useFakeTimers();
     try {
-      renderBoard(meLeft);
+      renderBoard(); // meFixture — trump-left, the default
       await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
-      // the hand the Draw starts from: ♠♠♠ ♥♥♥♥♥ ♦♦ ♣♣♣, as it has always been
+      // the hand the Draw starts from: ♠♠♠ ♥♥♥♥♥ ♦♦ ♣♣♣ — the auction has not
+      // settled yet, so there is no trump suit to promote whatever the
+      // preference says
       expect(fanSuits()).toEqual([0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3]);
 
       fireEvent.click(screen.getByRole('button', { name: '2♥' }));
@@ -1137,7 +1141,7 @@ describe('Board — trump placement', () => {
     }
   });
 
-  it('leaves the fan and the pacing exactly as they were for the default preference', async () => {
+  it('leaves the fan and the pacing exactly as they were for a player who asked for suit order', async () => {
     apiMock.board.mockResolvedValue(boardBidding);
     apiMock.call.mockResolvedValue({
       evaluation: { call: bid2H, bestCall: bid2H, userProb: 0.7, bestProb: 0.7, grade: 'excellent', score: 1 },
@@ -1146,7 +1150,7 @@ describe('Board — trump placement', () => {
 
     vi.useFakeTimers();
     try {
-      renderBoard(); // meFixture — 'suit'
+      renderBoard(meSuit);
       await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
       fireEvent.click(screen.getByRole('button', { name: '2♥' }));
       fireEvent.click(screen.getByRole('button', { name: 'Bid 2♥' }));
@@ -1170,14 +1174,14 @@ describe('Board — trump placement', () => {
     // uses the heart board's own play state instead, arrived at by a plain
     // GET rather than by watching the auction end.
     apiMock.board.mockResolvedValue(boardAuctionEndsHearts);
-    renderBoard(meLeft);
+    renderBoard(); // meFixture — trump-left, the default
     await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
     expect(fanSuits()).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 2, 2, 3, 3, 3]);
   });
 
   it('lays a spade contract out exactly as it always was — the no-op the Draw must not animate', async () => {
     apiMock.board.mockResolvedValue(boardPlaying); // 4♠ by S
-    renderBoard(meLeft);
+    renderBoard();
     await vi.waitFor(() => expect(screen.getByText('SOUTH · YOU')).toBeInTheDocument());
     expect(drawDuration(boardPlaying.hand, 0)).toBe(0);
     expect(fanSuits()).toEqual([0, 0, 0, 1, 1, 1, 2, 3, 3]); // ♠AQ10 ♥KJ9 ♦8 ♣Q9, four cards already played
@@ -1694,8 +1698,13 @@ describe('Board — rehearsal', () => {
   it('relabels the header and shows END instead of the vul chip, mid-play', async () => {
     apiMock.board.mockResolvedValue(boardPlayingRehearsal);
     renderBoard();
-    // branchPly 24 -> trick floor(24/4)+1 = 7
-    expect(await screen.findByText('REHEARSAL — Board 2, from Trick 7')).toBeInTheDocument();
+    // The header names the ORIGIN crossing's DISPLAY number, plus the branch
+    // point (branchPly 24 -> trick floor(24/4)+1 = 7). The fixture's origin is
+    // id 20 wearing number 18 — deliberately different, because the bug this
+    // replaced printed a row id (production's crossing #105 read "126"), and
+    // identical values would let that regress unnoticed.
+    expect(await screen.findByText('REHEARSAL — Crossing 18, Board 2, from Trick 7')).toBeInTheDocument();
+    expect(screen.queryByText(/Crossing 20/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'END' })).toHaveAttribute('href', '/t/20/b/2/analyze');
     // the ordinary vulnerability chip is gone — this is the one thing that swaps
     expect(screen.queryByText('NS VUL')).not.toBeInTheDocument();

@@ -59,7 +59,7 @@ import { drawDuration } from '../components/game/trumpDraw';
 import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
-import { signedScore, vulLabel } from '../format';
+import { signedScore, tournamentNo, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
@@ -118,13 +118,17 @@ export default function Board() {
   const trickClearMode = me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto';
   // "Trump placement" (settings gate) — 'left' lays every hand on the play
   // screen out with the trump suit first, and animates the re-sort once, as
-  // the auction settles (trumpDraw.ts). Defaults to 'suit', the shipped
-  // ♠♥♦♣; see the trump_placement migration in db.ts. Purely how the cards
-  // are drawn — nothing here reaches the server or changes what is legal.
-  const trumpPlacement = me?.user?.trumpPlacement === 'left' ? 'left' : 'suit';
+  // the auction settles (trumpDraw.ts). It is the DEFAULT, so an absent or
+  // unrecognised value reads as 'left' and only an explicit 'suit' opts back
+  // into ♠♥♦♣ — the opposite fallback to the one this shipped with, and the
+  // reason it is spelled as a test for 'suit'; see the trump_placement
+  // migrations in db.ts. Purely how the cards are drawn — nothing here
+  // reaches the server or changes what is legal.
+  const trumpPlacement = me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left';
   // "Foil trumps" (settings gate) — the holographic plate over the trump suit
-  // in hand and on the table (foil.ts). Fails CLOSED like doubleTapBid: this
-  // one defaults OFF, so an absent field must read as off rather than on.
+  // in hand and on the table (foil.ts). Reads the OTHER way round from the
+  // line above, and deliberately: this one defaults OFF, so an absent field
+  // must fail closed, the doubleTapBid rule rather than the trumpPlacement one.
   const foilTrumps = me?.user?.foilTrumps === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
@@ -914,8 +918,12 @@ export default function Board() {
  * stamp). A rehearsal (board.rehearsal set) is the ONE thing that changes
  * this screen from an ordinary live board — everything below this header,
  * PlayPhase/BiddingPhase included, is untouched. Two swaps: the name slot
- * reads "REHEARSAL — Board N, from Trick M" instead of the tournament name,
- * and the right-hand slot trades the vulnerability chip for an END action
+ * reads "REHEARSAL — Crossing N, Board M, from Trick T" instead of the
+ * tournament name — naming the ORIGIN's display number, since that is the
+ * crossing being rehearsed and a rehearsal has no number of its own, and the
+ * branch point, since which trick you took the cards at is the whole subject
+ * of the screen — and the right-hand slot trades the vulnerability chip for
+ * an END action
  * (live play has nowhere to go mid-board; a rehearsal does, since leaving
  * loses nothing — it persists, resumable from Analyze's history surfaces).
  */
@@ -927,7 +935,9 @@ function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean })
       <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
       <div className="board-head-mid">
         <div className="board-head-name">
-          {r ? `REHEARSAL — Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}` : board.tournamentName}
+          {r
+            ? `REHEARSAL — Crossing ${tournamentNo(r.originNumber, r.originTournamentId)}, Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}`
+            : board.tournamentName}
         </div>
         <div className="board-head-sub num">
           Dealer {SEAT_SHORT[board.dealer]}
@@ -1110,9 +1120,11 @@ export function PlayPhase({
   onClearTrick?: () => void;
   /**
    * "Trump placement" (users.trump_placement): 'left' lays every hand on this
-   * screen out trump-first. Defaults to 'suit' — the shipped ♠♥♦♣ — so the
-   * tour and Analyze, which mount this component without passing it, are
-   * unaffected exactly as they are by doubleTapBid.
+   * screen out trump-first, and is what the ACCOUNT defaults to — but this
+   * prop still defaults to 'suit', because its one caller that omits it is
+   * the tour, which reads no preference at all (the doubleTapBid precedent)
+   * and teaches on the plain ♠♥♦♣ hand. Board.tsx resolves the real
+   * preference and always passes it.
    */
   trumpPlacement?: 'suit' | 'left';
   /**

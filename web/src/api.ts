@@ -33,7 +33,7 @@ export interface Me {
     doubleTapBid: boolean;
     /** how a completed trick leaves the table (settings: "Trick clearing") — 'auto' times out on its own, 'tap' holds until the trick area is tapped */
     trickClearMode: 'auto' | 'tap';
-    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'suit' is always ♠♥♦♣, 'left' promotes the trump block */
+    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'left' (default) promotes the trump block, 'suit' is always ♠♥♦♣ */
     trumpPlacement: 'suit' | 'left';
     /** the holographic plate over the trump suit, in hand and on the table (settings: "Foil trumps"); default false */
     foilTrumps: boolean;
@@ -159,6 +159,8 @@ interface Contract {
 export interface BoardView {
   tournamentId: number;
   tournamentName: string;
+  /** the crossing's DISPLAY number; null on a rehearsal/exhibit — see format.ts's tournamentNo */
+  tournamentNumber: number | null;
   boardNo: number;
   totalBoards: number;
   state: 'bidding' | 'playing' | 'done';
@@ -194,7 +196,7 @@ export interface BoardView {
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
   /** present only when this board is a "Play From Here" rehearsal — never scored, see server/src/rehearsal.ts */
-  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
+  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number; originNumber: number | null };
   /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
   originResult?: BoardResult;
   /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
@@ -317,6 +319,8 @@ interface MyBoardSummary {
 export interface TournamentInfo {
   id: number;
   name: string;
+  /** the crossing's DISPLAY number; null on non-standard kinds — see format.ts's tournamentNo */
+  number: number | null;
   myDone?: number;
   createdAt?: number;
   /** unix seconds of my last completed board, null if I've finished none */
@@ -541,6 +545,8 @@ export type ActivityEvent =
       at: number;
       tournamentId: number;
       tournamentName: string;
+      /** display number; null falls back to the id — see format.ts's tournamentNo */
+      tournamentNumber: number | null;
       pct: number;
       rank: number;
       of: number;
@@ -746,9 +752,9 @@ export function boardConditions(boardNo: number): { dealer: number; vul: { ns: b
 }
 
 /**
- * The suits, in the order a hand is laid out: ♠ ♥ ♦ ♣ normally, and with the
- * trump suit promoted to the front when the reader has asked for that
- * ("Trump placement · LEFT SIDE", users.trump_placement).
+ * The suits, in the order a hand is laid out: the trump suit promoted to the
+ * front ("Trump placement · LEFT SIDE", users.trump_placement — the default),
+ * or plain ♠ ♥ ♦ ♣ for a reader who has asked for SUIT ORDER instead.
  *
  * The other three keep their relative order behind it rather than rotating —
  * a player reads the fan by colour as much as by glyph, and rotating would
@@ -800,7 +806,7 @@ export function trumpSuit(contract: { strain: number } | undefined): number | nu
  * The suit to give the Foil Trumps plate, or null for plain cards — the
  * preference and the contract, in the shape the card components want.
  *
- * Kept apart from `trumpForDisplay` above even though both end at the same
+ * Kept apart from `trumpForDisplay` below even though both end at the same
  * suit: they answer to different settings, and a hand can be foiled without
  * being re-sorted or re-sorted without being foiled.
  */
@@ -812,9 +818,9 @@ export function foilForDisplay(contract: { strain: number } | undefined, on: boo
  * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
  * the preference, the contract and the strain encoding meet.
  *
- * No-trump has no trump suit, an unsettled auction has no contract, and the
- * default preference leaves every hand in suit order — all three answer null.
- * The strain-to-suit conversion itself lives in `trumpSuit` above.
+ * No-trump has no trump suit, an unsettled auction has no contract, and SUIT
+ * ORDER leaves every hand in ♠♥♦♣ — all three answer null. The strain-to-suit
+ * conversion itself lives in `trumpSuit` above.
  */
 export function trumpForDisplay(
   contract: { strain: number } | undefined,

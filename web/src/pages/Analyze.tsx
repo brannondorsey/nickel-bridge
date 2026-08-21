@@ -35,7 +35,7 @@ import { GlossaryProse } from '../components/game/GlossaryProse';
 import { HandFan } from '../components/game/HandFan';
 import { motionOK, trickWinner } from '../components/game/playAnim';
 import { TrickArea } from '../components/game/TrickArea';
-import { signedScore } from '../format';
+import { signedScore, tournamentNo } from '../format';
 import { buildReplayViews, firstPlyOfTrick, plyOfSeatInTrick } from '../replay/replayViews';
 import { useReplay } from '../replay/useReplay';
 import { railLayout } from './analyzeRail';
@@ -234,7 +234,7 @@ export default function Analyze() {
 
   return (
     <div className="board-page analyze-page">
-      <ScreenHeader title={`CROSSING ${tournamentId} — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
+      <ScreenHeader title={`CROSSING ${tournamentNo(board.tournamentNumber, board.tournamentId)} — BOARD ${boardNo}`} caption={sub} onBack={() => navigate(`/t/${tournamentId}/b/${boardNo}`)} />
       <div className="analyze-lens">
         <PrefSwitch label="Lens" value={lens} options={LENS_OPTIONS} onChange={setLens} />
       </div>
@@ -807,7 +807,9 @@ function ReplayLens({
   // screen for the hand to have moved from — and re-sorting on every step
   // would be a motion that says nothing about the play being reviewed.
   const { me } = useMe();
-  const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'left' ? 'left' : 'suit');
+  // Trump-left is the default, so only an explicit 'suit' opts out of it —
+  // the same fallback Board.tsx reads the preference through.
+  const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left');
   // The reader's own "Foil trumps" applies here too — a review of a board is
   // still a board, and a hand that glitters in play looking plain in Analyze
   // would read as a different deck rather than as a different screen.

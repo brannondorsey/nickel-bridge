@@ -140,6 +140,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const mine = myTournaments(user.id).map((t) => ({
       id: t.id,
       name: t.name,
+      number: t.number,
       difficulty: t.difficulty,
       myDone: t.myDone,
       createdAt: t.created_at,
@@ -163,6 +164,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({
       id: t.id,
       name: t.name,
+      number: t.number,
       difficulty: t.difficulty,
       boardDifficulties: myBoards.map((b) => boardDifficulty(t, b.no)),
       createdAt: t.created_at,
