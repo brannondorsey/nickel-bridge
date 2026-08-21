@@ -144,6 +144,16 @@ export default function Scenarios() {
       if (desyncAfterMs != null) {
         window.setTimeout(() => void api.demoDesync(tournamentId, boardNo).catch(() => {}), desyncAfterMs);
       }
+      // An exhibit may set account state as well as board state — 'foil-trumps'
+      // switches the Inspector's "Foil trumps" on (scenarios.ts's foilTrumps
+      // field) — and `me` was loaded when the app booted, so the board would
+      // render against a preference from before the click. Awaited, not fired
+      // and forgotten: navigating first means Board.tsx mounts on the stale
+      // value and the treatment only appears on a later reload, which reads as
+      // the exhibit not working. One /api/me on a demo deployment, so this is
+      // unconditional rather than a flag the gallery projection would have to
+      // carry for every future preference-touching exhibit.
+      await refresh();
       navigate(`/t/${tournamentId}/b/${boardNo}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'failed to prepare the exhibit');

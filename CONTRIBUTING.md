@@ -1573,6 +1573,22 @@ live reveals a genuine tournament-summary screen instead of just one board's rec
 `richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
 (the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
 error is guaranteed to fire on the first submit.
+One exhibit sets an ACCOUNT preference rather than board state, and it is the only one:
+`foil-trumps` (`foilTrumps: true`) switches the Inspector's "Foil trumps" on before the
+replay runs, because the thing it demonstrates is not a property of the board at all and
+the preference ships off — without it the tester lands on ordinary cards. It turns the
+column ON only: there is no reliable "left the exhibit" moment to turn it back off at, and
+an exhibit that silently REVERTED a setting the tester chose in the settings gate would be
+worse than one that turns a setting on and says so, which its description does. Its recipe
+is deliberately `partner-declares`' own verified triple (the `stale-board` precedent —
+there was no new position to mine): that board is flipped, so the human's fan and dummy's
+are both on screen with nine trumps between them, which is the treatment at its widest.
+Note the knock-on for the gallery: `Scenarios.tsx`'s `enter()` now **awaits**
+`refresh()` before navigating, since `me` was loaded at app boot and `Board.tsx` would
+otherwise mount against the preference from before the click — the foil would appear only
+after a reload, which reads as the exhibit not working. `MeContext`'s `refresh` returns its
+promise for exactly that; every other caller still fires and forgets.
+
 One exhibit overrides its tournament's claim rule, and it is the only one: `claim-on-call`
 (`claimRule: 'optimistic'`) shows the claim ticket going up on a CALL, before a card is
 played. That state is effectively unreachable under the shipped gate — a scan of 522 call
