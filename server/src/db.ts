@@ -309,6 +309,32 @@ if (!/trump_placement TEXT NOT NULL DEFAULT 'left'/.test(usersTableSql)) {
     db.exec(`ALTER TABLE users ADD COLUMN trump_placement TEXT NOT NULL DEFAULT 'left'`);
   })();
 }
+// Migration: `foil_trumps` — the Foil Trumps treatment, a holographic plate
+// over the trump suit in hand and on the table (web/src/components/game/
+// foil.ts; the concept board it was chosen from is served at
+// /foil-trumps-b-blade.html). Defaults OFF — another preference here that does
+// NOT preserve prior behaviour by defaulting on, though for a reason of its
+// own: double_tap_bid defaults off because the shortcut was misfiring and
+// trump_placement re-defaults because players asked for the other placement,
+// where this one simply cannot preserve anything, since there was no such
+// thing before. A decorative treatment nobody asked for is also not something
+// to switch on for every account at once.
+//
+// An INTEGER boolean rather than the TEXT enums above, deliberately: those two
+// name a MODE with plausible third values, where this is genuinely a yes/no —
+// which foil, at what strength and in which palette are settled constants in
+// foil.ts, chosen off the concept board, not choices this column is holding
+// open. Should a second reading ever ship, that is a new column with a name
+// for what it varies, not a widening of this one.
+//
+// Account state, not localStorage: whether someone wants their trumps to
+// glitter belongs to the person, not the device — the trump_placement
+// argument exactly. Purely a CLIENT treatment; the server never reads this
+// column, and nothing about the deal, legal cards, scoring or robot play
+// depends on it.
+if (!userColumns.has('foil_trumps')) {
+  db.exec(`ALTER TABLE users ADD COLUMN foil_trumps INTEGER NOT NULL DEFAULT 0`);
+}
 
 // Migration: `beta_features` — opt in to features still being tried out
 // before a general release. Nothing is gated behind it today (Analyze, the
@@ -549,6 +575,8 @@ export interface UserRow {
   trick_clear_mode: 'auto' | 'tap';
   /** where the trump suit sits in a hand once a trump contract is settled: 'left' (default, trump block first) or 'suit' (always ♠♥♦♣) */
   trump_placement: 'suit' | 'left';
+  /** 1 = the holographic Foil Trumps plate over the trump suit; 0 (default) = plain cards */
+  foil_trumps: number;
   elo: number;
   created_at: number;
 }

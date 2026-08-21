@@ -35,6 +35,8 @@ export interface Me {
     trickClearMode: 'auto' | 'tap';
     /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'left' (default) promotes the trump block, 'suit' is always ♠♥♦♣ */
     trumpPlacement: 'suit' | 'left';
+    /** the holographic plate over the trump suit, in hand and on the table (settings: "Foil trumps"); default false */
+    foilTrumps: boolean;
     /**
      * Opt in to features still being tried out before a general release —
      * nothing is gated behind it today. Off by default in production, on by
@@ -596,6 +598,7 @@ export const api = {
     doubleTapBid?: boolean;
     trickClearMode?: 'auto' | 'tap';
     trumpPlacement?: 'suit' | 'left';
+    foilTrumps?: boolean;
   }) =>
     request<{
       ladderListed: boolean;
@@ -605,6 +608,7 @@ export const api = {
       doubleTapBid: boolean;
       trickClearMode: 'auto' | 'tap';
       trumpPlacement: 'suit' | 'left';
+      foilTrumps: boolean;
     }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
@@ -784,20 +788,43 @@ export function displaySort(hand: number[], trump?: number | null): number[] {
 }
 
 /**
- * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
- * the preference, the contract and the strain encoding meet.
+ * The contract's trump suit, or null when there isn't one — no-trump, or an
+ * auction that has not settled yet.
  *
  * `strain` counts in BID order (0=♣ 1=♦ 2=♥ 3=♠ 4=NT) and suits count the
  * other way (0=♠ 1=♥ 2=♦ 3=♣), so the conversion is `3 - strain`; getting
- * that backwards promotes the wrong suit rather than failing, which is why
- * it lives here once instead of at each call site. No-trump has no trump
- * suit, an unsettled auction has no contract, and SUIT ORDER leaves every
- * hand in ♠♥♦♣ — all three answer null.
+ * that backwards names the wrong suit rather than failing, which is why it
+ * lives here once. Both preferences that care which suit is trumps — where it
+ * sits in the hand, and whether it glitters — read it from here.
+ */
+export function trumpSuit(contract: { strain: number } | undefined): number | null {
+  if (!contract) return null;
+  return contract.strain === 4 ? null : 3 - contract.strain;
+}
+
+/**
+ * The suit to give the Foil Trumps plate, or null for plain cards — the
+ * preference and the contract, in the shape the card components want.
+ *
+ * Kept apart from `trumpForDisplay` below even though both end at the same
+ * suit: they answer to different settings, and a hand can be foiled without
+ * being re-sorted or re-sorted without being foiled.
+ */
+export function foilForDisplay(contract: { strain: number } | undefined, on: boolean | undefined): number | null {
+  return on ? trumpSuit(contract) : null;
+}
+
+/**
+ * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
+ * the preference, the contract and the strain encoding meet.
+ *
+ * No-trump has no trump suit, an unsettled auction has no contract, and SUIT
+ * ORDER leaves every hand in ♠♥♦♣ — all three answer null. The strain-to-suit
+ * conversion itself lives in `trumpSuit` above.
  */
 export function trumpForDisplay(
   contract: { strain: number } | undefined,
   placement: 'suit' | 'left' | undefined,
 ): number | null {
-  if (placement !== 'left' || !contract) return null;
-  return contract.strain === 4 ? null : 3 - contract.strain;
+  return placement === 'left' ? trumpSuit(contract) : null;
 }

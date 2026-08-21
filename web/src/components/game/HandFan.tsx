@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { RANK_CHARS, SUIT_SYMBOLS, cardRank, cardSuit, displaySort } from '../../api';
 import { fanMarginLeft } from './fanLayout';
+import { FoilLayer } from './FoilLayer';
 import { capturePlayOrigin, motionOK } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 import { drawTiming } from './trumpDraw';
@@ -31,6 +32,7 @@ export function HandFan({
   small = false,
   hint = null,
   trump = null,
+  foil = null,
   drawIn = false,
 }: {
   cards: number[];
@@ -42,6 +44,13 @@ export function HandFan({
   hint?: number | null;
   /** suit to lay out first ("Trump placement · LEFT SIDE"); null = plain ♠♥♦♣ */
   trump?: number | null;
+  /**
+   * suit to foil ("Foil trumps · ON"); null = no foil. Deliberately separate
+   * from `trump` above, which is an ORDERING and is null whenever the player
+   * left trump placement on ♠♥♦♣ — the two preferences are independent, and a
+   * hand can be foiled without being re-sorted or the other way round.
+   */
+  foil?: number | null;
   /** play the Draw into that order once, on mount — see the note below */
   drawIn?: boolean;
 }) {
@@ -87,7 +96,7 @@ export function HandFan({
     if (!fan) return;
     if (drawing) {
       firstLefts.current = new Map(
-        [...fan.children].map((el) => [Number((el as HTMLElement).dataset.card), el.getBoundingClientRect().left]),
+        cardEls(fan).map((el) => [Number(el.dataset.card), el.getBoundingClientRect().left]),
       );
       setDrawing(false);
       return;
@@ -121,21 +130,54 @@ export function HandFan({
             onClick={
               playable
                 ? (e) => {
-                    // second tap plays: remember where the card left the fan
-                    // so TrickArea can glide it into the trick slot from here
-                    if (selected === c) capturePlayOrigin(c, e.currentTarget.getBoundingClientRect());
+                    /* Second tap plays: remember where the card left the fan so
+                       TrickArea can glide it into the trick slot from here.
+                       The LIFT is taken back off first (a selected card sits
+                       ~14px high): the glide should start from where the card
+                       rests, and Foil Trumps samples its sheet at that resting
+                       position too, so a raised origin made the flight's first
+                       frame a different patch from the hand it just left. */
+                    if (selected === c) capturePlayOrigin(c, restingRect(e.currentTarget));
                     onSelect!(c);
                   }
                 : undefined
             }
             aria-label={`${RANK_CHARS[cardRank(c)]} of ${SUIT_SYMBOLS[cardSuit(c)]}`}
           >
-            <PlayingCard card={c} small={small} dimmed={dimmed} selected={selected === c} />
+            <PlayingCard
+              card={c}
+              small={small}
+              dimmed={dimmed}
+              selected={selected === c}
+              foil={foil !== null && cardSuit(c) === foil}
+            />
           </button>
         );
       })}
+      {/* last child, so it paints over the cards; it finds them itself */}
+      {foil !== null ? <FoilLayer /> : null}
     </div>
   );
+}
+
+/**
+ * A card button's box with its own transform taken back off — for a selected
+ * card that is the ~14px lift, which is the only transform a resting fan card
+ * ever has. Returned as a plain rect so callers can treat it like any other.
+ */
+function restingRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const dy = r.top - (el.offsetTop + (el.offsetParent?.getBoundingClientRect().top ?? 0));
+  const dx = r.left - (el.offsetLeft + (el.offsetParent?.getBoundingClientRect().left ?? 0));
+  return new DOMRect(r.left - dx, r.top - dy, r.width, r.height);
+}
+
+/**
+ * The fan's card buttons, in order — never just `fan.children`, which also
+ * holds the foil canvas when the treatment is on.
+ */
+function cardEls(fan: HTMLElement): HTMLElement[] {
+  return [...fan.querySelectorAll<HTMLElement>('[data-card]')];
 }
 
 /**
@@ -166,7 +208,7 @@ export function HandFan({
  */
 function playDraw(fan: HTMLElement, firstLefts: Map<number, number>, trump: number | null): Promise<unknown>[] {
   if (trump === null) return [];
-  const cards = [...fan.children] as HTMLElement[];
+  const cards = cardEls(fan);
   const trumps = cards.filter((el) => cardSuit(Number(el.dataset.card)) === trump).length;
   const timing = drawTiming(trumps);
   const ease = 'cubic-bezier(.2,.7,.2,1)';

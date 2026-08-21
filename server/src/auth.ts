@@ -38,6 +38,7 @@ const stmtSetBetaFeatures = db.prepare(`UPDATE users SET beta_features = ? WHERE
 const stmtSetDoubleTapBid = db.prepare(`UPDATE users SET double_tap_bid = ? WHERE id = ?`);
 const stmtSetTrickClearMode = db.prepare(`UPDATE users SET trick_clear_mode = ? WHERE id = ?`);
 const stmtSetTrumpPlacement = db.prepare(`UPDATE users SET trump_placement = ? WHERE id = ?`);
+const stmtSetFoilTrumps = db.prepare(`UPDATE users SET foil_trumps = ? WHERE id = ?`);
 const stmtHandleTaken = db.prepare(`SELECT 1 FROM users WHERE handle_key = ? AND id != ?`);
 const stmtUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
@@ -220,6 +221,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             doubleTapBid: user.double_tap_bid !== 0,
             trickClearMode: user.trick_clear_mode,
             trumpPlacement: user.trump_placement,
+            foilTrumps: user.foil_trumps !== 0,
             // Completed standard boards. Here rather than derived on the client
             // because Compare's entry points need to know whether the VIEWER
             // has a record worth comparing, and on someone else's profile the
@@ -316,6 +318,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
    *   trump_placement migration in db.ts, and the one below it for why
    *   existing accounts were moved onto the new default rather than left
    *   holding the old one.
+   * - foilTrumps — the holographic plate over the trump suit, in hand and on
+   *   the table. Defaults false: unlike doubleTapBid (off because the shortcut
+   *   was misfiring) or trumpPlacement (re-defaulted because players asked for
+   *   it), there is simply no prior behaviour here to preserve, and a
+   *   decorative treatment is not something to switch on for every account at
+   *   once. Client-side only — see the foil_trumps migration in db.ts.
    *
    * The last two are TEXT enums rather than booleans (each names a MODE, not
    * a yes/no — see their migrations in db.ts), so they live in `enums` below
@@ -335,6 +343,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ['bidFeedback', (on) => stmtSetBidFeedback.run(on ? 1 : 0, user.id)],
       ['betaFeatures', (on) => stmtSetBetaFeatures.run(on ? 1 : 0, user.id)],
       ['doubleTapBid', (on) => stmtSetDoubleTapBid.run(on ? 1 : 0, user.id)],
+      ['foilTrumps', (on) => stmtSetFoilTrumps.run(on ? 1 : 0, user.id)],
     ];
     const enums: [key: string, values: string[], apply: (value: string) => void][] = [
       ['trickClearMode', ['auto', 'tap'], (v) => stmtSetTrickClearMode.run(v, user.id)],
@@ -368,6 +377,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       doubleTapBid: row.double_tap_bid !== 0,
       trickClearMode: row.trick_clear_mode,
       trumpPlacement: row.trump_placement,
+      foilTrumps: row.foil_trumps !== 0,
     });
   });
 

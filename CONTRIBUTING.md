@@ -170,6 +170,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 AdjustedReceipt.tsx — the never-tolled twin ScoreReceipt lends its
                 ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
+                foil.ts + FoilLayer.tsx — Foil Trumps, the holographic plate over the
+                trump suit; one WebGL canvas per card container painting a quad per
+                [data-foil] face, since the pattern is one continuous field across a
+                hand rather than a background on each card — see "Foil trumps" below,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
                 the landing page share),
                 src/test/ (fixtures + apiMock pattern),
@@ -240,6 +244,18 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
+                foil-trumps: the concept boards are NOT here — they are
+                web/public/foil-trumps-a-concept.html (the six readings) and
+                web/public/foil-trumps-b-blade.html (the blade, narrowed, and
+                the one the shipped treatment was chosen from), served by the
+                app, because the tilt treatment reads deviceorientation and that
+                needs a secure, top-level, SAME-ORIGIN context. A docs/ file
+                opened over file:// has a null origin and iOS refuses
+                requestPermission() outright, and a hosted artifact is a
+                cross-origin frame where the sensors are policy-denied with no
+                way for the frame to grant itself them. A PR preview URL is the
+                review surface, and board B stays served after shipping because
+                it is where the dials live — see "Foil trumps" below;
                 trump-placement-concepts.html — the concept-exploration board for the
                 "trump suit to the left of the fan" request: three live, replayable
                 motions over the real fan geometry, plus the re-sort rule and which
@@ -777,6 +793,21 @@ it are decisions rather than defaults:
   back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
   preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
   and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
+
+**The three motion sensors are the one `(self)` in Permissions-Policy**, and the only
+capability this app grants rather than denies. `accelerometer`/`gyroscope`/`magnetometer`
+gate `deviceorientation`, which the Foil Trumps tilt treatment reads — in the shipped
+feature (`web/src/components/game/foil.ts`) and on both concept boards
+(`web/public/foil-trumps-*.html`); denied — as they were — the events never arrive
+at all: no error, no prompt, nothing in the console, so it presents as the feature being
+broken rather than as a header being wrong. `(self)` is deliberately not `*`: the default
+allowlist for these is already `self`, so writing it out changes nothing a browser does
+and instead states the decision where the next reader of that list will find it, while
+keeping a cross-origin iframe embedded in one of our pages from inheriting them. That same
+rule cuts the other way and is why the boards have to be served from here rather than
+hosted as an artifact — a cross-origin frame is denied these by default and nothing inside
+the frame can grant them. `server/test/security.test.ts` pins both halves; if Foil Trumps
+is ever cut, move the three back to `DENIED` in the same change.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
@@ -1542,6 +1573,22 @@ live reveals a genuine tournament-summary screen instead of just one board's rec
 `richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
 (the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
 error is guaranteed to fire on the first submit.
+One exhibit sets an ACCOUNT preference rather than board state, and it is the only one:
+`foil-trumps` (`foilTrumps: true`) switches the Inspector's "Foil trumps" on before the
+replay runs, because the thing it demonstrates is not a property of the board at all and
+the preference ships off — without it the tester lands on ordinary cards. It turns the
+column ON only: there is no reliable "left the exhibit" moment to turn it back off at, and
+an exhibit that silently REVERTED a setting the tester chose in the settings gate would be
+worse than one that turns a setting on and says so, which its description does. Its recipe
+is deliberately `partner-declares`' own verified triple (the `stale-board` precedent —
+there was no new position to mine): that board is flipped, so the human's fan and dummy's
+are both on screen with nine trumps between them, which is the treatment at its widest.
+Note the knock-on for the gallery: `Scenarios.tsx`'s `enter()` now **awaits**
+`refresh()` before navigating, since `me` was loaded at app boot and `Board.tsx` would
+otherwise mount against the preference from before the click — the foil would appear only
+after a reload, which reads as the exhibit not working. `MeContext`'s `refresh` returns its
+promise for exactly that; every other caller still fires and forgets.
+
 One exhibit overrides its tournament's claim rule, and it is the only one: `claim-on-call`
 (`claimRule: 'optimistic'`) shows the claim ticket going up on a CALL, before a card is
 played. That state is effectively unreachable under the shipped gate — a scan of 522 call
@@ -2235,12 +2282,200 @@ already settled inside the first trick — which is exactly why it went unnotice
   staged snapshots already enforce by dropping `legalCards`; the Draw needs its own guard
   because the case they do not cover is the player being on LEAD, where there are no robot
   cards to stage and the fan arrives live with the trumps still travelling.
+- **Foil trumps** (`users.foil_trumps`, default **OFF**) gives the trump suit a
+  holographic plate — in your hand, in dummy, on the table and in Analyze's replay.
+  Another row that does not preserve prior behaviour by defaulting on, and the reason is
+  its own: `double_tap_bid` defaults off because the shortcut was misfiring and
+  `trump_placement` re-defaults because players asked for the other placement, where this
+  one simply had no prior behaviour to preserve — and a decorative treatment nobody asked
+  for is not something to switch on for every account at once. An INTEGER boolean rather than the TEXT enums above, deliberately —
+  those name a MODE with plausible third values, where this is a yes/no; which foil, at
+  what strength, in which palette are settled constants in `foil.ts`, not choices this
+  column holds open. Purely a client treatment: the server never reads the column, and
+  nothing about the deal, the legal cards, scoring or robot play depends on it, so two
+  players on the same board with opposite settings still face identical robots. See
+  "Foil trumps" below for how it is drawn. It is also the ONE row on this panel whose
+  `onChange` does something besides write the preference: switching it ON calls
+  `requestFoilTilt()`, because iOS grants the motion sensors only from a user gesture
+  and this tap is both a real one and the moment the player has just asked for the
+  effect. A refusal is never surfaced — the foil drifts on its own clock without a
+  sensor.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,
   unlike the bullets above it — its `onChange` is the same synchronous set-state/store/apply
   triple Appearance uses, with no server round trip, no optimistic revert, and no
   `prefError` path to wire up.
+
+**Foil trumps is one continuous field, not an effect per card, and that decides its
+whole shape.** `web/src/components/game/foil.ts` is a Balatro-style ruled diffraction
+grating ("the blade") ported from the concept board at
+`web/public/foil-trumps-b-blade.html` with the settings the owner landed on baked in as
+constants — weight 0.90, count 0.15, ambient 0.15, light size 120, duotone by day and the
+full spectrum at night, day carrying more intensity than night because multiply spends it
+differently than screen does. The duotone's own lightness and saturation are day-only
+dials (the branch is never taken at night), and were raised once after shipping — the
+first pass read as a dusty lavender rather than as foil, so the tint went lighter and more
+saturated together, which under multiply means a lighter card carrying more colour. That board stays served after shipping, and is still where
+to change how this LOOKS: it carries every dial as a live slider, a gallery of sweeps and
+a sensor readout, none of which belong in the app bundle.
+
+At the shipped line count a single rule spans ~440px — wider than a whole hand — so the
+pattern has to be continuous ACROSS the fan to read as one sheet of foil. That rules out a
+per-card CSS gradient, which would restart at every card, and is why this is one canvas
+per card container (`FoilLayer`, a plain last child of `.handfan`/`.trick`) painting a quad
+per `[data-foil]` face rather than a background on each `.pcard`. `PlayingCard` marks the
+faces; the layer finds them itself, so the two halves never have to agree twice about
+which suit is trumps. A context per host is affordable here in a way it was not on the
+concept board — that page has ~130 hosts and had to render offscreen and blit against a
+browser limit of roughly 16 live contexts, where a board carries at most three.
+
+Four details are load-bearing:
+
+- **The blend mode is what protects the ink.** On day stock the layer multiplies, which
+  cannot lighten: the card takes the foil colour exactly while the near-black rank and pip
+  come through untouched, so the plate runs edge to edge UNDER the glyphs with nothing to
+  cut around (board A knocked a box out around the corner index, and you could see it).
+  Night is the opposite problem and screens onto the dark card. The GL clear colour follows
+  the stock for the same reason — white is multiply's no-op, black is screen's — or the
+  gaps between cards would tint.
+- **...which means the blend and the shader must agree, and that is the one thing easy to
+  get wrong.** The concept board shipped a version where CSS decided "night" from
+  `prefers-color-scheme` while the shader decided it from the board's own lever, and on a
+  phone in OS dark mode with the lever on DAY they disagreed: the day image, built around
+  white, was SCREENED, and since screen cannot darken, the card, the pips and the rank all
+  blew out to near-white together. It presented as the shader being wrong for light and it
+  was one selector. So neither half decides here. `--foil-stock` is a token declared beside
+  every other night override in `style.css` (add it to any block that overrides
+  `--cardface`), and BOTH the canvas's `mix-blend-mode` and the shader's `u_night` are read
+  from the cascade's answer for it. They cannot disagree, whatever combination of
+  `data-theme` and OS preference produced it. It is re-read on a timer rather than
+  subscribed to, because there are four ways it can change — the settings lever, App.tsx's
+  adaptive-schedule tick, an OS appearance change, and a `system` preference meeting either
+  of the last two — and a periodic read is correct for all of them plus any fifth.
+- **A card's quad is clipped to the part of it that is actually VISIBLE, and that
+  region is an L rather than a column.** Fan cards overlap and stacking is document
+  order, so the next card wins — measured with `elementFromPoint`, because it is easy
+  to assume otherwise: lifting a selected card does NOT raise it above its right-hand
+  neighbour, it exposes the strip ABOVE that neighbour's top edge. Clipping in x alone
+  foiled the left sliver and left that strip bare; dropping the clip for lifted cards
+  painted foil straight over the neighbour's face. A pixel is hidden only when it is
+  both past the neighbour's left edge AND below its top.
+- **The foil is printed ON the card, so the pattern is sampled where the card
+  LIVES, not where it has been moved to.** `u_shift` is however far a transform has
+  carried a card from its layout position, taken back off before the sheet is sampled.
+  Without it, selecting a card slid it 14px through a grating whose rules are ~440px
+  apart — enough to take the line term from 1 to 0 and drop the foil off that one card
+  while its neighbours kept theirs, which reads as the sheet tearing rather than as a card
+  being picked up. It covers the Draw's slide for free.
+- **...and the sheet is one PAGE-space field, not one per layer.** Each canvas used to
+  count from its own corner, which quietly made one sheet into three: the same card came
+  up gold in the hand and blue on the table, because the fan's canvas and the trick's
+  start at different places. `u_origin` adds each layer's own page offset, so a card's
+  patch depends only on where it is on the page. The LAMP stays per container, though
+  (`setSheet`) — every value on board B was chosen against a lamp over the hand, and one
+  light over the whole page would leave the fan, which sits at the bottom of the screen,
+  mostly at ambient. Only the pattern is shared.
+- **A card in flight holds still, anchored to where it is GOING.** Letting the clone
+  travel through the sheet was tried and measured: over one glide the patch swept green →
+  cyan → blue. The rules are ~440px apart and a card crosses ~200px, so "smoothly
+  continuous" is still a card visibly changing colour in mid air, which is what the
+  complaint was. Two things cannot both be true — that the hand reads as one sheet (a
+  card's patch depends on where it sits, so neighbours line up) and that a card's patch
+  never changes as it is played (the patch belongs to the card). The hand is the whole
+  look, so the sheet wins, and something has to change once; anchoring to the destination
+  spends it at the moment of the tap, when the card is leaving the fan anyway, and leaves
+  the glide and the landing identical. Three parts, all of them load-bearing and each one
+  the difference between "identical" and "nearly":
+  - **The anchor is the destination's LAYOUT point, not the rect it is drawn at**
+    (`foilAnchor`). A trick slot is centred with `transform: translate(-50%)`, and
+    `u_shift` takes that back off like any other transform — so a trick card's foil is
+    sampled up to half a slot from where the card appears (measured: 21px in x for N/S,
+    40px in y for E/W). Anchoring to the drawn rect put the last frame of the glide 40px
+    along the sheet from the card replacing it, which is exactly the snap this exists to
+    remove. (That centring also means the four cards of a trick sit on patches pulled
+    apart by those same amounts — under a tenth of a rule period, a slight difference in
+    tint between seats at most, and left alone: the fan's lift is a transform on an
+    ancestor too, and stripping it is the whole point there.)
+  - **The clone borrows the lamp of the layer it is going to** (`lampFor`), since the
+    lamp is per container. Lit by the viewport-wide flight layer's own centre instead, the
+    hue matched and the brightness still stepped on landing.
+  - **A scaled clone samples at 1:1** (`u_scale`). A fan card is a quarter wider than a
+    table slot and the glide scales it down, so a quad sampled at its drawn size would
+    zoom the pattern with it. `u_scale` is 1 for every laid-out card, where the shader
+    reduces to what it was.
+- **The flight clones need their own layer, and it is the only one not inside a card
+  container.** `TrickArea` animates a `position: fixed` clone on `document.body` between
+  the fan and the table, so nothing scoped to a host can reach it and a trump simply lost
+  its foil for the length of the glide — exactly when it is most looked at. The flight
+  layer is fixed like what it paints, so the two cannot desync the way a fixed blend layer
+  over SCROLLING content does. It is hidden by **`visibility`**, never `display`: a
+  `display: none` canvas has no box, so its own `getBoundingClientRect` comes back zeroed,
+  the zero-size guard bails, and it can never make itself visible again — hidden forever,
+  in silence. `collectSweep`'s clones are built from scratch rather than cloned, so
+  `makeCardEl` has to be told which are trumps — and, since the card element is already
+  gone by the time that layout effect runs, its anchor comes from the slot the card
+  filled rather than from the card.
+- **A card that cannot be played eases off, on night stock only.** `style.css` dims an
+  illegal card by dropping its rank and pip to 0.4 opacity and never touching the face —
+  which the foil then has to answer for, because the layer is a sibling and does not dim
+  with them. By day it does not need to: multiply cannot lighten, so the ink still darkens
+  whatever the plate put down. At night the plate SCREENS, so a full-strength patch under
+  a 40%-opacity light glyph leaves nothing to read — the card goes bright and its value
+  disappears, which is what a player reported for a hand of unplayable trumps. `u_dim`
+  brings the plate down with the ink (`DIM_NIGHT`, 0.45: enough left that the card still
+  reads as a trump). The join is `.pcard[data-foil]` also carrying `.dimmed`, so renaming
+  either class silently returns the card to being unreadable — `foil.test.tsx` guards it.
+- **Nothing moves on its own.** The phase was once advanced by a clock so a device with no
+  sensors still had something to look at; on a real phone that read as the foil crawling by
+  itself, and a card sitting on the table is not moving. The tilt is now the only thing
+  that moves the pattern, and a board with no sensor holds still.
+- **Measure against the CANVAS's box, never the host's.** The layer overhangs by
+  `--foil-bleed` (a trick card is taller than its grid row and spills past the box; a layer
+  pinned to `inset: 0` leaves its foot bare), so the two boxes differ by 32px in each axis.
+  Using the host's size for `u_res` while rasterising into the larger canvas shifts every
+  quad up and left by the bleed and stretches it — the foil lands beside its cards rather
+  than on them, which is exactly what shipped in the first draft. Relatedly, the width and
+  height are spelled out in CSS rather than left to opposing offsets: a `<canvas>` is a
+  REPLACED element, so `inset: -16px` with `width: auto` sits at its intrinsic 300×150 and
+  silently paints almost nothing.
+- **Tilt is the enhancement, not the feature.** Device orientation moves the grain's angle
+  and phase — with curvature gone every card shares one normal, so tilting cannot light one
+  card more than its neighbour and brightness is the wrong thing to hand a sensor. The
+  reading is filtered (a 420ms time constant, alpha derived per frame from real elapsed
+  time) AND rate-limited to 0.6 of the range per second, and both are needed: a time
+  constant bounds LAG, not SPEED, so the first frame of a full-sweep target still moves ~4%
+  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. **How much of
+  the reading is spent at all is one dial, `TILT_GAIN`** — "less motion" is a single
+  judgement about the whole effect, and scaling the reading scales the grain's rotation,
+  the band's slide and the hue shift together, leaving the relationship between them (the
+  part tuned on board B) alone. It came down a fifth, to 0.64, on a play report that the
+  shine moved too far for the wrist; `TILT_MAX_RATE` came down the same fifth with it,
+  since a cap in normalised units would otherwise cross the now-shorter range faster and
+  hand back the calm the shorter range buys. Without a
+  sensor the pattern simply holds still — nothing looks broken because a still card having
+  a still shine is what a card does. **Two events are listened for, not one**:
+  `deviceorientation` everywhere it exists, and `deviceorientationabsolute`, which some
+  Android builds populate INSTEAD — that is the case `magnetometer` is granted for in
+  `security.ts`'s `SELF_ONLY`, and a device firing only the sibling would otherwise hold
+  the permission while the pattern never moved. Both concept boards listen for both; the
+  port to the app dropped one and it had to be put back. The pair is detached again when
+  the last foiled surface unmounts, or the browser keeps sampling motion hardware for the
+  rest of the tab's life — on Settings, the ladder, everywhere — once tilt has ever
+  attached once. This matters because iOS grants the sensors only from
+  a user gesture and does not persist the grant across page loads. The ask therefore lives on the settings lever, and a player who
+  has already said yes once (`nb:foilTilt`) gets it re-made silently on their first tap of
+  the session. Under `prefers-reduced-motion` the clock and the tilt freeze but the layer
+  keeps drawing: the foil is a texture, and asking for less movement is not asking for a
+  plain card — the quads still have to follow their cards as the hand is played. That is
+  also why the rAF loop runs on a board where nothing is happening: it is tracking
+  geometry, not animating a pattern.
+
+`Tour.tsx` reads no preference at all, the `doubleTapBid`/`trump_placement` precedent. A
+browser with no WebGL gets an unstyled board rather than an error, and the context is
+feature-detected (`typeof WebGLRenderingContext`) before it is asked for, because
+`getContext('webgl')` under jsdom is not a quiet null — it reports on the virtual console,
+which would print a stack per canvas in every unit test that renders a foiled hand.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,

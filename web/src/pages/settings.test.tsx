@@ -108,6 +108,35 @@ describe('Settings', () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
+  // Off by default, like "Double-tap to bid" but for a reason of its own:
+  // there was no prior behaviour for it to preserve.
+  it('writes "Foil trumps" to the account, defaulting to off', async () => {
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, foilTrumps: true });
+    const { refresh } = renderSettings();
+    expect(segment('Foil trumps', 'OFF')).toHaveClass('active');
+    await userEvent.click(segment('Foil trumps', 'ON')!);
+    expect(apiMock.setPrefs).toHaveBeenCalledWith({ foilTrumps: true });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  // Turning it ON asks for the motion sensors, because iOS only grants them
+  // from a user gesture and this tap is the one moment in the app that is both
+  // a real gesture and the player saying they want the effect. Turning it OFF
+  // must not ask — nothing is about to use them.
+  it('asks for the motion sensors only when switching foil ON', async () => {
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    (window as unknown as { DeviceOrientationEvent: unknown }).DeviceOrientationEvent = { requestPermission };
+    apiMock.setPrefs.mockResolvedValue({ ladderListed: true, autoClaim: true, foilTrumps: true });
+    renderSettings({ ...meFixture, user: { ...meFixture.user!, foilTrumps: true } });
+
+    await userEvent.click(segment('Foil trumps', 'OFF')!);
+    expect(requestPermission).not.toHaveBeenCalled();
+
+    await userEvent.click(segment('Foil trumps', 'ON')!);
+    await vi.waitFor(() => expect(requestPermission).toHaveBeenCalledTimes(1));
+    delete (window as unknown as { DeviceOrientationEvent?: unknown }).DeviceOrientationEvent;
+  });
+
   it('reflects an account that has opted back into suit order', () => {
     renderSettings({ ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'suit' } });
     expect(segment('Trump placement', 'SUIT ORDER')).toHaveClass('active');

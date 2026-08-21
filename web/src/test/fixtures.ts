@@ -43,6 +43,8 @@ export const meFixture: Me = {
     // for and every account defaults to (see the trump_placement migrations
     // in server/src/db.ts). A suite that wants ♠♥♦♣ overrides this one.
     trumpPlacement: 'left',
+    // ...and foil, which defaults off for everyone.
+    foilTrumps: false,
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,

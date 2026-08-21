@@ -26,6 +26,7 @@ const stmtCreateExhibitWithRule = db.prepare(
   `INSERT INTO tournaments (name, seed, kind, claim_rule) VALUES (?, ?, 'exhibit', ?) RETURNING *`,
 );
 const stmtDeleteBoard = db.prepare(`DELETE FROM boards WHERE tournament_id = ? AND user_id = ? AND board_no = ?`);
+const stmtEnableFoilTrumps = db.prepare(`UPDATE users SET foil_trumps = 1 WHERE id = ?`);
 // The freshAiField exhibit's tournament is a REAL standard tournament —
 // same columns placeUser stamps (intermediate = the Inspector's default
 // preference, so it also behaves normally in placement afterwards) — because
@@ -171,6 +172,13 @@ async function runScenarioNow(
       throw httpError(500, `scenario ${s.id} drifted: expected ${s.expect}, got ${fresh.row.state}`);
     }
     return { tournamentId: t.id, boardNo: s.boardNo };
+  }
+  if (s.foilTrumps) {
+    // Not board state: "Foil trumps" is an account preference and it ships
+    // off, so the exhibit that demonstrates it has to switch it on for the
+    // acting user first or the tester lands on ordinary cards. ON only — see
+    // the field's doc comment in scenarios.ts for why it never turns back off.
+    stmtEnableFoilTrumps.run(userId);
   }
   const t = ensureExhibitTournament(s.seed, s.claimRule);
   if (s.completesTournament) {

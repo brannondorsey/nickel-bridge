@@ -5,6 +5,7 @@ import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
 import { PrefSwitch } from '../components/ds/PrefSwitch';
+import { requestFoilTilt } from '../components/game/foil';
 import { clearVisitStamp } from '../splash';
 import { applySuitPalette, readSuitPalette, storeSuitPalette, type SuitPalette } from '../suitPalette';
 import { applyThemePref, readThemePref, storeThemePref, type ThemePref } from '../theme';
@@ -94,6 +95,7 @@ type AccountPrefs = {
   doubleTapBid: boolean;
   trickClearMode: 'auto' | 'tap';
   trumpPlacement: 'suit' | 'left';
+  foilTrumps: boolean;
 };
 
 export default function Settings() {
@@ -115,6 +117,8 @@ export default function Settings() {
     // than the preserved old behaviour, so only an explicit 'suit' reads as
     // the ♠♥♦♣ this app laid every hand out in before the setting existed.
     trumpPlacement: me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left',
+    // Fails closed, like doubleTapBid: this one is off by default too.
+    foilTrumps: me?.user?.foilTrumps === true,
   });
   const [prefError, setPrefError] = useState<string | null>(null);
 
@@ -219,6 +223,28 @@ export default function Settings() {
               value={prefs.trumpPlacement}
               options={TRUMP_PLACEMENT_OPTIONS}
               onChange={(trumpPlacement) => change({ trumpPlacement })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Foil trumps"
+            note="Give the trump suit a holographic plate — in your hand, in dummy and on the table. On a phone, tilting the device moves the shine across the cards the way it would across real foil."
+          >
+            <PrefSwitch
+              label="Foil trumps"
+              value={prefs.foilTrumps}
+              options={OFF_ON}
+              onChange={(foilTrumps) => {
+                /* The one place in the app where asking for the motion
+                   sensors makes sense: iOS only grants them from a user
+                   gesture, and this tap is both a real one and the moment the
+                   player has just said they want the effect. A refusal is not
+                   an error and is never surfaced — the foil drifts on its own
+                   clock without a sensor, so tilt is the enhancement rather
+                   than the feature. */
+                if (foilTrumps) void requestFoilTilt();
+                change({ foilTrumps });
+              }}
             />
           </SettingRow>
 
