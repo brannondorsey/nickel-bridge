@@ -2350,6 +2350,14 @@ Four details are load-bearing:
   subscribed to, because there are four ways it can change — the settings lever, App.tsx's
   adaptive-schedule tick, an OS appearance change, and a `system` preference meeting either
   of the last two — and a periodic read is correct for all of them plus any fifth.
+- **A card's quad is clipped to the part of it that is actually VISIBLE, and that
+  region is an L rather than a column.** Fan cards overlap and stacking is document
+  order, so the next card wins — measured with `elementFromPoint`, because it is easy
+  to assume otherwise: lifting a selected card does NOT raise it above its right-hand
+  neighbour, it exposes the strip ABOVE that neighbour's top edge. Clipping in x alone
+  foiled the left sliver and left that strip bare; dropping the clip for lifted cards
+  painted foil straight over the neighbour's face. A pixel is hidden only when it is
+  both past the neighbour's left edge AND below its top.
 - **The foil is printed ON the card, so the pattern is sampled where the card
   LIVES, not where it has been moved to.** `u_shift` is however far a transform has
   carried a card from its layout position, taken back off before the sheet is sampled.

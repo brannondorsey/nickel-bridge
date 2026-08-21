@@ -101,6 +101,7 @@ varying vec2 v_uv;
 uniform vec4 u_rect;
 uniform vec2 u_light;
 uniform vec2 u_clipx;
+uniform float u_clipTop;
 uniform vec2 u_shift;
 uniform vec2 u_tilt;
 uniform float u_gain;
@@ -148,10 +149,18 @@ vec3 palette(float t) {
 
 void main() {
   vec2 px = u_rect.xy + v_uv * u_rect.zw;
-  /* a fanned card is overlapped by the next one; each quad paints only the
-     sliver of itself that is actually visible, or an earlier card's foil
-     would sit on top of a later card's face */
-  if (px.x < u_clipx.x || px.x > u_clipx.y) discard;
+  /* A fanned card is overlapped by the next one, and each quad paints only the
+     part of itself that is actually VISIBLE — otherwise an earlier card's foil
+     sits on top of a later card's face.
+     The visible part is an L, not a column, and getting that wrong is what
+     made a selected card look broken. Lifting a card does NOT move it above
+     its right-hand neighbour (measured with elementFromPoint: the neighbour
+     still wins, since fan stacking is document order); it exposes the strip
+     ABOVE the neighbour's top edge. Clipping in x alone foiled the left sliver
+     and left that strip bare; dropping the clip for lifted cards painted foil
+     straight over the neighbour's face. So both axes: a pixel is hidden only
+     when it is past the neighbour's left edge AND below its top. */
+  if (px.x > u_clipx.y && px.y > u_clipTop) discard;
 
   /* THE FOIL IS PRINTED ON THE CARD, so the pattern is sampled where the card
      LIVES, not where it has been moved to: u_shift is however far a transform
@@ -236,7 +245,9 @@ class FoilSurface {
     const loc = gl.getAttribLocation(program, 'a_unit');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const name of ['u_res', 'u_rect', 'u_light', 'u_clipx', 'u_shift', 'u_tilt', 'u_gain', 'u_night', 'u_palette']) {
+    for (const name of [
+      'u_res', 'u_rect', 'u_light', 'u_clipx', 'u_clipTop', 'u_shift', 'u_tilt', 'u_gain', 'u_night', 'u_palette',
+    ]) {
       this.u[name] = gl.getUniformLocation(program, name);
     }
     this.gl = gl;
@@ -306,11 +317,17 @@ class FoilSurface {
       if (el.style.visibility === 'hidden') continue;
       const r = el.getBoundingClientRect();
       if (r.width < 1) continue;
+      // the neighbour that overlaps this card, if any — see the L-shaped clip
+      // in the shader for why its TOP matters as much as its left edge
       let clipRight = r.right;
+      let clipTop = -1e6;
       const next = faces[i + 1];
       if (next) {
         const nr = next.getBoundingClientRect();
-        if (nr.left > r.left) clipRight = Math.min(clipRight, nr.left);
+        if (nr.left > r.left && nr.left < r.right) {
+          clipRight = nr.left;
+          clipTop = nr.top;
+        }
       }
       /* Where the card would be with no transform on it — see u_shift in the
          shader. A lift, the Draw's slide and a staged glide are all transforms
@@ -319,6 +336,7 @@ class FoilSurface {
       const shiftX = r.left - box.left - (lay.x + hostBox.left - box.left);
       const shiftY = r.top - box.top - (lay.y + hostBox.top - box.top);
       gl.uniform2f(this.u.u_clipx, r.left - box.left, clipRight - box.left);
+      gl.uniform1f(this.u.u_clipTop, clipTop - box.top);
       gl.uniform2f(this.u.u_shift, shiftX, shiftY);
       gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -358,7 +376,9 @@ class FoilSurface {
     for (const el of clones) {
       const r = el.getBoundingClientRect();
       if (r.width < 1) continue;
+      // a clone in flight is over everything, so nothing clips it
       gl.uniform2f(this.u.u_clipx, r.left - box.left, r.right - box.left);
+      gl.uniform1f(this.u.u_clipTop, 1e6);
       gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
