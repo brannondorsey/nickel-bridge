@@ -753,13 +753,39 @@ function removeSurface(s: FoilSurface) {
     // the next board re-centres on however the device is held then
     rest = null;
     tilt.x = tilt.y = tiltTarget.x = tiltTarget.y = 0;
+    // No foiled surface is left to read the sensor for, so stop asking the
+    // device for readings too — otherwise the browser keeps sampling motion
+    // hardware for the rest of the tab's life the moment tilt is ever
+    // attached once, on Settings, the leaderboard, anywhere.
+    if (listening) {
+      listening = false;
+      removeOrientationListeners();
+    }
   }
+}
+
+/** Both the plain event and the absolute variant fire it — see `SELF_ONLY`
+ *  in server/src/security.ts for why both are granted. */
+function addOrientationListeners() {
+  window.addEventListener('deviceorientation', onOrientation);
+  window.addEventListener('deviceorientationabsolute', onOrientation);
+}
+
+function removeOrientationListeners() {
+  window.removeEventListener('deviceorientation', onOrientation);
+  window.removeEventListener('deviceorientationabsolute', onOrientation);
 }
 
 /**
  * Attach the orientation listener, if this browser will give it to us without
  * asking. Where `requestPermission` exists (iOS) it must be called from a user
  * gesture, so the ask lives on the settings lever — see `requestFoilTilt`.
+ *
+ * Two events, not one: `deviceorientation` is the reading everywhere it
+ * exists, but some Android builds only ever populate its `absolute` sibling
+ * — the magnetometer grant in security.ts exists specifically for that case,
+ * and a device that only fires the sibling would otherwise hold the
+ * permission and never move the pattern.
  */
 function attachTilt() {
   if (listening || typeof window.DeviceOrientationEvent === 'undefined') return;
@@ -767,7 +793,7 @@ function attachTilt() {
     'function';
   if (gated && !tiltWasGranted()) return;
   listening = true;
-  window.addEventListener('deviceorientation', onOrientation);
+  addOrientationListeners();
   if (gated) armGestureRequest();
 }
 
@@ -825,7 +851,7 @@ export async function requestFoilTilt(): Promise<boolean> {
   }
   if (!listening) {
     listening = true;
-    window.addEventListener('deviceorientation', onOrientation);
+    addOrientationListeners();
   }
   return true;
 }

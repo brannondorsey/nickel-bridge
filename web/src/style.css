@@ -1586,8 +1586,10 @@ a.ds-btn-secondary:hover {
    TrickArea animates a position:fixed clone on document.body between the fan
    and the table, and nothing scoped to a host can reach it. Fixed like what it
    paints, so the two cannot desync the way a fixed blend layer over SCROLLING
-   content does; kept display:none except during a glide, since a viewport-wide
-   blending canvas is a compositor layer nobody should pay for at rest. */
+   content does; kept hidden via visibility (never display:none — see foil.ts,
+   a display:none canvas has no box and can never measure itself visible again)
+   except during a glide, since a viewport-wide blending canvas is a compositor
+   layer nobody should pay for at rest. */
 .foil-layer-flight {
   position: fixed;
   inset: 0;
