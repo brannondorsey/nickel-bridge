@@ -1140,15 +1140,27 @@ export function PlayPhase({
 
   return (
     <>
-      <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
-      {/* keep the last bid's grade visible when the auction ends on the human's
-          own call — it clears as soon as they play a card */}
-      {lastEval ? <GradeToast evaluation={lastEval} /> : null}
-      {board.flipped ? (
-        <Toast className="flip-note">
-          Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
-        </Toast>
-      ) : null}
+      {/* THE RAIL. What the auction settled and what the board has to say about
+          it — read, not acted on. It is `display: contents` on a phone, so this
+          wrapper generates no box at all and the three children lay out exactly
+          as the siblings they used to be; past 1024px it becomes the board's
+          left column (see "the board as two columns" in style.css). A wrapper
+          rather than three grid-placement rules because a stack of things
+          whose count varies is a stack, and saying so once here is worth more
+          than saying it three times in the cascade — the earlier version put
+          each child in column 1 by hand and let the grid's own rows stretch
+          them against the table's, which made a two-line toast 280px tall. */}
+      <div className="board-rail">
+        <AuctionGrid auction={board.auction} dealer={board.dealer} myTurn={false} onInspect={onInspect} />
+        {/* keep the last bid's grade visible when the auction ends on the human's
+            own call — it clears as soon as they play a card */}
+        {lastEval ? <GradeToast evaluation={lastEval} /> : null}
+        {board.flipped ? (
+          <Toast className="flip-note">
+            Partner won the auction — board flipped. You're declaring from <b>North</b>; your South hand is dummy.
+          </Toast>
+        ) : null}
+      </div>
       {claimAnnounceOpen && claimInfo ? <ClaimOverlay info={claimInfo} onDismiss={onSkipClaim} /> : null}
       {board.dummyHand && !dummyOnSide ? (
         <>
