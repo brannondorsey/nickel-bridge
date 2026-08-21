@@ -109,8 +109,8 @@ const DENIED = [
  *
  * These three sat in the denied list above, which was right while nothing
  * read them and is the reason this needed a deliberate edit rather than a
- * silent one. `deviceorientation` — the event behind the "foil trumps" tilt
- * treatment (web/public/foil-trumps-a-concept.html) — is gated on
+ * silent one. `deviceorientation` — the event behind the Foil Trumps tilt
+ * treatment (`web/src/components/game/foil.ts`) — is gated on
  * `accelerometer` and `gyroscope`, and on `magnetometer` for the absolute
  * variant some Android builds populate instead. Denied, the events simply
  * never arrive: no error, no prompt, no console warning, which is a
@@ -121,9 +121,6 @@ const DENIED = [
  * out changes nothing a browser does today — what it does is state the
  * decision where the next person looking at this list will see it, and keep
  * a cross-origin iframe embedded in one of our pages from inheriting them.
- * Note the inverse of that rule is why the concept board cannot work as a
- * hosted artifact and has to be served from here: a cross-origin frame is
- * denied these by default, and no markup inside the frame can grant them.
  *
  * If the tilt is cut, move these three back to DENIED in the same change.
  */

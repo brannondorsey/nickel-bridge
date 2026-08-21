@@ -311,8 +311,7 @@ if (!/trump_placement TEXT NOT NULL DEFAULT 'left'/.test(usersTableSql)) {
 }
 // Migration: `foil_trumps` — the Foil Trumps treatment, a holographic plate
 // over the trump suit in hand and on the table (web/src/components/game/
-// foil.ts; the concept board it was chosen from is served at
-// /foil-trumps-b-blade.html). Defaults OFF — another preference here that does
+// foil.ts). Defaults OFF — another preference here that does
 // NOT preserve prior behaviour by defaulting on, though for a reason of its
 // own: double_tap_bid defaults off because the shortcut was misfiring and
 // trump_placement re-defaults because players asked for the other placement,
