@@ -13,8 +13,8 @@ const HEARTS = 1;
  * The shine itself is WebGL and jsdom has none, so `mountFoil` no-ops here and
  * these tests cover what a broken build would actually break: which cards get
  * marked, whether the layer is mounted at all, and the tilt rule that decides
- * how fast the shine may travel. The look is judged on the concept board
- * (web/public/foil-trumps-b-blade.html), which is what it is for.
+ * how fast the shine may travel. The look itself was judged on a design
+ * concept board (PR #192, not part of the shipped app) rather than here.
  */
 
 describe('which suit is foiled', () => {

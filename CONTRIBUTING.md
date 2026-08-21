@@ -244,18 +244,6 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
-                foil-trumps: the concept boards are NOT here — they are
-                web/public/foil-trumps-a-concept.html (the six readings) and
-                web/public/foil-trumps-b-blade.html (the blade, narrowed, and
-                the one the shipped treatment was chosen from), served by the
-                app, because the tilt treatment reads deviceorientation and that
-                needs a secure, top-level, SAME-ORIGIN context. A docs/ file
-                opened over file:// has a null origin and iOS refuses
-                requestPermission() outright, and a hosted artifact is a
-                cross-origin frame where the sensors are policy-denied with no
-                way for the frame to grant itself them. A PR preview URL is the
-                review surface, and board B stays served after shipping because
-                it is where the dials live — see "Foil trumps" below;
                 trump-placement-concepts.html — the concept-exploration board for the
                 "trump suit to the left of the fan" request: three live, replayable
                 motions over the real fan geometry, plus the re-sort rule and which
@@ -796,18 +784,15 @@ it are decisions rather than defaults:
 
 **The three motion sensors are the one `(self)` in Permissions-Policy**, and the only
 capability this app grants rather than denies. `accelerometer`/`gyroscope`/`magnetometer`
-gate `deviceorientation`, which the Foil Trumps tilt treatment reads — in the shipped
-feature (`web/src/components/game/foil.ts`) and on both concept boards
-(`web/public/foil-trumps-*.html`); denied — as they were — the events never arrive
+gate `deviceorientation`, which the Foil Trumps tilt treatment reads
+(`web/src/components/game/foil.ts`); denied — as they were — the events never arrive
 at all: no error, no prompt, nothing in the console, so it presents as the feature being
 broken rather than as a header being wrong. `(self)` is deliberately not `*`: the default
 allowlist for these is already `self`, so writing it out changes nothing a browser does
 and instead states the decision where the next reader of that list will find it, while
-keeping a cross-origin iframe embedded in one of our pages from inheriting them. That same
-rule cuts the other way and is why the boards have to be served from here rather than
-hosted as an artifact — a cross-origin frame is denied these by default and nothing inside
-the frame can grant them. `server/test/security.test.ts` pins both halves; if Foil Trumps
-is ever cut, move the three back to `DENIED` in the same change.
+keeping a cross-origin iframe embedded in one of our pages from inheriting them.
+`server/test/security.test.ts` pins both halves; if Foil Trumps is ever cut, move the
+three back to `DENIED` in the same change.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
@@ -2309,16 +2294,16 @@ already settled inside the first trick — which is exactly why it went unnotice
 
 **Foil trumps is one continuous field, not an effect per card, and that decides its
 whole shape.** `web/src/components/game/foil.ts` is a Balatro-style ruled diffraction
-grating ("the blade") ported from the concept board at
-`web/public/foil-trumps-b-blade.html` with the settings the owner landed on baked in as
-constants — weight 0.90, count 0.15, ambient 0.15, light size 120, duotone by day and the
-full spectrum at night, day carrying more intensity than night because multiply spends it
-differently than screen does. The duotone's own lightness and saturation are day-only
-dials (the branch is never taken at night), and were raised once after shipping — the
-first pass read as a dusty lavender rather than as foil, so the tint went lighter and more
-saturated together, which under multiply means a lighter card carrying more colour. That board stays served after shipping, and is still where
-to change how this LOOKS: it carries every dial as a live slider, a gallery of sweeps and
-a sensor readout, none of which belong in the app bundle.
+grating ("the blade") ported from a design concept board (PR #192 — every dial as a live
+slider, a gallery of sweeps and a sensor readout, none of which belong in the app bundle;
+the board itself was a throwaway design tool, not shipped, see it in git history) with
+the settings the owner landed on baked in as constants — weight 0.90, count 0.15, ambient
+0.15, light size 120, duotone by day and the full spectrum at night, day carrying more
+intensity than night because multiply spends it differently than screen does. The
+duotone's own lightness and saturation are day-only dials (the branch is never taken at
+night), and were raised once after shipping — the first pass read as a dusty lavender
+rather than as foil, so the tint went lighter and more saturated together, which under
+multiply means a lighter card carrying more colour.
 
 At the shipped line count a single rule spans ~440px — wider than a whole hand — so the
 pattern has to be continuous ACROSS the fan to read as one sheet of foil. That rules out a

@@ -124,44 +124,9 @@ export function robotsPath(path: string): string {
   return path.endsWith('/*') ? path.slice(0, -1) : path;
 }
 
-/**
- * Static pages this app serves that are NOT routes — files under
- * web/public/ that Vite copies into dist and @fastify/static answers for
- * directly, never reaching the router.
- *
- * They deliberately do not live in SITE_ROUTES. That table describes URL
- * spaces the ROUTER owns, its `public` column is cross-checked against
- * App.tsx's isPublicPath (which knows nothing about static files), and its
- * `spa` column feeds scripts/cloudflare.mjs's edge BYPASS set — so a static
- * page listed there would be told to skip the very cache it benefits from
- * most.
- *
- * They still belong in robots.txt, and the reason is MACHINE TIME rather
- * than search rank. A `noindex` meta keeps a page out of the index but does
- * nothing to stop a compliant crawler fetching it first, and per CLAUDE.md
- * ("Machine time is bought by the request") any inbound request wakes a
- * dedicated Fly core and holds it for Fly's whole idle window — the
- * ClaudeBot anecdote there is a crawler that read `Disallow: /`, obeyed it,
- * left, and still cost seven minutes of CPU. That is the same reason
- * /leaderboard and /tour are disallowed despite reading without an account:
- * a URL that offers a crawler nothing should not also cost a wake.
- */
-export const STATIC_DISALLOW: readonly string[] = [
-  // A design concept board: ~80KB of shader and controls, no durable prose,
-  // linked from nowhere in the app. It is served rather than kept in docs/
-  // only because its tilt treatment reads deviceorientation, which needs a
-  // secure, top-level, same-origin context — see security.ts's SELF_ONLY.
-  '/foil-trumps-a-concept.html',
-  // Board B: the same, narrowed to one reading. Same reasoning as above.
-  '/foil-trumps-b-blade.html',
-];
-
-/**
- * Every URL a crawler is asked to stay out of: the unindexed routes in table
- * order, then the static pages above.
- */
+/** Every route a crawler is asked to stay out of, in table order. */
 export function crawlerDisallow(): string[] {
-  return [...SITE_ROUTES.filter((r) => !r.indexed).map((r) => robotsPath(r.path)), ...STATIC_DISALLOW];
+  return SITE_ROUTES.filter((r) => !r.indexed).map((r) => robotsPath(r.path));
 }
 
 /**

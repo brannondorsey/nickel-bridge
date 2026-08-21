@@ -1,12 +1,13 @@
 /**
  * FOIL TRUMPS — the holographic treatment on the trump suit.
  *
- * A Balatro-style ruled diffraction grating ("the blade"), ported from the
- * concept board at web/public/foil-trumps-b-blade.html with the settings the
- * owner landed on baked in as constants. That board is still the place to
- * change how this LOOKS: it carries every dial as a live slider, a gallery of
- * sweeps and a sensor readout, none of which belong in the app bundle. This
- * file is what the board's chosen row compiles down to.
+ * A Balatro-style ruled diffraction grating ("the blade"), ported from a
+ * design concept board (PR #192 — every dial as a live slider, a gallery of
+ * sweeps and a sensor readout, none of which belong in the app bundle) with
+ * the settings the owner landed on baked in as constants. This file is what
+ * the board's chosen row compiles down to; the board itself was a throwaway
+ * design tool and isn't part of the shipped app — see it in git history if
+ * the look ever needs revisiting.
  *
  * Three things about the design are worth reading before touching it.
  *
