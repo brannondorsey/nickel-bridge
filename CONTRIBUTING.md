@@ -2313,7 +2313,10 @@ grating ("the blade") ported from the concept board at
 `web/public/foil-trumps-b-blade.html` with the settings the owner landed on baked in as
 constants — weight 0.90, count 0.15, ambient 0.15, light size 120, duotone by day and the
 full spectrum at night, day carrying more intensity than night because multiply spends it
-differently than screen does. That board stays served after shipping, and is still where
+differently than screen does. The duotone's own lightness and saturation are day-only
+dials (the branch is never taken at night), and were raised once after shipping — the
+first pass read as a dusty lavender rather than as foil, so the tint went lighter and more
+saturated together, which under multiply means a lighter card carrying more colour. That board stays served after shipping, and is still where
 to change how this LOOKS: it carries every dial as a live slider, a gallery of sweeps and
 a sensor readout, none of which belong in the app bundle.
 
@@ -2413,6 +2416,16 @@ Four details are load-bearing:
   `makeCardEl` has to be told which are trumps — and, since the card element is already
   gone by the time that layout effect runs, its anchor comes from the slot the card
   filled rather than from the card.
+- **A card that cannot be played eases off, on night stock only.** `style.css` dims an
+  illegal card by dropping its rank and pip to 0.4 opacity and never touching the face —
+  which the foil then has to answer for, because the layer is a sibling and does not dim
+  with them. By day it does not need to: multiply cannot lighten, so the ink still darkens
+  whatever the plate put down. At night the plate SCREENS, so a full-strength patch under
+  a 40%-opacity light glyph leaves nothing to read — the card goes bright and its value
+  disappears, which is what a player reported for a hand of unplayable trumps. `u_dim`
+  brings the plate down with the ink (`DIM_NIGHT`, 0.45: enough left that the card still
+  reads as a trump). The join is `.pcard[data-foil]` also carrying `.dimmed`, so renaming
+  either class silently returns the card to being unreadable — `foil.test.tsx` guards it.
 - **Nothing moves on its own.** The phase was once advanced by a clock so a device with no
   sensors still had something to look at; on a real phone that read as the foil crawling by
   itself, and a card sitting on the table is not moving. The tilt is now the only thing
@@ -2430,9 +2443,16 @@ Four details are load-bearing:
   and phase — with curvature gone every card shares one normal, so tilting cannot light one
   card more than its neighbour and brightness is the wrong thing to hand a sensor. The
   reading is filtered (a 420ms time constant, alpha derived per frame from real elapsed
-  time) AND rate-limited to 0.75 of the range per second, and both are needed: a time
+  time) AND rate-limited to 0.6 of the range per second, and both are needed: a time
   constant bounds LAG, not SPEED, so the first frame of a full-sweep target still moves ~4%
-  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. Without a
+  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. **How much of
+  the reading is spent at all is one dial, `TILT_GAIN`** — "less motion" is a single
+  judgement about the whole effect, and scaling the reading scales the grain's rotation,
+  the band's slide and the hue shift together, leaving the relationship between them (the
+  part tuned on board B) alone. It came down a fifth, to 0.64, on a play report that the
+  shine moved too far for the wrist; `TILT_MAX_RATE` came down the same fifth with it,
+  since a cap in normalised units would otherwise cross the now-shorter range faster and
+  hand back the calm the shorter range buys. Without a
   sensor the pattern simply holds still — nothing looks broken because a still card having
   a still shine is what a card does. This matters because iOS grants the sensors only from
   a user gesture and does not persist the grant across page loads. The ask therefore lives on the settings lever, and a player who

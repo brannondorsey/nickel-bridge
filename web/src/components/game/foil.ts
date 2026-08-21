@@ -51,7 +51,7 @@ const LINE_K = Math.max(1.6, (16 - 14 * 0.9) * 0.5); // weight 0.90
 const LINE_FREQ = 0.0945 * 0.15; // count 0.15
 const AMBIENT = 0.15;
 const LIGHT_SIZE = 120;
-const GAIN_DAY = 1.25;
+const GAIN_DAY = 1.45;
 const GAIN_NIGHT = 0.9;
 const PALETTE_DAY = 1; // duotone arc
 const PALETTE_NIGHT = 0; // spectrum
@@ -63,6 +63,12 @@ const PALETTE_NIGHT = 0; // spectrum
  * board with no sensor simply holds still.
  */
 const PHASE = 3.2;
+/**
+ * What a DIMMED card's foil is worth on night stock — see u_dim in the shader.
+ * Between the glyphs' own 0.4 and full: enough plate left for the card to
+ * still read as a trump, little enough that the rank comes back.
+ */
+const DIM_NIGHT = 0.45;
 
 /* ---------------------------------------------------------------------------
    HOW FAR, AND HOW FAST, THE TWIST TRAVELS
@@ -76,7 +82,21 @@ const PHASE = 3.2;
    never accumulate a backlog it then has to sprint through.
 --------------------------------------------------------------------------- */
 const TILT_TAU_MS = 420;
-const TILT_MAX_RATE = 0.75;
+const TILT_MAX_RATE = 0.6;
+/**
+ * How much of the sensor's reading the pattern actually spends. It is one
+ * dial rather than four because "less motion" is a single judgement about the
+ * whole effect: scaling the reading scales the grain's rotation, the band's
+ * slide and the hue shift together, so their relationship to each other — the
+ * thing that was tuned on board B — is unchanged.
+ *
+ * 0.64 is 0.8 of the 0.8 it shipped at (itself the concept board's tilt gain
+ * 0.5 through its own x1.6 sensor scale): a fifth less travel for the same
+ * wrist. TILT_MAX_RATE comes down by the same fifth, since a speed cap in
+ * normalised units would otherwise cross the now-shorter range faster and
+ * hand back some of the calm the smaller range buys.
+ */
+const TILT_GAIN = 0.64;
 /** Degrees of rotation that map to the full ±1 of tilt, in each axis. */
 const TILT_DEGREES = 45;
 /** Radians the grain rotates, and pixels the bright band slides, at full tilt. */
@@ -105,6 +125,7 @@ uniform vec2 u_clipx;
 uniform float u_clipTop;
 uniform vec2 u_shift;
 uniform float u_scale;
+uniform float u_dim;
 uniform vec2 u_tilt;
 uniform float u_gain;
 uniform float u_night;
@@ -146,7 +167,7 @@ float cardMask(vec2 uv) {
 vec3 palette(float t) {
   float u = fract(t);
   if (u_palette == 0) return hsl2rgb(vec3(u, 0.55, 0.55));
-  return hsl2rgb(vec3(0.47 + 0.41 * u, 0.34, 0.62));
+  return hsl2rgb(vec3(0.47 + 0.41 * u, 0.46, 0.72));
 }
 
 void main() {
@@ -212,6 +233,15 @@ void main() {
      absorb far more before it stops looking like card stock. */
   float amount = clamp((0.30 + 0.95 * lines) * lit * u_gain, 0.0, 1.0) * cardMask(v_uv);
   amount *= mix(0.42, 1.0, u_night);
+  /* A card that cannot legally be played has its rank and pip dropped to 0.4
+     opacity (style.css dims the glyphs, never the face). On DAY stock that is
+     survivable: multiply cannot lighten, so the ink still darkens the card it
+     sits on. On NIGHT stock the foil screens onto the card, so full-strength
+     foil under a 40%-opacity light glyph leaves almost nothing to read — the
+     card goes bright and its value disappears. u_dim brings the plate down
+     with the ink. It is 1 everywhere else, including every dimmed card by
+     day. */
+  amount *= u_dim;
 
   /* multiply wants white as its no-op, screen wants black — so the two stocks
      blend from opposite neutrals toward the same tint */
@@ -265,7 +295,7 @@ class FoilSurface {
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     for (const name of [
       'u_res', 'u_rect', 'u_light', 'u_origin', 'u_clipx', 'u_clipTop', 'u_shift',
-      'u_tilt', 'u_gain', 'u_night', 'u_palette', 'u_scale',
+      'u_tilt', 'u_gain', 'u_night', 'u_palette', 'u_scale', 'u_dim',
     ]) {
       this.u[name] = gl.getUniformLocation(program, name);
     }
@@ -359,6 +389,7 @@ class FoilSurface {
       gl.uniform2f(this.u.u_clipx, r.left - box.left, clipRight - box.left);
       gl.uniform1f(this.u.u_clipTop, clipTop - box.top);
       gl.uniform2f(this.u.u_shift, shiftX, shiftY);
+      gl.uniform1f(this.u.u_dim, night && el.classList.contains('dimmed') ? DIM_NIGHT : 1);
       gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
@@ -415,6 +446,8 @@ class FoilSurface {
     gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
     // this layer's own lamp, for a clone anchored somewhere no layer covers
     const own = lampOf(box);
+    // a card in flight was legal to play, so it is never the dimmed case
+    gl.uniform1f(this.u.u_dim, 1);
     for (const el of clones) {
       const r = el.getBoundingClientRect();
       if (r.width < 1) continue;
@@ -636,9 +669,8 @@ function onOrientation(e: DeviceOrientationEvent) {
   const beta = e.beta ?? 0;
   if (!rest) rest = { beta, gamma };
   const clamp = (v: number) => Math.max(-TILT_DEGREES, Math.min(TILT_DEGREES, v)) / TILT_DEGREES;
-  // ×0.8: the concept board's tilt gain 0.5 through its own ×1.6 sensor scale
-  tiltTarget.x = clamp(gamma - rest.gamma) * 0.8;
-  tiltTarget.y = clamp(beta - rest.beta) * 0.8;
+  tiltTarget.x = clamp(gamma - rest.gamma) * TILT_GAIN;
+  tiltTarget.y = clamp(beta - rest.beta) * TILT_GAIN;
 }
 
 function frame(now: number) {

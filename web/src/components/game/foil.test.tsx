@@ -60,6 +60,26 @@ describe('HandFan foiling', () => {
     expect(fan.lastElementChild?.tagName).toBe('CANVAS');
   });
 
+  it('marks an unplayable trump BOTH foiled and dimmed', () => {
+    /* The two attributes foil.ts joins on: it looks up `.pcard[data-foil]`
+       and then asks whether that same element `.dimmed`, because on night
+       stock a full-strength plate under a 40%-opacity glyph leaves the rank
+       unreadable. Rename either class and the foil silently stops easing off
+       — the card just goes back to being hard to read. */
+    const spades = southHand.filter((c) => cardSuit(c) === SPADES);
+    const legal = southHand.filter((c) => cardSuit(c) !== SPADES);
+    const { container } = render(<HandFan cards={southHand} foil={SPADES} legal={legal} />);
+    const foiled = [...container.querySelectorAll<HTMLElement>('.pcard[data-foil]')];
+    expect(foiled.length).toBe(spades.length);
+    expect(foiled.every((el) => el.classList.contains('dimmed'))).toBe(true);
+    // and a legal card is foiled without being dimmed, or every trump would ease off
+    const clubs = southHand.filter((c) => cardSuit(c) === 3);
+    const { container: c2 } = render(<HandFan cards={southHand} foil={3} legal={clubs} />);
+    const lit = [...c2.querySelectorAll<HTMLElement>('.pcard[data-foil]')];
+    expect(lit.length).toBeGreaterThan(0);
+    expect(lit.some((el) => el.classList.contains('dimmed'))).toBe(false);
+  });
+
   it('mounts nothing at all when the preference is off', () => {
     const { container } = render(<HandFan cards={southHand} foil={null} />);
     expect(container.querySelector('canvas.foil-layer')).toBeNull();
@@ -144,7 +164,7 @@ describe('how fast the shine may travel', () => {
   const FRAME = 16;
 
   it('lets a small movement through on the filter alone', () => {
-    // well inside the per-frame cap (0.75/s ≈ 0.012 per 16ms frame), so this
+    // well inside the per-frame cap (0.6/s ≈ 0.0096 per 16ms frame), so this
     // is the exponential filter's own step and nothing else
     const step = stepTilt(0, 0.05, FRAME);
     expect(step).toBeGreaterThan(0);
@@ -156,12 +176,12 @@ describe('how fast the shine may travel', () => {
     // first frame of a full-sweep target still moved ~4% of it — a shine
     // crossing the hand in a fifth of a second
     const capped = stepTilt(0, 1.6, FRAME);
-    expect(capped).toBeCloseTo((0.75 * FRAME) / 1000, 6);
+    expect(capped).toBeCloseTo((0.6 * FRAME) / 1000, 6);
     expect(capped).toBeLessThan(1.6 * (1 - Math.exp(-FRAME / 420)));
   });
 
   it('caps in both directions, and never overshoots the target', () => {
-    expect(stepTilt(0, -1.6, FRAME)).toBeCloseTo((-0.75 * FRAME) / 1000, 6);
+    expect(stepTilt(0, -1.6, FRAME)).toBeCloseTo((-0.6 * FRAME) / 1000, 6);
     // approaching from either side converges rather than oscillating
     let v = 0;
     for (let i = 0; i < 600; i++) v = stepTilt(v, 0.4, FRAME);
