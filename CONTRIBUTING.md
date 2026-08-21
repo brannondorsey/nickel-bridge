@@ -2350,6 +2350,29 @@ Four details are load-bearing:
   subscribed to, because there are four ways it can change — the settings lever, App.tsx's
   adaptive-schedule tick, an OS appearance change, and a `system` preference meeting either
   of the last two — and a periodic read is correct for all of them plus any fifth.
+- **The foil is printed ON the card, so the pattern is sampled where the card
+  LIVES, not where it has been moved to.** `u_shift` is however far a transform has
+  carried a card from its layout position, taken back off before the sheet is sampled.
+  Without it, selecting a card slid it 14px through a grating whose rules are ~440px
+  apart — enough to take the line term from 1 to 0 and drop the foil off that one card
+  while its neighbours kept theirs, which reads as the sheet tearing rather than as a card
+  being picked up. It covers the Draw's slide for free. The flight clones are the
+  deliberate exception (`u_shift` zero): a card genuinely travelling across the table
+  should pass through the light rather than hold one frozen highlight.
+- **The flight clones need their own layer, and it is the only one not inside a card
+  container.** `TrickArea` animates a `position: fixed` clone on `document.body` between
+  the fan and the table, so nothing scoped to a host can reach it and a trump simply lost
+  its foil for the length of the glide — exactly when it is most looked at. The flight
+  layer is fixed like what it paints, so the two cannot desync the way a fixed blend layer
+  over SCROLLING content does. It is hidden by **`visibility`**, never `display`: a
+  `display: none` canvas has no box, so its own `getBoundingClientRect` comes back zeroed,
+  the zero-size guard bails, and it can never make itself visible again — hidden forever,
+  in silence. `collectSweep`'s clones are built from scratch rather than cloned, so
+  `makeCardEl` has to be told which are trumps.
+- **Nothing moves on its own.** The phase was once advanced by a clock so a device with no
+  sensors still had something to look at; on a real phone that read as the foil crawling by
+  itself, and a card sitting on the table is not moving. The tilt is now the only thing
+  that moves the pattern, and a board with no sensor holds still.
 - **Measure against the CANVAS's box, never the host's.** The layer overhangs by
   `--foil-bleed` (a trick card is taller than its grid row and spills past the box; a layer
   pinned to `inset: 0` leaves its foot bare), so the two boxes differ by 32px in each axis.
@@ -2365,14 +2388,16 @@ Four details are load-bearing:
   reading is filtered (a 420ms time constant, alpha derived per frame from real elapsed
   time) AND rate-limited to 0.75 of the range per second, and both are needed: a time
   constant bounds LAG, not SPEED, so the first frame of a full-sweep target still moves ~4%
-  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. Without any
-  sensor at all the pattern still drifts on its own clock, so nothing looks broken — which
-  matters because iOS grants the sensors only from a user gesture and does not persist the
-  grant across page loads. The ask therefore lives on the settings lever, and a player who
+  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. Without a
+  sensor the pattern simply holds still — nothing looks broken because a still card having
+  a still shine is what a card does. This matters because iOS grants the sensors only from
+  a user gesture and does not persist the grant across page loads. The ask therefore lives on the settings lever, and a player who
   has already said yes once (`nb:foilTilt`) gets it re-made silently on their first tap of
   the session. Under `prefers-reduced-motion` the clock and the tilt freeze but the layer
   keeps drawing: the foil is a texture, and asking for less movement is not asking for a
-  plain card — the quads still have to follow their cards as the hand is played.
+  plain card — the quads still have to follow their cards as the hand is played. That is
+  also why the rAF loop runs on a board where nothing is happening: it is tracking
+  geometry, not animating a pattern.
 
 `Tour.tsx` reads no preference at all, the `doubleTapBid`/`trump_placement` precedent. A
 browser with no WebGL gets an unstyled board rather than an error, and the context is

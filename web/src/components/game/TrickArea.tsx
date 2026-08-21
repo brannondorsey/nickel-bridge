@@ -83,7 +83,7 @@ export function TrickArea({
 
     // trick just cleared with a completed-tricks bump → collect sweep
     if (prevTrick.length > 0 && curTrick.length === 0 && (board.completedTricks ?? 0) > (prev.completedTricks ?? 0)) {
-      collectSweep(prevTrick, boxRef.current, slotEls.current, flights.current, winnerOf(prevTrick, board));
+      collectSweep(prevTrick, boxRef.current, slotEls.current, flights.current, winnerOf(prevTrick, board), foil);
     } else {
       // cards that just appeared glide in
       const known = new Set(prevTrick.map((t) => t.card));
@@ -95,6 +95,10 @@ export function TrickArea({
     // tally stamp on whichever count changed
     if ((board.declarerTricks ?? 0) !== (prev.declarerTricks ?? 0)) setStamp('decl');
     else if ((board.defenderTricks ?? 0) !== (prev.defenderTricks ?? 0)) setStamp('def');
+    // `board` alone stays the trigger: this is a diff against the previous
+    // view, and re-running it because a preference changed would replay an
+    // animation for a transition that already happened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board]);
 
   useEffect(() => {
@@ -208,10 +212,18 @@ function winnerOf(trick: { seat: number; card: number }[], board: BoardView): nu
   return board.handToPlay ?? trick[0].seat;
 }
 
-/** Imperative twin of PlayingCard for animation clones (kept in sync by eye). */
-function makeCardEl(card: number, from: DOMRect): HTMLElement {
+/**
+ * Imperative twin of PlayingCard for animation clones (kept in sync by eye).
+ *
+ * `foil` has to be passed rather than inferred: this builds an element from
+ * scratch (glideIn's clone gets `data-foil` for free from cloneNode), and a
+ * sweep of unmarked clones would drop the foil off the trumps for the length
+ * of the collect — see foil.ts's flight layer, which paints them.
+ */
+function makeCardEl(card: number, from: DOMRect, foil: boolean): HTMLElement {
   const el = document.createElement('div');
   el.className = `pcard small ${suitClass(cardSuit(card))} pcard-flight`;
+  if (foil) el.setAttribute('data-foil', '');
   const rank = RANK_CHARS[cardRank(card)];
   const rankEl = document.createElement('div');
   rankEl.className = `rank${rank === '10' ? ' ten' : ''}`;
@@ -297,6 +309,7 @@ function collectSweep(
   slots: Map<number, HTMLDivElement | null>,
   flights: Set<HTMLElement>,
   winner: number,
+  foil: number | null,
 ): void {
   const target = slots.get(winner)?.getBoundingClientRect();
   if (!target || target.width === 0) return;
@@ -304,7 +317,7 @@ function collectSweep(
   trick.forEach((t, i) => {
     const from = slots.get(t.seat)?.getBoundingClientRect();
     if (!from || from.width === 0) return;
-    const clone = makeCardEl(t.card, from);
+    const clone = makeCardEl(t.card, from, foil !== null && cardSuit(t.card) === foil);
     document.body.appendChild(clone);
     flights.add(clone);
     const anim = clone.animate(

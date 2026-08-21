@@ -96,6 +96,17 @@ describe('TrickArea foiling', () => {
   });
 });
 
+describe('the flight layer', () => {
+  it('is not mounted until a foiled board is', () => {
+    // It lives on document.body, outside every card container, because that
+    // is where TrickArea's position:fixed clones live — so an unfoiled board
+    // must not leave a viewport-wide blending canvas behind.
+    expect(document.querySelector('.foil-layer-flight')).toBeNull();
+    render(<TrickArea board={boardPlaying} />);
+    expect(document.querySelector('.foil-layer-flight')).toBeNull();
+  });
+});
+
 describe('how fast the shine may travel', () => {
   const FRAME = 16;
 

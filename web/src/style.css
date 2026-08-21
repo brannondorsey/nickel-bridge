@@ -1582,6 +1582,19 @@ a.ds-btn-secondary:hover {
   pointer-events: none;
   z-index: 4;
 }
+/* The flight layer is the one that is not a child of a card container:
+   TrickArea animates a position:fixed clone on document.body between the fan
+   and the table, and nothing scoped to a host can reach it. Fixed like what it
+   paints, so the two cannot desync the way a fixed blend layer over SCROLLING
+   content does; kept display:none except during a glide, since a viewport-wide
+   blending canvas is a compositor layer nobody should pay for at rest. */
+.foil-layer-flight {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 91;
+}
 .handfan .cardbtn {
   padding: 0;
   /* card overlaps (margin-left) are per-card inline styles computed in

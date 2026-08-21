@@ -55,8 +55,14 @@ const GAIN_DAY = 1.25;
 const GAIN_NIGHT = 0.9;
 const PALETTE_DAY = 1; // duotone arc
 const PALETTE_NIGHT = 0; // spectrum
-/** Seconds of shader time per real second, with the device held still. */
-const DRIFT_RATE = 0.35;
+/**
+ * The pattern's phase, fixed. It used to advance with a clock so a device with
+ * no sensors still had something to look at, and on a real phone that read as
+ * the foil crawling on its own — a card sitting on the table is not moving, so
+ * neither is its shine. The tilt is now the only thing that moves it, and a
+ * board with no sensor simply holds still.
+ */
+const PHASE = 3.2;
 
 /* ---------------------------------------------------------------------------
    HOW FAR, AND HOW FAST, THE TWIST TRAVELS
@@ -95,8 +101,8 @@ varying vec2 v_uv;
 uniform vec4 u_rect;
 uniform vec2 u_light;
 uniform vec2 u_clipx;
+uniform vec2 u_shift;
 uniform vec2 u_tilt;
-uniform float u_time;
 uniform float u_gain;
 uniform float u_night;
 uniform int u_palette;
@@ -147,13 +153,23 @@ void main() {
      would sit on top of a later card's face */
   if (px.x < u_clipx.x || px.x > u_clipx.y) discard;
 
+  /* THE FOIL IS PRINTED ON THE CARD, so the pattern is sampled where the card
+     LIVES, not where it has been moved to: u_shift is however far a transform
+     has carried this card from its layout position, and taking it back off
+     means a lifted or sliding card keeps the exact patch of sheet it had at
+     rest. Without it, selecting a card slid it 14px through a grating whose
+     rules are ~440px apart — enough to take the line term from 1 to 0 and drop
+     the foil off that one card while its neighbours kept theirs, which reads as
+     the sheet tearing rather than as a card being picked up. */
+  vec2 pat = px - u_shift;
+
   /* The grain. Its ANGLE and PHASE are what the device moves — every card
      shares one normal, so tilting cannot light one card more than its
      neighbour, which makes brightness the wrong thing to hand a sensor. */
   float ang = 0.9 + u_tilt.x * ${TILT_ANGLE.toFixed(3)};
   vec2 dir = vec2(cos(ang), sin(ang));
-  float d = dot(px, dir);
-  float lines = rule(d * ${LINE_FREQ.toFixed(6)} + u_tilt.y * ${TILT_PHASE.toFixed(2)} + u_time * 2.2, ${LINE_K.toFixed(3)});
+  float d = dot(pat, dir);
+  float lines = rule(d * ${LINE_FREQ.toFixed(6)} + u_tilt.y * ${TILT_PHASE.toFixed(2)} + ${(PHASE * 2.2).toFixed(3)}, ${LINE_K.toFixed(3)});
 
   /* One broad band, its width the lamp's apparent size and its position the
      lamp projected onto the grain's own axis. The floor is what keeps the
@@ -161,7 +177,7 @@ void main() {
   float band = exp(-pow((d - dot(u_light, dir) - u_tilt.y * ${TILT_SLIDE.toFixed(1)}) / ${LIGHT_SIZE.toFixed(1)}, 2.0));
   float lit = ${AMBIENT.toFixed(2)} + ${(1 - AMBIENT).toFixed(2)} * band;
 
-  float t = 0.5 + 0.5 * sin(d * 0.012 + u_time * 0.22) + lines * 0.5 + u_tilt.x * 0.12;
+  float t = 0.5 + 0.5 * sin(d * 0.012 + ${(PHASE * 0.22).toFixed(3)}) + lines * 0.5 + u_tilt.x * 0.12;
   vec3 tint = palette(t);
   /* Day and night need very different amounts of the same tint. Under
      multiply the tint lands on the card at full strength — no doubling, no
@@ -220,7 +236,7 @@ class FoilSurface {
     const loc = gl.getAttribLocation(program, 'a_unit');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const name of ['u_res', 'u_rect', 'u_light', 'u_clipx', 'u_tilt', 'u_time', 'u_gain', 'u_night', 'u_palette']) {
+    for (const name of ['u_res', 'u_rect', 'u_light', 'u_clipx', 'u_shift', 'u_tilt', 'u_gain', 'u_night', 'u_palette']) {
       this.u[name] = gl.getUniformLocation(program, name);
     }
     this.gl = gl;
@@ -250,7 +266,7 @@ class FoilSurface {
     return this.night;
   }
 
-  render(now: number, time: number, tiltX: number, tiltY: number) {
+  render(now: number, tiltX: number, tiltY: number) {
     const gl = this.gl;
     if (!gl) return;
     /* The CANVAS's box, never the host's, and this is the one measurement in
@@ -263,6 +279,93 @@ class FoilSurface {
     if (box.width < 1 || box.height < 1) return;
 
     const night = this.stock(now);
+    this.resize(gl, box);
+    // the clear colour follows the stock, or the gaps between cards would tint
+    gl.clearColor(night ? 0 : 1, night ? 0 : 1, night ? 0 : 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.uniform2f(this.u.u_res, box.width, box.height);
+    gl.uniform2f(this.u.u_light, box.width * 0.5, box.height * 0.45);
+    gl.uniform2f(this.u.u_tilt, tiltX, tiltY);
+    gl.uniform1f(this.u.u_gain, night ? GAIN_NIGHT : GAIN_DAY);
+    gl.uniform1f(this.u.u_night, night ? 1 : 0);
+    gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
+
+    /* Every card face in the host, in document order, so a foiled card can be
+       clipped against whichever card overlaps it next — foiled or not. The
+       fan's cards overlap by design; the trick's do not, where this is inert. */
+    const hostBox = this.host.getBoundingClientRect();
+    const faces = this.host.querySelectorAll<HTMLElement>('.pcard');
+    for (let i = 0; i < faces.length; i++) {
+      const el = faces[i];
+      if (!el.hasAttribute('data-foil')) continue;
+      /* A card mid-glide is hidden in place while a clone flies to it from
+         the fan (TrickArea's glideIn), and the clone is painted by the flight
+         layer instead. Painting its slot anyway would leave a foil rectangle
+         hanging in an empty seat until the card landed. */
+      if (el.style.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1) continue;
+      let clipRight = r.right;
+      const next = faces[i + 1];
+      if (next) {
+        const nr = next.getBoundingClientRect();
+        if (nr.left > r.left) clipRight = Math.min(clipRight, nr.left);
+      }
+      /* Where the card would be with no transform on it — see u_shift in the
+         shader. A lift, the Draw's slide and a staged glide are all transforms
+         on the button, so this is the difference between the two. */
+      const lay = layoutOffset(el, this.host);
+      const shiftX = r.left - box.left - (lay.x + hostBox.left - box.left);
+      const shiftY = r.top - box.top - (lay.y + hostBox.top - box.top);
+      gl.uniform2f(this.u.u_clipx, r.left - box.left, clipRight - box.left);
+      gl.uniform2f(this.u.u_shift, shiftX, shiftY);
+      gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+  }
+
+  /**
+   * The flight variant: a fixed, viewport-wide layer painting the `position:
+   * fixed` clones TrickArea animates between the fan and the table. They live
+   * on document.body, outside every card container, so no ordinary layer can
+   * reach them — and without this a trump simply lost its foil for the length
+   * of the glide, which is exactly when it is most looked at.
+   *
+   * `u_shift` is zero here on purpose. A clone has no layout position to carry
+   * a patch of sheet from, and a card genuinely travelling across the table
+   * SHOULD pass through the light rather than hold one frozen highlight — the
+   * opposite of the lifted card above, which is not moving at all.
+   */
+  renderFlights(now: number, tiltX: number, tiltY: number): boolean {
+    const gl = this.gl;
+    if (!gl) return false;
+    const clones = document.querySelectorAll<HTMLElement>('.pcard-flight[data-foil]');
+    if (clones.length === 0) return false;
+    const box = this.canvas.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return false;
+    const night = this.stock(now);
+    this.resize(gl, box);
+    gl.clearColor(night ? 0 : 1, night ? 0 : 1, night ? 0 : 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(this.u.u_res, box.width, box.height);
+    gl.uniform2f(this.u.u_light, box.width * 0.5, box.height * 0.45);
+    gl.uniform2f(this.u.u_tilt, tiltX, tiltY);
+    gl.uniform2f(this.u.u_shift, 0, 0);
+    gl.uniform1f(this.u.u_gain, night ? GAIN_NIGHT : GAIN_DAY);
+    gl.uniform1f(this.u.u_night, night ? 1 : 0);
+    gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
+    for (const el of clones) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1) continue;
+      gl.uniform2f(this.u.u_clipx, r.left - box.left, r.right - box.left);
+      gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+    return true;
+  }
+
+  private resize(gl: WebGLRenderingContext, box: DOMRect) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.round(box.width * dpr);
     const h = Math.round(box.height * dpr);
@@ -273,42 +376,15 @@ class FoilSurface {
       this.h = h;
     }
     gl.viewport(0, 0, w, h);
-    // the clear colour follows the stock, or the gaps between cards would tint
-    gl.clearColor(night ? 0 : 1, night ? 0 : 1, night ? 0 : 1, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
 
-    gl.uniform2f(this.u.u_res, box.width, box.height);
-    gl.uniform2f(this.u.u_light, box.width * 0.5, box.height * 0.45);
-    gl.uniform2f(this.u.u_tilt, tiltX, tiltY);
-    gl.uniform1f(this.u.u_time, time);
-    gl.uniform1f(this.u.u_gain, night ? GAIN_NIGHT : GAIN_DAY);
-    gl.uniform1f(this.u.u_night, night ? 1 : 0);
-    gl.uniform1i(this.u.u_palette, night ? PALETTE_NIGHT : PALETTE_DAY);
+  setVisible(on: boolean) {
+    this.canvas.style.visibility = on ? 'visible' : 'hidden';
+  }
 
-    /* Every card face in the host, in document order, so a foiled card can be
-       clipped against whichever card overlaps it next — foiled or not. The
-       fan's cards overlap by design; the trick's do not, where this is inert. */
-    const faces = this.host.querySelectorAll<HTMLElement>('.pcard');
-    for (let i = 0; i < faces.length; i++) {
-      const el = faces[i];
-      if (!el.hasAttribute('data-foil')) continue;
-      /* A card mid-glide is hidden in place while a clone flies to it from
-         the fan (TrickArea's glideIn), and the clone lives on document.body,
-         outside this host. Painting its slot anyway would leave a foil
-         rectangle hanging in an empty seat until the card landed. */
-      if (el.style.visibility === 'hidden') continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 1) continue;
-      let clipRight = r.right;
-      const next = faces[i + 1];
-      if (next) {
-        const nr = next.getBoundingClientRect();
-        if (nr.left > r.left) clipRight = Math.min(clipRight, nr.left);
-      }
-      gl.uniform2f(this.u.u_clipx, r.left - box.left, clipRight - box.left);
-      gl.uniform4f(this.u.u_rect, r.left - box.left, r.top - box.top, r.width, r.height);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
+  /** Only the flight layer owns its own element; a FoilLayer's is React's. */
+  remove() {
+    this.canvas.remove();
   }
 
   dispose() {
@@ -316,6 +392,28 @@ class FoilSurface {
     lose?.loseContext();
     this.gl = null;
   }
+}
+
+/**
+ * Where an element sits with every transform on it and its ancestors taken
+ * back off, relative to `host` — which is an offset parent, since both card
+ * containers are `position: relative`.
+ *
+ * `offsetLeft`/`offsetTop` are layout values and ignore transforms, which is
+ * the whole point: subtracting this from the measured rect leaves exactly how
+ * far a transform has carried the card, and that is what the shader takes back
+ * off before it samples the sheet.
+ */
+function layoutOffset(el: HTMLElement, host: HTMLElement): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  let n: HTMLElement | null = el;
+  while (n && n !== host) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+    n = n.offsetParent as HTMLElement | null;
+  }
+  return { x, y };
 }
 
 function link(gl: WebGLRenderingContext): WebGLProgram | null {
@@ -352,7 +450,9 @@ let rest: { beta: number; gamma: number } | null = null;
 let listening = false;
 let frameId = 0;
 let lastFrame = 0;
-let elapsed = 0;
+/** The lazily-made viewport layer that paints TrickArea's flight clones. */
+let flightSurface: FoilSurface | null = null;
+let flightVisible = false;
 
 /** Exported for the unit test: one step of the filter-then-cap tilt rule. */
 export function stepTilt(current: number, target: number, dtMs: number): number {
@@ -383,16 +483,29 @@ function frame(now: number) {
   lastFrame = now;
   if (document.hidden) return;
 
+  /* Reduced motion freezes the tilt but keeps drawing: the foil is a texture,
+     and asking for less movement is not asking for a plain card. The quads
+     still have to follow their cards as the hand is played. */
   const moving = motionAllowed();
   if (moving) {
     tilt.x = stepTilt(tilt.x, tiltTarget.x, dt);
     tilt.y = stepTilt(tilt.y, tiltTarget.y, dt);
-    elapsed += (dt / 1000) * DRIFT_RATE;
   }
-  /* Reduced motion freezes the clock and the tilt but keeps drawing: the foil
-     is a texture, and asking for less movement is not asking for a plain card.
-     The quads still have to follow their cards as the hand is played. */
-  for (const s of surfaces) s.render(now, moving ? elapsed : 3.2, moving ? tilt.x : 0, moving ? tilt.y : 0);
+  const tx = moving ? tilt.x : 0;
+  const ty = moving ? tilt.y : 0;
+  for (const s of surfaces) s.render(now, tx, ty);
+
+  /* The flight layer is viewport-wide and blends, so it is kept unpainted
+     except during the glide it exists for — and the hiding is `visibility`,
+     never `display`. A display:none canvas has NO BOX, so its own
+     getBoundingClientRect comes back all zeros, renderFlights bails on the
+     zero-size check and it can never make itself visible again: hidden
+     forever, in silence. The style is written only when the answer changes. */
+  const painted = flightSurface?.renderFlights(now, tx, ty) ?? false;
+  if (flightSurface && painted !== flightVisible) {
+    flightVisible = painted;
+    flightSurface.setVisible(painted);
+  }
 }
 
 function addSurface(s: FoilSurface) {
@@ -401,7 +514,34 @@ function addSurface(s: FoilSurface) {
     lastFrame = 0;
     frameId = requestAnimationFrame(frame);
   }
+  ensureFlightSurface();
   attachTilt();
+}
+
+/**
+ * The one layer that is not a child of a card container: TrickArea animates a
+ * `position: fixed` clone on document.body between the fan and the table, and
+ * nothing scoped to a host can reach it. Made once, on the first foiled board,
+ * and left hidden until a foiled clone actually exists.
+ *
+ * Being fixed, it cannot desync from what it paints the way a fixed blend
+ * layer over SCROLLING content does — the clones are fixed too, so the two
+ * move together by construction.
+ */
+function ensureFlightSurface() {
+  if (flightSurface || typeof document === 'undefined') return;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'foil-layer foil-layer-flight';
+  canvas.setAttribute('aria-hidden', 'true');
+  canvas.style.visibility = 'hidden';
+  document.body.appendChild(canvas);
+  const surface = new FoilSurface(canvas, document.body);
+  if (!surface.ok) {
+    canvas.remove();
+    return;
+  }
+  flightSurface = surface;
+  flightVisible = false;
 }
 
 function removeSurface(s: FoilSurface) {
@@ -410,6 +550,10 @@ function removeSurface(s: FoilSurface) {
   if (surfaces.size === 0 && frameId) {
     cancelAnimationFrame(frameId);
     frameId = 0;
+    flightSurface?.dispose();
+    flightSurface?.remove();
+    flightSurface = null;
+    flightVisible = false;
     // the next board re-centres on however the device is held then
     rest = null;
     tilt.x = tilt.y = tiltTarget.x = tiltTarget.y = 0;
