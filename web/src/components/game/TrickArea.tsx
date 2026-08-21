@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RANK_CHARS, SEAT_SHORT, SUIT_SYMBOLS, cardRank, cardSuit, suitClass, type BoardView } from '../../api';
+import { FoilLayer } from './FoilLayer';
 import { COLLECT_MS, GLIDE_MS, motionOK, takePlayOrigin, trickWinner } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
@@ -16,6 +17,11 @@ import { PlayingCard } from './PlayingCard';
  * off-table on that seat's side. A trick that just cleared sweeps to the
  * winner, and a tally cell that just changed gets the stamp pop.
  *
+ * `foil` is the trump suit to give the Foil Trumps treatment, or null for
+ * off — see foil.ts. The layer is a sibling of the four slots and finds its
+ * own cards, so nothing about the compass or the animations changes with it
+ * on.
+ *
  * `awaitingClear`/`onClearTap` are "Trick clearing: tap" (settings gate):
  * while true, Board.tsx has paused a completed trick on the table instead of
  * sweeping it away on a timer, and a tap/click/Enter/Space anywhere on this
@@ -25,10 +31,13 @@ import { PlayingCard } from './PlayingCard';
  */
 export function TrickArea({
   board,
+  foil = null,
   awaitingClear = false,
   onClearTap,
 }: {
   board: BoardView;
+  /** suit to foil ("Foil trumps · ON"); null = no foil */
+  foil?: number | null;
   awaitingClear?: boolean;
   onClearTap?: () => void;
 }) {
@@ -154,11 +163,16 @@ export function TrickArea({
                 slotEls.current.set(seat, el);
               }}
             >
-              {played ? <PlayingCard card={played.card} small /> : awaited ? <PlayingCard placeholder small /> : null}
+              {played ? (
+                <PlayingCard card={played.card} small foil={foil !== null && cardSuit(played.card) === foil} />
+              ) : awaited ? (
+                <PlayingCard placeholder small />
+              ) : null}
             </div>
           </div>
         );
       })}
+      {foil !== null ? <FoilLayer /> : null}
       <div className="trick-meter">
         <div className="trick-meter-num num">
           <span className={`trick-meter-side${humanDeclaring ? ' mine' : ''}${stamp === 'decl' ? ' stamp' : ''}`}>

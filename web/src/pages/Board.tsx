@@ -11,6 +11,7 @@ import {
   api,
   cardRank,
   cardSuit,
+  foilForDisplay,
   suitClass,
   trumpForDisplay,
 } from '../api';
@@ -121,6 +122,10 @@ export default function Board() {
   // ♠♥♦♣; see the trump_placement migration in db.ts. Purely how the cards
   // are drawn — nothing here reaches the server or changes what is legal.
   const trumpPlacement = me?.user?.trumpPlacement === 'left' ? 'left' : 'suit';
+  // "Foil trumps" (settings gate) — the holographic plate over the trump suit
+  // in hand and on the table (foil.ts). Fails CLOSED like doubleTapBid: this
+  // one defaults OFF, so an absent field must read as off rather than on.
+  const foilTrumps = me?.user?.foilTrumps === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   /**
@@ -867,6 +872,7 @@ export default function Board() {
           awaitingTrickClear={awaitingTrickClear}
           onClearTrick={clearHeldTrick}
           trumpPlacement={trumpPlacement}
+          foilTrumps={foilTrumps}
           drawTrumps={drawTrumps}
         />
       ) : (
@@ -1079,6 +1085,7 @@ export function PlayPhase({
   awaitingTrickClear = false,
   onClearTrick = () => {},
   trumpPlacement = 'suit',
+  foilTrumps = false,
   drawTrumps = false,
 }: {
   board: BoardView;
@@ -1109,6 +1116,12 @@ export function PlayPhase({
    */
   trumpPlacement?: 'suit' | 'left';
   /**
+   * "Foil trumps" (users.foil_trumps): the holographic plate over the trump
+   * suit. Defaults false — off is also the account default, and the tour
+   * mounts this component without passing it, the doubleTapBid precedent.
+   */
+  foilTrumps?: boolean;
+  /**
    * Play the Draw (trumpDraw.ts) into that order, once, as this mounts. Only
    * true when the player WATCHED the auction settle — a reload mid-play, a
    * replay or a second device gets the finished order with no motion, since
@@ -1126,6 +1139,9 @@ export function PlayPhase({
   // One derivation for every hand on the screen — the fan, a partner's dummy
   // fan and an opponent's dummy rail have to agree about which suit leads.
   const trump = trumpForDisplay(board.contract, trumpPlacement);
+  // ...and one for whether it glitters. Separate settings, separate answers:
+  // a hand can be foiled without being re-sorted, or the other way round.
+  const foil = foilForDisplay(board.contract, foilTrumps);
 
 
   // Dummy on East or West is always the opposing side's exposed hand — never
@@ -1157,6 +1173,7 @@ export function PlayPhase({
             <HandFan
               cards={board.dummyHand}
               trump={trump}
+              foil={foil}
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
               selected={selectedCard ?? soleLegal}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
@@ -1170,18 +1187,19 @@ export function PlayPhase({
           {board.dummy === 3 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" trump={trump} />
           ) : null}
-          <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
+          <TrickArea board={board} foil={foil} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
           {board.dummy === 1 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" trump={trump} />
           ) : null}
         </div>
       ) : (
-        <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
+        <TrickArea board={board} foil={foil} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
       )}
       <div className="board-fan">
         <HandFan
           cards={board.hand}
           trump={trump}
+          foil={foil}
           drawIn={drawTrumps}
           legal={canPlayFrom(playingSeat) ? board.legalCards : []}
           selected={selectedCard ?? soleLegal}

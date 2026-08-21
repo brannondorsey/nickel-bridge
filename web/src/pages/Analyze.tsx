@@ -19,6 +19,7 @@ import {
   displaySort,
   suitClass,
   suitDisplayOrder,
+  foilForDisplay,
   trumpForDisplay,
 } from '../api';
 import { Button } from '../components/ds/Button';
@@ -807,6 +808,10 @@ function ReplayLens({
   // would be a motion that says nothing about the play being reviewed.
   const { me } = useMe();
   const trump = trumpForDisplay(board.contract, me?.user?.trumpPlacement === 'left' ? 'left' : 'suit');
+  // The reader's own "Foil trumps" applies here too — a review of a board is
+  // still a board, and a hand that glitters in play looking plain in Analyze
+  // would read as a different deck rather than as a different screen.
+  const foil = foilForDisplay(board.contract, me?.user?.foilTrumps);
   const totalPlies = views.length - 1;
   const flat = useMemo(() => board.playHistory?.flat() ?? [], [board]);
   const [ply, setPly] = useState(() => Math.max(0, Math.min(initialPly, totalPlies)));
@@ -991,12 +996,12 @@ function ReplayLens({
           seat and role still reach assistive tech via aria-label. */}
       <div className="analyze-rail north" aria-label={`${acrossName}${dummy === across ? ' · DUMMY' : ''}`}>
         <div className="board-fan">
-          <HandFan cards={acrossOpen} selected={acrossHighlight} trump={trump} />
+          <HandFan cards={acrossOpen} selected={acrossHighlight} trump={trump} foil={foil} />
         </div>
       </div>
-      <TrickArea board={view} />
+      <TrickArea board={view} foil={foil} />
       <div className="board-fan">
-        <HandFan cards={view.hand} selected={fanHighlight} trump={trump} />
+        <HandFan cards={view.hand} selected={fanHighlight} trump={trump} foil={foil} />
       </div>
 
       <div className="replay-dock">

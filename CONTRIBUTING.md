@@ -170,6 +170,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 AdjustedReceipt.tsx — the never-tolled twin ScoreReceipt lends its
                 ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
+                foil.ts + FoilLayer.tsx — Foil Trumps, the holographic plate over the
+                trump suit; one WebGL canvas per card container painting a quad per
+                [data-foil] face, since the pattern is one continuous field across a
+                hand rather than a background on each card — see "Foil trumps" below,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
                 the landing page share),
                 src/test/ (fixtures + apiMock pattern),
@@ -240,14 +244,18 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 edge-runbook.md — the operator's companion to scripts/cloudflare.mjs: how to
                 verify a fronted host end to end, and how to measure whether it bought
                 machine time (see "The edge" below);
-                foil-trumps: the concept board is NOT here — it is
-                web/public/foil-trumps-a-concept.html, served by the app, because
-                the tilt treatment reads deviceorientation and that needs a
-                secure, top-level, SAME-ORIGIN context. A docs/ file opened over
-                file:// has a null origin and iOS refuses requestPermission()
-                outright, and a hosted artifact is a cross-origin frame where the
-                sensors are policy-denied with no way for the frame to grant
-                itself them. A PR preview URL is the review surface;
+                foil-trumps: the concept boards are NOT here — they are
+                web/public/foil-trumps-a-concept.html (the six readings) and
+                web/public/foil-trumps-b-blade.html (the blade, narrowed, and
+                the one the shipped treatment was chosen from), served by the
+                app, because the tilt treatment reads deviceorientation and that
+                needs a secure, top-level, SAME-ORIGIN context. A docs/ file
+                opened over file:// has a null origin and iOS refuses
+                requestPermission() outright, and a hosted artifact is a
+                cross-origin frame where the sensors are policy-denied with no
+                way for the frame to grant itself them. A PR preview URL is the
+                review surface, and board B stays served after shipping because
+                it is where the dials live — see "Foil trumps" below;
                 trump-placement-concepts.html — the concept-exploration board for the
                 "trump suit to the left of the fan" request: three live, replayable
                 motions over the real fan geometry, plus the re-sort rule and which
@@ -788,17 +796,18 @@ it are decisions rather than defaults:
 
 **The three motion sensors are the one `(self)` in Permissions-Policy**, and the only
 capability this app grants rather than denies. `accelerometer`/`gyroscope`/`magnetometer`
-gate `deviceorientation`, which the foil-trumps tilt treatment reads
-(`web/public/foil-trumps-a-concept.html`); denied — as they were — the events never arrive
+gate `deviceorientation`, which the Foil Trumps tilt treatment reads — in the shipped
+feature (`web/src/components/game/foil.ts`) and on both concept boards
+(`web/public/foil-trumps-*.html`); denied — as they were — the events never arrive
 at all: no error, no prompt, nothing in the console, so it presents as the feature being
 broken rather than as a header being wrong. `(self)` is deliberately not `*`: the default
 allowlist for these is already `self`, so writing it out changes nothing a browser does
 and instead states the decision where the next reader of that list will find it, while
 keeping a cross-origin iframe embedded in one of our pages from inheriting them. That same
-rule cuts the other way and is why the board has to be served from here rather than hosted
-as an artifact — a cross-origin frame is denied these by default and nothing inside the
-frame can grant them. `server/test/security.test.ts` pins both halves; if the tilt is cut,
-move the three back to `DENIED` in the same change.
+rule cuts the other way and is why the boards have to be served from here rather than
+hosted as an artifact — a cross-origin frame is denied these by default and nothing inside
+the frame can grant them. `server/test/security.test.ts` pins both halves; if Foil Trumps
+is ever cut, move the three back to `DENIED` in the same change.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
@@ -2175,12 +2184,102 @@ already settled inside the first trick — which is exactly why it went unnotice
   staged snapshots already enforce by dropping `legalCards`; the Draw needs its own guard
   because the case they do not cover is the player being on LEAD, where there are no robot
   cards to stage and the fan arrives live with the trumps still travelling.
+- **Foil trumps** (`users.foil_trumps`, default **OFF**) gives the trump suit a
+  holographic plate — in your hand, in dummy, on the table and in Analyze's replay.
+  Joins `double_tap_bid` as the second row here that does not preserve prior behaviour
+  by defaulting on, for the opposite reason: there was no prior behaviour to preserve,
+  and a decorative treatment nobody asked for is not something to switch on for every
+  account at once. An INTEGER boolean rather than the TEXT enums above, deliberately —
+  those name a MODE with plausible third values, where this is a yes/no; which foil, at
+  what strength, in which palette are settled constants in `foil.ts`, not choices this
+  column holds open. Purely a client treatment: the server never reads the column, and
+  nothing about the deal, the legal cards, scoring or robot play depends on it, so two
+  players on the same board with opposite settings still face identical robots. See
+  "Foil trumps" below for how it is drawn. It is also the ONE row on this panel whose
+  `onChange` does something besides write the preference: switching it ON calls
+  `requestFoilTilt()`, because iOS grants the motion sensors only from a user gesture
+  and this tap is both a real one and the moment the player has just asked for the
+  effect. A refusal is never surfaced — the foil drifts on its own clock without a
+  sensor.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,
   unlike the bullets above it — its `onChange` is the same synchronous set-state/store/apply
   triple Appearance uses, with no server round trip, no optimistic revert, and no
   `prefError` path to wire up.
+
+**Foil trumps is one continuous field, not an effect per card, and that decides its
+whole shape.** `web/src/components/game/foil.ts` is a Balatro-style ruled diffraction
+grating ("the blade") ported from the concept board at
+`web/public/foil-trumps-b-blade.html` with the settings the owner landed on baked in as
+constants — weight 0.90, count 0.15, ambient 0.15, light size 120, duotone by day and the
+full spectrum at night, day carrying more intensity than night because multiply spends it
+differently than screen does. That board stays served after shipping, and is still where
+to change how this LOOKS: it carries every dial as a live slider, a gallery of sweeps and
+a sensor readout, none of which belong in the app bundle.
+
+At the shipped line count a single rule spans ~440px — wider than a whole hand — so the
+pattern has to be continuous ACROSS the fan to read as one sheet of foil. That rules out a
+per-card CSS gradient, which would restart at every card, and is why this is one canvas
+per card container (`FoilLayer`, a plain last child of `.handfan`/`.trick`) painting a quad
+per `[data-foil]` face rather than a background on each `.pcard`. `PlayingCard` marks the
+faces; the layer finds them itself, so the two halves never have to agree twice about
+which suit is trumps. A context per host is affordable here in a way it was not on the
+concept board — that page has ~130 hosts and had to render offscreen and blit against a
+browser limit of roughly 16 live contexts, where a board carries at most three.
+
+Four details are load-bearing:
+
+- **The blend mode is what protects the ink.** On day stock the layer multiplies, which
+  cannot lighten: the card takes the foil colour exactly while the near-black rank and pip
+  come through untouched, so the plate runs edge to edge UNDER the glyphs with nothing to
+  cut around (board A knocked a box out around the corner index, and you could see it).
+  Night is the opposite problem and screens onto the dark card. The GL clear colour follows
+  the stock for the same reason — white is multiply's no-op, black is screen's — or the
+  gaps between cards would tint.
+- **...which means the blend and the shader must agree, and that is the one thing easy to
+  get wrong.** The concept board shipped a version where CSS decided "night" from
+  `prefers-color-scheme` while the shader decided it from the board's own lever, and on a
+  phone in OS dark mode with the lever on DAY they disagreed: the day image, built around
+  white, was SCREENED, and since screen cannot darken, the card, the pips and the rank all
+  blew out to near-white together. It presented as the shader being wrong for light and it
+  was one selector. So neither half decides here. `--foil-stock` is a token declared beside
+  every other night override in `style.css` (add it to any block that overrides
+  `--cardface`), and BOTH the canvas's `mix-blend-mode` and the shader's `u_night` are read
+  from the cascade's answer for it. They cannot disagree, whatever combination of
+  `data-theme` and OS preference produced it. It is re-read on a timer rather than
+  subscribed to, because there are four ways it can change — the settings lever, App.tsx's
+  adaptive-schedule tick, an OS appearance change, and a `system` preference meeting either
+  of the last two — and a periodic read is correct for all of them plus any fifth.
+- **Measure against the CANVAS's box, never the host's.** The layer overhangs by
+  `--foil-bleed` (a trick card is taller than its grid row and spills past the box; a layer
+  pinned to `inset: 0` leaves its foot bare), so the two boxes differ by 32px in each axis.
+  Using the host's size for `u_res` while rasterising into the larger canvas shifts every
+  quad up and left by the bleed and stretches it — the foil lands beside its cards rather
+  than on them, which is exactly what shipped in the first draft. Relatedly, the width and
+  height are spelled out in CSS rather than left to opposing offsets: a `<canvas>` is a
+  REPLACED element, so `inset: -16px` with `width: auto` sits at its intrinsic 300×150 and
+  silently paints almost nothing.
+- **Tilt is the enhancement, not the feature.** Device orientation moves the grain's angle
+  and phase — with curvature gone every card shares one normal, so tilting cannot light one
+  card more than its neighbour and brightness is the wrong thing to hand a sensor. The
+  reading is filtered (a 420ms time constant, alpha derived per frame from real elapsed
+  time) AND rate-limited to 0.75 of the range per second, and both are needed: a time
+  constant bounds LAG, not SPEED, so the first frame of a full-sweep target still moves ~4%
+  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. Without any
+  sensor at all the pattern still drifts on its own clock, so nothing looks broken — which
+  matters because iOS grants the sensors only from a user gesture and does not persist the
+  grant across page loads. The ask therefore lives on the settings lever, and a player who
+  has already said yes once (`nb:foilTilt`) gets it re-made silently on their first tap of
+  the session. Under `prefers-reduced-motion` the clock and the tilt freeze but the layer
+  keeps drawing: the foil is a texture, and asking for less movement is not asking for a
+  plain card — the quads still have to follow their cards as the hand is played.
+
+`Tour.tsx` reads no preference at all, the `doubleTapBid`/`trump_placement` precedent. A
+browser with no WebGL gets an unstyled board rather than an error, and the context is
+feature-detected (`typeof WebGLRenderingContext`) before it is asked for, because
+`getContext('webgl')` under jsdom is not a quiet null — it reports on the virtual console,
+which would print a stack per canvas in every unit test that renders a foiled hand.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,

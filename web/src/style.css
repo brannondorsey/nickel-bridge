@@ -72,6 +72,18 @@
   --cardface-suit-h: #c22f21;
   --cardface-suit-d: #9e6a00;
   --cardface-suit-c: #00775a;
+  /* Which stock the Foil Trumps layer is painting onto: 0 = the day card
+     above (the layer multiplies, and its shader builds its image around
+     white), 1 = the night card (it screens, around black). It lives here with
+     the card-face tokens because it is a fact ABOUT them — and it is a token
+     rather than a check in script precisely so there is only ever one answer.
+     foil.ts reads the cascade's value for BOTH the blend mode and the shader's
+     own u_night; source those separately and they can disagree, which paints a
+     white-based image with screen and blows the card, the pips and the rank
+     out to near-white together. Any block overriding --cardface needs this too. */
+  --foil-stock: 0;
+  /* how far the foil layer overhangs its container — see .foil-layer */
+  --foil-bleed: 16px;
 }
 
 /* ---- night theme — token swap only, never per-component dark styles.
@@ -123,6 +135,7 @@
   --cardface-suit-h: var(--suit-h);
   --cardface-suit-d: var(--suit-d);
   --cardface-suit-c: var(--suit-c);
+  --foil-stock: 1;
 }
 /* 'system' preference: no data-theme attribute, so the OS setting decides. Scoped to
    :not([data-theme]) so an explicit Day/Night override (which always sets the
@@ -162,6 +175,7 @@
     --cardface-suit-h: var(--suit-h);
     --cardface-suit-d: var(--suit-d);
     --cardface-suit-c: var(--suit-c);
+    --foil-stock: 1;
   }
 }
 /* light-on-dark serif renders heavier; night-only smoothing, never as a compensating
@@ -1540,6 +1554,33 @@ a.ds-btn-secondary:hover {
   justify-content: center;
   align-items: flex-end;
   padding: 14px 8px 2px;
+  /* the foil layer is absolutely positioned against this box (.trick already
+     has it for the compass slots) */
+  position: relative;
+}
+
+/* ---- Foil Trumps: the holographic plate over the trump suit (foil.ts).
+   One canvas per card container, painting a quad per [data-foil] face — the
+   pattern is one continuous field across a hand, so it cannot be a background
+   on each card. It OVERHANGS its host: a trick card is taller than its grid
+   row and spills past the box, and a layer pinned to inset:0 leaves its foot
+   bare. Width and height are spelled out rather than left to the opposing
+   offsets because a <canvas> is a REPLACED element — `inset: -16px` with
+   `width: auto` sits at its intrinsic 300x150 and silently paints nothing.
+
+   The blend mode is set from script, off the same --foil-stock token the
+   shader reads (see foil.ts): multiply on day stock, which cannot lighten and
+   so lets near-black ink through untouched, screen on night. It is NOT
+   declared here, because a CSS rule and a uniform sourced separately is
+   exactly the disagreement that ruins the card. ---- */
+.foil-layer {
+  position: absolute;
+  top: calc(var(--foil-bleed) * -1);
+  left: calc(var(--foil-bleed) * -1);
+  width: calc(100% + var(--foil-bleed) * 2);
+  height: calc(100% + var(--foil-bleed) * 2);
+  pointer-events: none;
+  z-index: 4;
 }
 .handfan .cardbtn {
   padding: 0;
