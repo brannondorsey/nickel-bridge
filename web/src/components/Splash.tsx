@@ -1,6 +1,4 @@
 import { useEffect, type ReactNode } from 'react';
-import riverScene from '../assets/bridge-river-scene.svg';
-import riverSceneNight from '../assets/bridge-river-scene-night.svg';
 
 /**
  * The toll-gate splash — wordmark, "DUPLICATE · SAYC", and the river scene
@@ -48,8 +46,19 @@ export function Splash({
       </div>
       {cue ?? null}
       <div className="splash-bridge">
-        <img className="day-scene" src={riverScene} width="390" height="146" alt="" />
-        <img className="night-scene" src={riverSceneNight} width="390" height="146" alt="" />
+        {/* The scene is a repeating BACKGROUND rather than an <img>, and that
+            is what lets the bridge span any viewport with none of it missing:
+            the drawing is a 160-unit arch pattern that meets itself exactly at
+            its own edges, so repeat-x tiles it seamlessly, and sizing it
+            `auto 100%` means the whole height — deck, arches, piers, water —
+            is always on screen. As an <img> it could only be `cover`, which
+            scales by WIDTH: at 1440 that magnified the drawing 2.25x inside a
+            fixed-height band and cropped everything above the waterline, so
+            the desktop hero showed a river and no bridge. The day/night pair
+            swaps in style.css beside every other theme override (an SVG loaded
+            as an image can't read the host page's custom properties, so the
+            night recolor has to be its own file either way). */}
+        <div className="splash-scene" aria-hidden="true" />
       </div>
     </div>
   );

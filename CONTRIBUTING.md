@@ -181,7 +181,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
                 the night token overrides; [data-suit-palette="colorblind"] + its
                 [data-theme="night"] and @media twins hold the colorblind suit-color
-                overrides — see "Night mode" below)
+                overrides — see "Night mode" below; and "the responsive ladder", the ONE
+                place the tablet/desktop breakpoints and the measure/action/page tokens live —
+                see "No sheet: the page is the viewport" below)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
@@ -213,6 +215,9 @@ tools           offline Python weight conversion + golden-fixture generation;
                 analyze_trace.mjs, see "Tuning Analyze's moment floor" below
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
+                responsive-check.mjs (the same walk shot at all four ladder viewports,
+                `<name>@<width>.png` — the review artifact for any breakpoint change,
+                see "No sheet: the page is the viewport" below),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
@@ -1986,6 +1991,105 @@ the human plays the North hand — see `humanControls` and the `flipped` handlin
 
 **better-sqlite3 is synchronous:** DB calls are not awaited; prepared statements live as
 module-level constants next to the functions that use them. Match that style.
+
+**No sheet: the page is the viewport.** The app was drawn for a 390px phone and `.shell` was a
+hard `max-width: 430px`, so on a tablet or a desktop it was a ribbon in an ocean of paper. A
+first pass stepped that cap 430 → 600 → 680px, which was mobile-first and safe and still
+wrong: a 1440px desktop got a 680px ribbon down the middle, which reads as a phone app
+someone left open on a monitor. **`.shell` now has no `max-width` at any size, and neither
+does any page root.** What caps is individual ELEMENTS, and only those with a reason to — a
+paragraph at its reading measure, a primary button at the width a thumb can cross, the trick
+table where its four seats stop reading as a table. Width that no element wants is spent on
+LAYOUT — a second column, a rail, a wider fan of cards — never on emptiness. **If you find
+yourself adding `max-width` to a page root, that is this bug coming back**: cap the element
+that looks wrong, or give the page another column. The whole mechanism is three tokens plus
+three numbers, declared together under "the responsive ladder" at the top of
+`web/src/style.css`:
+
+- **`--measure` (34rem)** is what a single column of prose or of stacked controls may reach;
+  **`--action-w` (22rem)** is where a primary button stops being a target and becomes a bar
+  with a word in it; **`--page-pad`** is the extra breathing room a page takes at width, added
+  by the page rather than imposed by the shell, because the landing folds, the trick table and
+  the TabBar are deliberately full-bleed. A fourth, `--fan-space`, is below.
+- **The three breakpoints are 720 / 1024 / 1400, and they are content breakpoints.** 720 is
+  where one column of phone-width content starts reading as a ribbon; 1024 is where a second
+  column of panels, or a rail beside the table, is affordable; 1400 is where a third is. There
+  is no CSS-native way to name a breakpoint, so those numbers appear literally in every
+  `@media` block in the file — `grep -n 'min-width: 1024px'` finds every rule at a step. **Do
+  not introduce a fourth number** without adding it to the ladder's comment.
+- **Mobile-first, strictly.** Every rule outside a `min-width` query is the phone design,
+  untouched; every responsive rule is additive. That is what makes "did I regress the phone?"
+  answerable by reading a diff instead of by re-shooting every screen.
+- **Media queries do not add specificity, and this file is long.** Two of the rules in this
+  pass silently did nothing at first because a later, equal-specificity base rule won on
+  source order (`.tabbar a { flex: 1 0 auto }` beating the centred-toolbar override, and the
+  1400px three-column bidding grid sitting above the 1024px two-column one). A responsive
+  override belongs immediately AFTER the rule it overrides, not in a tidy block somewhere
+  else.
+
+**Every screen has a desktop shape, and it is a content decision.** Home is the play side and
+the toll ledger side by side; the profile is a two-page spread at 1024 and three at 1400;
+Traffic is a week as a grid of days; the Glossary flows into two or three print columns
+(`columns`, not a grid — the letters are wildly uneven, and a grid row as tall as its tallest
+letter leaves holes a flowing column doesn't); a crossing is its scoresheet beside its field;
+Rankings keeps the ladder as one list (splitting a ranking across columns is a puzzle, not a
+layout) and gives the width to the house table. Each lives in an `at width` block beside its
+own screen's CSS.
+
+**The board becomes two columns, then three.** The auction is the one thing on that screen you
+read rather than act on, so past 1024 it moves into a rail and everything you act on — table,
+hands, bid box — takes the main column, with the vertical stack a whole tray shorter (on a
+landscape desktop, height is the scarce axis). Past 1400 the bidding screen goes to three:
+tray, hand, bidding box, which is also how a real table is laid out. Two structural notes:
+`PlayPhase` renders its parts as a flat list of siblings, so the rail is a real element
+(`.board-rail`, `display: contents` on the phone — it generates no box, so every phone
+measurement is unchanged) rather than three grid-placement rules, which is what the first
+attempt did and which let the grid's own rows stretch a two-line toast to 280px. And
+`.bid-scroll` does the same job for bidding via `display: contents`, splitting its two
+children across the two columns without a DOM change. **The bidding dock stops docking at
+1024**: `100dvh` plus a bottom-pinned box is a thumb-reach design, and on a desktop it only
+opens a 400px hole between the tray and the hand.
+
+**Cards size from the space the FAN gets, and from the viewport's HEIGHT.** `--card-h`'s fit
+formula measures `--fan-space`, which is the viewport on the phone (identical to the old
+`min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
+the viewport there would size cards from space the fan does not have and overflow the column.
+`--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, and to
+`min(150px, 26vh)` on the BIDDING screen specifically, which stacks exactly one hand and can
+afford it. The `vh` term is the part worth understanding: phones are portrait and desktops are
+landscape, so the moment the app claims desktop the scarce axis flips from width to height.
+The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
+of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
+Sized on width alone, a wide-but-short window gets beautiful cards and a hand that scrolls off
+the bottom. `FAN_GAP` (`fanLayout.ts`) deliberately stays a fixed 6px at every size: it is the
+whitespace between two printed values rather than a share of the card, and scaling it would
+make the fit formula's own constant circular.
+
+**Two cascade traps, both recorded beside the rules they bit.** `.board-page .trick` beats a
+one-class `.trick { margin-inline: auto }`, so a capped box sits flush left and it looks
+exactly like `max-width` not applying. And a flex item whose cross size is `auto` is
+*stretched*, so auto margins have no free space to absorb until you give it `width: 100%`.
+
+**The bridge tiles; it does not crop.** The river scene under the landing hero is a 640×240
+drawing whose arch pattern meets itself exactly at its own edges, so it is a `repeat-x`
+background sized `auto 100%` — the whole height is always on screen and the span continues for
+as much width as there is. As an `<img>` it could only be `object-fit: cover`, which scales by
+WIDTH: at 1440 that magnified the drawing 2.25× inside a fixed-height band and cropped
+everything above the waterline, so the desktop hero showed a river and no bridge. It is
+genuinely seamless rather than nearly — the drawing's own edges each carry half of the same
+pier line, and the arch curve is at a springing point on both.
+
+**The three hand-rolled charts scale uniformly now.** `Sparkline`, `StemChart` and `DayGrid`
+were drawn against a 326-unit design width and stretched on x alone
+(`preserveAspectRatio="none"`), which is invisible at 326-in-330 and indefensible at
+326-in-960: the toll log's days became 3:1 lozenges and the stem chart's `<text>` labels were
+drawn stretched, since a non-uniform viewBox scales glyphs too. They now scale on both axes
+(`height: auto` in `style.css`), so a wider panel makes the whole drawing bigger.
+
+**Reviewing a breakpoint change:** `node scripts/responsive-check.mjs http://localhost:3000
+./shots` walks the app once against a `DEV_AUTH=1` server and shoots every screen at 390, 834,
+1194 and 1440, as `<name>@<width>.png`. The 390 column is the regression net — nothing in it
+may change.
 
 **Night mode is a token swap, not per-component dark styles.** `[data-theme="night"]` on
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
