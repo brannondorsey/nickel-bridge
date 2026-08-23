@@ -4810,25 +4810,45 @@ a.stat-tile:hover {
  * block below. It has no table and no dummy, so a rail beside it would be a
  * rail beside nothing. */
 @media (min-width: 1024px) {
+  /* The rail takes a SHARE of the page rather than a fixed slab. At 1024 a flat
+     20rem is a fifth of the window, and every pixel of it is a pixel the cards
+     don't get; the tray reads perfectly well a little narrower. The clamp's
+     floor is where the four-column tray starts to crowd. */
   :root:has(.board-page) {
-    --board-rail: 20rem;
+    --board-rail: clamp(17rem, 26vw, 20rem);
   }
-  /* The fan shares the main column with the table during PLAY, so it gets the
-     viewport less the rail, the three gutters (two flanking the block, one
-     inside it) and the page padding. Bidding keeps the base 100vw: there is
-     nothing beside it to subtract. */
   :root:has(.board-page:not(.analyze-page) .trick) {
-    --fan-space: calc(100vw - var(--board-rail) - var(--space-5) * 3 - var(--page-pad) * 2);
-    /* Height is the scarce axis on a landscape screen, and this phase stacks
-       the table, your fan and its labels — about 2.6 card heights plus ~130px
-       of chrome. 20vh keeps that inside a 700px-tall window; the 150px ceiling
-       stops the cards outgrowing the table on a tall one. */
-    --card-h-cap: min(150px, 20vh);
+    /* What the main column has to work with: the viewport less the rail, the
+       three gutters (two flanking the block, one inside it) and the page
+       padding. Bidding keeps the base 100vw — there is nothing beside it. */
+    --board-avail: calc(100vw - var(--board-rail) - var(--space-5) * 3 - var(--page-pad) * 2);
+    --fan-space: var(--board-avail);
+    /* THE CARD SIZE IS BOUNDED BY THE TABLE, NOT ONLY BY THE FAN. --card-h's
+       own fit term sizes cards so a 13-card fan fits --fan-space, which is the
+       right question on the phone, where the fan is the widest thing on the
+       screen. Here it isn't: the table sits BESIDE the dummy rail, so the row
+       it lives in wants 6.4 card widths (its cap) plus the rail's 8rem. Left
+       to the fan alone, a 1024px window sized cards from a 584px fan and then
+       asked a 504px table to share 584px with a 128px rail — and .trick's
+       height is a fixed multiple of the card, so what gave was its WIDTH. It
+       came out tall and narrow with the played cards overlapping the trick
+       meter. 4.46 is 6.4 × 46/66, i.e. the table's cap expressed in card
+       HEIGHTS, which is the unit this token is in.
+
+       Height is still the other scarce axis on a landscape screen: this phase
+       stacks the table, your fan and its labels — about 2.6 card heights plus
+       ~130px of chrome — so 20vh keeps that inside a 700px-tall window, and
+       the 150px ceiling stops the cards outgrowing the table on a tall one. */
+    --card-h-cap: min(150px, 20vh, calc((var(--board-avail) - 8rem) / 4.46));
+    /* The width of the play composition itself: the table at its cap plus the
+       dummy rail beside it. This is what the main column is, and it is derived
+       from the card token rather than measured from the DOM — see the grid. */
+    --board-main: min(var(--board-avail), calc(var(--card-w) * 6.4 + 8rem));
   }
 }
 @media (min-width: 1400px) {
   :root:has(.board-page) {
-    --board-rail: 24rem;
+    --board-rail: clamp(20rem, 26vw, 24rem);
   }
 }
 
@@ -4856,9 +4876,12 @@ a.stat-tile:hover {
 @media (min-width: 1024px) {
   .board-page:not(.analyze-page):has(.trick) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--board-rail) minmax(0, max-content) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) var(--board-rail) minmax(0, var(--board-main)) minmax(0, 1fr);
     column-gap: var(--space-5);
-    align-content: start;
+    /* The block sits in the middle of the window rather than hugging the top.
+       .board-page is still a flex item of .shell with `flex: 1`, so it fills
+       the viewport's height and this centres the rows inside it. */
+    align-content: center;
   }
   .board-page:not(.analyze-page):has(.trick) > * {
     grid-column: 3;
@@ -4902,6 +4925,21 @@ a.stat-tile:hover {
     /* the rail's own gap spaces this stack; the tray's phone margins would
        double it and break the top alignment above */
     margin: 0;
+  }
+  /* The table claims the column instead of shrinking to its own contents. The
+     720 block hands it `width: auto` inside a .play-row so the table and the
+     rail can travel together and centre as a pair; out here the pair IS the
+     column, so the table takes whatever the rail leaves and stops at its own
+     6.4-card cap. Without this the row is only as wide as the cards currently
+     on the table — which is two of them by the end of a trick. */
+  .board-page:not(.analyze-page):has(.trick) > .play-row {
+    justify-content: center;
+  }
+  .board-page:not(.analyze-page):has(.trick) > .play-row > .trick {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    max-width: calc(var(--card-w) * 6.4);
   }
 }
 
@@ -4954,6 +4992,20 @@ a.stat-tile:hover {
     margin-bottom: auto;
   }
 }
+/* The dock's band runs to the WINDOW's edges, not the page's. .board-page takes
+   --page-pad past 720, which is right for everything that reads as content and
+   wrong for this: the dock is the bottom edge of the screen, and a tinted band
+   floating 40px short of the glass either side reads as a panel that failed to
+   reach. Negative margin then equal padding, so the band grows and the plates
+   inside it do not move — .bidbox-wrap's own cap centres them, and the pull is
+   symmetric. Declared after the >=1024 block above so it applies to both steps
+   (720 and up), which is also where .board-page's padding starts. */
+@media (min-width: 720px) {
+  .bid-dock {
+    margin-inline: calc(var(--page-pad) * -1);
+    padding-inline: var(--page-pad);
+  }
+}
 /* THE RECEIPT at width. The result is a document — a hero figure, the field it
  * was scored against, and the auction that got there — so it reads as a spread
  * rather than a scroll: the headline across the top, the two ledgers side by
@@ -4964,6 +5016,21 @@ a.stat-tile:hover {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: var(--space-5);
     align-content: start;
+    /* A receipt is a document, and a document has a width. Run the two ledgers
+       edge to edge on a 1440px page and the field table's contract column ends
+       up a third of a metre from its percentages. 68rem is ~3/4 of a 1440px
+       page, which is where it still reads as one sheet; past that the gutters
+       take the rest, which is the ladder's rule for a two-column page.
+
+       `width: 100%` is the load-bearing half — see "Two cascade traps" in
+       CONTRIBUTING.md. .board-page is a flex COLUMN, so a child's cross size
+       is its width: auto margins there stop it stretching and resolve it to
+       fit-content instead, and the cap never binds. Measured without it, this
+       sat at a content-driven 860px at every width — 72% of a 1194px page and
+       43% of a 2000px one, i.e. exactly the wrong way round. */
+    width: 100%;
+    max-width: 68rem;
+    margin-inline: auto;
   }
   .result > .result-hero,
   .result > .board-actions {
@@ -5212,6 +5279,15 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+/* Same argument as .result above — the itemised toll is a sheet of paper, and
+   a sheet has a width. */
+@media (min-width: 1024px) {
+  .receipt {
+    width: 100%;
+    max-width: 68rem;
+    margin-inline: auto;
+  }
 }
 .receipt-panel {
   margin: 18px 12px 0;
@@ -6297,6 +6373,20 @@ a.stat-tile:hover {
 .analyze-lens .pref-switch button {
   font-size: 9.5px;
   letter-spacing: 0.1em;
+}
+/* The lens pair is a reading position, not a call to action, and it heads a
+   page whose every other element is centred or spans. Past 720 it stops being
+   two half-page slabs and becomes two buttons on the page's own axis. Scoped
+   here rather than on the bare class for the reason given beside the settings
+   gate's copy of this: .rank-move-row wants its segments to stay even. */
+@media (min-width: 720px) {
+  .analyze-lens .pref-switch {
+    justify-content: center;
+  }
+  .analyze-lens .pref-switch button {
+    flex: 0 0 auto;
+    padding-inline: 22px;
+  }
 }
 
 /* ---- the moments ledger ---- */

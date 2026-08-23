@@ -1974,14 +1974,53 @@ real element (`.board-rail`, `display: contents` on the phone — it generates n
 phone measurement is unchanged) rather than three grid-placement rules, which is what the first
 attempt did and which let the grid's own rows stretch a two-line toast to 280px.
 
+**The main column is a DEFINITE width, and that is the whole ballgame.** It shipped once as
+`minmax(0, max-content)`, which reads as "as wide as the widest thing in it" and behaves as "as
+wide as the hand you are still holding": the fan is that widest thing, and it loses a card every
+trick. The table is `width: 100%` inside it and `.trick`'s HEIGHT is a fixed multiple of the
+card, so what gave was the table's WIDTH — by the last trick it was a tall narrow box with the
+played cards sitting on top of the trick meter. `--board-main` is computed from the card token
+instead (`min(--board-avail, --card-w * 6.4 + 8rem)` — the table at its cap plus the dummy rail
+beside it), so it depends on the viewport and nothing else. Measured at 1440: the table is
+669×350 with sixteen cards on screen and 669×350 with four.
+
+**And the card cap is bounded by the TABLE, not only by the fan.** `--card-h`'s fit term sizes
+cards so a 13-card fan fits `--fan-space`, which is the right question on a phone, where the fan
+is the widest thing on the screen. Here it isn't: the table shares its row with the dummy rail.
+Left to the fan alone, a 1024px window sized cards from a 584px fan and then asked a 504px table
+to share 584px with a 128px rail. So the cap carries a third term,
+`(--board-avail - 8rem) / 4.46` — 4.46 being 6.4 × 46/66, the table's cap expressed in card
+HEIGHTS, which is the unit the token is in. The rail is itself a `clamp(17rem, 26vw, 20rem)`
+share rather than a flat slab, because at 1024 a fixed 20rem is a fifth of the window and the
+cards pay for every pixel of it.
+
+**The block centres vertically too** (`align-content: center`). `.board-page` is still a flex
+item of `.shell` with `flex: 1`, so it fills the viewport height and the rows sit in the middle
+of it rather than hugging the masthead with a screen of empty paper underneath.
+
+**The dock's band reaches the glass.** `.board-page` takes `--page-pad` past 720, which is right
+for everything that reads as content and wrong for the bid dock: it is the bottom edge of the
+screen, and a tinted band stopping short of the window either side reads as a panel that failed
+to arrive. It is pulled back out with a negative inline margin and given the same value back as
+padding, so the band grows and the plates inside it do not move.
+
+**A receipt is a document, and a document has a width.** `.result` and `.receipt` cap at 68rem
+past 1024 — about 3/4 of a 1440px page — rather than running the two ledgers edge to edge, which
+put the field table's contract column a third of a metre from its percentages. The `width: 100%`
+beside that cap is load-bearing rather than decoration: `.board-page` is a flex COLUMN, so a
+child's cross size is its width, and `margin-inline: auto` there stops it stretching and
+resolves it to fit-content instead. Measured without it the receipt sat at a content-driven
+860px at every width — 72% of a 1194px page and 43% of a 2000px one, i.e. exactly the wrong way
+round.
+
 **Cards size from the space the FAN gets, and from the viewport's HEIGHT.** `--card-h`'s fit
 formula measures `--fan-space`, which is the viewport on the phone (identical to the old
 `min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
 the viewport there would size cards from space the fan does not have and overflow the column.
 `--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
-`min(150px, 20vh)` on the PLAY screen (which is what moving the tray into the rail paid for)
-and `min(150px, 26vh)` on the BIDDING screen, which stacks exactly one hand and can afford the
-looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
+`min(150px, 20vh, (--board-avail - 8rem) / 4.46)` on the PLAY screen (the third term is the
+table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
+stacks exactly one hand and can afford the looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
 landscape, so the moment the app claims desktop the scarce axis flips from width to height.
 The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
 of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
@@ -2043,7 +2082,9 @@ settings gate starts at the same left edge; a primary CTA caps at `--action-w`; 
 way out (Sign out) takes its own width rather than `--action-w`, which would make it the widest
 control on the page. The landing page's closing doors are the one CTA that spans its whole
 fold and centres — they are the last thing on the page, on the same axis as the bridge mark
-and the closing line under them, rather than a figure beside an argument.
+and the closing line under them, rather than a figure beside an argument. Analyze's lens pair is
+scoped the same way and centred on the page's own axis: it heads a page where everything else is
+centred or spans, and it is a reading position rather than two half-page slabs.
 
 **Reviewing a breakpoint change:** `node scripts/responsive-check.mjs http://localhost:3000
 ./shots` walks the app once against a `DEV_AUTH=1` server and shoots every screen at 390, 834,
