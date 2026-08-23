@@ -2404,6 +2404,12 @@ a.ds-btn-secondary:hover {
 }
 
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
+/* The play area's wrapper. No box on the phone — its children lay out as the
+   flex items of .board-page they have always been — and the board's centred
+   grid past 1024. See the comment beside it in Board.tsx. */
+.play-phase {
+  display: contents;
+}
 .play-row {
   display: flex;
   align-items: stretch;
@@ -2426,6 +2432,18 @@ a.ds-btn-secondary:hover {
   gap: 6px;
   padding: 10px 10px 10px 14px;
   background: var(--panel);
+}
+/* At width the rail is the 8rem --board-main reserves for it, not the phone's
+   96px, and it spends the difference on PADDING: at 96px with 24px of padding
+   the suit lines have 72px to live in and read as squeezed against the table.
+   Filling the allowance exactly is also what tucks the auction tray in — any
+   surplus in the main column becomes centring slack, and the tray ends up that
+   much further from the table than the gutter it is supposed to sit at. */
+@media (min-width: 1024px) {
+  .dummy-rail {
+    width: 8rem;
+    padding: 12px 16px;
+  }
 }
 .dummy-rail-left {
   padding: 10px 14px 10px 10px;
@@ -4874,20 +4892,26 @@ a.stat-tile:hover {
  * the single centred column the 720 block builds — narrower than it needs to
  * be, but not broken. */
 @media (min-width: 1024px) {
-  .board-page:not(.analyze-page):has(.trick) {
+  /* THE MASTHEAD STAYS AT THE TOP. This grid used to be .board-page itself,
+     with `align-content: center` — which centres every row it owns, and one of
+     those rows is the board's own header. On a tall window that floated the
+     masthead a third of the way down the page, which is not what centring the
+     board means. The head is now a plain flex child of .board-page, above the
+     grid, exactly where a header goes; only the play area centres, in the
+     space the head leaves. */
+  .board-page:not(.analyze-page) > .play-phase {
     display: grid;
+    flex: 1;
     grid-template-columns: minmax(0, 1fr) var(--board-rail) minmax(0, var(--board-main)) minmax(0, 1fr);
     column-gap: var(--space-5);
-    /* The block sits in the middle of the window rather than hugging the top.
-       .board-page is still a flex item of .shell with `flex: 1`, so it fills
-       the viewport's height and this centres the rows inside it. */
     align-content: center;
+    /* a beat under the masthead's rule, so the board is not welded to it */
+    margin-top: var(--space-5);
   }
-  .board-page:not(.analyze-page):has(.trick) > * {
+  .board-page:not(.analyze-page) > .play-phase > * {
     grid-column: 3;
   }
-  .board-page:not(.analyze-page):has(.trick) > .board-head {
-    grid-column: 1 / -1;
+  .board-page:not(.analyze-page):has(.play-phase) > .board-head {
     /* the head is the page's own masthead; the page padding is already on
        .board-page, so pull the rule back out to the paper's edge */
     margin-inline: calc(var(--page-pad) * -1);
@@ -4898,15 +4922,14 @@ a.stat-tile:hover {
      instructions, so it reads beside the table rather than pushing it down the
      screen. The play hint and any error stay in the main column, where the
      hand is and where they are about to matter. */
-  .board-page:not(.analyze-page):has(.trick) > .board-rail {
+  .board-page:not(.analyze-page) > .play-phase > .board-rail {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
     grid-column: 2;
-    /* row 2 is the first row under the head; the span keeps the rail in its
-       column for the whole height of the play area rather than letting it set
-       the height of row 2 alone */
-    grid-row: 2 / span 99;
+    /* the span keeps the rail in its column for the whole height of the play
+       area rather than letting it set the height of the first row alone */
+    grid-row: 1 / span 99;
     align-self: start;
     /* The tray's top edge sits ON the table's, which is what makes the two
        read as one object rather than as a sidebar parked next to a screen.
@@ -4914,14 +4937,14 @@ a.stat-tile:hover {
        so the two move together if that ever changes. */
     margin-top: 4px;
   }
-  .board-page:not(.analyze-page):has(.trick) .board-rail > .auction,
-  .board-page:not(.analyze-page):has(.trick) .board-rail > .grade-toast,
-  .board-page:not(.analyze-page):has(.trick) .board-rail > .flip-note {
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .auction,
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .grade-toast,
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .flip-note {
     /* the rail is the measure in here */
     max-width: none;
     margin-inline: 0;
   }
-  .board-page:not(.analyze-page):has(.trick) .board-rail > .auction {
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .auction {
     /* the rail's own gap spaces this stack; the tray's phone margins would
        double it and break the top alignment above */
     margin: 0;
@@ -4932,10 +4955,10 @@ a.stat-tile:hover {
      column, so the table takes whatever the rail leaves and stops at its own
      6.4-card cap. Without this the row is only as wide as the cards currently
      on the table — which is two of them by the end of a trick. */
-  .board-page:not(.analyze-page):has(.trick) > .play-row {
+  .board-page:not(.analyze-page) > .play-phase > .play-row {
     justify-content: center;
   }
-  .board-page:not(.analyze-page):has(.trick) > .play-row > .trick {
+  .board-page:not(.analyze-page) > .play-phase > .play-row > .trick {
     flex: 1 1 auto;
     min-width: 0;
     width: auto;

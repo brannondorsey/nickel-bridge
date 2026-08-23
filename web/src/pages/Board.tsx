@@ -1139,7 +1139,15 @@ export function PlayPhase({
   const soleLegal = board.myTurn && board.legalCards?.length === 1 ? board.legalCards[0] : null;
 
   return (
-    <>
+    /* THE PLAY AREA, as one element. It is `display: contents` on a phone, so
+       every child lays out as the flex item of .board-page it has always been
+       and the phone is untouched; past 1024 it becomes the board's centred
+       grid (see "the board at width" in style.css). A wrapper rather than
+       centring .board-page's own rows, because those rows include the board's
+       MASTHEAD — centring them all floats the header down the page on a tall
+       window, which is not what "centre the board" means. This is the shape
+       .bid-phase already has for the other half of the screen. */
+    <div className="play-phase">
       {/* THE RAIL. What the auction settled and what the board has to say about
           it — read, not acted on. It is `display: contents` on a phone, so this
           wrapper generates no box at all and the three children lay out exactly
@@ -1243,7 +1251,7 @@ export function PlayPhase({
       ) : (
         <div className="board-hint">Robots are thinking…</div>
       )}
-    </>
+    </div>
   );
 }
 

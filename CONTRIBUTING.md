@@ -1994,9 +1994,21 @@ HEIGHTS, which is the unit the token is in. The rail is itself a `clamp(17rem, 2
 share rather than a flat slab, because at 1024 a fixed 20rem is a fifth of the window and the
 cards pay for every pixel of it.
 
-**The block centres vertically too** (`align-content: center`). `.board-page` is still a flex
-item of `.shell` with `flex: 1`, so it fills the viewport height and the rows sit in the middle
-of it rather than hugging the masthead with a screen of empty paper underneath.
+**The block centres vertically too**, and the MASTHEAD is not part of it. `align-content:
+center` first went on `.board-page` itself, which owns the header's row as well as the board's
+— so on a tall window it floated the masthead a third of the way down the page, which is not
+what centring the board means. The grid is now `.play-phase`, a wrapper around everything
+PlayPhase renders (`display: contents` on the phone, so the phone is untouched — the same trick
+`.board-rail` uses, and the shape `.bid-phase` already had for the other half of the screen).
+The head stays a plain flex child of `.board-page` above it, and only the play area centres, in
+the space the head leaves.
+
+**The dummy rail fills the allowance exactly, and that is what tucks the tray in.** `--board-main`
+reserves 8rem for the rail; the phone's rail is 96px, so any surplus became centring slack
+inside the main column and the auction tray ended up that much further from the table than the
+gutter it is supposed to sit at. Past 1024 the rail is the full 8rem and spends the difference
+on padding — at 96px with 24px of it, the suit lines had 72px to live in and read as squeezed
+against the table.
 
 **The dock's band reaches the glass.** `.board-page` takes `--page-pad` past 720, which is right
 for everything that reads as content and wrong for the bid dock: it is the bottom edge of the
