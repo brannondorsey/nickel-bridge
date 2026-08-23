@@ -456,6 +456,20 @@ export default function Player() {
         </>
       ) : (
         <>
+          {/* THE TWO PAGES. Below 1024 both wrappers are `display: contents`
+              (the .board-rail trick), so they generate no box and every panel
+              lays out exactly as the sibling it used to be — the phone's DOM
+              order, and its rendering, are untouched. Past 1024 they become
+              the spread's two columns: what you did on the left, what it came
+              to on the right. Wrappers rather than per-panel `grid-column`
+              rules because grid's sparse auto-placement never moves its cursor
+              backwards, so a right-hand panel declared after four left-hand
+              ones lands four rows down and the second page starts halfway
+              down the first. */}
+          <div className="stats-col stats-col-record">
+            <div className="stats-col-head">
+              <span className="label-caps">THE RECORD</span>
+            </div>
           <PerforatedPanel
             heading={`TOLL LOG — ${dailyTotal} TOLL${dailyTotal === 1 ? '' : 'S'} THIS SEASON`}
             className="stats-daygrid"
@@ -543,6 +557,12 @@ export default function Player() {
             />
           </ChartPanel>
 
+          </div>
+
+          <div className="stats-col stats-col-count">
+            <div className="stats-col-head">
+              <span className="label-caps">THE COUNT</span>
+            </div>
           <PerforatedPanel heading={`BIDDING — ${gradedCalls} CALLS GRADED`} className="stats-bidding num">
             <button
               type="button"
@@ -815,6 +835,7 @@ export default function Player() {
               ))}
             </PerforatedPanel>
           ) : null}
+          </div>
         </>
       )}
 

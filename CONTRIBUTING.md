@@ -1933,35 +1933,55 @@ three numbers, declared together under "the responsive ladder" at the top of
   else.
 
 **Every screen has a desktop shape, and it is a content decision.** Home is the play side and
-the toll ledger side by side; the profile is a two-page spread at 1024 and three at 1400;
-Traffic is a week as a grid of days; the Glossary flows into two or three print columns
+the toll ledger side by side (the ledger stopping at 42rem past 1400 — a crossing's row is a
+date, a field size and two figures, and 900px of rule between them is not more of the record);
+the profile is a two-page SPREAD — THE RECORD on the left, THE COUNT on the right — whose
+columns stop growing at 1400 and spend the rest on gutters; Traffic is the week as columns,
+walked sideways; the Glossary flows into two or three print columns
 (`columns`, not a grid — the letters are wildly uneven, and a grid row as tall as its tallest
 letter leaves holes a flowing column doesn't); a crossing is its scoresheet beside its field;
 Rankings keeps the ladder as one list (splitting a ranking across columns is a puzzle, not a
 layout) and gives the width to the house table. Each lives in an `at width` block beside its
 own screen's CSS.
 
-**The board becomes two columns, then three.** The auction is the one thing on that screen you
-read rather than act on, so past 1024 it moves into a rail and everything you act on — table,
-hands, bid box — takes the main column, with the vertical stack a whole tray shorter (on a
-landscape desktop, height is the scarce axis). Past 1400 the bidding screen goes to three:
-tray, hand, bidding box, which is also how a real table is laid out. Two structural notes:
-`PlayPhase` renders its parts as a flat list of siblings, so the rail is a real element
-(`.board-rail`, `display: contents` on the phone — it generates no box, so every phone
-measurement is unchanged) rather than three grid-placement rules, which is what the first
-attempt did and which let the grid's own rows stretch a two-line toast to 280px. And
-`.bid-scroll` does the same job for bidding via `display: contents`, splitting its two
-children across the two columns without a DOM change. **The bidding dock stops docking at
-1024**: `100dvh` plus a bottom-pinned box is a thumb-reach design, and on a desktop it only
-opens a 400px hole between the tray and the hand.
+**The board is one block, and the block centres.** A desktop has no more HEIGHT than a phone
+does — usually less, since it is landscape — so the width has to buy something the vertical
+stack cannot, and on the play screen what it buys is CARDS. Past 1024 the auction tray leaves
+the stack for a rail beside the table, its top edge on the table's (4px, `.trick`'s own top
+margin, not a coincidence), and tray + table + dummy + hand centre together as one object;
+freeing that vertical space is what takes the play cap from 118px to 150px. The centring is
+done by `1fr` spacer COLUMNS either side rather than a `max-width`, because the board's own
+head still has to bleed to the paper's edge and a centred grid cannot do that without knowing
+its own offset. The main column is `max-content`, which ends up measuring the fan — every
+other child is already capped by the 720 block (prose at `--measure`, the table at 6.4 card
+widths).
+
+An earlier revision made this two full-height columns of the PAGE (a 20rem rail pinned to the
+left edge, everything else in a 1fr column) and the bidding screen three at 1400 — tray, hand,
+box. It describes well and reads badly: the pieces sit at opposite edges of the viewport, so
+they read as three unrelated screens rather than one table, and every glance from what was bid
+to what you can bid crosses the whole monitor. So **bidding does not get the rail at all** —
+it has no table and no dummy, so a rail beside it would be a rail beside nothing. It stays the
+phone's single centred column with bigger cards, **the dock stays docked** (the base
+`.bidding-dock` 100dvh rule is simply left alone, and the hole it used to open between the
+tray and the hand is closed by centring the scroll region's content instead of hugging the
+dock with it), and **the dock's tinted band still runs edge to edge** — a 34rem plate of
+surface fill floating mid-page is a ribbon, a band across the foot of the screen is a bidding
+box; the plates inside it keep `.bidbox-wrap`'s own 32rem cap and do not move.
+
+One structural note: `PlayPhase` renders its parts as a flat list of siblings, so the rail is a
+real element (`.board-rail`, `display: contents` on the phone — it generates no box, so every
+phone measurement is unchanged) rather than three grid-placement rules, which is what the first
+attempt did and which let the grid's own rows stretch a two-line toast to 280px.
 
 **Cards size from the space the FAN gets, and from the viewport's HEIGHT.** `--card-h`'s fit
 formula measures `--fan-space`, which is the viewport on the phone (identical to the old
 `min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
 the viewport there would size cards from space the fan does not have and overflow the column.
-`--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, and to
-`min(150px, 26vh)` on the BIDDING screen specifically, which stacks exactly one hand and can
-afford it. The `vh` term is the part worth understanding: phones are portrait and desktops are
+`--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
+`min(150px, 20vh)` on the PLAY screen (which is what moving the tray into the rail paid for)
+and `min(150px, 26vh)` on the BIDDING screen, which stacks exactly one hand and can afford the
+looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
 landscape, so the moment the app claims desktop the scarce axis flips from width to height.
 The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
 of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
@@ -1990,6 +2010,40 @@ were drawn against a 326-unit design width and stretched on x alone
 326-in-960: the toll log's days became 3:1 lozenges and the stem chart's `<text>` labels were
 drawn stretched, since a non-uniform viewBox scales glyphs too. They now scale on both axes
 (`height: auto` in `style.css`), so a wider panel makes the whole drawing bigger.
+
+**`DayStrip` is the exception, and it is the exception because it carries TYPE.** Uniform
+scaling is right for a sparkline and wrong for an axis: the traffic feed's hours rule is
+`width: 100%` over a 324-unit viewBox, so a tablet's ~770px panel scaled every user unit 2.4×
+— including `<text>`, which put "12 AM / 6 AM / NOON / 6 PM" on screen at ~20px, twice the size
+of the clock times in the rows beneath it, and nothing inside a uniformly-scaled SVG can opt
+out. So the plot scales on x alone with `vector-effect: non-scaling-stroke` on every rule (a
+stretched 1px hairline would otherwise thicken with the panel) and the hour labels are HTML
+below it, positioned at their own fractions of the width, where a px is a px at every viewport.
+The `now` flag went the same way — it is the one FILLED shape on the strip, and a fill has no
+`non-scaling-stroke` to save it. The two heights add to the 36 units the single SVG occupied,
+which is what keeps the phone identical: at 390 the panel is exactly 324px wide, so the old
+scale was 1.0 (measured after the change: strip height 46.77px → 47, every tick within 0.2px
+of where it was).
+
+**A bottom sheet is a phone idiom, so past 720 it stops being one.** `ds/Dialog` (`.sheet`) is
+the only bottom-anchored panel in the app — the glossary term sheet, the call inspector, the
+handle picker are all Dialogs — and it is drawn with a top border and no others because on a
+phone the SCREEN's edges are its left and right sides. Centre that same box on a 1440px page
+and the borders it hasn't got become the whole story: a 430px slab with two raw cut edges,
+parked on the bottom of the window for no reason anyone can see. Past 720 it becomes the shape
+the app already has a name for — a ticket: four borders, the ticket's own offset shadow,
+centred in the viewport, no drag grip. One rule, not one per caller.
+
+**How wide a button gets is a decision, and the default is wrong at width.** `.ds-btn` is
+`display: block; width: 100%` and `.pref-switch button` is `flex: 1`, both correct on a phone
+and both wrong the moment the column is 640px: a segmented lever becomes two 320px slabs with
+OFF and ON in the middle of them, which is a banner rather than a control. Past 720 the switch
+segments take their own words' width and sit at the head of their column, so every lever on the
+settings gate starts at the same left edge; a primary CTA caps at `--action-w`; and a secondary
+way out (Sign out) takes its own width rather than `--action-w`, which would make it the widest
+control on the page. The landing page's closing doors are the one CTA that spans its whole
+fold and centres — they are the last thing on the page, on the same axis as the bridge mark
+and the closing line under them, rather than a figure beside an argument.
 
 **Reviewing a breakpoint change:** `node scripts/responsive-check.mjs http://localhost:3000
 ./shots` walks the app once against a `DEV_AUTH=1` server and shoots every screen at 390, 834,
