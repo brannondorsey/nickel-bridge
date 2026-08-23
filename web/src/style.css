@@ -2938,13 +2938,9 @@ a.board-row:hover {
     min-width: 0;
     scroll-snap-align: start;
   }
-  /* the day's own 16px side margins become the grid's gap out here */
-  .traffic .traffic-panel {
-    margin-inline: 0;
-  }
-  .traffic-dayhead {
-    padding-inline: 0;
-  }
+  /* the day's own 16px side margins become the grid's gap out here — but that
+     pair of overrides cannot live in this block, because the base rules they
+     override are declared further down the file. See the note beside them. */
 }
 .traffic-head {
   padding: 18px 16px 0;
@@ -2985,6 +2981,22 @@ a.board-row:hover {
 .traffic .traffic-panel {
   margin: 0 16px;
   padding: 6px 14px 6px 20px;
+}
+/* The other half of "Traffic at width" (above), and it has to sit HERE rather
+   than up there with the rest of it: media queries add no specificity, so
+   `.traffic-dayhead { padding: … 16px … }` and `.traffic .traffic-panel
+   { margin: 0 16px }` — both declared above, both textually identical
+   selectors — simply win the tie on source order and the override is a silent
+   no-op. It shipped that way for one review round. Out here the day's own side
+   margins collapse and `.traffic-week`'s `gap` becomes the only gutter, which
+   is what keeps the day head's text on the panel's own left edge. */
+@media (min-width: 1024px) {
+  .traffic .traffic-panel {
+    margin-inline: 0;
+  }
+  .traffic-dayhead {
+    padding-inline: 0;
+  }
 }
 .daystrip {
   padding: 8px 0 2px;
@@ -4135,15 +4147,25 @@ a.stat-tile:hover {
  * words' width and the switch sits at the head of its column, so every lever
  * on the page starts at the same left edge and the column gets a spine.
  *
- * This block sits immediately AFTER the rule it overrides, and has to: media
- * queries add no specificity, so `.pref-switch button { flex: 1 }` declared
- * later would simply win. (See "the responsive ladder" — this is the third
- * time that trap has been paid for in this file.) */
+ * Scoped to .settings-panel rather than left on the bare class, because the
+ * same component is two other things elsewhere and neither wants this. The
+ * ladder's movement switch (.rank-move-row) shares a space-between row with a
+ * label and keeps its segments EVEN by splitting a 172px min-width between
+ * them — see its own comment above, which is describing `flex: 1` doing that
+ * job — and Analyze's lens switch spans its panel on purpose. Neither sets
+ * `flex` itself, so a bare-class override at this specificity would silently
+ * reach both.
+ *
+ * It also sits immediately AFTER the rule it overrides, which the scoping now
+ * makes belt-and-braces rather than load-bearing: media queries add no
+ * specificity, so an equal-specificity `.pref-switch button { flex: 1 }`
+ * declared later would simply win. (See "the responsive ladder" — that trap
+ * has now been paid for four times in this file.) */
 @media (min-width: 720px) {
-  .pref-switch {
+  .settings-panel .pref-switch {
     flex-wrap: wrap;
   }
-  .pref-switch button {
+  .settings-panel .pref-switch button {
     flex: 0 0 auto;
     padding-inline: 22px;
   }
