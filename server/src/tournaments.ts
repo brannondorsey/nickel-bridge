@@ -882,11 +882,18 @@ export function eloDrift(userId: number): number | null {
 }
 
 /**
- * How many crossings have actually rated this player — elo_history rows, the
- * same count /api/leaderboard's ladder query gates on. Home shows the rating
- * tile from the first one and the plain greeting before that: `users.elo` is
- * ELO_INITIAL until a crossing rates you, and 1200 is a starting value rather
- * than something anyone earned.
+ * How many crossings have actually rated this player — elo_history rows. Home
+ * shows the rating tile from the first one and the plain greeting before that:
+ * `users.elo` is ELO_INITIAL until a crossing rates you, and 1200 is a starting
+ * value rather than something anyone earned.
+ *
+ * There is a SECOND spelling of this same definition, deliberately: the ladder
+ * query in app.ts derives `rated_tournaments` as a correlated subquery over
+ * every user in one pass, and calling this per row would turn one query into
+ * N. They must agree — "rated" means an elo_history row, nothing more — so if
+ * that ever stops being the definition, change both. The pair is here rather
+ * than collapsed because the shapes genuinely differ (one player vs. the whole
+ * ladder), not because nobody noticed.
  */
 export function ratedTournamentCount(userId: number): number {
   return (stmtRatedTournamentCount.get(userId) as { n: number }).n;

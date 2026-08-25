@@ -63,6 +63,29 @@ const NEW_CROSSER_HANDLE = 'New Crosser';
  * crossing before it politely runs out.
  */
 const DRIFT_PASSER_HANDLES = ['Late Passer', 'Later Passer', 'Latest Passer'];
+
+/**
+ * One queue for the drift exhibit, on demo-seed.ts's `enqueue` precedent, and
+ * for the same reason: DEMO=1 hands every visitor to a preview the SAME
+ * Inspector session, so two testers clicking this at once arrive as two
+ * concurrent requests for one user. Unserialized they both resolve the same
+ * crossing, both pick the same passer (neither has finished a board yet, so
+ * the `find` below cannot tell them apart), and `playThrough`'s
+ * wipe-unfinished-then-replay deletes the other's in-flight board out from
+ * under it. Queued, the second request runs after the first has finished,
+ * correctly sees that passer as spent, and takes the next handle in the pool —
+ * which is what the pool is for. Errors are swallowed into the chain so one
+ * failed pass cannot wedge the exhibit for everybody after it.
+ */
+let driftQueue: Promise<unknown> = Promise.resolve();
+function queueDrift<T>(fn: () => Promise<T>): Promise<T> {
+  const run = driftQueue.then(fn, fn);
+  driftQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 /** A seeded bot (see demo-seed.ts's DEFAULT_PROFILE) with a genuinely rich history — the "populated stats page" exhibit points here. */
 const RICH_PROFILE_HANDLE = 'Margaret';
 /**
@@ -342,26 +365,32 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     if (!demoEnabled()) return reply.code(404).send({ error: 'not found' });
     const user = requireUserWithHandle(req, reply);
     if (!user) return;
-    const last = stmtLastFinishedCrossing.get(user.id, BOARDS_PER_TOURNAMENT) as { id: number } | undefined;
-    if (!last) return reply.send({ drifted: false });
-    const t = getTournament(last.id);
-    if (!t) return reply.send({ drifted: false });
+    // Everything from here is queued: the whole select-a-passer-then-play-it
+    // sequence has to be one turn, or two concurrent testers race on both
+    // halves of it. See queueDrift's doc comment.
+    const result = await queueDrift(async () => {
+      const last = stmtLastFinishedCrossing.get(user.id, BOARDS_PER_TOURNAMENT) as { id: number } | undefined;
+      if (!last) return { drifted: false as const };
+      const t = getTournament(last.id);
+      if (!t) return { drifted: false as const };
 
-    // One bot per pass, so re-entering the exhibit keeps working: playThrough
-    // resumes from what a player has already finished, so the same bot twice
-    // is a no-op rather than a second helping of drift.
-    const { ensureBot } = await import('./demo-seed.js');
-    const passer = DRIFT_PASSER_HANDLES.map(ensureBot).find(
-      (bot) => (stmtDoneCountFor.get(t.id, bot.id) as { n: number }).n < BOARDS_PER_TOURNAMENT,
-    );
-    if (!passer) return reply.send({ drifted: false });
+      // One bot per pass, so re-entering the exhibit keeps working: playThrough
+      // resumes from what a player has already finished, so the same bot twice
+      // is a no-op rather than a second helping of drift.
+      const { ensureBot } = await import('./demo-seed.js');
+      const passer = DRIFT_PASSER_HANDLES.map(ensureBot).find(
+        (bot) => (stmtDoneCountFor.get(t.id, bot.id) as { n: number }).n < BOARDS_PER_TOURNAMENT,
+      );
+      if (!passer) return { drifted: false as const };
 
-    const before = (stmtElo.get(user.id) as { elo: number }).elo;
-    await playThrough(t, passer.id, BOARDS_PER_TOURNAMENT, (no) =>
-      seededErraticStrategy(`${t.seed}:drift:${passer.id}:${no}`),
-    );
-    const after = (stmtElo.get(user.id) as { elo: number }).elo;
-    return reply.send({ drifted: true, delta: after - before });
+      const before = (stmtElo.get(user.id) as { elo: number }).elo;
+      await playThrough(t, passer.id, BOARDS_PER_TOURNAMENT, (no) =>
+        seededErraticStrategy(`${t.seed}:drift:${passer.id}:${no}`),
+      );
+      const after = (stmtElo.get(user.id) as { elo: number }).elo;
+      return { drifted: true as const, delta: after - before };
+    });
+    return reply.send(result);
   });
 
   // Full wipe + reseed, for starting a click-testing round from a pristine
