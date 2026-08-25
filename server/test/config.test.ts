@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertPublicOrigin, parsePublicOrigin } from '../src/config.js';
+import { assertPublicOrigin, canonicalHost, parsePublicOrigin } from '../src/config.js';
 
 /**
  * BASE_URL parsing. `parsePublicOrigin` is pure, so these need no env
@@ -28,6 +28,31 @@ describe('parsePublicOrigin', () => {
     ['a non-web protocol', 'ftp://bridge.brannon.online'],
   ])('rejects %s', (_label, raw) => {
     expect(parsePublicOrigin(raw)).toBeNull();
+  });
+});
+
+/**
+ * The host half of BASE_URL, which auth.ts uses to keep the OAuth state
+ * cookie and the redirect_uri on one origin. Null when BASE_URL names no
+ * origin is the load-bearing case: PUBLIC_ORIGIN falls back to the dev origin
+ * there, and a canonical host derived from that fallback would tell every
+ * visitor of an unconfigured deployment to go to localhost.
+ */
+describe('canonicalHost', () => {
+  it('is the host of the configured origin, port included', () => {
+    expect(canonicalHost('https://bridge.brannon.online')).toBe('bridge.brannon.online');
+    expect(canonicalHost('https://bridge.brannon.online/ignored/path')).toBe('bridge.brannon.online');
+    expect(canonicalHost('http://localhost:3000')).toBe('localhost:3000');
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['empty', ''],
+    ["Vite's base path", '/'],
+    ['a scheme with no host', 'https://'],
+    ['a bare hostname', 'bridge.brannon.online'],
+  ])('is null when BASE_URL is %s, so nothing redirects anywhere', (_label, raw) => {
+    expect(canonicalHost(raw)).toBeNull();
   });
 });
 

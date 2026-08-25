@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { DIFFICULTIES, type SettableDifficulty } from '@bridge/ai';
-import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
+import { CANONICAL_HOST, COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
 import { db, UserRow } from './db.js';
 import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
@@ -17,6 +17,36 @@ import { provisionalMin } from './tournaments.js';
  */
 const SESSION_COOKIE = 'session';
 const SESSION_TTL_S = 90 * 24 * 3600;
+
+/**
+ * The OAuth CSRF state, and the three things about it that were wrong.
+ *
+ * The cookie holds a LIST of recently-issued states rather than one, joined
+ * by '.' (which base64url never produces, so the delimiter can't collide with
+ * a value). A single slot meant the second start of a sign-in silently voided
+ * the first, and a browser starts twice more often than it looks: two tabs,
+ * back-then-retry from Google's account chooser, or an impatient second tap
+ * while a suspended Fly machine wakes. Whichever leg the visitor actually
+ * finished, the cookie had already been overwritten by the other, and they
+ * got a hard error for doing nothing wrong. Keeping the last few lets any
+ * in-flight attempt land; it costs ~68 bytes and gives an attacker nothing,
+ * since every value still has to be one this browser was handed.
+ *
+ * The window was ten minutes, which is not long enough for the sign-in this
+ * app actually asks for. A first-time visitor meets Google's account chooser,
+ * a password manager and very often a second factor on another device; the
+ * players who reported this are not people who breeze through that. Thirty
+ * minutes is still comfortably inside the range a one-shot CSRF token wants
+ * to live, and the cookie's Max-Age is refreshed on each start.
+ *
+ * And it is Secure on an https deployment, which it should always have been —
+ * the session cookie beside it already was. Safe now for the same reason that
+ * one is: the edge answers plain http with a 301 to https, so no visitor is
+ * on an origin that would drop it.
+ */
+const OAUTH_STATE_COOKIE = 'oauth_state';
+const OAUTH_STATE_TTL_S = 30 * 60;
+const OAUTH_STATE_MAX = 3;
 
 const stmtSessionUser = db.prepare(
   `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND s.expires_at > unixepoch()`,
@@ -135,6 +165,32 @@ export function upsertGoogleUser(googleId: string, email: string | null, name: s
   return stmtInsertUser.get(googleId, email, name, picture) as UserRow;
 }
 
+/** The states this browser currently has in flight, newest first. */
+function readOauthStates(raw: string | undefined): string[] {
+  return raw ? raw.split('.').filter(Boolean) : [];
+}
+
+/**
+ * A sign-in that did not complete, handed back to the front door.
+ *
+ * This used to be `400 {"error":"bad oauth state"}` — a raw JSON body with no
+ * markup, no styling and, crucially, no way back. Every reason a sign-in can
+ * fail arrived as that same dead end, so a visitor who merely took too long
+ * or tapped Cancel had no signal that trying again would work, and no link to
+ * try it with. Several did the only thing left and emailed to say the site was
+ * broken. Sending them to the landing page instead puts the toll gate and its
+ * PLAY THE TOLL button back on screen with one line saying what happened, so
+ * every transient cause costs one tap rather than the visit.
+ *
+ * The state cookie is deliberately NOT cleared here: a failure on one leg says
+ * nothing about the others a browser may still have in flight, and clearing
+ * would turn "one tab was stale" into "now none of them work". Unused states
+ * expire on their own.
+ */
+function signInFailed(reply: FastifyReply, reason: 'cancelled' | 'expired' | 'failed'): FastifyReply {
+  return reply.redirect(`/?signin=${reason}`);
+}
+
 export function registerAuthRoutes(app: FastifyInstance): void {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -142,8 +198,43 @@ export function registerAuthRoutes(app: FastifyInstance): void {
 
   app.get('/auth/google', (req, reply) => {
     if (!clientId) return reply.code(500).send({ error: 'GOOGLE_CLIENT_ID not configured' });
+    /**
+     * Start the flow on the canonical host, whatever host was asked.
+     *
+     * `redirectUri` is built from BASE_URL, so Google always returns the
+     * visitor to the canonical origin — but the state cookie is set by
+     * whichever host served THIS request, and a cookie is scoped to its host.
+     * Reach production as `nickel-bridge.fly.dev` (an old link, a bookmark
+     * from before the custom domain, anything a crawler surfaced — that origin
+     * serves the whole app and its robots.txt says `Allow: /`) and the two
+     * halves land on different hostnames: the cookie sits on fly.dev, the
+     * callback arrives at bridge.brannon.online carrying nothing, and sign-in
+     * fails every single time with no way for the visitor to work out why.
+     *
+     * One redirect before any state exists puts both halves on the same
+     * origin, and the visitor ends up signed in on the canonical host, which
+     * is where they wanted to be anyway.
+     *
+     * Scoped to this route rather than applied app-wide as a canonical-host
+     * redirect, deliberately: `scripts/cloudflare.mjs --snapshot/--purge`
+     * compares what the ORIGIN serves at `<app>.fly.dev` before and after a
+     * deploy, and blanket-redirecting that hostname would have it diffing
+     * redirects instead of content — the comparison would find every URL
+     * identical and purge nothing, which is the exact failure mode that
+     * script's doc comment warns about at length.
+     */
+    if (CANONICAL_HOST && req.headers.host !== CANONICAL_HOST) {
+      return reply.redirect(`${PUBLIC_ORIGIN}/auth/google`);
+    }
     const state = randomBytes(16).toString('base64url');
-    reply.setCookie('oauth_state', state, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600 });
+    const states = [state, ...readOauthStates(req.cookies[OAUTH_STATE_COOKIE])].slice(0, OAUTH_STATE_MAX);
+    reply.setCookie(OAUTH_STATE_COOKIE, states.join('.'), {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: COOKIES_SECURE,
+      maxAge: OAUTH_STATE_TTL_S,
+    });
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -154,10 +245,46 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   });
 
+  /**
+   * Where Google sends the visitor back.
+   *
+   * Four unrelated things used to arrive here as one indistinguishable
+   * `bad oauth state`: the cross-host cookie split above, a visitor who
+   * cancelled at Google (`error=access_denied`, so no `code` — that single
+   * `!code` was reading a deliberate choice as a protocol violation), a state
+   * older than its window, and a state clobbered by a second start. They are
+   * told apart now, logged apart, and none of them is a dead end.
+   */
   app.get('/auth/google/callback', async (req, reply) => {
-    const { code, state } = req.query as { code?: string; state?: string };
-    if (!code || !state || state !== req.cookies['oauth_state']) {
-      return reply.code(400).send({ error: 'bad oauth state' });
+    const { code, state, error } = req.query as { code?: string; state?: string; error?: string };
+    const states = readOauthStates(req.cookies[OAUTH_STATE_COOKIE]);
+    /**
+     * Already signed in, on a leg that can no longer complete.
+     *
+     * A browser with two tabs open finishes one, which clears the cookie; the
+     * other then arrives with a state nothing remembers. Nothing is wrong —
+     * this person is signed in — so telling them their sign-in expired would
+     * be both false and alarming. Checked before the failure branches so it
+     * covers a cancelled second tab too.
+     */
+    const alreadyIn = () => (optionalUser(req) ? reply.redirect('/') : null);
+    if (error) {
+      // Not an error of ours: the visitor declined, or backed out of the
+      // account chooser. Logged at info for that reason — and truncated,
+      // because it is a query parameter anyone can set to any length.
+      req.log.info({ oauthError: error.slice(0, 64) }, 'google sign-in did not complete');
+      return alreadyIn() ?? signInFailed(reply, error === 'access_denied' ? 'cancelled' : 'failed');
+    }
+    if (!code || !state || !states.includes(state)) {
+      // The state values themselves are never logged — they are this
+      // browser's CSRF tokens, and the shape is what makes the cause
+      // readable: no cookie at all reads as a cross-host or expired start,
+      // a cookie that simply doesn't hold this state as a stale leg.
+      req.log.warn(
+        { hasCode: Boolean(code), hasState: Boolean(state), statesHeld: states.length, host: req.headers.host },
+        'oauth callback did not match a state this browser started',
+      );
+      return alreadyIn() ?? signInFailed(reply, 'expired');
     }
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -172,15 +299,21 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     });
     if (!tokenRes.ok) {
       req.log.error({ status: tokenRes.status }, 'google token exchange failed');
-      return reply.code(502).send({ error: 'token exchange failed' });
+      return signInFailed(reply, 'failed');
     }
     const tokens = (await tokenRes.json()) as { access_token: string };
     const infoRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
       headers: { authorization: `Bearer ${tokens.access_token}` },
     });
-    if (!infoRes.ok) return reply.code(502).send({ error: 'userinfo failed' });
+    if (!infoRes.ok) {
+      req.log.error({ status: infoRes.status }, 'google userinfo failed');
+      return signInFailed(reply, 'failed');
+    }
     const info = (await infoRes.json()) as { sub: string; email?: string; name?: string; picture?: string };
     const user = upsertGoogleUser(info.sub, info.email ?? null, info.name ?? info.email ?? 'Player', info.picture ?? null);
+    // Spent: this state must not authenticate a second callback, and the
+    // cookie has no reason to sit in the browser for the rest of its window.
+    reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
     startSession(reply, user.id);
     return reply.redirect('/');
   });

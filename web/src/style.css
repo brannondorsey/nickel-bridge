@@ -578,6 +578,33 @@ input {
   gap: 10px;
   animation: nbSubIn 0.6s ease-out 0.8s both;
 }
+/*
+ * The gate notice — why a sign-in came back without a session.
+ *
+ * Inside .splash-cta rather than below the pitch, so the explanation and the
+ * button that retries are one block: the whole reason auth.ts redirects here
+ * instead of answering a bare JSON 400 is that the way to try again should be
+ * under the visitor's thumb the moment they read why it failed.
+ *
+ * The inset surface is the system's "this holds a call to action" treatment,
+ * which is exactly what it is doing. Deliberately NOT --negative: the most
+ * common reasons are a slow sign-in and a visitor who turned back on purpose,
+ * neither of which is an error worth painting red, and the design rule here is
+ * max ink, minimum colour. Italic Crimson is the aside voice.
+ */
+.splash-notice {
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13.5px;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--ink);
+}
+
 .splash-pitch {
   max-width: 300px;
   margin: 0;
