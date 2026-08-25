@@ -299,7 +299,10 @@ describe('App — authenticated', () => {
   it('shows Home with bottom tabs for a recent visitor, no splash', async () => {
     stampVisit();
     renderApp();
-    expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+    // TOLLS PAID rather than the greeting: Home leads with the rating tile for
+    // a player a crossing has rated (meFixture is one), so the greeting is not
+    // the landmark that says "we arrived at Home" any more.
+    expect(await screen.findByText('TOLLS PAID')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'TOURNEYS' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
   });
@@ -388,7 +391,8 @@ describe('App — demo mode', () => {
     apiMock.me.mockResolvedValue({ ...meFixture, demo: true });
     apiMock.tournaments.mockResolvedValue({ tournaments: [] });
     renderApp();
-    expect(await screen.findByText(/Margaret/)).toBeInTheDocument();
+    // see the note on the recent-visitor test above for why this is TOLLS PAID
+    expect(await screen.findByText('TOLLS PAID')).toBeInTheDocument();
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
   });
 

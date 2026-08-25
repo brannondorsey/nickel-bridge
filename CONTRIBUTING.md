@@ -77,7 +77,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 rehearsal.ts (createRehearsal/listRehearsals — "Play From Here,"
                 branching a finished board's real play into a live, never-scored
                 board of its own; see "Play From Here" below),
-                tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
+                tournaments.ts (JIT placement, standings, recomputeElo, plus the rating-drift
+                pair stampCrossingBaseline/eloDrift behind Home's rating tile — the one stored
+                snapshot in the app, see "Home leads with the rating tile" below), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
                 function of two PlayerStats, see "Compare and the gate" below),
@@ -162,7 +164,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 arity-agnostic segmented lever (lifted out of Settings.tsx when the
                 Analyze lens switch needed it), and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
-                that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
+                that resolves which sign-in doors a deployment has, and RatingTile — the
+                NICKEL RATING flip-digit hero Home and the Stats profile SHARE, differing only in
+                what its delta measures, and MedalBar/MedalGlyphs —
                 the Home rail and the shared suit-glyph row, see "Medal progress" below)
                 + components/game/
                 (auction, bid box,
@@ -1775,6 +1779,54 @@ property of the CROSSING rather than of the viewer's progress, swings show on a 
 too, for players who finished ahead of you. Reading it costs `idx_elo_history_tournament`, the
 tournament-first sibling of `idx_elo_history_user`; see the pair's note in `db.ts` for why one
 index cannot serve both directions.
+
+**Home leads with the rating tile, and its delta is the one thing this data model cannot
+subtract for.** A player a crossing has rated arrives at Home on their NICKEL RATING
+(`ds/RatingTile.tsx`, lifted out of the Stats hero so the two screens draw the same tile rather
+than two that resemble each other) with a signed delta beside it: how far the rating has moved
+since they last finished a crossing. The greeting still stands for a player no crossing has
+rated yet — `users.elo` reads `ELO_INITIAL` until one does, and 1200 presented as a hero figure
+claims something nobody earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards`
+or the medal rail's tournament count: a crossing only rates you once a second human finishes the
+same field, so a player can have several behind them and still be carrying 1200.
+
+**The delta needed a stored snapshot, and reading why is the whole point of this section.**
+Every other Elo surface here is recompute-on-read, and that model has no memory of what a rating
+used to say. When a late finisher joins a crossing you already played, the points that lands on
+you arrive as a RESTATEMENT of that old crossing's delta, never as new points — so
+`leaderboardMovement`'s "rating then = `users.elo` minus the points banked since the cutoff",
+exact for a clock window, is identically **zero** for this one: nothing is banked after your last
+crossing, because your last crossing is the last thing that banked anything. So
+`users.elo_at_last_crossing` is written at the moment it is true (`stampCrossingBaseline` in
+`tournaments.ts`, called by `game.ts`'s `settleCompletedBoard` right after `recomputeElo` — the
+order is load-bearing, or a player's own swing reads as drift on the one screen built to exclude
+it), and `eloDrift()` is the subtraction. `/api/me` carries both fields, on the route that
+already pays for medals' two counts and already refreshes when a tournament's last board lands.
+
+Three consequences worth having in hand before touching it. **A crossing that rated nobody still
+re-anchors** — a field of one human never reaches `recomputeElo`'s `complete.length < 2` gate,
+and when a second human finishes it later the points it finally hands out show up as drift, which
+is exactly the case this figure exists to report. **Your own swing is never drift**: it is folded
+into the baseline in the same breath, and it is already reported on that crossing's own result
+screen. And **zero renders as nothing at all** on Home — it is the resting state of a screen
+opened daily — where Stats keeps drawing "+0 THIS MONTH", a real finding about a month of play;
+`RatingTile` renders any non-null delta and leaves that editorial call to its two callers.
+
+The alternative considered and not taken was a second ratings replay restricted to
+`boards.updated_at <= T`, which needs no column and works retroactively. It was rejected on cost
+and blast radius: per-tournament queries plus matchpointing on every `/api/me` — i.e. every page
+load, on a machine that suspends — and a second replay implementation that must never drift from
+`recomputeElo`'s. The column's backfill is `elo` rather than NULL, so drift starts accruing for
+existing accounts immediately instead of waiting out their next crossing; the one-time cost is
+that an account whose last crossing predates the migration is anchored on "when this shipped",
+which reads as 0 (and 0 draws nothing) until they next finish one. `server/test/elo-drift.test.ts`
+pins the sequence, including the late-finisher case that motivates it.
+
+Drift is also the one state on Home a tester cannot produce for themselves — it needs somebody
+else to finish your old field AFTER you did, and the demo seeder only runs at boot and reset — so
+demo mode carries an exhibit for it (`POST /api/demo/drift` + the FRONT DOOR gallery row). Like
+`/api/demo/desync` it fabricates nothing: it walks a seeded bot through the caller's last finished
+crossing via the ordinary `playThrough`, and the re-matchpointed field moves the rating for real.
 
 **Replay order is not play order, and every surface that draws a timeline has to convert.**
 Tournaments never close, so a player can be placed into a months-old tournament or resume one

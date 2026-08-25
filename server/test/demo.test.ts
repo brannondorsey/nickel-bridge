@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { TestClient, freshDbEnv, makeApp } from './helpers.js';
+import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 const silentLog = { info() {}, error() {}, warn() {}, debug() {} } as unknown as FastifyBaseLogger;
 
@@ -142,6 +142,32 @@ describe('demo mode', () => {
     expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId })).statusCode).toBe(400);
     expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId: 999999, boardNo: 1 })).statusCode).toBe(404);
   }, 120_000);
+
+  it('drift has a real bot finish the caller’s last crossing, moving their rating', async () => {
+    // Home's rating-drift exhibit. Like desync, this is not a special code
+    // path: a seeded bot plays the four boards through the ordinary engine,
+    // the field is re-matchpointed with one more pair in it, and the
+    // Inspector's rating moves without them touching a card.
+    const placed = await inspector.post('/api/play');
+    for (let no = 1; no <= 4; no++) await playBoard(inspector, placed.tournamentId, no);
+    const before = await inspector.get('/api/me');
+    expect(before.user.eloDrift).toBe(0);
+
+    const res = await inspector.post('/api/demo/drift');
+    expect(res.drifted).toBe(true);
+
+    const after = await inspector.get('/api/me');
+    expect(after.user.ratedTournaments).toBeGreaterThan(0);
+    // the rating moved, and the tile's delta is exactly that movement
+    expect(after.user.elo).not.toBe(before.user.elo);
+    expect(after.user.eloDrift).toBe(after.user.elo - before.user.elo);
+  }, 300_000);
+
+  it('drift answers rather than erroring when there is no crossing to move', async () => {
+    const newcomer = new TestClient(app, 'DriftNewcomer');
+    await newcomer.login();
+    expect(await newcomer.post('/api/demo/drift')).toEqual({ drifted: false });
+  });
 
   it('re-entering a scenario resets the board instead of stacking on it', async () => {
     const first = await inspector.post('/api/demo/scenarios/partner-declares');

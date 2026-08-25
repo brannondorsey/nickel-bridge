@@ -48,6 +48,13 @@ export const meFixture: Me = {
     // Comfortably past COMPARE_MIN_BOARDS, so this established player is
     // offered Compare; meFreshCrosser below is the other side of that gate.
     boards: 112,
+    // Rated, and drifting: 12 crossings have rated Margaret, and 4 points
+    // have arrived since the last one finished — purely other people's play,
+    // which is the whole point of Home's delta (see eloDrift in
+    // server/src/tournaments.ts). Non-zero on purpose so a suite that lets the
+    // tile render sees the delta rather than the resting state.
+    ratedTournaments: 12,
+    eloDrift: 4,
     // Club earned; 12 tournaments (48 boards) toward diamond's 100-board
     // target = 48%, measured from zero per packages/core/src/medals.ts —
     // crossing the club threshold didn't reset this back to 0%.
@@ -68,6 +75,10 @@ export const meFreshCrosser: Me = {
     ...meFixture.user!,
     onboardedAt: null,
     boards: 0,
+    // No crossing has rated them, so Home keeps the greeting and there is no
+    // baseline for a drift figure to measure from.
+    ratedTournaments: 0,
+    eloDrift: null,
     medals: { earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 },
   },
 };

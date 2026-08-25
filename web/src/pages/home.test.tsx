@@ -10,6 +10,13 @@ import {
 } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Lobby from './Lobby';
+import type { Me } from '../api';
+
+/** meFixture with the rating fields overridden — the tile's whole input. */
+const withRating = (me: Me, over: Partial<NonNullable<Me['user']>>): Me => ({
+  ...me,
+  user: { ...me.user!, ...over },
+});
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -25,16 +32,74 @@ describe('Home', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('greets by time of day and opens the current crossing', async () => {
+  it('opens the current crossing', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentInProgress, tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
-    expect(await screen.findByText(/Good (morning|afternoon|evening), Margaret/)).toBeInTheDocument();
-    expect(screen.getByText('The bridge is open.')).toBeInTheDocument();
     // in-progress tournament → KEEP GOING with the stable e2e hook
-    const cta = screen.getByRole('link', { name: /keep going/i });
+    const cta = await screen.findByRole('link', { name: /keep going/i });
     expect(cta).toHaveAttribute('href', '/t/12');
     expect(cta.className).toContain('home-cta');
     expect(screen.getByText(/Board 2 of 4 in progress/)).toBeInTheDocument();
+  });
+
+  it('leads with the rating tile, and its drift since the last crossing', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: meFixture });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    // the hero number is per-digit (FlipDigits), so it is read off the tile
+    expect(document.querySelector('.home-rating .flipdigits')).toHaveTextContent('1487');
+    const delta = screen.getByText(/SINCE YOUR LAST CROSSING/);
+    expect(delta).toHaveTextContent('+4 SINCE YOUR LAST CROSSING');
+    expect(delta).toHaveClass('positive');
+    // ...in place of the greeting, not beside it
+    expect(screen.queryByText(/Good (morning|afternoon|evening), Margaret/)).not.toBeInTheDocument();
+    expect(screen.queryByText('The bridge is open.')).not.toBeInTheDocument();
+  });
+
+  it('inks a slide while you were away in the negative color', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: -7 }) });
+    const delta = await screen.findByText(/SINCE YOUR LAST CROSSING/);
+    expect(delta).toHaveTextContent('−7 SINCE YOUR LAST CROSSING');
+    expect(delta).toHaveClass('negative');
+  });
+
+  // Zero is the ordinary answer on a quiet week, and "+0 SINCE YOUR LAST
+  // CROSSING" is a sentence about nothing on a screen opened daily. Stats
+  // decides this the other way for "+0 THIS MONTH" — see RatingTile.
+  it('says nothing at all when nothing moved while you were away', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: 0 }) });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+  });
+
+  it('shows no delta before any crossing has finished', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null }) });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+  });
+
+  // ELO_INITIAL is a starting value, not an achievement — a crossing only rates
+  // you once a second human finishes the same field, so a player can have
+  // crossings behind them and still be carrying 1200. The greeting holds until
+  // there is a rating that was actually earned.
+  it('keeps the greeting until a crossing has actually rated you', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { ratedTournaments: 0, eloDrift: null }) });
+    expect(await screen.findByText(/Good (morning|afternoon|evening), Margaret/)).toBeInTheDocument();
+    expect(screen.getByText('The bridge is open.')).toBeInTheDocument();
+    expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
+  });
+
+  // The drift figure is the number most likely to prompt "why did that move
+  // without me?", so the label beside it opens the term that answers it.
+  it('opens the rating term from the tile label', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: meFixture });
+    const label = await screen.findByRole('button', { name: 'NICKEL RATING' });
+    expect(label).toHaveClass('rating-tile-explain');
   });
 
   it('lists finished crossings under TOLLS PAID with date, field, pct and rank', async () => {

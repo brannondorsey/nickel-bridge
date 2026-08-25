@@ -52,6 +52,23 @@ export interface Me {
     boards: number;
     /** null only for a signed-out/non-human session; never applies to a real user's own /api/me */
     medals: MedalProgress | null;
+    /**
+     * Crossings that have actually rated this player (elo_history rows). The
+     * gate on Home's rating tile rather than a figure it draws: `elo` reads
+     * ELO_INITIAL until a crossing rates you, and 1200 is a starting value
+     * rather than something anyone earned — so before the first one Home
+     * keeps the plain greeting.
+     */
+    ratedTournaments: number;
+    /**
+     * Points the rating has moved since this player last finished a crossing —
+     * Home's delta. Entirely other people's play: their own swing from a
+     * crossing is folded into the baseline the moment it ends, so what's left
+     * is the evergreen replay restating history around them (a late finisher
+     * joining an old field, an opponent's rating moving). null = no crossing
+     * finished yet. See eloDrift() in server/src/tournaments.ts.
+     */
+    eloDrift: number | null;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -663,6 +680,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tournamentId, boardNo }),
     }),
+  /** demo only: walk a seeded bot through your last finished crossing, so Home's rating drift has something to report */
+  demoDrift: () => request<{ drifted: boolean; delta?: number }>('/api/demo/drift', { method: 'POST' }),
   resetDemo: () => request<{ ok: boolean }>('/api/demo/reset', { method: 'POST' }),
   leaderboard: () =>
     request<{

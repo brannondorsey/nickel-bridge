@@ -7,7 +7,7 @@ import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
 import { completedBoardCount } from './stats.js';
 import { medalProgressFor } from './medals.js';
-import { provisionalMin } from './tournaments.js';
+import { eloDrift, provisionalMin, ratedTournamentCount } from './tournaments.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -232,6 +232,18 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             // AI/house accounts (never applies to a real session, but keeps
             // medalProgressFor's human-only gate honest end to end).
             medals: medalProgressFor(user.id, user.kind),
+            // Home's rating tile. `ratedTournaments` is the gate rather than
+            // the figure: `elo` is ELO_INITIAL until a crossing actually rates
+            // you, so before the first one Home keeps the plain greeting
+            // instead of presenting 1200 as something that was earned.
+            // `eloDrift` is the tile's delta — points moved since this player
+            // last finished a crossing, which is entirely other people's play
+            // (see eloDrift/stampCrossingBaseline in tournaments.ts, and the
+            // elo_at_last_crossing migration in db.ts for why it needs a
+            // stored baseline at all). Two indexed reads, on the same route
+            // that already pays for medals' two counts.
+            ratedTournaments: ratedTournamentCount(user.id),
+            eloDrift: eloDrift(user.id),
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',

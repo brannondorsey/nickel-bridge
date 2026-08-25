@@ -2441,6 +2441,19 @@ a.board-row:hover {
 .home-greeting {
   padding: 20px 16px 0;
 }
+/* The rating hero that stands where the greeting stands, for a player who has
+   one (Lobby.tsx). Centred, at the greeting's own padding, because both kit
+   precedents for this hero — Stats and the tournament result — centre it, and
+   because holding 20px 16px 0 keeps the vertical rhythm of the screen
+   identical whichever of the two is showing. It is the screen's ONE hero
+   number, per the design system's rule; the medal rail's percentage below is
+   a plain .num figure beside its bar, not a second one. */
+.home-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 0;
+}
 .home-hello {
   font-weight: 600;
   font-size: 21px;
@@ -2841,19 +2854,60 @@ a.board-row:hover {
   font-size: 13px;
   color: var(--muted);
 }
-.stats-rating-line {
+/* The NICKEL RATING hero's label line — ds/RatingTile.tsx, shared by the
+   Stats hero and Home. Named for the component rather than for Stats, which
+   is where it started: the two screens are meant to draw the SAME tile, and a
+   `.stats-` prefix on Home's front door would invite the next person to fork
+   it. */
+.rating-tile-line {
   display: flex;
   align-items: baseline;
   gap: 8px;
   margin-top: 8px;
+  /* Wrap, centred, rather than let flex shrink the two items. Stats' delta is
+     short enough to sit on the label's baseline ("+34 THIS MONTH") and still
+     does; Home's names the period it measures ("−12 SINCE YOUR LAST CROSSING")
+     and does not fit beside the label at 390px. Shrinking is what a plain flex
+     row does there, and it broke both halves at once — the label folded to
+     NICKEL / RATING and jammed against the left edge while the delta broke
+     mid-phrase. Wrapping moves the delta whole onto its own centred line under
+     the label instead, which is also the right reading order for it. */
+  flex-wrap: wrap;
+  justify-content: center;
 }
-.stats-rating-label {
+.rating-tile-label {
   letter-spacing: 0.18em;
+  /* ...so each half wraps as a unit or not at all — see above */
+  white-space: nowrap;
 }
-.stats-delta {
+/* The label as a glossary opener (Home passes `explainTerm`), where the drift
+   figure beside it is the number most likely to prompt "why did that move
+   without me?" — 'elo-rating' answers it in one line. Deliberately NOT the
+   shared .gloss-link: that rule sets `font: inherit`, and it is declared far
+   below .label-caps, so it would quietly strip the label's face, weight and
+   size. Everything here is the button reset and the dotted underline; the
+   typography stays .label-caps's. */
+.rating-tile-explain {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  line-height: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.rating-tile-explain:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.rating-tile-delta {
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .chart-panel {
@@ -5364,7 +5418,7 @@ a.stat-tile:hover {
 /* A finished attempt's score is inked against the table you actually sat —
    green beat it, red fell short, ordinary ink on a tie — but that needs no
    rule here: it wears the bare global .positive/.negative utilities, the
-   same way stats-delta, tourney-rating-delta and tolls-rank do. Nothing in
+   same way rating-tile-delta, tourney-rating-delta and tolls-rank do. Nothing in
    this stub's chain sets a competing colour (.rehearsal-stub is `inherit`,
    .rehearsal-stub-score and .num set none), so a scoped copy would only
    restate the utility. Contrast .worth-rehearsal-dot below, which genuinely
