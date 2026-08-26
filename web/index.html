@@ -6,6 +6,34 @@
     <meta name="theme-color" content="#fcfbf8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--
+      The home-screen icon set. Deliberately OUTSIDE the seo markers below:
+      like the favicon and the viewport, this is true of the site rather than
+      of any one page, so a prerendered glossary page must keep it.
+
+      The favicon above is the right thing for a browser tab and the wrong
+      thing for a phone's home screen, which is what these lines fix. It is a
+      160×122 drawing with no background and the mark running edge to edge, so
+      a launcher asked to make a square tile out of it letterboxes it (the
+      "improperly centered" report), crops the piers off under any rounded
+      mask, and rasterises it at a size nobody art-directed (the "low res"
+      one). scripts/app-icons.mjs draws the same mark onto square paper tiles
+      with real margins instead; see its doc comment for the safe-zone
+      arithmetic behind the two artworks.
+
+      Android reads the manifest and picks a size. iOS does NOT — it wants the
+      apple-touch-icon <link>, and without one it screenshots the page. The
+      three apple-mobile-* metas are the pre-manifest way of saying what
+      `display: standalone` says, and are still what older iOS reads; they are
+      here so the launch mode is something the app ASKS for on every platform
+      rather than something it happens to be given.
+    -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Nickel Bridge" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!--
       seo:start — everything between these two markers is the SITE-WIDE
       discoverability block, and web/scripts/prerender-glossary.mjs replaces the
       whole span wholesale when it prerenders a glossary page. Keep the markers

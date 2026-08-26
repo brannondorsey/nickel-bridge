@@ -155,7 +155,12 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 seo.test.ts (the drift guard between that table and App.tsx's
                 isPublicPath — the only test that imports across the workspace
                 boundary, and the reason App.tsx exports the gate),
-                public/ (favicon.svg + og-image.png, the checked-in social share card),
+                public/ (favicon.svg — the browser TAB icon, and only that; og-image.png,
+                the checked-in social share card; site.webmanifest + icon-*.png +
+                apple-touch-icon.png, the home-screen icon set — see "The home-screen
+                icon" below),
+                appIcons.test.ts (the drift guard holding that manifest and index.html's
+                apple-touch-icon link against the PNGs actually checked in),
                 pages/Compare.tsx (the Compare screen — draws the server's
                 verdicts, re-derives no statistics),
                 replay/ (useReplay.ts — the shared replay driver extracted from the
@@ -230,7 +235,9 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 the edge work is judged by; read its header before trusting a number,
                 that API punishes two obvious approaches), og-image.mjs (regenerates the
                 checked-in social share card web/public/og-image.png — offline, no
-                running instance needed)
+                running instance needed), app-icons.mjs (regenerates the home-screen
+                icon set from web/public/site.webmanifest — also offline; the manifest
+                is the table, this draws what it names)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            analyze-design.md — the Analyze design record, with its concept-exploration
                 board analyze-concepts.html (three directions; the owner chose B,
@@ -872,6 +879,55 @@ uniqueness key folds cross-script lookalikes (Cyrillic `а`, Greek `Ο`, fullwid
 mathematical letters) onto their Latin twin *for the key only*, so a handle nobody can
 visually distinguish from another player's collides on the unique index instead of joining
 them on the ladder. Its doc comment says what the curated map does not claim to catch.
+
+**The home-screen icon is a separate asset from the favicon, and conflating them is
+what broke it.** For a long time the shell declared exactly one icon — `/favicon.svg`,
+the BridgeMark glyph — and a phone asked to make a home-screen tile had nothing else to
+work with. That file is correct for a browser tab and wrong for a launcher in three
+independent ways, which together are the whole of the "low res and off-centre" report:
+
+- **It is not square.** The glyph's viewBox is 160×122, so a launcher building a square
+  tile letterboxes it: the deck line lands hard against the top edge with a band of dead
+  space under the arch. Nothing is centred because nothing was ever composed for a square.
+- **It has no safe zone.** The deck line spans x=0..160 and the piers sit on the outer
+  edges, so any mask with a radius — Android's adaptive-icon circle, iOS's superellipse —
+  cuts through the mark rather than around it.
+- **It was never offered at the size being asked for.** Nothing here is genuinely low
+  resolution; it is an un-art-directed downscale of a drawing whose thinnest stroke is 7
+  units of 160.
+
+So `scripts/app-icons.mjs` draws the same mark onto square paper tiles with real margins,
+`web/public/site.webmanifest` names them, and `web/index.html` links the manifest plus
+`apple-touch-icon.png`. The favicon is untouched — it is still the right answer for a tab.
+Four things about the shape:
+
+- **The manifest is the table, and the generator reads it** rather than keeping a second
+  list beside it — the same move `seo.ts` makes for robots.txt and the sitemap. Add a size
+  to the manifest and the next run draws it. The one file it cannot carry is
+  `apple-touch-icon.png`: iOS reads that from a `<link>` and ignores the manifest entirely,
+  so the generator parses the tag (`sizes` attribute included) instead of hardcoding it.
+- **Two artworks, because the two purposes crop differently.** A `"maskable"` tile has to
+  keep everything inside a circle of 80% of the width, which for a mark this wide is a
+  tighter bound than it looks — a centred w×h box fits when `hypot(w, h) <= 0.8·S`, capping
+  the width at ~0.636·S at the glyph's 160:122. `MARK_MASKABLE` sits under it and the paper
+  bleeds to all four edges; `MARK_ANY` is more generous, for the surfaces shown uncropped.
+  Ship only one of the two and Android either crops the piers off or shrinks the whole tile
+  onto a white background of its own.
+- **`display: "standalone"` is a launch-behaviour decision riding along with an icon fix**,
+  and worth knowing as such. Before this the app asked for nothing, so whatever a home-screen
+  launch did was the platform's own default; now it asks. The `apple-mobile-*` metas say the
+  same thing the pre-manifest way, for the iOS versions that read those instead. The one
+  thing to watch if a sign-in report ever arrives from a home-screen user: an iOS Home Screen
+  web app has historically kept its own cookie jar, so an OAuth redirect that bounces out to
+  Safari and back can land the session in the wrong place. Not observed here, and the flow
+  stays in-app on current iOS — but it is the failure this line would cause, so it is written
+  down rather than rediscovered.
+- **The outputs are checked in and nothing in the build regenerates them**, exactly like
+  `og-image.png`. That is what `web/src/appIcons.test.ts` exists for: a manifest entry whose
+  PNG was never generated is a 404 the launcher answers by silently falling back to the
+  favicon — i.e. straight back to the letterboxed tile — with nothing red anywhere. The
+  six files are also in `scripts/cloudflare.mjs`'s `STATIC_FILES`, so they cache at the edge
+  and `--purge` drops exactly the tiles a regeneration moved.
 
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes

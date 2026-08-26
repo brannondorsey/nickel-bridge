@@ -177,7 +177,25 @@ const IMMUTABLE_PREFIX = '/assets/';
  * are the two that matter most: they are the first thing a crawler fetches, so caching
  * them is what turns a crawl visit into zero origin requests.
  */
-const STATIC_FILES = ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.svg'];
+export const STATIC_FILES = [
+  '/robots.txt',
+  '/sitemap.xml',
+  '/og-image.png',
+  '/favicon.svg',
+  // The home-screen icon set (scripts/app-icons.mjs) and the manifest that
+  // names it. Unhashed like the two above, so they belong here for the same
+  // two reasons: they cache at the edge, and --purge samples each one
+  // individually, so re-running the generator drops exactly the tiles that
+  // moved rather than the whole HTML set. They are fetched rarely — once when
+  // someone adds the app to their home screen — but that fetch is a machine
+  // wake like any other, and it is the one moment the icon has to be right.
+  '/site.webmanifest',
+  '/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+];
 
 /**
  * Paths that must never cache but that SITE_ROUTES does not describe.
