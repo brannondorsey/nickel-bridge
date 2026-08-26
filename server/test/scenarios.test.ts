@@ -95,6 +95,19 @@ describe('scenario recipes replay to their declared states', () => {
             await assertFinalCardsClaim(s, tournamentId, t, view.legalCards);
           }
         }
+        if (s.foilTrumps) {
+          // The exhibit's whole subject is a preference, not a position, so
+          // the drift guard has to check the preference: a recipe that still
+          // arrives in the right state with foil left off is an exhibit that
+          // silently shows the tester ordinary cards.
+          const row = db.prepare(`SELECT foil_trumps FROM users WHERE id = ?`).get(userId) as {
+            foil_trumps: number;
+          };
+          expect(row.foil_trumps, `'${s.id}' promises foiled trumps but left the preference off`).toBe(1);
+          // ...and there has to be a trump suit for it to land on. A no-trump
+          // contract would pass every other assertion here and show nothing.
+          expect(view.contract?.strain, `'${s.id}' drifted to a no-trump contract — nothing to foil`).not.toBe(4);
+        }
         if (s.completesTournament) {
           // The tester's live final play is supposed to finish the whole
           // tournament, not just this board — so every prior board must

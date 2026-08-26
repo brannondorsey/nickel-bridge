@@ -3,8 +3,9 @@ import { AUCTION_END_MS } from './playAnim';
 
 /**
  * "The Draw" — the motion that moves the trump suit to the left of a hand
- * when the contract settles, for players who asked for it ("Trump placement ·
- * LEFT SIDE", users.trump_placement).
+ * when the contract settles ("Trump placement · LEFT SIDE",
+ * users.trump_placement — the default, so this is what most boards do; a
+ * player who has asked for SUIT ORDER instead never sees it).
  *
  * Two beats, and the order of them is the whole idea. First the other suits
  * slide right together, opening a gap at the left edge. Then the trumps are

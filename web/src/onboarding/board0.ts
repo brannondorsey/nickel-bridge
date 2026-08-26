@@ -45,7 +45,23 @@ export interface TourBoard {
  * as a different board.
  */
 const TOUR_BOARD_NO = 0;
-const renumber = (view: BoardView): BoardView => ({ ...view, boardNo: TOUR_BOARD_NO });
+/**
+ * The tour's crossing wears №0 too — its capture ran inside a real tournament
+ * (id 1, "Practice crossing #0"), and the receipt's postmark is the one place
+ * that number reaches the screen. It used to arrive there by accident: the
+ * postmark parsed the "#0" back out of the NAME. Now that the server sends
+ * `tournamentNumber` and format.ts's tournamentNo falls back to the id, an
+ * offline capture that predates the field would postmark a newcomer's first
+ * receipt "TOURNAMENT Nº1" — a row address, on the one screen the whole tour
+ * builds to. Stamped here rather than regenerated into board0.json for the
+ * same reason boardNo is: the capture stays exactly what the engine emitted.
+ */
+const TOUR_CROSSING_NO = 0;
+const renumber = (view: BoardView): BoardView => ({
+  ...view,
+  boardNo: TOUR_BOARD_NO,
+  tournamentNumber: TOUR_CROSSING_NO,
+});
 
 let cache: Promise<TourBoard> | null = null;
 

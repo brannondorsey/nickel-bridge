@@ -178,6 +178,16 @@ const stmtMyLastPlayed = db.prepare(
 const stmtMyBoards = db.prepare(
   `SELECT * FROM boards WHERE tournament_id = ? AND user_id = ? ORDER BY board_no`,
 );
+const stmtCrossingBoardsDone = db.prepare(
+  `SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
+);
+const stmtStampCrossingBaseline = db.prepare(`UPDATE users SET elo_at_last_crossing = elo WHERE id = ?`);
+const stmtRatingDrift = db.prepare(
+  `SELECT elo, elo_at_last_crossing AS baseline FROM users WHERE id = ?`,
+);
+const stmtRatedTournamentCount = db.prepare(
+  `SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`,
+);
 
 export interface Standing {
   userId: number;
@@ -828,6 +838,73 @@ export function tournamentEloDeltas(tournamentId: number): Map<number, number> {
     after: number;
   }[];
   return new Map(rows.map((r) => [r.user_id, r.after - r.before]));
+}
+
+/**
+ * Re-anchor this player's drift baseline, if the board that just finished was
+ * the last one of their crossing. Call AFTER recomputeElo(), never before —
+ * the whole point is to snapshot the rating the crossing left them on.
+ *
+ * Deliberately stamped on every crossing a player finishes, including one that
+ * rated nobody (a field of one human never reaches recomputeElo's `complete
+ * .length < 2` gate). That is not a gap, it is the interesting case: the
+ * crossing sits there unrated until a second human finishes it, and when they
+ * do, the points it hands this player show up as drift — which is exactly the
+ * "your rating moved while you were away" this baseline exists to report.
+ *
+ * See the elo_at_last_crossing migration in db.ts for why a snapshot is the
+ * only way to ask this question at all.
+ */
+export function stampCrossingBaseline(userId: number, tournamentId: number): void {
+  if (doneBoardCount(tournamentId, userId) < BOARDS_PER_TOURNAMENT) return;
+  stmtStampCrossingBaseline.run(userId);
+}
+
+/**
+ * How many boards of one crossing this player has finished. Exported because
+ * the drift exhibit (demo.ts) asks the same question of its passer bots, and
+ * two prepared statements spelling out one definition is how they drift apart.
+ */
+export function doneBoardCount(tournamentId: number, userId: number): number {
+  return (stmtCrossingBoardsDone.get(tournamentId, userId) as { n: number }).n;
+}
+
+/**
+ * Points this player's rating has moved since they last finished a crossing —
+ * Home's rating tile. `null` when there is no baseline to measure from (a
+ * brand-new account that has never finished one; the elo_at_last_crossing
+ * migration backfills every account that existed when it ran).
+ *
+ * Every point of this came from someone ELSE playing: the player's own swing
+ * from a crossing is folded into the baseline the moment that crossing ends
+ * (stampCrossingBaseline above), so what is left is the evergreen replay
+ * restating history around them — a late finisher joining one of their old
+ * fields, or an opponent's rating moving and changing what a past pairing was
+ * worth. Same model, same disclosure as everywhere else: it can restate
+ * retroactively, and 0 is the ordinary answer on a quiet week.
+ */
+export function eloDrift(userId: number): number | null {
+  const row = stmtRatingDrift.get(userId) as { elo: number; baseline: number | null } | undefined;
+  if (!row || row.baseline === null) return null;
+  return row.elo - row.baseline;
+}
+
+/**
+ * How many crossings have actually rated this player — elo_history rows. Home
+ * shows the rating tile from the first one and the plain greeting before that:
+ * `users.elo` is ELO_INITIAL until a crossing rates you, and 1200 is a starting
+ * value rather than something anyone earned.
+ *
+ * There is a SECOND spelling of this same definition, deliberately: the ladder
+ * query in app.ts derives `rated_tournaments` as a correlated subquery over
+ * every user in one pass, and calling this per row would turn one query into
+ * N. They must agree — "rated" means an elo_history row, nothing more — so if
+ * that ever stops being the definition, change both. The pair is here rather
+ * than collapsed because the shapes genuinely differ (one player vs. the whole
+ * ladder), not because nobody noticed.
+ */
+export function ratedTournamentCount(userId: number): number {
+  return (stmtRatedTournamentCount.get(userId) as { n: number }).n;
 }
 
 interface MyBoardSummary {

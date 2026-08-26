@@ -11,6 +11,7 @@ import {
   api,
   cardRank,
   cardSuit,
+  foilForDisplay,
   suitClass,
   trumpForDisplay,
 } from '../api';
@@ -58,7 +59,7 @@ import { drawDuration } from '../components/game/trumpDraw';
 import { AdjustedReceipt } from '../components/game/AdjustedReceipt';
 import { ScoreReceipt } from '../components/game/ScoreReceipt';
 import { TrickArea } from '../components/game/TrickArea';
-import { signedScore, vulLabel } from '../format';
+import { signedScore, tournamentNo, vulLabel } from '../format';
 
 const SEAT_NAMES = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
@@ -117,10 +118,18 @@ export default function Board() {
   const trickClearMode = me?.user?.trickClearMode === 'tap' ? 'tap' : 'auto';
   // "Trump placement" (settings gate) — 'left' lays every hand on the play
   // screen out with the trump suit first, and animates the re-sort once, as
-  // the auction settles (trumpDraw.ts). Defaults to 'suit', the shipped
-  // ♠♥♦♣; see the trump_placement migration in db.ts. Purely how the cards
-  // are drawn — nothing here reaches the server or changes what is legal.
-  const trumpPlacement = me?.user?.trumpPlacement === 'left' ? 'left' : 'suit';
+  // the auction settles (trumpDraw.ts). It is the DEFAULT, so an absent or
+  // unrecognised value reads as 'left' and only an explicit 'suit' opts back
+  // into ♠♥♦♣ — the opposite fallback to the one this shipped with, and the
+  // reason it is spelled as a test for 'suit'; see the trump_placement
+  // migrations in db.ts. Purely how the cards are drawn — nothing here
+  // reaches the server or changes what is legal.
+  const trumpPlacement = me?.user?.trumpPlacement === 'suit' ? 'suit' : 'left';
+  // "Foil trumps" (settings gate) — the holographic plate over the trump suit
+  // in hand and on the table (foil.ts). Reads the OTHER way round from the
+  // line above, and deliberately: this one defaults OFF, so an absent field
+  // must fail closed, the doubleTapBid rule rather than the trumpPlacement one.
+  const foilTrumps = me?.user?.foilTrumps === true;
 
   const [board, setBoard] = useState<BoardView | null>(null);
   /**
@@ -221,13 +230,27 @@ export default function Board() {
     } else if (sawLiveRef.current) {
       sawLiveRef.current = false;
       setShowReceipt(true);
-      // The tournament (not just this board) just finished live — Home's
-      // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
-      // neither of which this screen otherwise touches, so without this a
-      // medal earned on this exact board stays uncolored until a hard reload.
-      // Never true for a rehearsal (board.rehearsal set): it isn't a real
-      // tournament board, so this would just be a wasted /api/me round trip.
-      if (board && !board.rehearsal && board.boardNo === board.totalBoards) refresh();
+      // A real board just finished live, so the account state Home reads off
+      // MeContext is stale — and this screen otherwise never touches it, so
+      // without this it stays stale for the rest of the session rather than
+      // until the next navigation.
+      //
+      // This used to fire only on `boardNo === totalBoards`, on the theory that
+      // an ordinary mid-tournament board touches nothing. It does: /api/me's
+      // `boards` count is what smooths the medal bar's percentage board by
+      // board, so the rail sat frozen mid-tournament. And as a test for "my
+      // crossing just completed" — which is what the medal itself and now the
+      // rating tile both need — it only holds while boards are played in
+      // order. Finish board 4 by URL first and the crossing completes on board
+      // 3, where this never fired: a first-ever rating would leave Home
+      // greeting you until a hard reload. The board view carries no done-count
+      // to test honestly, so this refetches on every completed board instead —
+      // four cheap /api/me per crossing, on a request that just ran a full Elo
+      // replay anyway.
+      //
+      // Still never for a rehearsal (board.rehearsal set): it isn't a real
+      // tournament board, so this would be a genuinely wasted round trip.
+      if (board && !board.rehearsal) refresh();
     }
   }, [boardState]);
 
@@ -867,6 +890,7 @@ export default function Board() {
           awaitingTrickClear={awaitingTrickClear}
           onClearTrick={clearHeldTrick}
           trumpPlacement={trumpPlacement}
+          foilTrumps={foilTrumps}
           drawTrumps={drawTrumps}
         />
       ) : (
@@ -908,8 +932,12 @@ export default function Board() {
  * stamp). A rehearsal (board.rehearsal set) is the ONE thing that changes
  * this screen from an ordinary live board — everything below this header,
  * PlayPhase/BiddingPhase included, is untouched. Two swaps: the name slot
- * reads "REHEARSAL — Board N, from Trick M" instead of the tournament name,
- * and the right-hand slot trades the vulnerability chip for an END action
+ * reads "REHEARSAL — Crossing N, Board M, from Trick T" instead of the
+ * tournament name — naming the ORIGIN's display number, since that is the
+ * crossing being rehearsed and a rehearsal has no number of its own, and the
+ * branch point, since which trick you took the cards at is the whole subject
+ * of the screen — and the right-hand slot trades the vulnerability chip for
+ * an END action
  * (live play has nowhere to go mid-board; a rehearsal does, since leaving
  * loses nothing — it persists, resumable from Analyze's history surfaces).
  */
@@ -921,7 +949,9 @@ function BoardHead({ board, vulPulse }: { board: BoardView; vulPulse: boolean })
       <TicketStub label="BOARD" value={`${board.boardNo} of ${board.totalBoards}`} edgeText="ADMIT" width={92} />
       <div className="board-head-mid">
         <div className="board-head-name">
-          {r ? `REHEARSAL — Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}` : board.tournamentName}
+          {r
+            ? `REHEARSAL — Crossing ${tournamentNo(r.originNumber, r.originTournamentId)}, Board ${board.boardNo}, from Trick ${Math.floor(r.branchPly / 4) + 1}`
+            : board.tournamentName}
         </div>
         <div className="board-head-sub num">
           Dealer {SEAT_SHORT[board.dealer]}
@@ -1079,6 +1109,7 @@ export function PlayPhase({
   awaitingTrickClear = false,
   onClearTrick = () => {},
   trumpPlacement = 'suit',
+  foilTrumps = false,
   drawTrumps = false,
 }: {
   board: BoardView;
@@ -1103,11 +1134,19 @@ export function PlayPhase({
   onClearTrick?: () => void;
   /**
    * "Trump placement" (users.trump_placement): 'left' lays every hand on this
-   * screen out trump-first. Defaults to 'suit' — the shipped ♠♥♦♣ — so the
-   * tour and Analyze, which mount this component without passing it, are
-   * unaffected exactly as they are by doubleTapBid.
+   * screen out trump-first, and is what the ACCOUNT defaults to — but this
+   * prop still defaults to 'suit', because its one caller that omits it is
+   * the tour, which reads no preference at all (the doubleTapBid precedent)
+   * and teaches on the plain ♠♥♦♣ hand. Board.tsx resolves the real
+   * preference and always passes it.
    */
   trumpPlacement?: 'suit' | 'left';
+  /**
+   * "Foil trumps" (users.foil_trumps): the holographic plate over the trump
+   * suit. Defaults false — off is also the account default, and the tour
+   * mounts this component without passing it, the doubleTapBid precedent.
+   */
+  foilTrumps?: boolean;
   /**
    * Play the Draw (trumpDraw.ts) into that order, once, as this mounts. Only
    * true when the player WATCHED the auction settle — a reload mid-play, a
@@ -1126,6 +1165,9 @@ export function PlayPhase({
   // One derivation for every hand on the screen — the fan, a partner's dummy
   // fan and an opponent's dummy rail have to agree about which suit leads.
   const trump = trumpForDisplay(board.contract, trumpPlacement);
+  // ...and one for whether it glitters. Separate settings, separate answers:
+  // a hand can be foiled without being re-sorted, or the other way round.
+  const foil = foilForDisplay(board.contract, foilTrumps);
 
 
   // Dummy on East or West is always the opposing side's exposed hand — never
@@ -1177,6 +1219,7 @@ export function PlayPhase({
             <HandFan
               cards={board.dummyHand}
               trump={trump}
+              foil={foil}
               legal={canPlayFrom(board.dummy) ? board.legalCards : []}
               selected={selectedCard ?? soleLegal}
               onSelect={canPlayFrom(board.dummy) ? onSelectCard : undefined}
@@ -1190,18 +1233,19 @@ export function PlayPhase({
           {board.dummy === 3 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="left" trump={trump} />
           ) : null}
-          <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
+          <TrickArea board={board} foil={foil} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
           {board.dummy === 1 ? (
             <DummyRail seat={board.dummy} cards={board.dummyHand} hcp={board.dummyHcp} side="right" trump={trump} />
           ) : null}
         </div>
       ) : (
-        <TrickArea board={board} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
+        <TrickArea board={board} foil={foil} awaitingClear={awaitingTrickClear} onClearTap={onClearTrick} />
       )}
       <div className="board-fan">
         <HandFan
           cards={board.hand}
           trump={trump}
+          foil={foil}
           drawIn={drawTrumps}
           legal={canPlayFrom(playingSeat) ? board.legalCards : []}
           selected={selectedCard ?? soleLegal}

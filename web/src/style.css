@@ -72,6 +72,18 @@
   --cardface-suit-h: #c22f21;
   --cardface-suit-d: #9e6a00;
   --cardface-suit-c: #00775a;
+  /* Which stock the Foil Trumps layer is painting onto: 0 = the day card
+     above (the layer multiplies, and its shader builds its image around
+     white), 1 = the night card (it screens, around black). It lives here with
+     the card-face tokens because it is a fact ABOUT them — and it is a token
+     rather than a check in script precisely so there is only ever one answer.
+     foil.ts reads the cascade's value for BOTH the blend mode and the shader's
+     own u_night; source those separately and they can disagree, which paints a
+     white-based image with screen and blows the card, the pips and the rank
+     out to near-white together. Any block overriding --cardface needs this too. */
+  --foil-stock: 0;
+  /* how far the foil layer overhangs its container — see .foil-layer */
+  --foil-bleed: 16px;
 }
 
 /* ---- night theme — token swap only, never per-component dark styles.
@@ -123,6 +135,7 @@
   --cardface-suit-h: var(--suit-h);
   --cardface-suit-d: var(--suit-d);
   --cardface-suit-c: var(--suit-c);
+  --foil-stock: 1;
 }
 /* 'system' preference: no data-theme attribute, so the OS setting decides. Scoped to
    :not([data-theme]) so an explicit Day/Night override (which always sets the
@@ -162,6 +175,7 @@
     --cardface-suit-h: var(--suit-h);
     --cardface-suit-d: var(--suit-d);
     --cardface-suit-c: var(--suit-c);
+    --foil-stock: 1;
   }
 }
 /* light-on-dark serif renders heavier; night-only smoothing, never as a compensating
@@ -665,6 +679,33 @@ input {
   gap: 10px;
   animation: nbSubIn 0.6s ease-out 0.8s both;
 }
+/*
+ * The gate notice — why a sign-in came back without a session.
+ *
+ * Inside .splash-cta rather than below the pitch, so the explanation and the
+ * button that retries are one block: the whole reason auth.ts redirects here
+ * instead of answering a bare JSON 400 is that the way to try again should be
+ * under the visitor's thumb the moment they read why it failed.
+ *
+ * The inset surface is the system's "this holds a call to action" treatment,
+ * which is exactly what it is doing. Deliberately NOT --negative: the most
+ * common reasons are a slow sign-in and a visitor who turned back on purpose,
+ * neither of which is an error worth painting red, and the design rule here is
+ * max ink, minimum colour. Italic Crimson is the aside voice.
+ */
+.splash-notice {
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13.5px;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--ink);
+}
+
 .splash-pitch {
   max-width: 300px;
   margin: 0;
@@ -1750,6 +1791,48 @@ a.ds-btn-secondary:hover {
   justify-content: center;
   align-items: flex-end;
   padding: 14px 8px 2px;
+  /* the foil layer is absolutely positioned against this box (.trick already
+     has it for the compass slots) */
+  position: relative;
+}
+
+/* ---- Foil Trumps: the holographic plate over the trump suit (foil.ts).
+   One canvas per card container, painting a quad per [data-foil] face — the
+   pattern is one continuous field across a hand, so it cannot be a background
+   on each card. It OVERHANGS its host: a trick card is taller than its grid
+   row and spills past the box, and a layer pinned to inset:0 leaves its foot
+   bare. Width and height are spelled out rather than left to the opposing
+   offsets because a <canvas> is a REPLACED element — `inset: -16px` with
+   `width: auto` sits at its intrinsic 300x150 and silently paints nothing.
+
+   The blend mode is set from script, off the same --foil-stock token the
+   shader reads (see foil.ts): multiply on day stock, which cannot lighten and
+   so lets near-black ink through untouched, screen on night. It is NOT
+   declared here, because a CSS rule and a uniform sourced separately is
+   exactly the disagreement that ruins the card. ---- */
+.foil-layer {
+  position: absolute;
+  top: calc(var(--foil-bleed) * -1);
+  left: calc(var(--foil-bleed) * -1);
+  width: calc(100% + var(--foil-bleed) * 2);
+  height: calc(100% + var(--foil-bleed) * 2);
+  pointer-events: none;
+  z-index: 4;
+}
+/* The flight layer is the one that is not a child of a card container:
+   TrickArea animates a position:fixed clone on document.body between the fan
+   and the table, and nothing scoped to a host can reach it. Fixed like what it
+   paints, so the two cannot desync the way a fixed blend layer over SCROLLING
+   content does; kept hidden via visibility (never display:none — see foil.ts,
+   a display:none canvas has no box and can never measure itself visible again)
+   except during a glide, since a viewport-wide blending canvas is a compositor
+   layer nobody should pay for at rest. */
+.foil-layer-flight {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 91;
 }
 .handfan .cardbtn {
   padding: 0;
@@ -2672,6 +2755,19 @@ a.board-row:hover {
 .home-greeting {
   padding: 20px 16px 0;
 }
+/* The rating hero that stands where the greeting stands, for a player who has
+   one (Lobby.tsx). Centred, at the greeting's own padding, because both kit
+   precedents for this hero — Stats and the tournament result — centre it, and
+   because holding 20px 16px 0 keeps the vertical rhythm of the screen
+   identical whichever of the two is showing. It is the screen's ONE hero
+   number, per the design system's rule; the medal rail's percentage below is
+   a plain .num figure beside its bar, not a second one. */
+.home-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 0;
+}
 .home-hello {
   font-weight: 600;
   font-size: 21px;
@@ -3335,19 +3431,72 @@ a.board-row:hover {
   font-size: 13px;
   color: var(--muted);
 }
-.stats-rating-line {
+/* The NICKEL RATING hero's label line — ds/RatingTile.tsx, shared by the
+   Stats hero and Home. Named for the component rather than for Stats, which
+   is where it started: the two screens are meant to draw the SAME tile, and a
+   `.stats-` prefix on Home's front door would invite the next person to fork
+   it. */
+.rating-tile-line {
   display: flex;
   align-items: baseline;
   gap: 8px;
   margin-top: 8px;
+  /* Wrap, centred, rather than let flex shrink the two items. Home's ▲12 fits
+     beside the label with room to spare; Stats' "+34 THIS MONTH" is the one
+     that can outgrow the line, and a longer caption than that would too.
+     Shrinking is what a plain flex row does there, and it breaks both halves at
+     once — the label folds to NICKEL / RATING and jams against the left edge
+     while the delta breaks mid-phrase. (Not hypothetical: Home carried a
+     "−12 SINCE YOUR LAST CROSSING" caption for one commit and did exactly
+     that.) Wrapping moves the delta whole onto its own centred line under the
+     label instead, which is also the right reading order for it. */
+  flex-wrap: wrap;
+  justify-content: center;
 }
-.stats-rating-label {
+.rating-tile-label {
   letter-spacing: 0.18em;
+  /* ...so each half wraps as a unit or not at all — see above */
+  white-space: nowrap;
 }
-.stats-delta {
+/* The glossary opener worn by BOTH halves of the line when Home passes
+   `explainTerm` — the label and the ▲12 beside it, since the arrow is the part
+   that prompts "why did that move without me?" and 'rating-drift' answers
+   exactly that. Deliberately NOT the shared .gloss-link: that rule sets
+   `font: inherit`, and it is declared far below .label-caps, so it would
+   quietly strip the label's face, weight and size — and it would do the same
+   to the delta's. Everything here is the button reset and the dotted
+   underline; each half keeps its own typography and its own ink.
+
+   The underline is `currentColor` rather than a literal, which is what lets
+   one rule serve both: under the label it draws in .label-caps's muted ink,
+   under the delta in the --positive/--negative it is already carrying. A
+   muted rule under a green arrow would read as two unrelated marks. */
+.rating-tile-explain {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  /* Deliberately NO `color`: a button's UA default loses to any author rule, so
+     the label keeps .label-caps's muted ink and the delta keeps its
+     --positive/--negative. `color: inherit` was tried and is the trap — it is a
+     single-class rule declared BELOW .positive/.negative, so it won on source
+     order and drew a green arrow in plain ink. */
+  line-height: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.rating-tile-explain:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.rating-tile-delta {
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .chart-panel {
@@ -6572,7 +6721,7 @@ a.stat-tile:hover {
 /* A finished attempt's score is inked against the table you actually sat —
    green beat it, red fell short, ordinary ink on a tie — but that needs no
    rule here: it wears the bare global .positive/.negative utilities, the
-   same way stats-delta, tourney-rating-delta and tolls-rank do. Nothing in
+   same way rating-tile-delta, tourney-rating-delta and tolls-rank do. Nothing in
    this stub's chain sets a competing colour (.rehearsal-stub is `inherit`,
    .rehearsal-stub-score and .num set none), so a scoped copy would only
    restate the utility. Contrast .worth-rehearsal-dot below, which genuinely

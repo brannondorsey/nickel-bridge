@@ -72,6 +72,23 @@ export interface Scenario {
    */
   claimRule?: 'optimistic' | 'pessimistic';
   /**
+   * Switch the acting user's "Foil trumps" ON before the replay runs.
+   *
+   * The same shape as `claimRule` above and for the same reason: the state
+   * this exhibit demonstrates is unreachable from a recipe alone, because it
+   * is not a property of the BOARD at all. Foil is an account preference
+   * (`users.foil_trumps`) and it ships OFF, so without this a tester clicking
+   * the row would land on an ordinary board and see nothing.
+   *
+   * It only ever turns the column ON, and that is deliberate rather than
+   * lazy. Turning it back off on the way out has nowhere to live (there is no
+   * reliable "left the exhibit" moment), and an exhibit that silently REVERTS
+   * a setting the tester chose in the settings gate would be worse than one
+   * that turns a setting on and says so — which the description does, along
+   * with where to undo it.
+   */
+  foilTrumps?: true;
+  /**
    * This is the tournament's last board, and finishing it live should reveal
    * a genuine tournament-summary screen — not just this one board's receipt.
    * The executor pre-completes the acting user's boards 1..(boardNo - 1)
@@ -215,6 +232,24 @@ export const SCENARIOS: Scenario[] = [
     boardNo: 2,
     actions: [call(0), call(0), call(0), card(40)],
     expect: 'playing',
+  },
+  {
+    id: 'foil-trumps',
+    label: 'Trumps under holograph',
+    description:
+      'Partner declares 2♥, so you run both hands: seven foiled hearts in your own fan and two more across in dummy, under one continuous sheet rather than a patch per card. East has led a club, so dummy follows suit first — keep playing and the first heart to reach the table carries the plate onto the felt with it. On a phone, tilt the handset and the shine travels across the fan. This exhibit leaves “Foil trumps” switched ON for the Inspector; the settings gate turns it back off.',
+    category: 'card play',
+    // The same (seed, board, actions) as 'partner-declares' — the recipe is
+    // not what this exhibit is about, and there was no new position to mine
+    // (the 'stale-board' precedent). It is picked over the other card-play
+    // boards because it is the one that shows the treatment at its widest:
+    // the board is flipped, so the human's OWN fan and dummy's are both on
+    // screen, and the human hand holds seven of the trump suit.
+    seed: 'hunt-1',
+    boardNo: 2,
+    actions: [call(0), call(0), call(0)],
+    expect: 'playing',
+    foilTrumps: true,
   },
 
   // ---- claims ----

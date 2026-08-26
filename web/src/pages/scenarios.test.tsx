@@ -114,6 +114,39 @@ describe('Scenarios (the Exhibit Hall)', () => {
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
   });
 
+  // Home's rating drift is the one state on that screen a tester cannot produce
+  // for themselves — it needs somebody else to finish your old field AFTER you
+  // did, and the seeder only runs at boot and reset.
+  describe('the rating-drift exhibit', () => {
+    const driftRow = async () =>
+      ((await screen.findByText(/moved while you were away/)).closest('.exhibit-row') as HTMLElement);
+
+    it('moves the field, refreshes `me`, then lands on Home', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog);
+      apiMock.demoDrift.mockResolvedValue({ drifted: true, delta: 11 });
+      const { refresh } = renderWithMe(<Scenarios />, { me: meDemo });
+      await userEvent.click(within(await driftRow()).getByRole('button', { name: /enter/i }));
+      expect(apiMock.demoDrift).toHaveBeenCalled();
+      // `me` was loaded at app boot and Home's tile reads the drift off it, so
+      // navigating without this shows the figure from before the click — the
+      // foil-trumps precedent. Awaiting it is the whole point, so a regression
+      // to fire-and-forget has to fail somewhere: this is that somewhere.
+      await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+      expect(screen.queryByText(/finish a crossing first/i)).not.toBeInTheDocument();
+    });
+
+    it('says so rather than navigating when there is no crossing to move', async () => {
+      apiMock.demoScenarios.mockResolvedValue(catalog);
+      apiMock.demoDrift.mockResolvedValue({ drifted: false });
+      const { refresh } = renderWithMe(<Scenarios />, { me: meDemo });
+      await userEvent.click(within(await driftRow()).getByRole('button', { name: /enter/i }));
+      expect(await screen.findByText(/finish a crossing first/i)).toBeInTheDocument();
+      // ...and it stops there rather than landing the tester on a Home with
+      // nothing new on it
+      expect(refresh).not.toHaveBeenCalled();
+    });
+  });
+
   // The SIGNED OUT group is the one that really ends the session — an overlay
   // can't fake the states it shows, since they're all decided by whether
   // me.user is genuinely null. It leaves with a hard navigation so the app

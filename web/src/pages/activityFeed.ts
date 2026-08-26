@@ -1,5 +1,5 @@
 import type { ActivityEvent, ActivityResponse } from '../api';
-import { timeGreeting } from '../format';
+import { timeGreeting, tournamentNo } from '../format';
 
 /**
  * Turning the activity feed's flat events into what the screen renders.
@@ -155,9 +155,9 @@ const MILESTONE_WORDS: Record<Extract<ActivityEvent, { kind: 'milestone' }>['mil
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** "Tournament #12" → "12", matching format.ts's tournamentNo. */
+/** The crossing's display number — format.ts owns the rule; this just adapts the event. */
 function crossingNo(c: Extract<ActivityEvent, { kind: 'crossing' }>): string {
-  return c.tournamentName.match(/#(\d+)/)?.[1] ?? String(c.tournamentId);
+  return tournamentNo(c.tournamentNumber, c.tournamentId);
 }
 
 /** "62%, 2nd of 5" — how a single crossing finished. */

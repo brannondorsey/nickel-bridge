@@ -27,7 +27,16 @@ import { clearTourDone, peekTourDone } from './onboarding/tourDone';
 import { splashOnReturn, stampVisit } from './splash';
 import { applyThemePref, readThemePref } from './theme';
 
-export const MeContext = createContext<{ me: Me | null; refresh: () => void }>({ me: null, refresh: () => {} });
+/**
+ * `refresh` returns its promise so a caller that must not act on a stale `me`
+ * can wait for the new one — the demo gallery's exhibits do, since one of them
+ * changes an account preference and then navigates straight to a board that
+ * reads it. Every other caller fires and forgets, which is unchanged.
+ */
+export const MeContext = createContext<{ me: Me | null; refresh: () => Promise<void> }>({
+  me: null,
+  refresh: async () => {},
+});
 export const useMe = () => useContext(MeContext);
 
 /**
@@ -118,13 +127,16 @@ export default function App() {
   const [splash, setSplash] = useState(false);
   const { pathname, search } = useLocation();
 
-  const refresh = () => {
+  const refresh = () =>
     api
       .me()
       .then(setMe)
       .finally(() => setLoaded(true));
-  };
-  useEffect(refresh, []);
+  // Wrapped rather than passed straight in: an effect callback may return only
+  // a cleanup function, and `refresh` now returns a promise.
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   // The blocking inline script in index.html already set data-theme/theme-color
   // before first paint; this only keeps <meta name="theme-color"> live for a

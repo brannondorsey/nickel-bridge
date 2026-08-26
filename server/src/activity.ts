@@ -52,6 +52,8 @@ export type ActivityEvent =
       at: number;
       tournamentId: number;
       tournamentName: string;
+      /** display number; null falls back to the id client-side */
+      tournamentNumber: number | null;
       pct: number;
       rank: number;
       /** complete players in that field, the denominator `rank` is out of */
@@ -96,7 +98,7 @@ const stmtWindowBoards = db.prepare(
 // finishers rates nobody: `before`/`after` come back NULL there and the feed
 // prints an em dash, never a 0.
 const stmtWindowCrossings = db.prepare(
-  `SELECT f.user_id, f.tournament_id, f.finished_at, t.name AS tournament_name, h.before, h.after
+  `SELECT f.user_id, f.tournament_id, f.finished_at, t.name AS tournament_name, t.number AS tournament_number, h.before, h.after
      FROM (
        SELECT b.user_id, b.tournament_id, MAX(b.updated_at) AS finished_at, COUNT(*) AS done
          FROM boards b
@@ -145,6 +147,8 @@ interface CrossingRow {
   tournament_id: number;
   finished_at: number;
   tournament_name: string;
+  /** the crossing's DISPLAY number (db.ts's `number`); NULL on non-standard kinds */
+  tournament_number: number | null;
   before: number | null;
   after: number | null;
 }
@@ -289,6 +293,7 @@ export function recentActivity(sinceUnix: number, provisionalMin: number): Activ
       at: c.finished_at,
       tournamentId: c.tournament_id,
       tournamentName: c.tournament_name,
+      tournamentNumber: c.tournament_number,
       pct: mine.totalPct,
       rank: mine.rank,
       of,

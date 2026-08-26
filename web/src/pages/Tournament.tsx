@@ -138,7 +138,7 @@ export default function Tournament() {
   );
 
   if (complete) {
-    const num = tournamentNo(t.name, t.id);
+    const num = tournamentNo(t.number, t.id);
     const when = t.myLastPlayedAt ?? t.createdAt;
     const delta = t.myEloDelta ? t.myEloDelta.after - t.myEloDelta.before : null;
     return (

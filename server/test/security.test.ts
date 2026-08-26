@@ -68,6 +68,29 @@ describe('security headers on the wire', () => {
   });
 });
 
+describe('the permissions policy', () => {
+  /**
+   * The motion sensors are the one place this header says `(self)` instead of
+   * `()`, and both halves of that need holding. Denied, `deviceorientation`
+   * delivers no events at all — no error, no prompt, nothing in the console —
+   * so a regression here reads as the tilt treatment being broken rather than
+   * as a header being wrong, which is exactly the failure this pins. Widened
+   * to `*`, a cross-origin iframe embedded in one of our pages would inherit
+   * the sensors, which is the thing the header is spent on in the first place.
+   */
+  it('grants the motion sensors to this origin only, and nothing else at all', async () => {
+    const { securityHeaders } = await import('../src/security.js');
+    const policy = String(securityHeaders({ hsts: true })['permissions-policy']);
+    for (const feature of ['accelerometer', 'gyroscope', 'magnetometer']) {
+      expect(policy, `${feature} gates deviceorientation`).toContain(`${feature}=(self)`);
+    }
+    for (const feature of ['camera', 'microphone', 'geolocation', 'payment', 'usb']) {
+      expect(policy, `${feature} is not used by this app`).toContain(`${feature}=()`);
+    }
+    expect(policy, 'no feature may be granted to every origin').not.toContain('*');
+  });
+});
+
 describe('the content security policy', () => {
   it('forbids what the app never does', async () => {
     const { contentSecurityPolicy } = await import('../src/security.js');

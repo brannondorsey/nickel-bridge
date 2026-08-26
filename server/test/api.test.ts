@@ -212,9 +212,13 @@ describe('handle (first-login username)', () => {
     // doubleTapBid is the one that defaults false, not true, since it is the
     // one preference this endpoint deliberately ships as a behavior change
     // rather than a preserved default (see the double_tap_bid migration in db.ts).
-    // trickClearMode defaults to 'auto' and trumpPlacement to 'suit', each
-    // the shipped behaviour before its setting existed (see the
-    // trick_clear_mode and trump_placement migrations in db.ts).
+    // trickClearMode defaults to 'auto', the shipped behaviour before its
+    // setting existed. trumpPlacement is the one enum that does NOT default
+    // that way: it defaults to 'left', the placement players asked for, with
+    // existing accounts re-defaulted onto it — see the two trump_placement
+    // migrations in db.ts, and trump-placement-default.test.ts. foilTrumps
+    // defaults FALSE for a third reason again: there was no prior behaviour
+    // for it to preserve.
     let me = await pete.get('/api/me');
     expect([
       me.user.ladderListed,
@@ -224,7 +228,8 @@ describe('handle (first-login username)', () => {
       me.user.doubleTapBid,
       me.user.trickClearMode,
       me.user.trumpPlacement,
-    ]).toEqual([true, true, true, true, false, 'auto', 'suit']);
+      me.user.foilTrumps,
+    ]).toEqual([true, true, true, true, false, 'auto', 'left', false]);
 
     // a partial patch leaves the untouched keys alone
     expect(await pete.post('/api/me/prefs', { autoClaim: false })).toEqual({
@@ -234,7 +239,8 @@ describe('handle (first-login username)', () => {
       betaFeatures: true,
       doubleTapBid: false,
       trickClearMode: 'auto',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     await pete.post('/api/me/prefs', { ladderListed: false });
     me = await pete.get('/api/me');
@@ -246,7 +252,8 @@ describe('handle (first-login username)', () => {
       me.user.doubleTapBid,
       me.user.trickClearMode,
       me.user.trumpPlacement,
-    ]).toEqual([false, false, true, true, false, 'auto', 'suit']);
+      me.user.foilTrumps,
+    ]).toEqual([false, false, true, true, false, 'auto', 'left', false]);
 
     // an empty patch is a legal no-op; a bad type or an unknown key is not,
     // so a typo can't look like a successful write
@@ -257,7 +264,8 @@ describe('handle (first-login username)', () => {
       betaFeatures: true,
       doubleTapBid: false,
       trickClearMode: 'auto',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     expect((await pete.raw('POST', '/api/me/prefs', { autoClaim: 'yes' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { fastForwrad: true })).statusCode).toBe(400);
@@ -271,7 +279,8 @@ describe('handle (first-login username)', () => {
       betaFeatures: true,
       doubleTapBid: false,
       trickClearMode: 'auto',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     expect((await pete.get('/api/me')).user.bidFeedback).toBe(false);
 
@@ -285,7 +294,8 @@ describe('handle (first-login username)', () => {
       betaFeatures: false,
       doubleTapBid: false,
       trickClearMode: 'auto',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     expect((await pete.get('/api/me')).user.betaFeatures).toBe(false);
 
@@ -297,7 +307,8 @@ describe('handle (first-login username)', () => {
       betaFeatures: false,
       doubleTapBid: true,
       trickClearMode: 'auto',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     expect((await pete.get('/api/me')).user.doubleTapBid).toBe(true);
 
@@ -311,28 +322,49 @@ describe('handle (first-login username)', () => {
       betaFeatures: false,
       doubleTapBid: true,
       trickClearMode: 'tap',
-      trumpPlacement: 'suit',
+      trumpPlacement: 'left',
+      foilTrumps: false,
     });
     expect((await pete.get('/api/me')).user.trickClearMode).toBe('tap');
     expect((await pete.raw('POST', '/api/me/prefs', { trickClearMode: 'fast' })).statusCode).toBe(400);
     expect((await pete.get('/api/me')).user.trickClearMode).toBe('tap');
 
-    expect(await pete.post('/api/me/prefs', { trumpPlacement: 'left' })).toEqual({
+    // Patched AWAY from its default, unlike trickClearMode above — 'left' is
+    // what this account already holds, so writing it back would prove nothing.
+    expect(await pete.post('/api/me/prefs', { trumpPlacement: 'suit' })).toEqual({
       ladderListed: false,
       autoClaim: false,
       bidFeedback: false,
       betaFeatures: false,
       doubleTapBid: true,
       trickClearMode: 'tap',
-      trumpPlacement: 'left',
+      trumpPlacement: 'suit',
+      foilTrumps: false,
     });
-    expect((await pete.get('/api/me')).user.trumpPlacement).toBe('left');
+    expect((await pete.get('/api/me')).user.trumpPlacement).toBe('suit');
     // ...including the ways a second enum could be got wrong: a value from
     // the OTHER enum's set, and a boolean, which the old boolean-only
     // validator would have waved through into the column as a raw `true`.
     expect((await pete.raw('POST', '/api/me/prefs', { trumpPlacement: 'tap' })).statusCode).toBe(400);
     expect((await pete.raw('POST', '/api/me/prefs', { trumpPlacement: true })).statusCode).toBe(400);
-    expect((await pete.get('/api/me')).user.trumpPlacement).toBe('left');
+    expect((await pete.get('/api/me')).user.trumpPlacement).toBe('suit');
+
+    // foilTrumps is a plain switch again, and opts in from a false default
+    // exactly like doubleTapBid — it is a yes/no rather than a mode, so it
+    // belongs in the boolean list and a string is a 400.
+    expect(await pete.post('/api/me/prefs', { foilTrumps: true })).toEqual({
+      ladderListed: false,
+      autoClaim: false,
+      bidFeedback: false,
+      betaFeatures: false,
+      doubleTapBid: true,
+      trickClearMode: 'tap',
+      trumpPlacement: 'suit',
+      foilTrumps: true,
+    });
+    expect((await pete.get('/api/me')).user.foilTrumps).toBe(true);
+    expect((await pete.raw('POST', '/api/me/prefs', { foilTrumps: 'on' })).statusCode).toBe(400);
+    expect((await pete.get('/api/me')).user.foilTrumps).toBe(true);
 
     expect(
       (await new TestClient(app, 'AnonSet').raw('POST', '/api/me/prefs', { ladderListed: false })).statusCode,

@@ -277,6 +277,29 @@ describe('tournament metadata', () => {
     }
   });
 
+  /**
+   * The DISPLAY number, on every surface that names a crossing. It is a
+   * separate sequence from the row id (db.ts's createCrossing), and the web
+   * client's tournamentNo() falls back to the id when it is missing — so a
+   * route that quietly stopped sending it would not throw anywhere, it would
+   * just start printing row addresses at players, which is the exact bug this
+   * column was added to end. Asserted on all three carriers.
+   */
+  it('list, detail and boardView all carry the crossing DISPLAY number', async () => {
+    const { tournaments } = await alice.get('/api/tournaments');
+    expect(tournaments.length).toBeGreaterThan(0);
+    for (const t of tournaments) expect(typeof t.number).toBe('number');
+
+    const first = tournaments[0];
+    const detail = await alice.get(`/api/tournaments/${first.id}`);
+    expect(detail.number).toBe(first.number);
+
+    const view = await alice.get(`/api/tournaments/${first.id}/boards/1`);
+    expect(view.tournamentNumber).toBe(first.number);
+    // and it is its own sequence: the name renders the number, not the id
+    expect(first.name).toBe(`Tournament #${first.number}`);
+  });
+
   it('myLastPlayedAt is null for a joined-but-unplayed tournament', async () => {
     const erin = new TestClient(app, 'Erin');
     await erin.login();

@@ -109,6 +109,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('the screen header', () => {
+  it('names the crossing by its DISPLAY number, never the row id in the URL', async () => {
+    // Production's tournament id 126 is the crossing players know as #105 —
+    // two separate sequences (CONTRIBUTING's "the id stays the ADDRESS"). This
+    // header used to interpolate the route param, so it announced "CROSSING
+    // 126" on a board every other screen called #105. The numbers here are
+    // that exact pair, so an accidental return to the id is unmistakable.
+    apiMock.board.mockResolvedValue({ ...donePlayed, tournamentId: 126, tournamentNumber: 105 });
+    apiMock.analysis.mockResolvedValue(makeAnalysis({ par: parPayload }));
+    renderAnalyze('/t/126/b/2/analyze');
+
+    expect(await screen.findByText('CROSSING 105 — BOARD 2')).toBeInTheDocument();
+    expect(screen.queryByText(/CROSSING 126/)).not.toBeInTheDocument();
+    // the id remains the ADDRESS: fetches and the back link still use it
+    expect(apiMock.analysis).toHaveBeenCalledWith(126, 2, true);
+  });
+});
+
 describe('the moments ledger (THE CROSSING)', () => {
   it('requests par for the crossing lens and renders the charged row, with the overflow counted', async () => {
     apiMock.board.mockResolvedValue(donePlayed);
@@ -393,7 +411,9 @@ describe('the play lens', () => {
   // other thing strain decides.
   describe('trump placement', () => {
     const heartsBoard = { ...donePlayed, contract: { ...donePlayed.contract!, strain: 2 } };
-    const meLeft: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'left' } };
+    // meFixture is already trump-left — the account default — so the override
+    // is the OTHER end: a reader who has opted back into ♠♥♦♣.
+    const meSuit: Me = { ...meFixture, user: { ...meFixture.user!, trumpPlacement: 'suit' } };
     /** the suits of a fan, left to right */
     const fanSuits = (fan: Element) =>
       [...fan.querySelectorAll<HTMLElement>('.cardbtn')].map((el) => Math.floor(Number(el.dataset.card) / 13));
@@ -414,8 +434,8 @@ describe('the play lens', () => {
       delete (Element.prototype as unknown as { animate?: unknown }).animate;
     });
 
-    it('lays the fans and the suit-line rails out trump-first for a reader who asked for it', async () => {
-      await openPlayLens(meLeft);
+    it('lays the fans and the suit-line rails out trump-first by default', async () => {
+      await openPlayLens(meFixture);
       // every fan on the lens — the player's own and the hand across — leads
       // with hearts, and every card is still there
       const fans = [...document.querySelectorAll('.board-fan')];
@@ -439,8 +459,8 @@ describe('the play lens', () => {
       }
     });
 
-    it('leaves them in ♠♥♦♣ for the default preference', async () => {
-      await openPlayLens(meFixture);
+    it('leaves them in ♠♥♦♣ for a reader who asked for suit order', async () => {
+      await openPlayLens(meSuit);
       for (const fan of document.querySelectorAll('.board-fan')) {
         const suits = fanSuits(fan);
         expect(suits).toEqual([...suits].sort((a, b) => a - b));

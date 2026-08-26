@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RANK_CHARS, SEAT_SHORT, SUIT_SYMBOLS, cardRank, cardSuit, suitClass, type BoardView } from '../../api';
+import { FoilLayer } from './FoilLayer';
+import { foilAnchor } from './foil';
 import { COLLECT_MS, GLIDE_MS, motionOK, takePlayOrigin, trickWinner } from './playAnim';
 import { PlayingCard } from './PlayingCard';
 
@@ -16,6 +18,11 @@ import { PlayingCard } from './PlayingCard';
  * off-table on that seat's side. A trick that just cleared sweeps to the
  * winner, and a tally cell that just changed gets the stamp pop.
  *
+ * `foil` is the trump suit to give the Foil Trumps treatment, or null for
+ * off — see foil.ts. The layer is a sibling of the four slots and finds its
+ * own cards, so nothing about the compass or the animations changes with it
+ * on.
+ *
  * `awaitingClear`/`onClearTap` are "Trick clearing: tap" (settings gate):
  * while true, Board.tsx has paused a completed trick on the table instead of
  * sweeping it away on a timer, and a tap/click/Enter/Space anywhere on this
@@ -25,10 +32,13 @@ import { PlayingCard } from './PlayingCard';
  */
 export function TrickArea({
   board,
+  foil = null,
   awaitingClear = false,
   onClearTap,
 }: {
   board: BoardView;
+  /** suit to foil ("Foil trumps · ON"); null = no foil */
+  foil?: number | null;
   awaitingClear?: boolean;
   onClearTap?: () => void;
 }) {
@@ -74,7 +84,7 @@ export function TrickArea({
 
     // trick just cleared with a completed-tricks bump → collect sweep
     if (prevTrick.length > 0 && curTrick.length === 0 && (board.completedTricks ?? 0) > (prev.completedTricks ?? 0)) {
-      collectSweep(prevTrick, boxRef.current, slotEls.current, flights.current, winnerOf(prevTrick, board));
+      collectSweep(prevTrick, boxRef.current, slotEls.current, flights.current, winnerOf(prevTrick, board), foil);
     } else {
       // cards that just appeared glide in
       const known = new Set(prevTrick.map((t) => t.card));
@@ -86,6 +96,10 @@ export function TrickArea({
     // tally stamp on whichever count changed
     if ((board.declarerTricks ?? 0) !== (prev.declarerTricks ?? 0)) setStamp('decl');
     else if ((board.defenderTricks ?? 0) !== (prev.defenderTricks ?? 0)) setStamp('def');
+    // `board` alone stays the trigger: this is a diff against the previous
+    // view, and re-running it because a preference changed would replay an
+    // animation for a transition that already happened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board]);
 
   useEffect(() => {
@@ -154,11 +168,16 @@ export function TrickArea({
                 slotEls.current.set(seat, el);
               }}
             >
-              {played ? <PlayingCard card={played.card} small /> : awaited ? <PlayingCard placeholder small /> : null}
+              {played ? (
+                <PlayingCard card={played.card} small foil={foil !== null && cardSuit(played.card) === foil} />
+              ) : awaited ? (
+                <PlayingCard placeholder small />
+              ) : null}
             </div>
           </div>
         );
       })}
+      {foil !== null ? <FoilLayer /> : null}
       <div className="trick-meter">
         <div className="trick-meter-num num">
           <span className={`trick-meter-side${humanDeclaring ? ' mine' : ''}${stamp === 'decl' ? ' stamp' : ''}`}>
@@ -194,10 +213,18 @@ function winnerOf(trick: { seat: number; card: number }[], board: BoardView): nu
   return board.handToPlay ?? trick[0].seat;
 }
 
-/** Imperative twin of PlayingCard for animation clones (kept in sync by eye). */
-function makeCardEl(card: number, from: DOMRect): HTMLElement {
+/**
+ * Imperative twin of PlayingCard for animation clones (kept in sync by eye).
+ *
+ * `foil` has to be passed rather than inferred: this builds an element from
+ * scratch (glideIn's clone gets `data-foil` for free from cloneNode), and a
+ * sweep of unmarked clones would drop the foil off the trumps for the length
+ * of the collect — see foil.ts's flight layer, which paints them.
+ */
+function makeCardEl(card: number, from: DOMRect, foil: boolean, anchor: { x: number; y: number } | null): HTMLElement {
   const el = document.createElement('div');
   el.className = `pcard small ${suitClass(cardSuit(card))} pcard-flight`;
+  if (foil) el.setAttribute('data-foil', '');
   const rank = RANK_CHARS[cardRank(card)];
   const rankEl = document.createElement('div');
   rankEl.className = `rank${rank === '10' ? ' ten' : ''}`;
@@ -206,6 +233,9 @@ function makeCardEl(card: number, from: DOMRect): HTMLElement {
   suitEl.className = 'suit';
   suitEl.textContent = SUIT_SYMBOLS[cardSuit(card)];
   el.append(rankEl, suitEl);
+  // a swept card is already at its slot, so that slot's own sampling point is
+  // its anchor — see foilAnchor for why that is not the rect it is drawn at
+  if (foil && anchor) el.setAttribute('data-foil-at', `${anchor.x},${anchor.y},${from.width}`);
   el.style.left = `${from.left}px`;
   el.style.top = `${from.top}px`;
   el.style.width = `${from.width}px`;
@@ -251,6 +281,19 @@ function glideIn(
   // origin size at the start of the flight (fan cards are bigger than slots)
   const clone = cardEl.cloneNode(true) as HTMLElement;
   clone.classList.add('pcard-flight');
+  /* Where this card is going, for Foil Trumps: the foil layer holds the sheet
+     still on a flying card, and it anchors it to the DESTINATION so the last
+     frame of the glide is already the card's table look — see foil.ts. The
+     anchor is foilAnchor's point and NOT `to`: a trick slot is centred with a
+     transform, so the card is drawn up to half a slot from where its foil is
+     sampled, and anchoring to the drawn rect leaves the landing snapping to a
+     different patch — the very thing this is for. */
+  if (clone.hasAttribute('data-foil')) {
+    const anchor = foilAnchor(cardEl, box);
+    // x, y, and the card's PRINTED width — the clone flies scaled up from the
+    // fan, and the third number is what lets the sheet stay printed at 1:1
+    clone.setAttribute('data-foil-at', `${anchor.x},${anchor.y},${to.width}`);
+  }
   clone.style.left = `${from.left}px`;
   clone.style.top = `${from.top}px`;
   clone.style.width = `${to.width}px`;
@@ -283,14 +326,20 @@ function collectSweep(
   slots: Map<number, HTMLDivElement | null>,
   flights: Set<HTMLElement>,
   winner: number,
+  foil: number | null,
 ): void {
   const target = slots.get(winner)?.getBoundingClientRect();
   if (!target || target.width === 0) return;
   const jitter = [-3, 2, -1, 3];
   trick.forEach((t, i) => {
-    const from = slots.get(t.seat)?.getBoundingClientRect();
-    if (!from || from.width === 0) return;
-    const clone = makeCardEl(t.card, from);
+    const slotEl = slots.get(t.seat);
+    const from = slotEl?.getBoundingClientRect();
+    if (!slotEl || !from || from.width === 0) return;
+    const isFoil = foil !== null && cardSuit(t.card) === foil;
+    /* The card that was here filled its slot exactly, so the slot's own
+       sampling point is the card's — and the card element is already gone by
+       the time this layout effect runs. */
+    const clone = makeCardEl(t.card, from, isFoil, isFoil ? foilAnchor(slotEl, box) : null);
     document.body.appendChild(clone);
     flights.add(clone);
     const anim = clone.animate(

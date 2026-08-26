@@ -33,8 +33,10 @@ export interface Me {
     doubleTapBid: boolean;
     /** how a completed trick leaves the table (settings: "Trick clearing") — 'auto' times out on its own, 'tap' holds until the trick area is tapped */
     trickClearMode: 'auto' | 'tap';
-    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'suit' is always ♠♥♦♣, 'left' promotes the trump block */
+    /** where the trump suit sits once a trump contract is settled (settings: "Trump placement") — 'left' (default) promotes the trump block, 'suit' is always ♠♥♦♣ */
     trumpPlacement: 'suit' | 'left';
+    /** the holographic plate over the trump suit, in hand and on the table (settings: "Foil trumps"); default false */
+    foilTrumps: boolean;
     /**
      * Opt in to features still being tried out before a general release —
      * nothing is gated behind it today. Off by default in production, on by
@@ -50,6 +52,23 @@ export interface Me {
     boards: number;
     /** null only for a signed-out/non-human session; never applies to a real user's own /api/me */
     medals: MedalProgress | null;
+    /**
+     * Crossings that have actually rated this player (elo_history rows). The
+     * gate on Home's rating tile rather than a figure it draws: `elo` reads
+     * ELO_INITIAL until a crossing rates you, and 1200 is a starting value
+     * rather than something anyone earned — so before the first one Home
+     * keeps the plain greeting.
+     */
+    ratedTournaments: number;
+    /**
+     * Points the rating has moved since this player last finished a crossing —
+     * Home's delta. Entirely other people's play: their own swing from a
+     * crossing is folded into the baseline the moment it ends, so what's left
+     * is the evergreen replay restating history around them (a late finisher
+     * joining an old field, an opponent's rating moving). null = no crossing
+     * finished yet. See eloDrift() in server/src/tournaments.ts.
+     */
+    eloDrift: number | null;
   } | null;
   devAuth?: boolean;
   googleAuth?: boolean;
@@ -157,6 +176,8 @@ interface Contract {
 export interface BoardView {
   tournamentId: number;
   tournamentName: string;
+  /** the crossing's DISPLAY number; null on a rehearsal/exhibit — see format.ts's tournamentNo */
+  tournamentNumber: number | null;
   boardNo: number;
   totalBoards: number;
   state: 'bidding' | 'playing' | 'done';
@@ -192,7 +213,7 @@ export interface BoardView {
   /** true when this board completed via an automatic laydown claim, not full play-out */
   claimed?: boolean;
   /** present only when this board is a "Play From Here" rehearsal — never scored, see server/src/rehearsal.ts */
-  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number };
+  rehearsal?: { originTournamentId: number; originBoardNo: number; branchPly: number; originNumber: number | null };
   /** the origin board's own real result, sent alongside a FINISHED rehearsal's own `result` for the adjusted receipt's comparison */
   originResult?: BoardResult;
   /** what this line's score would have earned against the origin board's real field (substituted, never appended) — null if that field has too few entrants for a pct to mean anything */
@@ -315,6 +336,8 @@ interface MyBoardSummary {
 export interface TournamentInfo {
   id: number;
   name: string;
+  /** the crossing's DISPLAY number; null on non-standard kinds — see format.ts's tournamentNo */
+  number: number | null;
   myDone?: number;
   createdAt?: number;
   /** unix seconds of my last completed board, null if I've finished none */
@@ -539,6 +562,8 @@ export type ActivityEvent =
       at: number;
       tournamentId: number;
       tournamentName: string;
+      /** display number; null falls back to the id — see format.ts's tournamentNo */
+      tournamentNumber: number | null;
       pct: number;
       rank: number;
       of: number;
@@ -590,6 +615,7 @@ export const api = {
     doubleTapBid?: boolean;
     trickClearMode?: 'auto' | 'tap';
     trumpPlacement?: 'suit' | 'left';
+    foilTrumps?: boolean;
   }) =>
     request<{
       ladderListed: boolean;
@@ -599,6 +625,7 @@ export const api = {
       doubleTapBid: boolean;
       trickClearMode: 'auto' | 'tap';
       trumpPlacement: 'suit' | 'left';
+      foilTrumps: boolean;
     }>('/api/me/prefs', { method: 'POST', body: JSON.stringify(prefs) }),
   play: () => request<{ tournamentId: number; boardNo: number }>('/api/play', { method: 'POST' }),
   tournaments: () => request<{ tournaments: TournamentInfo[] }>('/api/tournaments'),
@@ -653,6 +680,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tournamentId, boardNo }),
     }),
+  /** demo only: walk a seeded bot through your last finished crossing, so Home's rating drift has something to report */
+  demoDrift: () => request<{ drifted: boolean; delta?: number }>('/api/demo/drift', { method: 'POST' }),
   resetDemo: () => request<{ ok: boolean }>('/api/demo/reset', { method: 'POST' }),
   leaderboard: () =>
     request<{
@@ -742,9 +771,9 @@ export function boardConditions(boardNo: number): { dealer: number; vul: { ns: b
 }
 
 /**
- * The suits, in the order a hand is laid out: ♠ ♥ ♦ ♣ normally, and with the
- * trump suit promoted to the front when the reader has asked for that
- * ("Trump placement · LEFT SIDE", users.trump_placement).
+ * The suits, in the order a hand is laid out: the trump suit promoted to the
+ * front ("Trump placement · LEFT SIDE", users.trump_placement — the default),
+ * or plain ♠ ♥ ♦ ♣ for a reader who has asked for SUIT ORDER instead.
  *
  * The other three keep their relative order behind it rather than rotating —
  * a player reads the fan by colour as much as by glyph, and rotating would
@@ -778,20 +807,43 @@ export function displaySort(hand: number[], trump?: number | null): number[] {
 }
 
 /**
- * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
- * the preference, the contract and the strain encoding meet.
+ * The contract's trump suit, or null when there isn't one — no-trump, or an
+ * auction that has not settled yet.
  *
  * `strain` counts in BID order (0=♣ 1=♦ 2=♥ 3=♠ 4=NT) and suits count the
  * other way (0=♠ 1=♥ 2=♦ 3=♣), so the conversion is `3 - strain`; getting
- * that backwards promotes the wrong suit rather than failing, which is why
- * it lives here once instead of at each call site. No-trump has no trump
- * suit, an unsettled auction has no contract, and the default preference
- * leaves every hand in suit order — all three answer null.
+ * that backwards names the wrong suit rather than failing, which is why it
+ * lives here once. Both preferences that care which suit is trumps — where it
+ * sits in the hand, and whether it glitters — read it from here.
+ */
+export function trumpSuit(contract: { strain: number } | undefined): number | null {
+  if (!contract) return null;
+  return contract.strain === 4 ? null : 3 - contract.strain;
+}
+
+/**
+ * The suit to give the Foil Trumps plate, or null for plain cards — the
+ * preference and the contract, in the shape the card components want.
+ *
+ * Kept apart from `trumpForDisplay` below even though both end at the same
+ * suit: they answer to different settings, and a hand can be foiled without
+ * being re-sorted or re-sorted without being foiled.
+ */
+export function foilForDisplay(contract: { strain: number } | undefined, on: boolean | undefined): number | null {
+  return on ? trumpSuit(contract) : null;
+}
+
+/**
+ * The suit whose block leads a hand, or null for plain ♠♥♦♣ — the one place
+ * the preference, the contract and the strain encoding meet.
+ *
+ * No-trump has no trump suit, an unsettled auction has no contract, and SUIT
+ * ORDER leaves every hand in ♠♥♦♣ — all three answer null. The strain-to-suit
+ * conversion itself lives in `trumpSuit` above.
  */
 export function trumpForDisplay(
   contract: { strain: number } | undefined,
   placement: 'suit' | 'left' | undefined,
 ): number | null {
-  if (placement !== 'left' || !contract) return null;
-  return contract.strain === 4 ? null : 3 - contract.strain;
+  return placement === 'left' ? trumpSuit(contract) : null;
 }

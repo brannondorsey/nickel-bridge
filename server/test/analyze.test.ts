@@ -226,6 +226,67 @@ describe('the verdict matrix', () => {
     expect(view.moments).toEqual([]);
   }, 240_000);
 
+  /**
+   * The production regression this rule was written for, replayed verbatim.
+   *
+   * Tournament id 126 board 1 (5♣ by West, South defending, seed below) came
+   * back from the live site with TWO moments, both false:
+   *
+   *   trick 4  — played ♠T; sampled engine picked ♠K; double dummy says only
+   *              ♠6 recovers (♠6=1, ♠T=0, ♠K=0)
+   *   trick 10 — played ♥T; sampled engine picked ♣T; double dummy says only
+   *              ♥A/♥K recover (♥A=1, ♥K=1, ♥T=0, ♣T=0)
+   *
+   * Each was charged +100 matchpoints against the 4-table field and each
+   * named a card worth exactly as little as the one actually played — the
+   * player replayed trick 10 three times through "Play From Here" and got
+   * the identical −400 every time, which is what surfaced the bug. Raw-seeded
+   * rather than driven through the engine (the rehearsal.ts precedent): this
+   * is a specific historical position, and re-deriving it by play would be
+   * re-deriving the robots too.
+   */
+  it('a candidate whose sampled pick does not recover the DD loss is excused — the prod board that named a dead card', async () => {
+    const seed = '381622e47ec910dc02b18f66a13d8296';
+    const t = db
+      .prepare(`INSERT INTO tournaments (name, seed, claim_rule) VALUES ('t', ?, 'pessimistic') RETURNING *`)
+      .get(seed) as any;
+    const contract = JSON.stringify({ level: 5, strain: 0, declarer: 3, doubled: false, redoubled: false });
+    const insert = db.prepare(
+      `INSERT INTO boards (tournament_id, user_id, board_no, state, calls, plays, contract, tricks_declarer, score_ns, claimed_at_ply)
+       VALUES (?, ?, 1, 'done', ?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run(
+      t.id,
+      userId,
+      '[0,6,10,13,15,23,0,0,0]',
+      '[13,40,16,14,26,27,37,31,2,7,12,3,0,8,39,9,41,43,48,46,1,4,50,15,30,33,38,28,5,11,19,35,36,34,17,29,21,23,18,6,42,45,49,47,32,24,44,20,51,22,10,25]',
+      contract,
+      11,
+      -400,
+      40,
+    );
+    // the rest of the real field: two tables at −200 and one at −140, which
+    // is what made the counterfactual +50 worth a full 100 matchpoints
+    for (const [i, score] of [-200, -140, -200].entries()) {
+      const uid = (
+        db
+          .prepare(`INSERT INTO users (google_id, name, handle) VALUES (?, ?, ?) RETURNING id`)
+          .get(`module:field126-${i}`, `Field${i}`, `field126-${i}`) as { id: number }
+      ).id;
+      insert.run(t.id, uid, '[]', '[]', contract, score === -140 ? 9 : 11, score, null);
+    }
+
+    const b = game.loadBoard(t, userId, 1, false)!;
+    const view = await analyze.getBoardAnalysis(t, b, false);
+
+    // stage 1 still sees both genuine DD losses — the trace is not in doubt
+    expect(view.ddTricks).not.toBeNull();
+    // ...but neither survives stage 3, because neither recommendation works
+    expect(view.plies).toEqual([]);
+    expect(view.moments).toEqual([]);
+    expect(view.setAside).toBe(0);
+  }, 240_000);
+
   it('defending: only South is ever graded — robot partner North never', async () => {
     const t = makeTournament('hunt-0'); // board 1: E/W declares (see game.test.ts)
     const b = await driveBoard(t, userId, 1, firstLegalCard);

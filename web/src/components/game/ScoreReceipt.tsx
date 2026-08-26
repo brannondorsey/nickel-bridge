@@ -93,7 +93,7 @@ export function ScoreReceipt({
         <div className="receipt-postmark" style={{ '--i': rows } as CSSProperties}>
           <Postmark
             size={112}
-            arcBottom={`TOURNAMENT Nº${tournamentNo(board.tournamentName, board.tournamentId)}`}
+            arcBottom={`TOURNAMENT Nº${tournamentNo(board.tournamentNumber, board.tournamentId)}`}
             line1={stamp === 'TOLL PAID' ? 'TOLL PAID' : 'REFUSED'}
             line2={postmarkDate(Date.now() / 1000)}
           />

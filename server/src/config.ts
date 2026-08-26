@@ -50,6 +50,58 @@ export function parsePublicOrigin(raw: string | undefined): string | null {
 export const PUBLIC_ORIGIN = parsePublicOrigin(process.env.BASE_URL) ?? DEV_ORIGIN;
 
 /**
+ * The host BASE_URL names, or null when BASE_URL configures no origin.
+ *
+ * This is deliberately NOT `new URL(PUBLIC_ORIGIN).host`. PUBLIC_ORIGIN falls
+ * back to the dev origin so tests and an unconfigured local run keep working,
+ * and a fallback is precisely the case where there is no canonical host to
+ * speak of — deriving one from it would tell a preview app with no BASE_URL
+ * that its canonical home is `localhost:3000`, and auth.ts would send every
+ * visitor there.
+ *
+ * What it exists for: this app answers on more than one hostname. Production
+ * is `bridge.brannon.online` but the same machine also serves
+ * `nickel-bridge.fly.dev` directly (Cloudflare fronts the first; the second is
+ * the unproxied origin, and is what `scripts/cloudflare.mjs` compares bytes
+ * against). Anything that mixes a per-host cookie with an origin-derived URL
+ * breaks across that split — see the OAuth entry point in auth.ts.
+ */
+export const CANONICAL_HOST: string | null = canonicalHost(process.env.BASE_URL);
+
+/** The host of the origin `raw` names, or null if it names none. */
+export function canonicalHost(raw: string | undefined): string | null {
+  const origin = parsePublicOrigin(raw);
+  return origin === null ? null : new URL(origin).host;
+}
+
+/**
+ * Whether a request's `Host` header names this deployment's canonical host.
+ *
+ * Two callers, both consequences of the same split: the OAuth entry point
+ * (auth.ts), which bounces to the canonical origin before any state cookie
+ * exists, and the noindex hook (app.ts), which keeps the non-canonical
+ * hostname out of the search index. Two hand-written copies of one compare is
+ * exactly the drift this codebase spends its comments avoiding — and the two
+ * halves getting out of step here is silent in both directions.
+ *
+ * Lowercased because a Host header is case-insensitive while a string compare
+ * is not, and CANONICAL_HOST comes out of `new URL().host`, which is already
+ * normalized. A mixed-case `Host: Bridge.Brannon.Online` is the canonical host
+ * and must be treated as one.
+ *
+ * Returns TRUE when there is no canonical host to compare against — a
+ * deployment with no usable BASE_URL (local dev, a preview that never set one)
+ * has no non-canonical hostname either, so nothing should redirect and nothing
+ * should be noindexed. Both callers phrase their check so that this fails
+ * safe: `if (!isCanonicalHost(...))` does nothing at all when BASE_URL is
+ * absent.
+ */
+export function isCanonicalHost(host: string | undefined): boolean {
+  if (CANONICAL_HOST === null) return true;
+  return host?.toLowerCase() === CANONICAL_HOST;
+}
+
+/**
  * Whether cookies this app sets should carry `Secure`.
  *
  * Note this still derives from configuration rather than from the request that

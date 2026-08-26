@@ -160,7 +160,10 @@ describe('Tournament result', () => {
     renderWithMe(<Tournament />, { me: meFixture });
 
     expect(await screen.findByText('TOLL PAID')).toBeInTheDocument();
-    expect(screen.getByText('TOURNAMENT Nº11')).toBeInTheDocument();
+    // the DISPLAY number (8), never the row id (11) — the fixture keeps them
+    // apart on purpose
+    expect(screen.getByText('TOURNAMENT Nº8')).toBeInTheDocument();
+    expect(screen.queryByText('TOURNAMENT Nº11')).not.toBeInTheDocument();
     expect(screen.getByText('MATCHPOINTS · 2ND OF 3 PLAYERS')).toBeInTheDocument();
     expect(screen.getByText('NICKEL RATING')).toBeInTheDocument();
     expect(screen.getByText('1487')).toBeInTheDocument();

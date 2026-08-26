@@ -67,7 +67,9 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
-                config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE,
+                config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE/
+                CANONICAL_HOST + the isCanonicalHost compare auth.ts's OAuth entry
+                point and app.ts's noindex hook share,
                 plus the boot assertion index.ts calls; lenient at import so tests
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
@@ -77,7 +79,9 @@ server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/
                 rehearsal.ts (createRehearsal/listRehearsals — "Play From Here,"
                 branching a finished board's real play into a live, never-scored
                 board of its own; see "Play From Here" below),
-                tournaments.ts (JIT placement, standings, recomputeElo), stats.ts,
+                tournaments.ts (JIT placement, standings, recomputeElo, plus the rating-drift
+                pair stampCrossingBaseline/eloDrift behind Home's rating tile — the one stored
+                snapshot in the app, see "Home leads with the rating tile" below), stats.ts,
                 compare.ts (the Compare screen's gate arithmetic — full-tilt
                 constants, three error models, verdict classification; a pure
                 function of two PlayerStats, see "Compare and the gate" below),
@@ -162,7 +166,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 arity-agnostic segmented lever (lifted out of Settings.tsx when the
                 Analyze lens switch needed it), and SignInBar — the logged-out
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
-                that resolves which sign-in doors a deployment has, and MedalBar/MedalGlyphs —
+                that resolves which sign-in doors a deployment has, and RatingTile — the
+                NICKEL RATING flip-digit hero Home and the Stats profile SHARE, differing only in
+                what its delta measures and whether it names the period (Home takes the ladder's
+                bare ▲12; both halves open the 'rating-drift' term), and MedalBar/MedalGlyphs —
                 the Home rail and the shared suit-glyph row, see "Medal progress" below)
                 + components/game/
                 (auction, bid box,
@@ -170,6 +177,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 AdjustedReceipt.tsx — the never-tolled twin ScoreReceipt lends its
                 ReceiptRow/caption to, see "Play From Here" below,
                 GlossaryProse.tsx — SuitText + tappable glossary terms,
+                foil.ts + FoilLayer.tsx — Foil Trumps, the holographic plate over the
+                trump suit; one WebGL canvas per card container painting a quad per
+                [data-foil] face, since the pattern is one continuous field across a
+                hand rather than a background on each card — see "Foil trumps" below,
                 SpecimenField.tsx — the "one deal, three crossings" table the tour and
                 the landing page share),
                 src/test/ (fixtures + apiMock pattern),
@@ -738,6 +749,67 @@ own volume — `fly.toml` is shared across all of them, with the app name always
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
 
+**Signing in is one origin's business, and every failure is recoverable.** Google OAuth
+lives in `server/src/auth.ts`, and the shape of it is a direct response to players emailing
+to say sign-in was broken — which, for three separate reasons, it was.
+
+**The app answers on more than one hostname, and the OAuth flow used to straddle them.**
+`redirectUri` is built from `BASE_URL`, so Google always returns a visitor to the canonical
+origin; the `oauth_state` cookie, though, is set by whichever host served `/auth/google`, and
+a cookie is scoped to its host. Production is `bridge.brannon.online` behind Cloudflare, but
+the same machine also serves `nickel-bridge.fly.dev` directly — that origin runs the whole
+app and, since it is production (neither `DEMO` nor `DEV_AUTH`), serves the production
+`robots.txt` with `Allow: /` rather than the throwaway shut-out (that hostname is
+`X-Robots-Tag: noindex`ed now — see "Discoverability" below, which shares this route's
+`isCanonicalHost` compare — but the `robots.txt` bytes deliberately still say `Allow: /`,
+and the reasoning there is worth reading before touching either). So an old link, a bookmark
+predating the custom domain, or anything a crawler surfaced put the state cookie on `.fly.dev`
+and the callback on `bridge.brannon.online`, which carried nothing: sign-in failed **100% of
+the time**, with nothing on screen explaining why. `/auth/google` now bounces to
+`${PUBLIC_ORIGIN}/auth/google` before issuing any state (`CANONICAL_HOST` in `config.ts` —
+null when `BASE_URL` names no origin, which is what keeps a deployment without one from
+redirecting its visitors to `localhost`). Deliberately scoped to that ONE route rather than
+applied as an app-wide canonical redirect: `scripts/cloudflare.mjs --snapshot/--purge`
+compares what the ORIGIN serves at `<app>.fly.dev` before and after a deploy, so redirecting
+that hostname wholesale would have it diffing redirects instead of content — finding every
+URL identical and purging nothing, the exact failure that script's doc comment warns about.
+
+**`oauth_state` holds a LIST of recent states, not one.** A single slot meant the second
+start of a sign-in silently voided the first, and a browser starts twice more often than it
+looks: two tabs, back-then-retry out of Google's account chooser, or an impatient second tap
+while a suspended Fly machine wakes. Whichever leg the visitor actually finished, the other
+had already overwritten the cookie. The values are joined by `.`, which base64url never
+produces, and capped at `OAUTH_STATE_MAX`. The window is `OAUTH_STATE_TTL_S` (30 min, up from
+10): a first-time visitor meets an account chooser, a password manager and usually a second
+factor on another device, and ten minutes did not cover it. The cookie is `Secure` on an https
+deployment — the session cookie beside it always was — which is safe because the edge answers
+plain http with a 301. It is cleared on success, so a spent state cannot authenticate a
+replayed callback, and deliberately NOT cleared on failure, since one stale leg says nothing
+about the others a browser still has in flight.
+
+**Four different failures used to answer `400 {"error":"bad oauth state"}`.** The
+cross-host split above; a visitor who cancelled at Google (`error=access_denied`, so no
+`code` — the old `!code` test read a deliberate choice as a protocol violation); an expired
+state; and a clobbered one. They are told apart now, logged apart (never logging the state
+values themselves — the shape is what makes the cause readable), and none is a dead end:
+`signInFailed` redirects to `/?signin=cancelled|expired|failed`, which `pages/Login.tsx`
+renders as one line above a working PLAY THE TOLL. That pairing is the fix — the old response
+was raw JSON with nothing to press, so a visitor whose only problem was slowness had no way
+to learn that trying again would work. An unrecognised `?signin=` value renders nothing, since
+the param rides in a shareable URL. A callback that can no longer complete but whose visitor
+is **already signed in** (the second of two tabs) just goes to `/`, rather than claiming a
+sign-in expired for someone who is demonstrably through the gate. That check lives inside
+`signInFailed` rather than at its call sites, and deliberately: it started at two of the four
+failure exits and was quietly missing from the other two, so the guarantee written here was
+wider than the code behind it. One gate on the one function every failure leaves through is a
+thing a later branch cannot forget to call. The canonical-host compare lowercases the `Host`
+header for the same class of reason — that header is case-insensitive and a string compare is
+not.
+
+`server/test/oauth.test.ts` drives the whole round trip through `app.inject()` with a cookie
+jar **per hostname** — the headline bug is invisible to any single-host test — and stubs
+Google at `fetch`. Eleven of its thirteen cases fail against the pre-fix code.
+
 **Security headers are set once, in the app, for every response.** `server/src/security.ts`
 holds the table — Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options`,
 `Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` — with a paragraph
@@ -782,6 +854,18 @@ it are decisions rather than defaults:
   back if a genuine subdomain of one of these hosts ever exists. `preload` is absent because the
   preload list is keyed on the registrable domain, and submitting would commit `brannon.online`
   and the ten other hostnames on that shared zone to HTTPS-only with removal taking months.
+
+**The three motion sensors are the one `(self)` in Permissions-Policy**, and the only
+capability this app grants rather than denies. `accelerometer`/`gyroscope`/`magnetometer`
+gate `deviceorientation`, which the Foil Trumps tilt treatment reads
+(`web/src/components/game/foil.ts`); denied — as they were — the events never arrive
+at all: no error, no prompt, nothing in the console, so it presents as the feature being
+broken rather than as a header being wrong. `(self)` is deliberately not `*`: the default
+allowlist for these is already `self`, so writing it out changes nothing a browser does
+and instead states the decision where the next reader of that list will find it, while
+keeping a cross-origin iframe embedded in one of our pages from inheriting them.
+`server/test/security.test.ts` pins both halves; if Foil Trumps is ever cut, move the
+three back to `DENIED` in the same change.
 
 Two smaller boundary guards live nearby and are easy to re-break. `app.ts`'s `boardNoParam`
 screens `:no` with `Number.isInteger`, not just a range: `2.5` is between 1 and 4, and the GET
@@ -1079,12 +1163,31 @@ human card decision: **cost** is the DD trace (`AnalysePlayPBN`, one call for th
 converted to matchpoints by SUBSTITUTING the counterfactual score into the real field rows
 (`boardFieldRows` — never appending; matchpoint averages aren't order-preserving under
 insertion), and **fault** is `scoreCardsSampled` from the player's own seat (k=`ANALYZE_K`,
-seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault (the sampled engine
-would ALSO have played the card, `deficit <= 0`) is DROPPED before the response is built,
+seed `${seed}:analyze:${boardNo}:${ply}`) — high cost with no fault is DROPPED before the
+response is built,
 not shown-but-forgiven: a card nobody could reasonably find from that seat isn't a moment
 just because an omniscient trace prefers something else, and a well-played board comes back
 with an empty ledger rather than a wall of "not your fault" stamps (`ANALYZE_VERSION` bumped
-when this shipped, so every cached analysis recomputes). Stage order is load-bearing: the DD trace is the cheap filter, the
+when this shipped, so every cached analysis recomputes). **"No fault" is TWO tests, and the
+second one is easy to leave out** — `sampleFindability` excuses a candidate when the sampled
+engine would also have played the card (`deficit <= 0`), *and* when nothing the sampled engine
+rated top is DD-optimal at that node. The second is not a refinement of the first: comparing
+the played card against the sampled engine's pick only asks whether the engine DISAGREES, and
+an engine that disagrees while being just as wrong is not evidence of a findable trick. Note
+"rated top" is a TIED SET, not one card off an argmax scan: sampled totals are sums of whole
+tricks over k layouts, so ties are ordinary, and resolving one by `legalCards` order would let
+card ordering decide whether a moment exists at all. The tie is left open for the solve to
+break, so the named card is a card the engine liked *and* one that works.
+Shipped after production tournament id 126 board 1 (5♣ by W) came back with two moments,
+both false — trick 4 charged 100 MP naming ♠K (only ♠6 recovers), trick 10 charged 100 MP
+naming ♣T (only ♥A/♥K recover) — and the player's three "Play From Here" rehearsals of the
+trick-10 advice all returned the identical −400, which is what surfaced it. Costs one extra
+true-deal `solveFutureTricks` per candidate that clears the first test, ordered after it so
+the free check runs first. The payoff beyond fairness: a surviving verdict's `bestCard` is
+now guaranteed to recover the loss, so the play lens's "the engine, from your seat, plays X"
+and the ledger's "worth N% instead of M%" describe the same reachable outcome — before, the
+named card and the promised percentage came from two different engines and could disagree.
+`server/test/analyze.test.ts` pins that exact board, raw-seeded. Stage order is load-bearing: the DD trace is the cheap filter, the
 sampled verdict the expensive one, and it only runs on candidates over `MOMENT_FLOOR`; par +
 counterfactual auctions (`CalcDDTablePBN`, the slowest DDS call) run only when `?par=1` asks.
 Computed on FIRST OPEN (never on completion), cached in `board_analyses` keyed by board id with
@@ -1112,8 +1215,14 @@ contract). So when `computePar`'s counterfactual auction lands on a contract equ
 your actual play of it — with nothing a different bid could have changed; attributing that
 gap to the bid was a false accusation, not a finding. `computePar` now leaves `cf` null in
 that case, same as when the robot's own preferred call was the one played. This bumped
-`ANALYZE_VERSION` (6): a cached analysis computed before it shipped could carry a
-same-contract bid moment that should never have existed.
+`ANALYZE_VERSION`: a cached analysis computed before it shipped could carry a
+same-contract bid moment that should never have existed. It landed as 6 and went to **7** —
+it and the stage-3 excusal above were written on separate branches and each bumped to 6, so
+merging them had to move past both: a shared version only means anything if it changes
+whenever the output can, and at 6 a cache written by either change alone would have looked
+current to code that is now stricter than it. It is **8** today: the tie-break above changes
+which card a surviving verdict names, and whether a tied candidate survives at all, so it
+falls under the same rule.
 
 The served `momentFloor`
 still backs one honest caption for the residual case backfillDriftedPlies can't close (Analyze.tsx's
@@ -1216,6 +1325,26 @@ excusal was already doing the "don't nag on noise" work well inside that flat ba
 was no coverage or meaningful compute reason to sit above it. `MOMENT_FLOOR` is now 5 — the
 cleanest round number inside the flat 2-5 band; re-run both scripts and record a fresh date + n
 if the population's field sizes or mistake rate drift.
+
+**Re-measured 2026-08-20**, once stage 3 gained its second excusal (nothing the engine rated
+top recovers the loss — see "Analyze" above). `calibrate_moment_floor.mjs` now sweeps BOTH rules
+side by side off one `scoreCardsSampled` draw per candidate, so the gap between them is the rule
+and not sampling noise; the old column is kept as a baseline, never as something production can
+select. n=1579 boards (a larger population than the 1237 above, so these are a fresh sample
+rather than a diff): 26 passed out and 606 carried no real DD-loss candidate, leaving 947 boards
+and 1649 candidates for stage 3, which excused 363 (22.0%) because the engine would have played
+the card itself, 93 (5.6%) because nothing it rated top recovers any of the loss and 9 (0.5%)
+because what it rated top recovers only part of one, leaving 1184 (71.8%) genuinely chargeable.
+**That 22.0% against the earlier 21.9% is the cross-check** — the reimplementation is still
+faithful, so the 6.2% is a real second population rather than the first re-counted.
+
+**The number to quote is 8.2% fewer moments.** At the shipped floor the old rule showed 1003
+moments and this one shows 921 — 82 retired. Per board, 639 of the 947 graded boards (67.5%) had
+at least one and 594 (62.7%) do now, so 45 boards lose every moment they had and come back clean;
+across all 1579 that is 37.6% of boards with something to say, down from 40.5%. Boards-with-a-
+moment understates the change, since a board keeps its row when one of its three moments is
+retired — count the moments themselves. The floor did not move and should not: counts are
+identical at floors 2-5 under both rules, the same flat band as before.
 
 **Play From Here lets a player take the cards from any point in a finished board's real
 play and see a genuine outcome instead of Analyze's caption.** Two entry points, both on
@@ -1370,9 +1499,27 @@ Bundled, the row and its number commit together or not at all, and "create a cro
 no spelling that skips the numbering. A raw INSERT elsewhere could still bypass it; an
 `AFTER INSERT` trigger is what would make that impossible, and is deliberately not done —
 this codebase has no triggers and an invisible rewrite of a row's name is a poor thing to
-discover. `web/src/format.ts`'s `tournamentNo()` still parses the number back out of `name`
-and needed no change; sending `number` over the API and retiring both client-side regexes is
-the natural follow-up, not done here.
+discover.
+
+**The API sends `number`, and no client re-derives it.** `boardView` (as `tournamentNumber`),
+both `/api/tournaments` routes and the activity feed's crossing events all carry the column,
+and `web/src/format.ts`'s `tournamentNo(number, id)` is the ONE place deciding how a crossing
+is named. It used to regex `#(\d+)` back out of `name`, with a second copy of that regex in
+`pages/activityFeed.ts` — wrong in the direction that fails silently, since any name without a
+`#` fell through to the raw id. Not hypothetical: a rehearsal is named "Rehearsal — Board 1,
+from Trick 10", and `pages/Analyze.tsx`'s header skipped the helper entirely to interpolate the
+route param, so production's crossing **#105 announced itself as "CROSSING 126"** — its row id.
+The id fallback survives only for rows that genuinely carry no number (rehearsal and exhibit
+kinds are NULL by design); a standard crossing reaching it is a `createCrossing` bug, not a
+display case.
+
+A rehearsal has no number of its own, so `boardView`'s `rehearsal` field carries `originNumber`
+— the ORIGIN crossing's display number, since that is the crossing being rehearsed — and
+`BoardHead` renders `REHEARSAL — Crossing N, Board M, from Trick T` — the branch point stays in
+the header, since which trick you took the cards at is the subject of the screen. The web
+fixtures deliberately give that origin id 20 and number 18, so a return to the id cannot pass
+unnoticed, and the `TournamentInfo` fixtures do the same (id 12/11 wearing numbers 9/8) so the
+lobby and tournament surfaces can't pass on the id fallback either.
 
 **`MAX(number) + 1`, never a `COUNT` of the rows before it — this is the load-bearing
 choice.** A count is a re-derivation, so it is stable only while no earlier standard row
@@ -1484,6 +1631,22 @@ live reveals a genuine tournament-summary screen instead of just one board's rec
 `richProfileId` (a populated bot's profile, paired with it for contrast); `collisionHandle`
 (the New Crosser's own handle) prefills the handle-picker exhibit so its "already taken"
 error is guaranteed to fire on the first submit.
+One exhibit sets an ACCOUNT preference rather than board state, and it is the only one:
+`foil-trumps` (`foilTrumps: true`) switches the Inspector's "Foil trumps" on before the
+replay runs, because the thing it demonstrates is not a property of the board at all and
+the preference ships off — without it the tester lands on ordinary cards. It turns the
+column ON only: there is no reliable "left the exhibit" moment to turn it back off at, and
+an exhibit that silently REVERTED a setting the tester chose in the settings gate would be
+worse than one that turns a setting on and says so, which its description does. Its recipe
+is deliberately `partner-declares`' own verified triple (the `stale-board` precedent —
+there was no new position to mine): that board is flipped, so the human's fan and dummy's
+are both on screen with nine trumps between them, which is the treatment at its widest.
+Note the knock-on for the gallery: `Scenarios.tsx`'s `enter()` now **awaits**
+`refresh()` before navigating, since `me` was loaded at app boot and `Board.tsx` would
+otherwise mount against the preference from before the click — the foil would appear only
+after a reload, which reads as the exhibit not working. `MeContext`'s `refresh` returns its
+promise for exactly that; every other caller still fires and forgets.
+
 One exhibit overrides its tournament's claim rule, and it is the only one: `claim-on-call`
 (`claimRule: 'optimistic'`) shows the claim ticket going up on a CALL, before a card is
 played. That state is effectively unreachable under the shipped gate — a scan of 522 call
@@ -1686,6 +1849,64 @@ too, for players who finished ahead of you. Reading it costs `idx_elo_history_to
 tournament-first sibling of `idx_elo_history_user`; see the pair's note in `db.ts` for why one
 index cannot serve both directions.
 
+**Home leads with the rating tile, and its delta is the one thing this data model cannot
+subtract for.** A player a crossing has rated arrives at Home on their NICKEL RATING
+(`ds/RatingTile.tsx`, lifted out of the Stats hero so the two screens draw the same tile rather
+than two that resemble each other) with a delta beside it: how far the rating has moved
+since they last finished a crossing. On Home that delta is the ladder's own movement glyph —
+`▲12` / `▼12`, `Leaderboard.tsx`'s `Movement` idiom, glyph AND colour so it survives a flattened
+palette — while Stats keeps naming its period ("+34 THIS MONTH"). `deltaLabel` is what picks
+between the two shapes, and the split is about reading distance: a profile figure is studied,
+Home's is glanced at, and naming the period there cost two lines to say something the glossary
+says better. Which is why BOTH the label and the arrow open the `rating-drift` term
+(`explainTerm`) — a door on the label alone would put the explanation beside the one figure
+that doesn't need it. That term is the second non-bridge entry in the ledger, after the First
+crossing easter egg; `glossary.test.ts` pins the count and the Glossary page derives its
+"N CORE TERMS" from `TERMS.length` rather than a literal. The greeting still stands for a player no crossing has
+rated yet — `users.elo` reads `ELO_INITIAL` until one does, and 1200 presented as a hero figure
+claims something nobody earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards`
+or the medal rail's tournament count: a crossing only rates you once a second human finishes the
+same field, so a player can have several behind them and still be carrying 1200.
+
+**The delta needed a stored snapshot, and reading why is the whole point of this section.**
+Every other Elo surface here is recompute-on-read, and that model has no memory of what a rating
+used to say. When a late finisher joins a crossing you already played, the points that lands on
+you arrive as a RESTATEMENT of that old crossing's delta, never as new points — so
+`leaderboardMovement`'s "rating then = `users.elo` minus the points banked since the cutoff",
+exact for a clock window, is identically **zero** for this one: nothing is banked after your last
+crossing, because your last crossing is the last thing that banked anything. So
+`users.elo_at_last_crossing` is written at the moment it is true (`stampCrossingBaseline` in
+`tournaments.ts`, called by `game.ts`'s `settleCompletedBoard` right after `recomputeElo` — the
+order is load-bearing, or a player's own swing reads as drift on the one screen built to exclude
+it), and `eloDrift()` is the subtraction. `/api/me` carries both fields, on the route that
+already pays for medals' two counts and already refreshes when a tournament's last board lands.
+
+Three consequences worth having in hand before touching it. **A crossing that rated nobody still
+re-anchors** — a field of one human never reaches `recomputeElo`'s `complete.length < 2` gate,
+and when a second human finishes it later the points it finally hands out show up as drift, which
+is exactly the case this figure exists to report. **Your own swing is never drift**: it is folded
+into the baseline in the same breath, and it is already reported on that crossing's own result
+screen. And **zero renders as nothing at all** on Home — it is the resting state of a screen
+opened daily, and an arrow reading zero is a claim about nothing — where Stats keeps drawing
+"+0 THIS MONTH", a real finding about a month of play; `RatingTile` renders any non-null delta
+and leaves that editorial call to its two callers.
+
+The alternative considered and not taken was a second ratings replay restricted to
+`boards.updated_at <= T`, which needs no column and works retroactively. It was rejected on cost
+and blast radius: per-tournament queries plus matchpointing on every `/api/me` — i.e. every page
+load, on a machine that suspends — and a second replay implementation that must never drift from
+`recomputeElo`'s. The column's backfill is `elo` rather than NULL, so drift starts accruing for
+existing accounts immediately instead of waiting out their next crossing; the one-time cost is
+that an account whose last crossing predates the migration is anchored on "when this shipped",
+which reads as 0 (and 0 draws nothing) until they next finish one. `server/test/elo-drift.test.ts`
+pins the sequence, including the late-finisher case that motivates it.
+
+Drift is also the one state on Home a tester cannot produce for themselves — it needs somebody
+else to finish your old field AFTER you did, and the demo seeder only runs at boot and reset — so
+demo mode carries an exhibit for it (`POST /api/demo/drift` + the FRONT DOOR gallery row). Like
+`/api/demo/desync` it fabricates nothing: it walks a seeded bot through the caller's last finished
+crossing via the ordinary `playThrough`, and the re-matchpointed field moves the rating for real.
+
 **Replay order is not play order, and every surface that draws a timeline has to convert.**
 Tournaments never close, so a player can be placed into a months-old tournament or resume one
 they abandoned in the spring; its id is low but they finished it today. Two consequences, and
@@ -1834,9 +2055,16 @@ writes), so without an explicit trigger the Home rail would show a stale bar/med
 rest of the visit — including at the exact moment a medal is earned, the one moment this
 widget most wants to be right. So the same effect that flips on the toll receipt
 (`Board.tsx`'s `showReceipt` effect, keyed on the board's `state` going live → `'done'`)
-also calls `refresh()` when the board that just finished was the tournament's **last**
-one (`board.boardNo === board.totalBoards`) — an ordinary mid-tournament board finishing
-doesn't touch account state and skips it.
+also calls `refresh()` on every completed real board. It used to fire only on the
+tournament's **last** one (`board.boardNo === board.totalBoards`), on the theory that an
+ordinary mid-tournament board touches no account state. It does: `/api/me`'s `boards` count
+is exactly what smooths this bar board by board, so the rail sat frozen mid-crossing for the
+rest of the session. And as a stand-in for "my crossing just completed" — which the medal and
+Home's rating tile both need — that test only holds while boards are played IN ORDER: finish
+board 4 by URL first and the crossing completes on board 3, where it never fired. `boardView`
+carries no done-count to test honestly, so the gate is now just "a real board finished"
+(rehearsals still excluded — not a real tournament board). Four cheap `/api/me` per crossing,
+on a request that has just run a full Elo replay anyway.
 
 **Two call sites, two shapes.** `/api/me`'s `medals` field
 (`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,
@@ -2320,11 +2548,30 @@ already settled inside the first trick — which is exactly why it went unnotice
   the response landed, same as `auto` (actually faster, since even `auto`'s timed hold is
   skipped under reduced motion) — which directly contradicts the setting's own purpose for
   exactly the population likeliest to want a manual, unhurried pause.
-- **Trump placement** (`users.trump_placement`, TEXT `'suit'`/`'left'`, default `'suit'`)
-  decides whether a hand always reads ♠♥♦♣ or promotes the trump suit's block to the
-  front once the contract is settled. Repeatedly requested by players, and a genuine
+- **Trump placement** (`users.trump_placement`, TEXT `'left'`/`'suit'`, default `'left'`)
+  decides whether a hand promotes the trump suit's block to the front once the contract
+  is settled or always reads ♠♥♦♣. Repeatedly requested by players, and a genuine
   playing aid rather than decoration — the suit you are counting is the one your eye
-  should land on first. `api.ts`'s `suitDisplayOrder`/`displaySort`/`trumpForDisplay`
+  should land on first, which is why it is the DEFAULT rather than an opt-in.
+  It shipped (#180) defaulting to `'suit'`, preserving prior behaviour like every
+  other row here; a second migration in `db.ts` then made `'left'` the default AND
+  moved existing accounts onto it, since a default nobody holds is a default for
+  future signups only. That migration is the one place in `db.ts` that discards data
+  and the only one whose guard is the schema TEXT rather than a missing column:
+  SQLite cannot re-default a column in place, so it DROPs and re-ADDs it (every
+  existing row re-created at the new default, and every future `INSERT` too, in one
+  transaction) and reads the recorded default back out of `sqlite_master` to know it
+  has already run — unguarded it would re-flip the column on every boot and no player
+  could ever hold `'suit'` again. It cannot tell an account that CHOSE ♠♥♦♣ from one
+  that never opened the settings gate, so it overrides both: a deliberate trade, taken
+  because the column was a week old and the setting is one tap to put back.
+  `server/test/trump-placement-default.test.ts` pins both halves. Note the client reads
+  the preference as `=== 'suit' ? 'suit' : 'left'` — an absent value now falls to
+  `'left'`, the opposite way round from every switch that preserves prior behaviour —
+  and that `PlayPhase`'s own `trumpPlacement` PROP still defaults to `'suit'`, because
+  its one caller that omits it is the tour, which reads no preference at all (the
+  `doubleTapBid` precedent) and teaches on a plain ♠♥♦♣ hand.
+  `api.ts`'s `suitDisplayOrder`/`displaySort`/`trumpForDisplay`
   are the whole of the ordering, in one place, because the fan, a partner's dummy fan,
   the E/W `DummyRail` and Analyze's suit lines all have to agree: a hand that reads
   trump-left in the fan and ♠♥♦♣ in the rail beside it is worse than either alone. The
@@ -2364,12 +2611,200 @@ already settled inside the first trick — which is exactly why it went unnotice
   staged snapshots already enforce by dropping `legalCards`; the Draw needs its own guard
   because the case they do not cover is the player being on LEAD, where there are no robot
   cards to stage and the fan arrives live with the trumps still travelling.
+- **Foil trumps** (`users.foil_trumps`, default **OFF**) gives the trump suit a
+  holographic plate — in your hand, in dummy, on the table and in Analyze's replay.
+  Another row that does not preserve prior behaviour by defaulting on, and the reason is
+  its own: `double_tap_bid` defaults off because the shortcut was misfiring and
+  `trump_placement` re-defaults because players asked for the other placement, where this
+  one simply had no prior behaviour to preserve — and a decorative treatment nobody asked
+  for is not something to switch on for every account at once. An INTEGER boolean rather than the TEXT enums above, deliberately —
+  those name a MODE with plausible third values, where this is a yes/no; which foil, at
+  what strength, in which palette are settled constants in `foil.ts`, not choices this
+  column holds open. Purely a client treatment: the server never reads the column, and
+  nothing about the deal, the legal cards, scoring or robot play depends on it, so two
+  players on the same board with opposite settings still face identical robots. See
+  "Foil trumps" below for how it is drawn. It is also the ONE row on this panel whose
+  `onChange` does something besides write the preference: switching it ON calls
+  `requestFoilTilt()`, because iOS grants the motion sensors only from a user gesture
+  and this tap is both a real one and the moment the player has just asked for the
+  effect. A refusal is never surfaced — the foil drifts on its own clock without a
+  sensor.
 - **Suit colors** (`nb:suitPalette`, default STANDARD) is the settings-gate row for the
   colorblind palette — see "Night mode" above for the full token-swap story. The one thing
   worth knowing here specifically: it is NOT in `AccountPrefs`/`POST /api/me/prefs` at all,
   unlike the bullets above it — its `onChange` is the same synchronous set-state/store/apply
   triple Appearance uses, with no server round trip, no optimistic revert, and no
   `prefError` path to wire up.
+
+**Foil trumps is one continuous field, not an effect per card, and that decides its
+whole shape.** `web/src/components/game/foil.ts` is a Balatro-style ruled diffraction
+grating ("the blade") ported from a design concept board (PR #192 — every dial as a live
+slider, a gallery of sweeps and a sensor readout, none of which belong in the app bundle;
+the board itself was a throwaway design tool, not shipped, see it in git history) with
+the settings the owner landed on baked in as constants — weight 0.90, count 0.15, ambient
+0.15, light size 120, duotone by day and the full spectrum at night, day carrying more
+intensity than night because multiply spends it differently than screen does. The
+duotone's own lightness and saturation are day-only dials (the branch is never taken at
+night), and were raised once after shipping — the first pass read as a dusty lavender
+rather than as foil, so the tint went lighter and more saturated together, which under
+multiply means a lighter card carrying more colour.
+
+At the shipped line count a single rule spans ~440px — wider than a whole hand — so the
+pattern has to be continuous ACROSS the fan to read as one sheet of foil. That rules out a
+per-card CSS gradient, which would restart at every card, and is why this is one canvas
+per card container (`FoilLayer`, a plain last child of `.handfan`/`.trick`) painting a quad
+per `[data-foil]` face rather than a background on each `.pcard`. `PlayingCard` marks the
+faces; the layer finds them itself, so the two halves never have to agree twice about
+which suit is trumps. A context per host is affordable here in a way it was not on the
+concept board — that page has ~130 hosts and had to render offscreen and blit against a
+browser limit of roughly 16 live contexts, where a board carries at most three.
+
+Four details are load-bearing:
+
+- **The blend mode is what protects the ink.** On day stock the layer multiplies, which
+  cannot lighten: the card takes the foil colour exactly while the near-black rank and pip
+  come through untouched, so the plate runs edge to edge UNDER the glyphs with nothing to
+  cut around (board A knocked a box out around the corner index, and you could see it).
+  Night is the opposite problem and screens onto the dark card. The GL clear colour follows
+  the stock for the same reason — white is multiply's no-op, black is screen's — or the
+  gaps between cards would tint.
+- **...which means the blend and the shader must agree, and that is the one thing easy to
+  get wrong.** The concept board shipped a version where CSS decided "night" from
+  `prefers-color-scheme` while the shader decided it from the board's own lever, and on a
+  phone in OS dark mode with the lever on DAY they disagreed: the day image, built around
+  white, was SCREENED, and since screen cannot darken, the card, the pips and the rank all
+  blew out to near-white together. It presented as the shader being wrong for light and it
+  was one selector. So neither half decides here. `--foil-stock` is a token declared beside
+  every other night override in `style.css` (add it to any block that overrides
+  `--cardface`), and BOTH the canvas's `mix-blend-mode` and the shader's `u_night` are read
+  from the cascade's answer for it. They cannot disagree, whatever combination of
+  `data-theme` and OS preference produced it. It is re-read on a timer rather than
+  subscribed to, because there are four ways it can change — the settings lever, App.tsx's
+  adaptive-schedule tick, an OS appearance change, and a `system` preference meeting either
+  of the last two — and a periodic read is correct for all of them plus any fifth.
+- **A card's quad is clipped to the part of it that is actually VISIBLE, and that
+  region is an L rather than a column.** Fan cards overlap and stacking is document
+  order, so the next card wins — measured with `elementFromPoint`, because it is easy
+  to assume otherwise: lifting a selected card does NOT raise it above its right-hand
+  neighbour, it exposes the strip ABOVE that neighbour's top edge. Clipping in x alone
+  foiled the left sliver and left that strip bare; dropping the clip for lifted cards
+  painted foil straight over the neighbour's face. A pixel is hidden only when it is
+  both past the neighbour's left edge AND below its top.
+- **The foil is printed ON the card, so the pattern is sampled where the card
+  LIVES, not where it has been moved to.** `u_shift` is however far a transform has
+  carried a card from its layout position, taken back off before the sheet is sampled.
+  Without it, selecting a card slid it 14px through a grating whose rules are ~440px
+  apart — enough to take the line term from 1 to 0 and drop the foil off that one card
+  while its neighbours kept theirs, which reads as the sheet tearing rather than as a card
+  being picked up. It covers the Draw's slide for free.
+- **...and the sheet is one PAGE-space field, not one per layer.** Each canvas used to
+  count from its own corner, which quietly made one sheet into three: the same card came
+  up gold in the hand and blue on the table, because the fan's canvas and the trick's
+  start at different places. `u_origin` adds each layer's own page offset, so a card's
+  patch depends only on where it is on the page. The LAMP stays per container, though
+  (`setSheet`) — every value on board B was chosen against a lamp over the hand, and one
+  light over the whole page would leave the fan, which sits at the bottom of the screen,
+  mostly at ambient. Only the pattern is shared.
+- **A card in flight holds still, anchored to where it is GOING.** Letting the clone
+  travel through the sheet was tried and measured: over one glide the patch swept green →
+  cyan → blue. The rules are ~440px apart and a card crosses ~200px, so "smoothly
+  continuous" is still a card visibly changing colour in mid air, which is what the
+  complaint was. Two things cannot both be true — that the hand reads as one sheet (a
+  card's patch depends on where it sits, so neighbours line up) and that a card's patch
+  never changes as it is played (the patch belongs to the card). The hand is the whole
+  look, so the sheet wins, and something has to change once; anchoring to the destination
+  spends it at the moment of the tap, when the card is leaving the fan anyway, and leaves
+  the glide and the landing identical. Three parts, all of them load-bearing and each one
+  the difference between "identical" and "nearly":
+  - **The anchor is the destination's LAYOUT point, not the rect it is drawn at**
+    (`foilAnchor`). A trick slot is centred with `transform: translate(-50%)`, and
+    `u_shift` takes that back off like any other transform — so a trick card's foil is
+    sampled up to half a slot from where the card appears (measured: 21px in x for N/S,
+    40px in y for E/W). Anchoring to the drawn rect put the last frame of the glide 40px
+    along the sheet from the card replacing it, which is exactly the snap this exists to
+    remove. (That centring also means the four cards of a trick sit on patches pulled
+    apart by those same amounts — under a tenth of a rule period, a slight difference in
+    tint between seats at most, and left alone: the fan's lift is a transform on an
+    ancestor too, and stripping it is the whole point there.)
+  - **The clone borrows the lamp of the layer it is going to** (`lampFor`), since the
+    lamp is per container. Lit by the viewport-wide flight layer's own centre instead, the
+    hue matched and the brightness still stepped on landing.
+  - **A scaled clone samples at 1:1** (`u_scale`). A fan card is a quarter wider than a
+    table slot and the glide scales it down, so a quad sampled at its drawn size would
+    zoom the pattern with it. `u_scale` is 1 for every laid-out card, where the shader
+    reduces to what it was.
+- **The flight clones need their own layer, and it is the only one not inside a card
+  container.** `TrickArea` animates a `position: fixed` clone on `document.body` between
+  the fan and the table, so nothing scoped to a host can reach it and a trump simply lost
+  its foil for the length of the glide — exactly when it is most looked at. The flight
+  layer is fixed like what it paints, so the two cannot desync the way a fixed blend layer
+  over SCROLLING content does. It is hidden by **`visibility`**, never `display`: a
+  `display: none` canvas has no box, so its own `getBoundingClientRect` comes back zeroed,
+  the zero-size guard bails, and it can never make itself visible again — hidden forever,
+  in silence. `collectSweep`'s clones are built from scratch rather than cloned, so
+  `makeCardEl` has to be told which are trumps — and, since the card element is already
+  gone by the time that layout effect runs, its anchor comes from the slot the card
+  filled rather than from the card.
+- **A card that cannot be played eases off, on night stock only.** `style.css` dims an
+  illegal card by dropping its rank and pip to 0.4 opacity and never touching the face —
+  which the foil then has to answer for, because the layer is a sibling and does not dim
+  with them. By day it does not need to: multiply cannot lighten, so the ink still darkens
+  whatever the plate put down. At night the plate SCREENS, so a full-strength patch under
+  a 40%-opacity light glyph leaves nothing to read — the card goes bright and its value
+  disappears, which is what a player reported for a hand of unplayable trumps. `u_dim`
+  brings the plate down with the ink (`DIM_NIGHT`, 0.45: enough left that the card still
+  reads as a trump). The join is `.pcard[data-foil]` also carrying `.dimmed`, so renaming
+  either class silently returns the card to being unreadable — `foil.test.tsx` guards it.
+- **Nothing moves on its own.** The phase was once advanced by a clock so a device with no
+  sensors still had something to look at; on a real phone that read as the foil crawling by
+  itself, and a card sitting on the table is not moving. The tilt is now the only thing
+  that moves the pattern, and a board with no sensor holds still.
+- **Measure against the CANVAS's box, never the host's.** The layer overhangs by
+  `--foil-bleed` (a trick card is taller than its grid row and spills past the box; a layer
+  pinned to `inset: 0` leaves its foot bare), so the two boxes differ by 32px in each axis.
+  Using the host's size for `u_res` while rasterising into the larger canvas shifts every
+  quad up and left by the bleed and stretches it — the foil lands beside its cards rather
+  than on them, which is exactly what shipped in the first draft. Relatedly, the width and
+  height are spelled out in CSS rather than left to opposing offsets: a `<canvas>` is a
+  REPLACED element, so `inset: -16px` with `width: auto` sits at its intrinsic 300×150 and
+  silently paints almost nothing.
+- **Tilt is the enhancement, not the feature.** Device orientation moves the grain's angle
+  and phase — with curvature gone every card shares one normal, so tilting cannot light one
+  card more than its neighbour and brightness is the wrong thing to hand a sensor. The
+  reading is filtered (a 420ms time constant, alpha derived per frame from real elapsed
+  time) AND rate-limited to 0.6 of the range per second, and both are needed: a time
+  constant bounds LAG, not SPEED, so the first frame of a full-sweep target still moves ~4%
+  of it, which at 60Hz is a shine crossing the hand in a fifth of a second. **How much of
+  the reading is spent at all is one dial, `TILT_GAIN`** — "less motion" is a single
+  judgement about the whole effect, and scaling the reading scales the grain's rotation,
+  the band's slide and the hue shift together, leaving the relationship between them (the
+  part tuned on board B) alone. It came down a fifth, to 0.64, on a play report that the
+  shine moved too far for the wrist; `TILT_MAX_RATE` came down the same fifth with it,
+  since a cap in normalised units would otherwise cross the now-shorter range faster and
+  hand back the calm the shorter range buys. Without a
+  sensor the pattern simply holds still — nothing looks broken because a still card having
+  a still shine is what a card does. **Two events are listened for, not one**:
+  `deviceorientation` everywhere it exists, and `deviceorientationabsolute`, which some
+  Android builds populate INSTEAD — that is the case `magnetometer` is granted for in
+  `security.ts`'s `SELF_ONLY`, and a device firing only the sibling would otherwise hold
+  the permission while the pattern never moved. Both concept boards listen for both; the
+  port to the app dropped one and it had to be put back. The pair is detached again when
+  the last foiled surface unmounts, or the browser keeps sampling motion hardware for the
+  rest of the tab's life — on Settings, the ladder, everywhere — once tilt has ever
+  attached once. This matters because iOS grants the sensors only from
+  a user gesture and does not persist the grant across page loads. The ask therefore lives on the settings lever, and a player who
+  has already said yes once (`nb:foilTilt`) gets it re-made silently on their first tap of
+  the session. Under `prefers-reduced-motion` the clock and the tilt freeze but the layer
+  keeps drawing: the foil is a texture, and asking for less movement is not asking for a
+  plain card — the quads still have to follow their cards as the hand is played. That is
+  also why the rAF loop runs on a board where nothing is happening: it is tracking
+  geometry, not animating a pattern.
+
+`Tour.tsx` reads no preference at all, the `doubleTapBid`/`trump_placement` precedent. A
+browser with no WebGL gets an unstyled board rather than an error, and the context is
+feature-detected (`typeof WebGLRenderingContext`) before it is asked for, because
+`getContext('webgl')` under jsdom is not a quiet null — it reports on the virtual console,
+which would print a stack per canvas in every unit test that renders a foiled hand.
 
 **The glossary is static client data — no server, no API.** `web/src/glossary/terms.ts`
 holds the ~124 curated core terms (slug, final definition copy, the brief's seven themes,
@@ -2548,6 +2983,42 @@ it emits. See "keeping it that way" at the end of this section.
   to disallow-all *and* adds `X-Robots-Tag: noindex, nofollow` to every response — the
   header is the one that matters, since a preview link posted in a PR is inbound-link
   enough to get a URL indexed without ever being fetched.
+- **So do a real deployment's NON-CANONICAL hostnames, and that is a separate check.**
+  Production answers on two names: `bridge.brannon.online` (canonical, fronted by
+  Cloudflare) and `nickel-bridge.fly.dev`, the unproxied Fly origin `scripts/cloudflare.mjs`
+  compares bytes against. The second is not a throwaway anything — it is the whole
+  production app, with neither flag set — so it served the production `robots.txt`
+  (`Allow: /`, sitemap and all) and carried no noindex header: a complete, fully indexable
+  duplicate of the real site, competing with it for the same queries, and the copy search
+  picks is not necessarily the one anybody links to. An old bookmark predating the custom
+  domain, or any crawler that ever saw that hostname, is enough to get it in — the same
+  exposure that broke sign-in for everyone who arrived that way (see "The app answers on
+  more than one hostname" above). `app.ts` now marks any response whose `Host` isn't
+  `CANONICAL_HOST`. Two things about the shape:
+  - **It is a per-request test inside the hook, not a boot-time `if` around it**, unlike
+    the throwaway case directly above. A whole deployment either is throwaway or isn't; one
+    process serves both of these hostnames, so only the request knows. `config.ts` exports
+    the compare as `isCanonicalHost()` and `auth.ts`'s OAuth entry point uses the same one
+    — two hand-written copies of one lowercased `Host` test is the drift this codebase
+    spends its comments avoiding, and it is silent in both directions (miss the lowercasing
+    and a capitalised `Host` noindexes the real site; miss the null case and every local
+    `npm run dev` noindexes itself). It returns TRUE when `BASE_URL` names no origin, so a
+    deployment with no canonical host marks nothing.
+  - **It is a header and NOT a `robots.txt` change, deliberately.** Serving a disallow-all
+    `robots.txt` on the fly.dev host is the tempting other half, and it would break the edge
+    deploy pipeline in a way that stays silent for up to 30 days. `--snapshot` (before every
+    deploy) and `--purge --since` (after) hash what `<app>.fly.dev` serves for a sample of
+    URLs — `/robots.txt` among them — and purge Cloudflare's cache for whatever moved. Pin
+    that host's `robots.txt` to a constant and a genuine `SITE_ROUTES` change would alter the
+    CANONICAL host's `robots.txt` while leaving the sampled bytes identical: the comparison
+    finds nothing, purges nothing, and the edge keeps serving a stale `robots.txt` for the
+    full TTL. So `robotsTxt()` and its `throwaway` flag stay exactly as they are, and
+    `server/test/canonical-host.test.ts` pins the two hosts' bodies as byte-identical.
+    Response headers are not part of that hash, which is what makes the header-only fix
+    safe — and the header is the stronger half anyway, for the same reason it is on a
+    preview: `robots.txt` only asks a crawler not to FETCH, while `noindex` is what keeps a
+    URL out of the index, and a URL can be indexed from inbound links without ever being
+    fetched.
 
 Two things to keep in mind when editing. `web/index.html` must keep its `seo:start`/
 `seo:end` markers and its `<div id="root"></div>` exactly as they are — the prerender

@@ -7,10 +7,11 @@ import { Button } from '../components/ds/Button';
 import { Loading } from '../components/ds/Loading';
 import { MedalBar } from '../components/ds/MedalBar';
 import { PerforatedPanel } from '../components/ds/PerforatedPanel';
+import { RatingTile } from '../components/ds/RatingTile';
 import { TicketStub } from '../components/ds/TicketStub';
 import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 
-const tourneyNo = (t: TournamentInfo) => tournamentNo(t.name, t.id);
+const tourneyNo = (t: TournamentInfo) => tournamentNo(t.number, t.id);
 
 /**
  * Home ("the bridge is open"): one live crossing at a time. The current
@@ -44,6 +45,10 @@ export default function Lobby() {
     }
   };
 
+  // Non-null exactly when there is a rating worth leading with — see the note
+  // beside the tile below for why `ratedTournaments` is the test.
+  const rated = me?.user && me.user.ratedTournaments > 0 ? me.user : null;
+
   const current = tournaments?.find((t) => (t.myDone ?? 0) < 4) ?? null;
   const finished = (tournaments ?? [])
     .filter((t) => t.myDone === 4)
@@ -59,12 +64,44 @@ export default function Lobby() {
         )
       ) : (
         <>
-          <div className="home-greeting">
-            <div className="home-hello">
-              Good {timeGreeting(new Date().getHours())}, {me?.user?.handle}
+          {/* The front door leads with the rating once there is one to lead
+              with, and with the greeting before that. `ratedTournaments` is
+              the test rather than `boards` or the medal rail's tournament
+              count: a crossing only rates you once a second human finishes the
+              same field, so a player can have several crossings behind them
+              and still be carrying ELO_INITIAL — and 1200 presented as a hero
+              figure claims an achievement that hasn't happened. The greeting
+              is the honest thing to show until it has.
+
+              Note what the tile does NOT do for the not-yet-ranked: it makes
+              no promise about the ladder. The medal rail immediately below
+              already says "Complete N more tournaments to join the rankings",
+              and a second copy of that sentence up here is exactly the
+              redundancy that retired the old sealed "TOURNEY ?" hint from this
+              screen. */}
+          {rated ? (
+            <div className="home-rating">
+              <RatingTile
+                elo={rated.elo}
+                // Zero drift is the resting state of a screen opened daily, so
+                // it says nothing at all rather than drawing an arrow that
+                // claims nothing moved — see RatingTile's note on why Stats
+                // decides this differently for "+0 THIS MONTH".
+                delta={rated.eloDrift || null}
+                // No deltaLabel: Home takes the ladder's bare ▲12 / ▼12 rather
+                // than spelling the period out, and 'rating-drift' — opened by
+                // the label OR the arrow — is where the period gets explained.
+                explainTerm="rating-drift"
+              />
             </div>
-            <div className="home-sub">The bridge is open.</div>
-          </div>
+          ) : (
+            <div className="home-greeting">
+              <div className="home-hello">
+                Good {timeGreeting(new Date().getHours())}, {me?.user?.handle}
+              </div>
+              <div className="home-sub">The bridge is open.</div>
+            </div>
+          )}
 
           <div className="home-current">
             <div className="home-current-row">

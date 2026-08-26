@@ -10,6 +10,13 @@ import {
 } from '../test/fixtures';
 import { apiMock, renderWithMe } from '../test/utils';
 import Lobby from './Lobby';
+import type { Me } from '../api';
+
+/** meFixture with the rating fields overridden — the tile's whole input. */
+const withRating = (me: Me, over: Partial<NonNullable<Me['user']>>): Me => ({
+  ...me,
+  user: { ...me.user!, ...over },
+});
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -25,23 +32,93 @@ describe('Home', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('greets by time of day and opens the current crossing', async () => {
+  it('opens the current crossing', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentInProgress, tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
-    expect(await screen.findByText(/Good (morning|afternoon|evening), Margaret/)).toBeInTheDocument();
-    expect(screen.getByText('The bridge is open.')).toBeInTheDocument();
     // in-progress tournament → KEEP GOING with the stable e2e hook
-    const cta = screen.getByRole('link', { name: /keep going/i });
+    const cta = await screen.findByRole('link', { name: /keep going/i });
     expect(cta).toHaveAttribute('href', '/t/12');
     expect(cta.className).toContain('home-cta');
     expect(screen.getByText(/Board 2 of 4 in progress/)).toBeInTheDocument();
   });
 
+  it('leads with the rating tile, and its drift as the ladder\'s own arrow', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: meFixture });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    // the hero number is per-digit (FlipDigits), so it is read off the tile
+    expect(document.querySelector('.home-rating .flipdigits')).toHaveTextContent('1487');
+    // ▲, not "+4 SINCE YOUR LAST CROSSING" — glyph AND colour, matching
+    // Leaderboard.tsx's Movement, with the period explained by the sheet
+    const delta = screen.getByText('▲4');
+    expect(delta).toHaveClass('positive');
+    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+    // ...in place of the greeting, not beside it
+    expect(screen.queryByText(/Good (morning|afternoon|evening), Margaret/)).not.toBeInTheDocument();
+    expect(screen.queryByText('The bridge is open.')).not.toBeInTheDocument();
+  });
+
+  it('inks a slide while you were away with the down arrow', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: -7 }) });
+    const delta = await screen.findByText('▼7');
+    expect(delta).toHaveClass('negative');
+  });
+
+  // Zero is the ordinary answer on a quiet week, and an arrow reading zero is
+  // a claim about nothing on a screen opened daily. Stats decides this the
+  // other way for "+0 THIS MONTH" — see RatingTile.
+  it('says nothing at all when nothing moved while you were away', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: 0 }) });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    expect(document.querySelector('.rating-tile-delta')).toBeNull();
+  });
+
+  it('shows no delta before any crossing has finished', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null }) });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    expect(document.querySelector('.rating-tile-delta')).toBeNull();
+  });
+
+  // ELO_INITIAL is a starting value, not an achievement — a crossing only rates
+  // you once a second human finishes the same field, so a player can have
+  // crossings behind them and still be carrying 1200. The greeting holds until
+  // there is a rating that was actually earned.
+  it('keeps the greeting until a crossing has actually rated you', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { ratedTournaments: 0, eloDrift: null }) });
+    expect(await screen.findByText(/Good (morning|afternoon|evening), Margaret/)).toBeInTheDocument();
+    expect(screen.getByText('The bridge is open.')).toBeInTheDocument();
+    expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
+  });
+
+  // The arrow is the figure most likely to prompt "why did that move without
+  // me?", so BOTH it and the label open the term that answers it — a door on
+  // the label alone would put the explanation beside the one number that
+  // doesn't need it.
+  it('opens the rating-drift term from the label AND from the arrow', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: meFixture });
+    expect(await screen.findByRole('button', { name: 'NICKEL RATING' })).toHaveClass('rating-tile-explain');
+    // Named in WORDS, not "up-pointing triangle 4": the ladder's Movement can
+    // wear the bare glyph because it is a non-focusable span, but this one is a
+    // control. Same rule RehearsalRail's stubs follow.
+    const arrow = screen.getByRole('button', { name: 'Rating up 4 since your last crossing' });
+    expect(arrow).toHaveClass('rating-tile-explain');
+    expect(arrow).toHaveTextContent('▲4');
+  });
+
+
   it('lists finished crossings under TOLLS PAID with date, field, pct and rank', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentInProgress, tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
     const row = (await screen.findByText('61%')).closest('a')!;
+    // the row is ADDRESSED by id and NAMED by the display number — the two
+    // differ in the fixture, so a regression to the id would show up here
     expect(row).toHaveAttribute('href', '/t/11');
+    expect(within(row).getByText('8')).toHaveClass('tolls-no');
     expect(within(row).getByText(/· 3 players/)).toBeInTheDocument();
     expect(within(row).getByText('2ND')).toHaveClass('quiet');
   });

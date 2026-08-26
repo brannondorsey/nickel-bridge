@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { GlossaryProvider } from '../glossary/GlossaryContext';
+import { TERMS } from '../glossary/terms';
 import { meFixture } from '../test/fixtures';
 import { renderWithMe } from '../test/utils';
 import Glossary from './Glossary';
@@ -45,7 +46,9 @@ describe('Glossary page', () => {
   it('renders the A–Z core ledger with letter heads and theme badges', () => {
     renderGlossary();
     expect(screen.getByText('The Glossary')).toBeInTheDocument();
-    expect(screen.getByText('126 CORE TERMS')).toBeInTheDocument();
+    // Derived, not literal: the page prints TERMS.length, so a hardcoded count
+    // here fails the day a term is added while testing nothing about the page.
+    expect(screen.getByText(`${TERMS.length} CORE TERMS`)).toBeInTheDocument();
     // the digit bucket leads, then letters
     const letters = screen.getAllByText(/^[#A-Z]$/, { selector: '.gloss-letter' }).map((el) => el.textContent);
     expect(letters[0]).toBe('#');
