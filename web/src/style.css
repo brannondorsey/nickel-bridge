@@ -2715,6 +2715,7 @@ a.board-row:hover {
   }
   .home > .appheader,
   .home > .home-greeting,
+  .home > .home-rating,
   .home > .notice-error {
     grid-column: 1 / -1;
   }
@@ -2745,6 +2746,7 @@ a.board-row:hover {
   }
   .home > .appheader,
   .home > .home-greeting,
+  .home > .home-rating,
   .home > .notice-error {
     grid-column: 1 / -1;
   }
@@ -2761,7 +2763,12 @@ a.board-row:hover {
    because holding 20px 16px 0 keeps the vertical rhythm of the screen
    identical whichever of the two is showing. It is the screen's ONE hero
    number, per the design system's rule; the medal rail's percentage below is
-   a plain .num figure beside its bar, not a second one. */
+   a plain .num figure beside its bar, not a second one.
+
+   Because it stands where the greeting stands, it has to be named wherever
+   the greeting is named: both "at width" blocks above span it across the
+   whole page. Left out, it is auto-placed like an ordinary panel and the
+   screen's one hero number ends up squeezed into the narrow play column. */
 .home-rating {
   display: flex;
   flex-direction: column;
