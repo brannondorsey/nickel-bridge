@@ -358,6 +358,58 @@ if (!userColumns.has('beta_features')) {
   db.exec(`ALTER TABLE users ADD COLUMN beta_features INTEGER NOT NULL DEFAULT ${betaDefault}`);
 }
 
+// Migration: `elo_at_last_crossing` — the ONE persisted rating snapshot in
+// this codebase, and the only way Home's rating tile can answer "what moved
+// while I was away".
+//
+// Everything else Elo-shaped here is recompute-on-read: elo_history is wiped
+// and replayed in tournament-id order on every board completion, and
+// `users.elo` is the endpoint of that replay. That model has no memory of
+// what a rating USED to say. A late finisher joining a crossing you already
+// played re-matchpoints that field, changes your delta for it, and the
+// correction propagates — but it lands as a RESTATEMENT of a past crossing,
+// never as new points, so the drift is invisible to any subtraction over
+// elo_history. leaderboardMovement()'s "rating then = users.elo minus the
+// points banked since the cutoff" is exact for a clock window and identically
+// zero for this one: nothing is banked after your last crossing, because your
+// last crossing is the last thing that banked anything.
+//
+// So the baseline has to be written down at the moment it is true.
+// stampCrossingBaseline() (tournaments.ts) sets this to `users.elo` right
+// after recomputeElo() whenever a player finishes the last board of one of
+// their crossings; eloDrift() reads `elo - elo_at_last_crossing`. A crossing's
+// own swing is therefore never drift — it is absorbed into the baseline in the
+// same breath, and it is already reported on that crossing's own result screen.
+//
+// The alternative considered and not taken: replay the ratings a second time
+// with the board set restricted to `updated_at <= T`, which needs no column
+// and works retroactively. It was rejected on cost and blast radius — the
+// replay is per-tournament queries plus matchpointing, and this would put one
+// on every /api/me (i.e. every page load, on a machine that suspends), to say
+// nothing of a second replay implementation that must never drift from
+// recomputeElo's.
+//
+// The backfill is `elo`, not NULL: NULL would show every existing player
+// nothing until their next crossing finished, where seeding the baseline at
+// today's rating starts accruing real drift immediately. The one-time cost is
+// that for an account whose last crossing predates this migration, the anchor
+// is really "when this shipped" rather than "your last crossing" — which reads
+// as 0 on day one (and 0 renders as nothing at all), and self-corrects the
+// next time they finish a crossing.
+//
+// The ALTER and its backfill go through db.transaction() together, the same way
+// the `number` migration below bundles its own two statements: SQLite's DDL is
+// transactional, and split apart a crash between them would leave the column
+// present-but-NULL — at which point the `!userColumns.has(...)` guard skips the
+// backfill forever and every pre-existing account is permanently anchored at
+// NULL rather than at today's rating.
+if (!userColumns.has('elo_at_last_crossing')) {
+  db.transaction(() => {
+    db.exec(`ALTER TABLE users ADD COLUMN elo_at_last_crossing INTEGER`);
+    db.exec(`UPDATE users SET elo_at_last_crossing = elo`);
+  })();
+}
+
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
 // created only by demo.ts under DEMO=1) from real ones ('standard'). It is a
 // first-class column — not a name convention — because placement, the Elo
@@ -577,6 +629,15 @@ export interface UserRow {
   /** 1 = the holographic Foil Trumps plate over the trump suit; 0 (default) = plain cards */
   foil_trumps: number;
   elo: number;
+  /**
+   * `elo` as it stood when this player last finished a crossing — the app's ONE
+   * stored rating snapshot, and the only way Home's tile can report what moved
+   * while they were away. NULL until they finish one (the migration backfills
+   * every account that existed when it ran). Written by stampCrossingBaseline
+   * and read by eloDrift, both in tournaments.ts; see the migration comment
+   * below for why a subtraction over elo_history cannot answer this.
+   */
+  elo_at_last_crossing: number | null;
   created_at: number;
 }
 

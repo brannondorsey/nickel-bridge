@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { TestClient, freshDbEnv, makeApp } from './helpers.js';
+import { TestClient, freshDbEnv, makeApp, playBoard } from './helpers.js';
 
 const silentLog = { info() {}, error() {}, warn() {}, debug() {} } as unknown as FastifyBaseLogger;
 
@@ -142,6 +142,64 @@ describe('demo mode', () => {
     expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId })).statusCode).toBe(400);
     expect((await inspector.raw('POST', '/api/demo/desync', { tournamentId: 999999, boardNo: 1 })).statusCode).toBe(404);
   }, 120_000);
+
+  it('drift has a real bot finish the caller’s last crossing, moving their rating', async () => {
+    // Home's rating-drift exhibit. Like desync, this is not a special code
+    // path: a seeded bot plays the four boards through the ordinary engine,
+    // the field is re-matchpointed with one more pair in it, and the
+    // Inspector's rating moves without them touching a card.
+    const placed = await inspector.post('/api/play');
+    for (let no = 1; no <= 4; no++) await playBoard(inspector, placed.tournamentId, no);
+    const before = await inspector.get('/api/me');
+    expect(before.user.eloDrift).toBe(0);
+
+    const res = await inspector.post('/api/demo/drift');
+    expect(res.drifted).toBe(true);
+
+    const after = await inspector.get('/api/me');
+    expect(after.user.ratedTournaments).toBeGreaterThan(0);
+    // the rating moved, and the tile's delta is exactly that movement
+    expect(after.user.elo).not.toBe(before.user.elo);
+    expect(after.user.eloDrift).toBe(after.user.elo - before.user.elo);
+  }, 300_000);
+
+  // DEMO=1 hands every visitor the SAME Inspector session, so two testers
+  // clicking this at once really are two concurrent requests for one user.
+  // Unserialized they both pick the same passer — neither has finished a board
+  // yet, so nothing tells them apart — and playThrough's wipe-unfinished step
+  // deletes the other's in-flight board out from under it.
+  it('serializes concurrent passes, so each takes a different bot', async () => {
+    const twice = new TestClient(app, 'DriftTwice');
+    await twice.login();
+    const placed = await twice.post('/api/play');
+    for (let no = 1; no <= 4; no++) await playBoard(twice, placed.tournamentId, no);
+
+    const [a, b] = await Promise.all([twice.post('/api/demo/drift'), twice.post('/api/demo/drift')]);
+    expect(a.drifted).toBe(true);
+    expect(b.drifted).toBe(true);
+
+    // Two DISTINCT passers, each with a whole crossing done. Both halves have
+    // teeth: unserialized, the two requests cannot tell the passers apart and
+    // both take the FIRST one (so only one shows up here), and the loser's
+    // in-flight board is wiped mid-play (so a passer can be left short of
+    // four). Placement joins an existing field, so this counts passers rather
+    // than every finisher of the crossing.
+    const passers = db
+      .prepare(
+        `SELECT b.user_id, COUNT(*) AS n FROM boards b JOIN users u ON u.id = b.user_id
+          WHERE b.tournament_id = ? AND b.state = 'done' AND u.handle LIKE '%Passer%'
+          GROUP BY b.user_id`,
+      )
+      .all(placed.tournamentId) as { user_id: number; n: number }[];
+    expect(passers.length).toBeGreaterThanOrEqual(2);
+    for (const p of passers) expect(p.n).toBe(4);
+  }, 300_000);
+
+  it('drift answers rather than erroring when there is no crossing to move', async () => {
+    const newcomer = new TestClient(app, 'DriftNewcomer');
+    await newcomer.login();
+    expect(await newcomer.post('/api/demo/drift')).toEqual({ drifted: false });
+  });
 
   it('re-entering a scenario resets the board instead of stacking on it', async () => {
     const first = await inspector.post('/api/demo/scenarios/partner-declares');

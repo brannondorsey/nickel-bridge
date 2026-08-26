@@ -38,7 +38,13 @@ import {
   scoreBreakdown,
 } from '@bridge/core';
 import { BOARDS_PER_TOURNAMENT, BoardRow, TournamentRow, aiTieRank, db } from './db.js';
-import { boardDifficulty, claimRule, getTournament, recomputeElo } from './tournaments.js';
+import {
+  boardDifficulty,
+  claimRule,
+  getTournament,
+  recomputeElo,
+  stampCrossingBaseline,
+} from './tournaments.js';
 
 export const HUMAN_SEAT: Seat = 2; // South — exported for analyze.ts's grading boundary
 export { BOARDS_PER_TOURNAMENT };
@@ -208,6 +214,29 @@ function save(b: GameBoard): void {
     b.row.tournament_id,
     b.row.user_id,
   );
+}
+
+/**
+ * Everything a completed board owes the rest of the app, in one place — the
+ * three call sites below (submitCall, submitPlay, ensureAdvanced) had three
+ * byte-identical copies of the guard and one of them was always going to be
+ * missed the next time something was added to it.
+ *
+ * kind === 'standard' excludes exhibit AND rehearsal boards: recomputeElo's
+ * own replay already filters to standard tournaments, so calling it for
+ * either would be a wasted full replay-sweep, not a correctness bug — but
+ * rehearsals are explicitly uncapped, so skipping the call outright (rather
+ * than relying on the replay to no-op) actually matters here.
+ *
+ * Order is load-bearing: the drift baseline is a snapshot of `users.elo`, so
+ * it has to be taken after the replay that sets it, or a player's own crossing
+ * would read as drift on the very screen that exists to exclude it (see
+ * stampCrossingBaseline and the elo_at_last_crossing migration in db.ts).
+ */
+function settleCompletedBoard(b: GameBoard): void {
+  if (!boardDone(b.row) || isAiUser(b.row.user_id) || b.tournament.kind !== 'standard') return;
+  recomputeElo();
+  stampCrossingBaseline(b.row.user_id, b.row.tournament_id);
 }
 
 /** function boundary defeats TS narrowing: advanceRobots mutates row.state */
@@ -443,12 +472,7 @@ export async function submitCall(
     b.bidEvals.push(evaluation);
     await advanceRobots(b, priority);
     save(b);
-    // kind === 'standard' excludes exhibit AND rehearsal boards: recomputeElo's
-    // own replay already filters to standard tournaments, so calling it here
-    // for either would be a wasted full replay-sweep, not a correctness bug —
-    // but rehearsals are explicitly uncapped, so skipping the call outright
-    // (rather than relying on the replay to no-op) actually matters here.
-    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
+    settleCompletedBoard(b);
     return evaluation;
   });
 }
@@ -463,8 +487,7 @@ export async function submitPlay(b: GameBoard, card: Card, priority: SolvePriori
     b.plays.push(card);
     await advanceRobots(b, priority);
     save(b);
-    // see the matching comment in submitCall above
-    if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
+    settleCompletedBoard(b);
   });
 }
 
@@ -488,8 +511,7 @@ export async function ensureAdvanced(b: GameBoard, priority: SolvePriority = 'in
     await advanceRobots(b, priority);
     if (JSON.stringify([b.calls, b.plays, b.row.state]) !== before) {
       save(b);
-      // see the matching comment in submitCall above
-      if (boardDone(b.row) && !isAiUser(b.row.user_id) && b.tournament.kind === 'standard') recomputeElo();
+      settleCompletedBoard(b);
     }
   });
 }

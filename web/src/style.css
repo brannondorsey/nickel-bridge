@@ -2468,6 +2468,19 @@ a.board-row:hover {
 .home-greeting {
   padding: 20px 16px 0;
 }
+/* The rating hero that stands where the greeting stands, for a player who has
+   one (Lobby.tsx). Centred, at the greeting's own padding, because both kit
+   precedents for this hero — Stats and the tournament result — centre it, and
+   because holding 20px 16px 0 keeps the vertical rhythm of the screen
+   identical whichever of the two is showing. It is the screen's ONE hero
+   number, per the design system's rule; the medal rail's percentage below is
+   a plain .num figure beside its bar, not a second one. */
+.home-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 0;
+}
 .home-hello {
   font-weight: 600;
   font-size: 21px;
@@ -2868,19 +2881,72 @@ a.board-row:hover {
   font-size: 13px;
   color: var(--muted);
 }
-.stats-rating-line {
+/* The NICKEL RATING hero's label line — ds/RatingTile.tsx, shared by the
+   Stats hero and Home. Named for the component rather than for Stats, which
+   is where it started: the two screens are meant to draw the SAME tile, and a
+   `.stats-` prefix on Home's front door would invite the next person to fork
+   it. */
+.rating-tile-line {
   display: flex;
   align-items: baseline;
   gap: 8px;
   margin-top: 8px;
+  /* Wrap, centred, rather than let flex shrink the two items. Home's ▲12 fits
+     beside the label with room to spare; Stats' "+34 THIS MONTH" is the one
+     that can outgrow the line, and a longer caption than that would too.
+     Shrinking is what a plain flex row does there, and it breaks both halves at
+     once — the label folds to NICKEL / RATING and jams against the left edge
+     while the delta breaks mid-phrase. (Not hypothetical: Home carried a
+     "−12 SINCE YOUR LAST CROSSING" caption for one commit and did exactly
+     that.) Wrapping moves the delta whole onto its own centred line under the
+     label instead, which is also the right reading order for it. */
+  flex-wrap: wrap;
+  justify-content: center;
 }
-.stats-rating-label {
+.rating-tile-label {
   letter-spacing: 0.18em;
+  /* ...so each half wraps as a unit or not at all — see above */
+  white-space: nowrap;
 }
-.stats-delta {
+/* The glossary opener worn by BOTH halves of the line when Home passes
+   `explainTerm` — the label and the ▲12 beside it, since the arrow is the part
+   that prompts "why did that move without me?" and 'rating-drift' answers
+   exactly that. Deliberately NOT the shared .gloss-link: that rule sets
+   `font: inherit`, and it is declared far below .label-caps, so it would
+   quietly strip the label's face, weight and size — and it would do the same
+   to the delta's. Everything here is the button reset and the dotted
+   underline; each half keeps its own typography and its own ink.
+
+   The underline is `currentColor` rather than a literal, which is what lets
+   one rule serve both: under the label it draws in .label-caps's muted ink,
+   under the delta in the --positive/--negative it is already carrying. A
+   muted rule under a green arrow would read as two unrelated marks. */
+.rating-tile-explain {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  /* Deliberately NO `color`: a button's UA default loses to any author rule, so
+     the label keeps .label-caps's muted ink and the delta keeps its
+     --positive/--negative. `color: inherit` was tried and is the trap — it is a
+     single-class rule declared BELOW .positive/.negative, so it won on source
+     order and drew a green arrow in plain ink. */
+  line-height: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+.rating-tile-explain:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.rating-tile-delta {
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .chart-panel {
@@ -5391,7 +5457,7 @@ a.stat-tile:hover {
 /* A finished attempt's score is inked against the table you actually sat —
    green beat it, red fell short, ordinary ink on a tie — but that needs no
    rule here: it wears the bare global .positive/.negative utilities, the
-   same way stats-delta, tourney-rating-delta and tolls-rank do. Nothing in
+   same way rating-tile-delta, tourney-rating-delta and tolls-rank do. Nothing in
    this stub's chain sets a competing colour (.rehearsal-stub is `inherit`,
    .rehearsal-stub-score and .num set none), so a scoped copy would only
    restate the utility. Contrast .worth-rehearsal-dot below, which genuinely

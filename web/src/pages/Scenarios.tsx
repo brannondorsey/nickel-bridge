@@ -182,6 +182,37 @@ export default function Scenarios() {
     window.location.assign(to);
   };
 
+  /**
+   * Home's rating drift (the ▲4 beside NICKEL RATING), which is the one state
+   * on that screen a tester cannot produce for themselves: it needs another
+   * human to finish one of your old fields AFTER you did, and the seeder only
+   * runs at boot and reset. POST /api/demo/drift walks a seeded bot through
+   * the Inspector's last finished crossing for real — see that route for why
+   * it fabricates nothing — and then Home is just Home.
+   *
+   * `refresh()` is awaited before navigating, on the foil-trumps precedent:
+   * the tile reads the drift off `me`, loaded when the app booted, so
+   * navigating first shows the figure from before the click.
+   */
+  const showDrift = async () => {
+    if (busyId) return;
+    setBusyId('drift');
+    setError(null);
+    try {
+      const { drifted } = await api.demoDrift();
+      if (!drifted) {
+        setError('Nothing to drift yet — finish a crossing first, then come back.');
+        setBusyId(null);
+        return;
+      }
+      await refresh();
+      navigate('/');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'failed to move the field');
+      setBusyId(null);
+    }
+  };
+
   const reset = async () => {
     if (!resetArmed) {
       setResetArmed(true);
@@ -263,6 +294,26 @@ export default function Scenarios() {
                 </Button>
               </div>
             ))}
+            <div className="exhibit-row">
+              <div className="exhibit-row-text">
+                <b>Your rating, moved while you were away</b>
+                <span className="exhibit-row-desc">
+                  Home leads with your rating once a crossing has rated you, and with a signed delta when it has
+                  moved since you last finished one. This walks a seeded bot through your last crossing for real,
+                  re-matchpointing that field with one more pair in it — then lands you on Home to read the
+                  result. Needs a finished crossing to work on; three passes available before the bench runs out.
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={showDrift}
+                busy={busyId === 'drift'}
+                busyLabel="PLAYING…"
+                disabled={busyId !== null && busyId !== 'drift'}
+              >
+                ENTER →
+              </Button>
+            </div>
             <div className="exhibit-row">
               <div className="exhibit-row-text">
                 <b>The first crossing</b>

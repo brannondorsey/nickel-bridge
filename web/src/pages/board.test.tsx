@@ -1682,7 +1682,16 @@ describe('Board — toll receipt', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it('does not refresh account state when a non-final board completes live', async () => {
+  // This pinned the opposite until the rating tile landed: the refetch used to
+  // fire only on `boardNo === totalBoards`. Two things were wrong with that.
+  // /api/me's `boards` count is what smooths the medal bar's percentage board
+  // by board, so the rail sat frozen mid-crossing for the whole session. And as
+  // a stand-in for "my crossing just completed" it only holds while boards are
+  // played in order — finish board 4 by URL first and the crossing completes on
+  // board 3, where it never fired, leaving Home greeting a player it had just
+  // rated. The board view carries no done-count to test honestly, so every
+  // completed board refetches.
+  it('refreshes account state on every completed board, not just the crossing\'s last', async () => {
     apiMock.board.mockResolvedValue(boardPlaying);
     apiMock.playCard.mockResolvedValue({ board: boardDone });
     const { refresh } = renderBoard();
@@ -1690,7 +1699,7 @@ describe('Board — toll receipt', () => {
     await userEvent.click(queen);
     await userEvent.click(screen.getByRole('button', { name: 'Q of ♠' }));
     expect(await screen.findByText('THE TOLL — BOARD 2')).toBeInTheDocument();
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
   });
 });
 

@@ -5,7 +5,7 @@ import { BidTypeKey, COMPARE_MIN_BOARDS_FALLBACK, ConventionKey, PlayerStats, Ri
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
-import { FlipDigits } from '../components/ds/FlipDigits';
+import { RatingTile } from '../components/ds/RatingTile';
 import { Loading } from '../components/ds/Loading';
 import { MedalGlyphs } from '../components/ds/MedalGlyphs';
 import { PctBar } from '../components/ds/PctBar';
@@ -410,20 +410,7 @@ export default function Player() {
             </div>
           </div>
         ) : null}
-        {!house ? (
-          <>
-            <FlipDigits value={t.currentElo} size={46} />
-            <div className="stats-rating-line">
-              <span className="label-caps stats-rating-label">NICKEL RATING</span>
-              {t.monthlyEloDelta !== null ? (
-                <span className={`stats-delta num ${t.monthlyEloDelta >= 0 ? 'positive' : 'negative'}`}>
-                  {t.monthlyEloDelta >= 0 ? '+' : '−'}
-                  {Math.abs(t.monthlyEloDelta)} THIS MONTH
-                </span>
-              ) : null}
-            </div>
-          </>
-        ) : null}
+        {!house ? <RatingTile elo={t.currentElo} delta={t.monthlyEloDelta} deltaLabel="THIS MONTH" /> : null}
         {/* Compare needs a record on BOTH sides to say anything — below the
             floor every measure is set aside, because at a handful of boards any
             difference between two players is the shuffle rather than the play.

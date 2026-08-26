@@ -6,7 +6,7 @@ import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, createCrossing, db } from './db.js';
 import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
-import { getTournament } from './tournaments.js';
+import { doneBoardCount, getTournament } from './tournaments.js';
 
 /**
  * Demo mode (DEMO=1) — preview-deployment conveniences for click-testing.
@@ -35,8 +35,54 @@ const stmtCreateFreshAiTournament = db.prepare(
   `INSERT INTO tournaments (name, seed, difficulty, board_difficulties, ai_field) VALUES ('Tournament', ?, 'intermediate', ?, 1) RETURNING *`,
 );
 
+// Home's rating-drift exhibit (POST /api/demo/drift). The crossing is the
+// caller's most recently FINISHED standard one — the same MAX(updated_at)
+// bridge stats.ts and activity.ts use for "when did this crossing end".
+const stmtLastFinishedCrossing = db.prepare(
+  `SELECT b.tournament_id AS id
+     FROM boards b JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+    WHERE b.user_id = ? AND b.state = 'done'
+    GROUP BY b.tournament_id
+   HAVING COUNT(*) >= ?
+    ORDER BY MAX(b.updated_at) DESC, b.tournament_id DESC
+    LIMIT 1`,
+);
+const stmtElo = db.prepare(`SELECT elo FROM users WHERE id = ?`);
+
 const DEMO_HANDLE = 'Inspector';
 const NEW_CROSSER_HANDLE = 'New Crosser';
+/**
+ * The pool the drift exhibit draws from, in order. Ordinary seeded demo bots
+ * (ensureBot), so they rate like anyone else — a persona would not, and the
+ * whole point is a rated pair entering the caller's old field. Three deep
+ * because one crossing can only ever be finished once per player: the pool
+ * size is how many times the exhibit can be re-entered against the same
+ * crossing before it politely runs out.
+ */
+const DRIFT_PASSER_HANDLES = ['Late Passer', 'Later Passer', 'Latest Passer'];
+
+/**
+ * One queue for the drift exhibit, on demo-seed.ts's `enqueue` precedent, and
+ * for the same reason: DEMO=1 hands every visitor to a preview the SAME
+ * Inspector session, so two testers clicking this at once arrive as two
+ * concurrent requests for one user. Unserialized they both resolve the same
+ * crossing, both pick the same passer (neither has finished a board yet, so
+ * the `find` below cannot tell them apart), and `playThrough`'s
+ * wipe-unfinished-then-replay deletes the other's in-flight board out from
+ * under it. Queued, the second request runs after the first has finished,
+ * correctly sees that passer as spent, and takes the next handle in the pool —
+ * which is what the pool is for. Errors are swallowed into the chain so one
+ * failed pass cannot wedge the exhibit for everybody after it.
+ */
+let driftQueue: Promise<unknown> = Promise.resolve();
+function queueDrift<T>(fn: () => Promise<T>): Promise<T> {
+  const run = driftQueue.then(fn, fn);
+  driftQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 /** A seeded bot (see demo-seed.ts's DEFAULT_PROFILE) with a genuinely rich history — the "populated stats page" exhibit points here. */
 const RICH_PROFILE_HANDLE = 'Margaret';
 /**
@@ -288,6 +334,60 @@ export function registerDemoRoutes(app: FastifyInstance): void {
     }
     await submitPlay(b, view.legalCards[0]);
     return reply.send({ advanced: true });
+  });
+
+  /**
+   * Have somebody else finish the caller's last crossing — the server half of
+   * Home's rating-drift exhibit (Scenarios.tsx's `DRIFT` row).
+   *
+   * Like /api/demo/desync, this is NOT a special code path and deliberately
+   * fabricates nothing: it walks a seeded demo bot through the four boards of
+   * a crossing the caller has already finished, via the same playThrough every
+   * ambient seed uses. Finishing those boards runs the ordinary
+   * settleCompletedBoard → recomputeElo, the field is re-matchpointed with one
+   * more pair in it, and the caller's rating moves. That gap — between
+   * `users.elo` now and the `elo_at_last_crossing` stamped when they finished —
+   * IS the drift, arrived at exactly as it arrives in production.
+   *
+   * It has to exist because this is the one state on Home a tester cannot
+   * reach on their own: drift needs another human to finish one of your old
+   * fields AFTER you did, and the demo seeder only runs at boot and reset.
+   *
+   * Answers `{ drifted: false }` rather than erroring when there is nothing to
+   * do — no finished crossing yet, or every bot in the pool has already played
+   * the last one — on the desync precedent: a click-testing aid that 500s is
+   * worse than one that quietly no-ops and can be re-entered.
+   */
+  app.post('/api/demo/drift', async (req, reply) => {
+    if (!demoEnabled()) return reply.code(404).send({ error: 'not found' });
+    const user = requireUserWithHandle(req, reply);
+    if (!user) return;
+    // Everything from here is queued: the whole select-a-passer-then-play-it
+    // sequence has to be one turn, or two concurrent testers race on both
+    // halves of it. See queueDrift's doc comment.
+    const result = await queueDrift(async () => {
+      const last = stmtLastFinishedCrossing.get(user.id, BOARDS_PER_TOURNAMENT) as { id: number } | undefined;
+      if (!last) return { drifted: false as const };
+      const t = getTournament(last.id);
+      if (!t) return { drifted: false as const };
+
+      // One bot per pass, so re-entering the exhibit keeps working: playThrough
+      // resumes from what a player has already finished, so the same bot twice
+      // is a no-op rather than a second helping of drift.
+      const { ensureBot } = await import('./demo-seed.js');
+      const passer = DRIFT_PASSER_HANDLES.map(ensureBot).find(
+        (bot) => doneBoardCount(t.id, bot.id) < BOARDS_PER_TOURNAMENT,
+      );
+      if (!passer) return { drifted: false as const };
+
+      const before = (stmtElo.get(user.id) as { elo: number }).elo;
+      await playThrough(t, passer.id, BOARDS_PER_TOURNAMENT, (no) =>
+        seededErraticStrategy(`${t.seed}:drift:${passer.id}:${no}`),
+      );
+      const after = (stmtElo.get(user.id) as { elo: number }).elo;
+      return { drifted: true as const, delta: after - before };
+    });
+    return reply.send(result);
   });
 
   // Full wipe + reseed, for starting a click-testing round from a pristine
