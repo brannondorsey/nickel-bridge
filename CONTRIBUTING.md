@@ -783,7 +783,13 @@ was raw JSON with nothing to press, so a visitor whose only problem was slowness
 to learn that trying again would work. An unrecognised `?signin=` value renders nothing, since
 the param rides in a shareable URL. A callback that can no longer complete but whose visitor
 is **already signed in** (the second of two tabs) just goes to `/`, rather than claiming a
-sign-in expired for someone who is demonstrably through the gate.
+sign-in expired for someone who is demonstrably through the gate. That check lives inside
+`signInFailed` rather than at its call sites, and deliberately: it started at two of the four
+failure exits and was quietly missing from the other two, so the guarantee written here was
+wider than the code behind it. One gate on the one function every failure leaves through is a
+thing a later branch cannot forget to call. The canonical-host compare lowercases the `Host`
+header for the same class of reason — that header is case-insensitive and a string compare is
+not.
 
 `server/test/oauth.test.ts` drives the whole round trip through `app.inject()` with a cookie
 jar **per hostname** — the headline bug is invisible to any single-host test — and stubs

@@ -162,6 +162,18 @@ describe('the cross-host split (the bug players reported)', () => {
     expect(me.json().user).not.toBeNull();
   });
 
+  it('treats a mixed-case Host as the canonical host, not a second hop', async () => {
+    // Host headers are case-insensitive; a string compare is not. Some old
+    // bookmarks and crawlers send one, and it would otherwise bounce once
+    // through here for nothing.
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/google',
+      headers: { host: CANONICAL.toUpperCase() },
+    });
+    expect(res.headers.location).toContain('accounts.google.com');
+  });
+
   it('is a no-op on a deployment whose visitors are already on the canonical host', async () => {
     stubGoogle('sub-canonical');
     const b = new Browser();
@@ -272,11 +284,26 @@ describe('failures are told apart, and none of them is a dead end', () => {
     expect(res.headers.location).toBe('/?signin=failed');
   });
 
-  it('does not tell an already-signed-in visitor their sign-in expired', async () => {
+  it.each([
+    ['a cancelled second tab', '/auth/google/callback?error=access_denied&state=stale'],
+    ['a state nothing remembers', '/auth/google/callback?code=c&state=stale'],
+  ])('does not tell an already-signed-in visitor a sign-in failed — %s', async (_label, url) => {
     const b = new Browser();
-    await b.post(CANONICAL, '/auth/dev', { name: 'Margaret' });
-    // The other tab finally comes back, on a state nothing remembers.
-    const res = await b.get(CANONICAL, '/auth/google/callback?code=c&state=stale');
+    await b.post(CANONICAL, '/auth/dev', { name: `Margaret-${url.length}` });
+    const res = await b.get(CANONICAL, url);
+    expect(res.headers.location).toBe('/');
+  });
+
+  it('extends that courtesy to a Google-side failure, not just a stale state', async () => {
+    // The check began at two of the four failure exits and was absent from
+    // the other two, which made the guarantee in CONTRIBUTING.md wider than
+    // the code. It now lives in signInFailed, so no exit can skip it.
+    const b = new Browser();
+    await b.post(CANONICAL, '/auth/dev', { name: 'AlreadyIn' });
+    const start = await b.get(CANONICAL, '/auth/google');
+    const state = stateFromAuthRedirect(start.headers.location as string);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));
+    const res = await b.get(CANONICAL, `/auth/google/callback?code=c&state=${state}`);
     expect(res.headers.location).toBe('/');
   });
 

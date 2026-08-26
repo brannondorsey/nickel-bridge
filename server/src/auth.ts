@@ -187,7 +187,27 @@ function readOauthStates(raw: string | undefined): string[] {
  * would turn "one tab was stale" into "now none of them work". Unused states
  * expire on their own.
  */
-function signInFailed(reply: FastifyReply, reason: 'cancelled' | 'expired' | 'failed'): FastifyReply {
+function signInFailed(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  reason: 'cancelled' | 'expired' | 'failed',
+): FastifyReply {
+  /**
+   * Already through the gate — say nothing and let them in.
+   *
+   * A browser with two tabs open finishes one, and the other arrives on a leg
+   * that can no longer complete: a state nothing remembers, a cancelled
+   * chooser, or a Google-side stumble on an attempt that was otherwise fine.
+   * This person is signed in, so a notice telling them their sign-in failed
+   * would be false, and alarming for being false.
+   *
+   * The check lives HERE rather than at the call sites because it started at
+   * two of the four failure exits and was silently absent from the other two,
+   * which made the guarantee written in CONTRIBUTING.md broader than the code
+   * that backed it. One gate on the one function every failure leaves through
+   * is a thing a later branch cannot forget to call.
+   */
+  if (optionalUser(req)) return reply.redirect('/');
   return reply.redirect(`/?signin=${reason}`);
 }
 
@@ -223,7 +243,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
      * identical and purge nothing, which is the exact failure mode that
      * script's doc comment warns about at length.
      */
-    if (CANONICAL_HOST && req.headers.host !== CANONICAL_HOST) {
+    // Lowercased because a Host header is case-insensitive while a string
+    // compare is not, and CANONICAL_HOST comes out of `new URL().host`, which
+    // is already normalized. A mixed-case Host would otherwise take a second,
+    // pointless hop through here before matching — it terminates either way,
+    // but odd hostnames are the entire subject of this route.
+    if (CANONICAL_HOST && req.headers.host?.toLowerCase() !== CANONICAL_HOST) {
       return reply.redirect(`${PUBLIC_ORIGIN}/auth/google`);
     }
     const state = randomBytes(16).toString('base64url');
@@ -258,22 +283,12 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   app.get('/auth/google/callback', async (req, reply) => {
     const { code, state, error } = req.query as { code?: string; state?: string; error?: string };
     const states = readOauthStates(req.cookies[OAUTH_STATE_COOKIE]);
-    /**
-     * Already signed in, on a leg that can no longer complete.
-     *
-     * A browser with two tabs open finishes one, which clears the cookie; the
-     * other then arrives with a state nothing remembers. Nothing is wrong —
-     * this person is signed in — so telling them their sign-in expired would
-     * be both false and alarming. Checked before the failure branches so it
-     * covers a cancelled second tab too.
-     */
-    const alreadyIn = () => (optionalUser(req) ? reply.redirect('/') : null);
     if (error) {
       // Not an error of ours: the visitor declined, or backed out of the
       // account chooser. Logged at info for that reason — and truncated,
       // because it is a query parameter anyone can set to any length.
       req.log.info({ oauthError: error.slice(0, 64) }, 'google sign-in did not complete');
-      return alreadyIn() ?? signInFailed(reply, error === 'access_denied' ? 'cancelled' : 'failed');
+      return signInFailed(req, reply, error === 'access_denied' ? 'cancelled' : 'failed');
     }
     if (!code || !state || !states.includes(state)) {
       // The state values themselves are never logged — they are this
@@ -284,7 +299,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         { hasCode: Boolean(code), hasState: Boolean(state), statesHeld: states.length, host: req.headers.host },
         'oauth callback did not match a state this browser started',
       );
-      return alreadyIn() ?? signInFailed(reply, 'expired');
+      return signInFailed(req, reply, 'expired');
     }
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -299,7 +314,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     });
     if (!tokenRes.ok) {
       req.log.error({ status: tokenRes.status }, 'google token exchange failed');
-      return signInFailed(reply, 'failed');
+      return signInFailed(req, reply, 'failed');
     }
     const tokens = (await tokenRes.json()) as { access_token: string };
     const infoRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
@@ -307,7 +322,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     });
     if (!infoRes.ok) {
       req.log.error({ status: infoRes.status }, 'google userinfo failed');
-      return signInFailed(reply, 'failed');
+      return signInFailed(req, reply, 'failed');
     }
     const info = (await infoRes.json()) as { sub: string; email?: string; name?: string; picture?: string };
     const user = upsertGoogleUser(info.sub, info.email ?? null, info.name ?? info.email ?? 'Player', info.picture ?? null);
