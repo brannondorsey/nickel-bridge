@@ -42,43 +42,44 @@ describe('Home', () => {
     expect(screen.getByText(/Board 2 of 4 in progress/)).toBeInTheDocument();
   });
 
-  it('leads with the rating tile, and its drift since the last crossing', async () => {
+  it('leads with the rating tile, and its drift as the ladder\'s own arrow', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
     // the hero number is per-digit (FlipDigits), so it is read off the tile
     expect(document.querySelector('.home-rating .flipdigits')).toHaveTextContent('1487');
-    const delta = screen.getByText(/SINCE YOUR LAST CROSSING/);
-    expect(delta).toHaveTextContent('+4 SINCE YOUR LAST CROSSING');
+    // ▲, not "+4 SINCE YOUR LAST CROSSING" — glyph AND colour, matching
+    // Leaderboard.tsx's Movement, with the period explained by the sheet
+    const delta = screen.getByText('▲4');
     expect(delta).toHaveClass('positive');
+    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
     // ...in place of the greeting, not beside it
     expect(screen.queryByText(/Good (morning|afternoon|evening), Margaret/)).not.toBeInTheDocument();
     expect(screen.queryByText('The bridge is open.')).not.toBeInTheDocument();
   });
 
-  it('inks a slide while you were away in the negative color', async () => {
+  it('inks a slide while you were away with the down arrow', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: -7 }) });
-    const delta = await screen.findByText(/SINCE YOUR LAST CROSSING/);
-    expect(delta).toHaveTextContent('−7 SINCE YOUR LAST CROSSING');
+    const delta = await screen.findByText('▼7');
     expect(delta).toHaveClass('negative');
   });
 
-  // Zero is the ordinary answer on a quiet week, and "+0 SINCE YOUR LAST
-  // CROSSING" is a sentence about nothing on a screen opened daily. Stats
-  // decides this the other way for "+0 THIS MONTH" — see RatingTile.
+  // Zero is the ordinary answer on a quiet week, and an arrow reading zero is
+  // a claim about nothing on a screen opened daily. Stats decides this the
+  // other way for "+0 THIS MONTH" — see RatingTile.
   it('says nothing at all when nothing moved while you were away', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: 0 }) });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
-    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+    expect(document.querySelector('.rating-tile-delta')).toBeNull();
   });
 
   it('shows no delta before any crossing has finished', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null }) });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
-    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+    expect(document.querySelector('.rating-tile-delta')).toBeNull();
   });
 
   // ELO_INITIAL is a starting value, not an achievement — a crossing only rates
@@ -93,13 +94,23 @@ describe('Home', () => {
     expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
   });
 
-  // The drift figure is the number most likely to prompt "why did that move
-  // without me?", so the label beside it opens the term that answers it.
-  it('opens the rating term from the tile label', async () => {
+  // The arrow is the figure most likely to prompt "why did that move without
+  // me?", so BOTH it and the label open the term that answers it — a door on
+  // the label alone would put the explanation beside the one number that
+  // doesn't need it.
+  it('opens the rating-drift term from the label AND from the arrow', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
-    const label = await screen.findByRole('button', { name: 'NICKEL RATING' });
-    expect(label).toHaveClass('rating-tile-explain');
+    expect(await screen.findByRole('button', { name: 'NICKEL RATING' })).toHaveClass('rating-tile-explain');
+    expect(screen.getByRole('button', { name: '▲4' })).toHaveClass('rating-tile-explain');
+  });
+
+  // Nothing to explain without a rating, and nothing to click either.
+  it('leaves the tile as plain text when there is no term to open', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { ratedTournaments: 0 }) });
+    await screen.findByText('The bridge is open.');
+    expect(screen.queryByRole('button', { name: 'NICKEL RATING' })).not.toBeInTheDocument();
   });
 
   it('lists finished crossings under TOLLS PAID with date, field, pct and rank', async () => {

@@ -87,8 +87,10 @@ export default function Lobby() {
                 // it says nothing rather than "+0 SINCE YOUR LAST CROSSING" —
                 // see RatingTile's note on why Stats decides this differently.
                 delta={rated.eloDrift || null}
-                deltaLabel="SINCE YOUR LAST CROSSING"
-                explainTerm="elo-rating"
+                // No deltaLabel: Home takes the ladder's bare ▲12 / ▼12 rather
+                // than spelling the period out, and 'rating-drift' — opened by
+                // the label OR the arrow — is where the period gets explained.
+                explainTerm="rating-drift"
               />
             </div>
           ) : (

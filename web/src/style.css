@@ -2880,22 +2880,33 @@ a.board-row:hover {
   /* ...so each half wraps as a unit or not at all — see above */
   white-space: nowrap;
 }
-/* The label as a glossary opener (Home passes `explainTerm`), where the drift
-   figure beside it is the number most likely to prompt "why did that move
-   without me?" — 'elo-rating' answers it in one line. Deliberately NOT the
-   shared .gloss-link: that rule sets `font: inherit`, and it is declared far
-   below .label-caps, so it would quietly strip the label's face, weight and
-   size. Everything here is the button reset and the dotted underline; the
-   typography stays .label-caps's. */
+/* The glossary opener worn by BOTH halves of the line when Home passes
+   `explainTerm` — the label and the ▲12 beside it, since the arrow is the part
+   that prompts "why did that move without me?" and 'rating-drift' answers
+   exactly that. Deliberately NOT the shared .gloss-link: that rule sets
+   `font: inherit`, and it is declared far below .label-caps, so it would
+   quietly strip the label's face, weight and size — and it would do the same
+   to the delta's. Everything here is the button reset and the dotted
+   underline; each half keeps its own typography and its own ink.
+
+   The underline is `currentColor` rather than a literal, which is what lets
+   one rule serve both: under the label it draws in .label-caps's muted ink,
+   under the delta in the --positive/--negative it is already carrying. A
+   muted rule under a green arrow would read as two unrelated marks. */
 .rating-tile-explain {
   appearance: none;
   background: none;
   border: none;
   padding: 0;
   margin: 0;
+  /* Deliberately NO `color`: a button's UA default loses to any author rule, so
+     the label keeps .label-caps's muted ink and the delta keeps its
+     --positive/--negative. `color: inherit` was tried and is the trap — it is a
+     single-class rule declared BELOW .positive/.negative, so it won on source
+     order and drew a green arrow in plain ink. */
   line-height: inherit;
   cursor: pointer;
-  text-decoration: underline dotted var(--muted);
+  text-decoration: underline dotted currentColor;
   text-decoration-thickness: 1px;
   text-underline-offset: 2.5px;
 }

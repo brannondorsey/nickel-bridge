@@ -828,6 +828,15 @@ export const TERMS: GlossaryTerm[] = [
     related: ['fit', 'limit-raise'],
   },
   {
+    slug: 'rating-drift',
+    term: 'Rating drift',
+    def: 'How far your Nickel rating has moved since you last finished a crossing — the small arrow beside the rating on the home screen. Every point of it comes from somebody else: when a new player finishes a board you have already played, that board is matchpointed again and your share of it moves.',
+    example: 'You have not touched a card all week and the rating reads ▼3 — two friends finished a crossing you paid for on Sunday.',
+    themes: ['scoring'],
+    aliases: ['drift', 'rating movement'],
+    related: ['elo-rating', 'matchpoints'],
+  },
+  {
     slug: 'rebid',
     term: 'Rebid',
     def: 'A player’s second (or later) bid, refining the picture their first bid painted.',

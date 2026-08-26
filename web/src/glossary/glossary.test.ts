@@ -39,9 +39,14 @@ describe('glossary core data', () => {
     }
   });
 
-  it('covers the whole curated sheet (plus the First crossing easter egg)', () => {
-    expect(TERMS.length).toBe(126);
-    // the ledger's one non-bridge entry: the app tour, filed as a term
+  it('covers the whole curated sheet (plus the app entries filed as terms)', () => {
+    // 126 curated bridge terms + First crossing + Rating drift
+    expect(TERMS.length).toBe(127);
+    // Rating drift is the second non-bridge entry: it explains the home
+    // screen's own arrow, and both the NICKEL RATING label and the delta
+    // beside it open this sheet (ds/RatingTile.tsx).
+    expect(TERMS.find((t) => t.slug === 'rating-drift')?.themes).toEqual(['scoring']);
+    // the ledger's first non-bridge entry: the app tour, filed as a term
     const egg = TERMS.find((t) => t.slug === 'first-crossing');
     expect(egg?.action?.to).toBe('/tour');
     expect(egg?.linkify).toBe(false); // never auto-linked in game prose

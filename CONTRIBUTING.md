@@ -166,7 +166,8 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
                 that resolves which sign-in doors a deployment has, and RatingTile — the
                 NICKEL RATING flip-digit hero Home and the Stats profile SHARE, differing only in
-                what its delta measures, and MedalBar/MedalGlyphs —
+                what its delta measures and whether it names the period (Home takes the ladder's
+                bare ▲12; both halves open the 'rating-drift' term), and MedalBar/MedalGlyphs —
                 the Home rail and the shared suit-glyph row, see "Medal progress" below)
                 + components/game/
                 (auction, bid box,
@@ -1783,8 +1784,17 @@ index cannot serve both directions.
 **Home leads with the rating tile, and its delta is the one thing this data model cannot
 subtract for.** A player a crossing has rated arrives at Home on their NICKEL RATING
 (`ds/RatingTile.tsx`, lifted out of the Stats hero so the two screens draw the same tile rather
-than two that resemble each other) with a signed delta beside it: how far the rating has moved
-since they last finished a crossing. The greeting still stands for a player no crossing has
+than two that resemble each other) with a delta beside it: how far the rating has moved
+since they last finished a crossing. On Home that delta is the ladder's own movement glyph —
+`▲12` / `▼12`, `Leaderboard.tsx`'s `Movement` idiom, glyph AND colour so it survives a flattened
+palette — while Stats keeps naming its period ("+34 THIS MONTH"). `deltaLabel` is what picks
+between the two shapes, and the split is about reading distance: a profile figure is studied,
+Home's is glanced at, and naming the period there cost two lines to say something the glossary
+says better. Which is why BOTH the label and the arrow open the `rating-drift` term
+(`explainTerm`) — a door on the label alone would put the explanation beside the one figure
+that doesn't need it. That term is the second non-bridge entry in the ledger, after the First
+crossing easter egg; `glossary.test.ts` pins the count and the Glossary page derives its
+"N CORE TERMS" from `TERMS.length` rather than a literal. The greeting still stands for a player no crossing has
 rated yet — `users.elo` reads `ELO_INITIAL` until one does, and 1200 presented as a hero figure
 claims something nobody earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards`
 or the medal rail's tournament count: a crossing only rates you once a second human finishes the
@@ -1809,8 +1819,9 @@ and when a second human finishes it later the points it finally hands out show u
 is exactly the case this figure exists to report. **Your own swing is never drift**: it is folded
 into the baseline in the same breath, and it is already reported on that crossing's own result
 screen. And **zero renders as nothing at all** on Home — it is the resting state of a screen
-opened daily — where Stats keeps drawing "+0 THIS MONTH", a real finding about a month of play;
-`RatingTile` renders any non-null delta and leaves that editorial call to its two callers.
+opened daily, and an arrow reading zero is a claim about nothing — where Stats keeps drawing
+"+0 THIS MONTH", a real finding about a month of play; `RatingTile` renders any non-null delta
+and leaves that editorial call to its two callers.
 
 The alternative considered and not taken was a second ratings replay restricted to
 `boards.updated_at <= T`, which needs no column and works retroactively. It was rejected on cost
