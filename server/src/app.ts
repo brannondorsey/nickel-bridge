@@ -462,8 +462,7 @@ export async function buildApp(): Promise<FastifyInstance> {
    * follows that the failure mode if that ever changed is loud on that route
    * before it is quiet on this one.
    *
-   * It
-   * lives in the same hook as the throwaway case rather than a second one, so
+   * It lives in the same hook as the throwaway case rather than a second one, so
    * exactly one X-Robots-Tag is ever set — Fastify's reply.header() overwrites
    * for everything but set-cookie, but "one hook, one header" needs no reader to
    * know that.
