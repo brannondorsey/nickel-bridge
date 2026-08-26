@@ -9,7 +9,7 @@ import { recentActivity } from './activity.js';
 import { enqueueAiField, noteInteractiveRequest, noteTournamentActivity } from './ai-players.js';
 import { buildCompare, compareMin } from './compare.js';
 import { hasSession, optionalUser, registerAuthRoutes, requireUserWithHandle } from './auth.js';
-import { COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
+import { CANONICAL_HOST, COOKIES_SECURE, PUBLIC_ORIGIN, isCanonicalHost } from './config.js';
 import { BOARDS_PER_TOURNAMENT, db } from './db.js';
 import { registerDemoRoutes } from './demo.js';
 import { getBoardAnalysis } from './analyze.js';
@@ -438,13 +438,66 @@ export async function buildApp(): Promise<FastifyInstance> {
   // searchers a database that gets wiped on a schedule. Both flags are the
   // reliable tell: invariant 5 forbids either on the production app.
   const throwawayOrigin = process.env.DEMO === '1' || process.env.DEV_AUTH === '1';
-  if (throwawayOrigin) {
+
+  /**
+   * The same trap one level down: a NON-CANONICAL HOSTNAME of a real deployment.
+   *
+   * Production is `bridge.brannon.online`, but the same machine also answers on
+   * `nickel-bridge.fly.dev` — the unproxied Fly origin, which is not a throwaway
+   * anything. It serves the entire production app, with neither flag set, so it
+   * serves the production robots.txt (`Allow: /`, sitemap and all) and used to
+   * carry no noindex header: a complete, fully indexable duplicate of the real
+   * site, competing with it for the same queries. An old bookmark from before
+   * the custom domain, or any crawler that ever saw that hostname, is enough to
+   * get it into the index — and the duplicate that wins may well be the one
+   * nobody links to.
+   *
+   * Unlike `throwawayOrigin`, this cannot be decided at boot: one process serves
+   * both hostnames, so the test has to run per request, on the Host header. That
+   * the header survives the trip is not an assumption this change introduces —
+   * both Cloudflare and Fly's proxy pass the original Host through, and
+   * auth.ts's `/auth/google` bounce already depends on it in exactly the same
+   * way: if the canonical host arrived here wearing some other name, sign-in
+   * would redirect to itself forever rather than work, which it does. It also
+   * follows that the failure mode if that ever changed is loud on that route
+   * before it is quiet on this one.
+   *
+   * It
+   * lives in the same hook as the throwaway case rather than a second one, so
+   * exactly one X-Robots-Tag is ever set — Fastify's reply.header() overwrites
+   * for everything but set-cookie, but "one hook, one header" needs no reader to
+   * know that.
+   *
+   * WHAT THIS DELIBERATELY DOES NOT DO is serve a disallow-all robots.txt on the
+   * non-canonical host. robotsTxt()'s bytes must stay a pure function of
+   * SITE_ROUTES and the throwaway flag, because those bytes are load-bearing for
+   * the edge deploy pipeline: `scripts/cloudflare.mjs --snapshot` (before every
+   * deploy) and `--purge --since` (after) hash what `<app>.fly.dev` serves for a
+   * sample of URLs — /robots.txt among them — and purge Cloudflare's cache for
+   * whatever moved. Pin fly.dev's robots.txt to a constant `Disallow: /` and a
+   * genuine SITE_ROUTES change would alter the CANONICAL host's robots.txt while
+   * leaving the sampled bytes identical: the comparison finds nothing, purges
+   * nothing, and the edge serves a stale robots.txt for the full 30-day TTL.
+   * Response headers are not part of that hash, which is what makes the
+   * header-only fix safe here. It is also the stronger half of the pair anyway —
+   * robots.txt only asks a crawler not to FETCH, while X-Robots-Tag: noindex is
+   * what actually keeps a URL out of the index, and a URL can be indexed from
+   * inbound links without ever being fetched.
+   */
+  // The outer gate is only about not registering a hook that could never fire:
+  // with neither flag set and no canonical host to be non-canonical to (local
+  // dev, any deployment without a usable BASE_URL), there is nothing to mark.
+  // isCanonicalHost() returns true in that case anyway, so the inner test is
+  // correct on its own — this just keeps the no-op off every request.
+  if (throwawayOrigin || CANONICAL_HOST) {
     // Belt and braces with the robots.txt below: robots.txt asks a crawler not
     // to fetch, X-Robots-Tag tells one that fetched anyway not to index. The
     // second matters more here, since a URL can be indexed from inbound links
     // alone — exactly what a PR preview link in a pull request is.
-    app.addHook('onSend', (_req, reply, payload, done) => {
-      reply.header('X-Robots-Tag', 'noindex, nofollow');
+    app.addHook('onSend', (req, reply, payload, done) => {
+      if (throwawayOrigin || !isCanonicalHost(req.headers.host)) {
+        reply.header('X-Robots-Tag', 'noindex, nofollow');
+      }
       done(null, payload);
     });
   }

@@ -6,6 +6,15 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { freshDbEnv } from './helpers.js';
 
 freshDbEnv('seo');
+// This suite's premise is a deployment with NO canonical host: src/config.ts
+// parses BASE_URL once at module load, and the noindex hook only marks a
+// non-canonical hostname when there is a canonical one to differ from. Stated
+// explicitly rather than inherited, because vitest reuses a worker PROCESS
+// across test files while resetting their module registries — so a suite that
+// sets BASE_URL (oauth, canonical-host) leaves it set for whatever runs next
+// in that fork, and this one would then noindex every inject() (whose default
+// Host is `localhost:80`) depending only on file order.
+delete process.env.BASE_URL;
 
 /**
  * Search-engine surface: robots.txt, the noindex guard on throwaway origins,
@@ -15,6 +24,10 @@ freshDbEnv('seo');
  * and builds its own app rather than sharing one. freshDbEnv() turns DEV_AUTH
  * on for every other suite, which is exactly the preview-shaped case — the
  * production-shaped tests have to clear it explicitly.
+ *
+ * The other half of the noindex guard — a real deployment's NON-canonical
+ * hostnames, which needs BASE_URL set before src/app.js is imported — lives in
+ * canonical-host.test.ts for exactly that reason.
  */
 let buildApp: () => Promise<FastifyInstance>;
 let webDist: string;
@@ -121,6 +134,21 @@ describe('noindex header', () => {
     const app = await productionApp();
     const res = await app.inject({ method: 'GET', url: '/robots.txt' });
     expect(res.headers['x-robots-tag']).toBeUndefined();
+    await app.close();
+  });
+
+  // A real deployment's non-canonical hostnames are noindexed too (see
+  // canonical-host.test.ts) — but only where there IS a canonical host. This
+  // suite runs with no usable BASE_URL, which is the local-dev shape: nothing
+  // to be non-canonical to, so no Host header may earn the header. Getting
+  // this backwards would noindex every response of every dev run and, worse,
+  // of any deployment that forgot to set BASE_URL.
+  it('is absent for any hostname when BASE_URL names no origin', async () => {
+    const app = await productionApp();
+    for (const host of ['nickel-bridge.fly.dev', 'localhost:3000', 'anything.example']) {
+      const res = await app.inject({ method: 'GET', url: '/robots.txt', headers: { host } });
+      expect(res.headers['x-robots-tag'], host).toBeUndefined();
+    }
     await app.close();
   });
 

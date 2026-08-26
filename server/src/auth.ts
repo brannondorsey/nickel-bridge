@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { DIFFICULTIES, type SettableDifficulty } from '@bridge/ai';
-import { CANONICAL_HOST, COOKIES_SECURE, PUBLIC_ORIGIN } from './config.js';
+import { COOKIES_SECURE, PUBLIC_ORIGIN, isCanonicalHost } from './config.js';
 import { db, UserRow } from './db.js';
 import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
@@ -243,12 +243,10 @@ export function registerAuthRoutes(app: FastifyInstance): void {
      * identical and purge nothing, which is the exact failure mode that
      * script's doc comment warns about at length.
      */
-    // Lowercased because a Host header is case-insensitive while a string
-    // compare is not, and CANONICAL_HOST comes out of `new URL().host`, which
-    // is already normalized. A mixed-case Host would otherwise take a second,
-    // pointless hop through here before matching — it terminates either way,
-    // but odd hostnames are the entire subject of this route.
-    if (CANONICAL_HOST && req.headers.host?.toLowerCase() !== CANONICAL_HOST) {
+    // isCanonicalHost (config.ts) owns the lowercasing and the "no BASE_URL
+    // means nothing is non-canonical" case, so this route and app.ts's noindex
+    // hook cannot drift apart about what counts as the canonical host.
+    if (!isCanonicalHost(req.headers.host)) {
       return reply.redirect(`${PUBLIC_ORIGIN}/auth/google`);
     }
     const state = randomBytes(16).toString('base64url');

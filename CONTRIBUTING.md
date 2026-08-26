@@ -67,7 +67,9 @@ packages/ai     model.ts (loads models/{sl,rl-fsp}.{json,bin}, 4×1024 MLP → 3
                 unshipped card-"forgetting" prototype — see its doc comment and
                 docs/difficulty-calibration-research.md)
 server          index.ts (entry) → app.ts (buildApp(): all routes, serves web/dist),
-                config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE,
+                config.ts (the ONE parse of BASE_URL — PUBLIC_ORIGIN/COOKIES_SECURE/
+                CANONICAL_HOST + the isCanonicalHost compare auth.ts's OAuth entry
+                point and app.ts's noindex hook share,
                 plus the boot assertion index.ts calls; lenient at import so tests
                 can import it, strict at boot, see its doc comment),
                 auth.ts (Google OAuth + DEV_AUTH dev login), db.ts (schema DDL, WAL),
@@ -747,7 +749,10 @@ origin; the `oauth_state` cookie, though, is set by whichever host served `/auth
 a cookie is scoped to its host. Production is `bridge.brannon.online` behind Cloudflare, but
 the same machine also serves `nickel-bridge.fly.dev` directly — that origin runs the whole
 app and, since it is production (neither `DEMO` nor `DEV_AUTH`), serves the production
-`robots.txt` with `Allow: /` rather than the throwaway shut-out. So an old link, a bookmark
+`robots.txt` with `Allow: /` rather than the throwaway shut-out (that hostname is
+`X-Robots-Tag: noindex`ed now — see "Discoverability" below, which shares this route's
+`isCanonicalHost` compare — but the `robots.txt` bytes deliberately still say `Allow: /`,
+and the reasoning there is worth reading before touching either). So an old link, a bookmark
 predating the custom domain, or anything a crawler surfaced put the state cookie on `.fly.dev`
 and the callback on `bridge.brannon.online`, which carried nothing: sign-in failed **100% of
 the time**, with nothing on screen explaining why. `/auth/google` now bounces to
@@ -2697,6 +2702,42 @@ it emits. See "keeping it that way" at the end of this section.
   to disallow-all *and* adds `X-Robots-Tag: noindex, nofollow` to every response — the
   header is the one that matters, since a preview link posted in a PR is inbound-link
   enough to get a URL indexed without ever being fetched.
+- **So do a real deployment's NON-CANONICAL hostnames, and that is a separate check.**
+  Production answers on two names: `bridge.brannon.online` (canonical, fronted by
+  Cloudflare) and `nickel-bridge.fly.dev`, the unproxied Fly origin `scripts/cloudflare.mjs`
+  compares bytes against. The second is not a throwaway anything — it is the whole
+  production app, with neither flag set — so it served the production `robots.txt`
+  (`Allow: /`, sitemap and all) and carried no noindex header: a complete, fully indexable
+  duplicate of the real site, competing with it for the same queries, and the copy search
+  picks is not necessarily the one anybody links to. An old bookmark predating the custom
+  domain, or any crawler that ever saw that hostname, is enough to get it in — the same
+  exposure that broke sign-in for everyone who arrived that way (see "The app answers on
+  more than one hostname" above). `app.ts` now marks any response whose `Host` isn't
+  `CANONICAL_HOST`. Two things about the shape:
+  - **It is a per-request test inside the hook, not a boot-time `if` around it**, unlike
+    the throwaway case directly above. A whole deployment either is throwaway or isn't; one
+    process serves both of these hostnames, so only the request knows. `config.ts` exports
+    the compare as `isCanonicalHost()` and `auth.ts`'s OAuth entry point uses the same one
+    — two hand-written copies of one lowercased `Host` test is the drift this codebase
+    spends its comments avoiding, and it is silent in both directions (miss the lowercasing
+    and a capitalised `Host` noindexes the real site; miss the null case and every local
+    `npm run dev` noindexes itself). It returns TRUE when `BASE_URL` names no origin, so a
+    deployment with no canonical host marks nothing.
+  - **It is a header and NOT a `robots.txt` change, deliberately.** Serving a disallow-all
+    `robots.txt` on the fly.dev host is the tempting other half, and it would break the edge
+    deploy pipeline in a way that stays silent for up to 30 days. `--snapshot` (before every
+    deploy) and `--purge --since` (after) hash what `<app>.fly.dev` serves for a sample of
+    URLs — `/robots.txt` among them — and purge Cloudflare's cache for whatever moved. Pin
+    that host's `robots.txt` to a constant and a genuine `SITE_ROUTES` change would alter the
+    CANONICAL host's `robots.txt` while leaving the sampled bytes identical: the comparison
+    finds nothing, purges nothing, and the edge keeps serving a stale `robots.txt` for the
+    full TTL. So `robotsTxt()` and its `throwaway` flag stay exactly as they are, and
+    `server/test/canonical-host.test.ts` pins the two hosts' bodies as byte-identical.
+    Response headers are not part of that hash, which is what makes the header-only fix
+    safe — and the header is the stronger half anyway, for the same reason it is on a
+    preview: `robots.txt` only asks a crawler not to FETCH, while `noindex` is what keeps a
+    URL out of the index, and a URL can be indexed from inbound links without ever being
+    fetched.
 
 Two things to keep in mind when editing. `web/index.html` must keep its `seo:start`/
 `seo:end` markers and its `<div id="root"></div>` exactly as they are — the prerender
