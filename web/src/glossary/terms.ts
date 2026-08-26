@@ -834,6 +834,11 @@ export const TERMS: GlossaryTerm[] = [
     example: 'You have not touched a card all week and the rating reads ▼3 — two friends finished a crossing you paid for on Sunday.',
     themes: ['scoring'],
     aliases: ['drift', 'rating movement'],
+    // Searchable by those aliases, never auto-linked — the First crossing
+    // precedent for an app-vocabulary entry. 'drift' is an ordinary English
+    // word, and the first receipt caption or tour line that happens to use it
+    // would otherwise become a link to this sheet.
+    linkify: false,
     related: ['elo-rating', 'matchpoints'],
   },
   {

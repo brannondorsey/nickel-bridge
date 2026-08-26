@@ -84,8 +84,9 @@ export default function Lobby() {
               <RatingTile
                 elo={rated.elo}
                 // Zero drift is the resting state of a screen opened daily, so
-                // it says nothing rather than "+0 SINCE YOUR LAST CROSSING" —
-                // see RatingTile's note on why Stats decides this differently.
+                // it says nothing at all rather than drawing an arrow that
+                // claims nothing moved — see RatingTile's note on why Stats
+                // decides this differently for "+0 THIS MONTH".
                 delta={rated.eloDrift || null}
                 // No deltaLabel: Home takes the ladder's bare ▲12 / ▼12 rather
                 // than spelling the period out, and 'rating-drift' — opened by

@@ -61,6 +61,13 @@ export function RatingTile({
         ? `${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${deltaLabel}`
         : `${delta >= 0 ? '▲' : '▼'}${Math.abs(delta)}`;
   const deltaClass = `rating-tile-delta num ${delta !== null && delta >= 0 ? 'positive' : 'negative'}`;
+  // The ladder gets away with a bare ▲12 because its Movement is a
+  // non-focusable <span>; here the same glyph becomes a control, and
+  // "up-pointing triangle 4, button" is not a thing anyone can act on. Words,
+  // the way RehearsalRail's stubs state their verdict — and only on the arrow
+  // form, since the labelled one already reads as a sentence.
+  const deltaAria =
+    delta === null || deltaLabel ? undefined : `Rating ${delta >= 0 ? 'up' : 'down'} ${Math.abs(delta)} since your last crossing`;
   return (
     <>
       <FlipDigits value={elo} size={size} />
@@ -73,7 +80,7 @@ export function RatingTile({
           <span className="label-caps rating-tile-label">NICKEL RATING</span>
         )}
         {deltaText === null ? null : open ? (
-          <button type="button" className={`${deltaClass} rating-tile-explain`} onClick={open}>
+          <button type="button" className={`${deltaClass} rating-tile-explain`} aria-label={deltaAria} onClick={open}>
             {deltaText}
           </button>
         ) : (

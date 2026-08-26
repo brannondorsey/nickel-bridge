@@ -230,13 +230,27 @@ export default function Board() {
     } else if (sawLiveRef.current) {
       sawLiveRef.current = false;
       setShowReceipt(true);
-      // The tournament (not just this board) just finished live — Home's
-      // medal rail and "TOLLS PAID" list read off MeContext/api.tournaments(),
-      // neither of which this screen otherwise touches, so without this a
-      // medal earned on this exact board stays uncolored until a hard reload.
-      // Never true for a rehearsal (board.rehearsal set): it isn't a real
-      // tournament board, so this would just be a wasted /api/me round trip.
-      if (board && !board.rehearsal && board.boardNo === board.totalBoards) refresh();
+      // A real board just finished live, so the account state Home reads off
+      // MeContext is stale — and this screen otherwise never touches it, so
+      // without this it stays stale for the rest of the session rather than
+      // until the next navigation.
+      //
+      // This used to fire only on `boardNo === totalBoards`, on the theory that
+      // an ordinary mid-tournament board touches nothing. It does: /api/me's
+      // `boards` count is what smooths the medal bar's percentage board by
+      // board, so the rail sat frozen mid-tournament. And as a test for "my
+      // crossing just completed" — which is what the medal itself and now the
+      // rating tile both need — it only holds while boards are played in
+      // order. Finish board 4 by URL first and the crossing completes on board
+      // 3, where this never fired: a first-ever rating would leave Home
+      // greeting you until a hard reload. The board view carries no done-count
+      // to test honestly, so this refetches on every completed board instead —
+      // four cheap /api/me per crossing, on a request that just ran a full Elo
+      // replay anyway.
+      //
+      // Still never for a rehearsal (board.rehearsal set): it isn't a real
+      // tournament board, so this would be a genuinely wasted round trip.
+      if (board && !board.rehearsal) refresh();
     }
   }, [boardState]);
 

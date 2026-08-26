@@ -183,7 +183,7 @@ export default function Scenarios() {
   };
 
   /**
-   * Home's rating drift ("+4 SINCE YOUR LAST CROSSING"), which is the one state
+   * Home's rating drift (the ▲4 beside NICKEL RATING), which is the one state
    * on that screen a tester cannot produce for themselves: it needs another
    * human to finish one of your old fields AFTER you did, and the seeder only
    * runs at boot and reset. POST /api/demo/drift walks a seeded bot through

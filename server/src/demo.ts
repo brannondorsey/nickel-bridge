@@ -6,7 +6,7 @@ import { playThrough, seededErraticStrategy, tick } from './bot-play.js';
 import { BOARDS_PER_TOURNAMENT, ClaimRule, TournamentRow, UserRow, createCrossing, db } from './db.js';
 import { boardView, ensureAdvanced, httpError, loadBoard, submitCall, submitPlay } from './game.js';
 import { Scenario, SCENARIOS, exhibitName, scenarioById } from './scenarios.js';
-import { getTournament } from './tournaments.js';
+import { doneBoardCount, getTournament } from './tournaments.js';
 
 /**
  * Demo mode (DEMO=1) — preview-deployment conveniences for click-testing.
@@ -46,9 +46,6 @@ const stmtLastFinishedCrossing = db.prepare(
    HAVING COUNT(*) >= ?
     ORDER BY MAX(b.updated_at) DESC, b.tournament_id DESC
     LIMIT 1`,
-);
-const stmtDoneCountFor = db.prepare(
-  `SELECT COUNT(*) AS n FROM boards WHERE tournament_id = ? AND user_id = ? AND state = 'done'`,
 );
 const stmtElo = db.prepare(`SELECT elo FROM users WHERE id = ?`);
 
@@ -379,7 +376,7 @@ export function registerDemoRoutes(app: FastifyInstance): void {
       // is a no-op rather than a second helping of drift.
       const { ensureBot } = await import('./demo-seed.js');
       const passer = DRIFT_PASSER_HANDLES.map(ensureBot).find(
-        (bot) => (stmtDoneCountFor.get(t.id, bot.id) as { n: number }).n < BOARDS_PER_TOURNAMENT,
+        (bot) => doneBoardCount(t.id, bot.id) < BOARDS_PER_TOURNAMENT,
       );
       if (!passer) return { drifted: false as const };
 

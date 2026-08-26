@@ -5,7 +5,6 @@ import { BidTypeKey, COMPARE_MIN_BOARDS_FALLBACK, ConventionKey, PlayerStats, Ri
 import { AppHeader } from '../components/ds/AppHeader';
 import { Button } from '../components/ds/Button';
 import { DayGrid, dateToUnix, sumInWindow } from '../components/ds/DayGrid';
-import { FlipDigits } from '../components/ds/FlipDigits';
 import { RatingTile } from '../components/ds/RatingTile';
 import { Loading } from '../components/ds/Loading';
 import { MedalGlyphs } from '../components/ds/MedalGlyphs';
@@ -411,11 +410,7 @@ export default function Player() {
             </div>
           </div>
         ) : null}
-        {!house ? (
-          <>
-            <RatingTile elo={t.currentElo} delta={t.monthlyEloDelta} deltaLabel="THIS MONTH" />
-          </>
-        ) : null}
+        {!house ? <RatingTile elo={t.currentElo} delta={t.monthlyEloDelta} deltaLabel="THIS MONTH" /> : null}
         {/* Compare needs a record on BOTH sides to say anything — below the
             floor every measure is set aside, because at a handful of boards any
             difference between two players is the shuffle rather than the play.

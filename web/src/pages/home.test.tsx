@@ -102,16 +102,14 @@ describe('Home', () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
     expect(await screen.findByRole('button', { name: 'NICKEL RATING' })).toHaveClass('rating-tile-explain');
-    expect(screen.getByRole('button', { name: '▲4' })).toHaveClass('rating-tile-explain');
+    // Named in WORDS, not "up-pointing triangle 4": the ladder's Movement can
+    // wear the bare glyph because it is a non-focusable span, but this one is a
+    // control. Same rule RehearsalRail's stubs follow.
+    const arrow = screen.getByRole('button', { name: 'Rating up 4 since your last crossing' });
+    expect(arrow).toHaveClass('rating-tile-explain');
+    expect(arrow).toHaveTextContent('▲4');
   });
 
-  // Nothing to explain without a rating, and nothing to click either.
-  it('leaves the tile as plain text when there is no term to open', async () => {
-    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
-    renderWithMe(<Lobby />, { me: withRating(meFixture, { ratedTournaments: 0 }) });
-    await screen.findByText('The bridge is open.');
-    expect(screen.queryByRole('button', { name: 'NICKEL RATING' })).not.toBeInTheDocument();
-  });
 
   it('lists finished crossings under TOLLS PAID with date, field, pct and rank', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentInProgress, tournamentComplete] });

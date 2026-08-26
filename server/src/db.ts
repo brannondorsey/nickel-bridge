@@ -396,9 +396,18 @@ if (!userColumns.has('beta_features')) {
 // is really "when this shipped" rather than "your last crossing" — which reads
 // as 0 on day one (and 0 renders as nothing at all), and self-corrects the
 // next time they finish a crossing.
+//
+// The ALTER and its backfill go through db.transaction() together, the same way
+// the `number` migration below bundles its own two statements: SQLite's DDL is
+// transactional, and split apart a crash between them would leave the column
+// present-but-NULL — at which point the `!userColumns.has(...)` guard skips the
+// backfill forever and every pre-existing account is permanently anchored at
+// NULL rather than at today's rating.
 if (!userColumns.has('elo_at_last_crossing')) {
-  db.exec(`ALTER TABLE users ADD COLUMN elo_at_last_crossing INTEGER`);
-  db.exec(`UPDATE users SET elo_at_last_crossing = elo`);
+  db.transaction(() => {
+    db.exec(`ALTER TABLE users ADD COLUMN elo_at_last_crossing INTEGER`);
+    db.exec(`UPDATE users SET elo_at_last_crossing = elo`);
+  })();
 }
 
 // Migration: `kind` discriminates demo-mode exhibit tournaments ('exhibit',
@@ -620,6 +629,15 @@ export interface UserRow {
   /** 1 = the holographic Foil Trumps plate over the trump suit; 0 (default) = plain cards */
   foil_trumps: number;
   elo: number;
+  /**
+   * `elo` as it stood when this player last finished a crossing — the app's ONE
+   * stored rating snapshot, and the only way Home's tile can report what moved
+   * while they were away. NULL until they finish one (the migration backfills
+   * every account that existed when it ran). Written by stampCrossingBaseline
+   * and read by eloDrift, both in tournaments.ts; see the migration comment
+   * below for why a subtraction over elo_history cannot answer this.
+   */
+  elo_at_last_crossing: number | null;
   created_at: number;
 }
 

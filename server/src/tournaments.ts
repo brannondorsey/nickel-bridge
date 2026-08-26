@@ -856,9 +856,17 @@ export function tournamentEloDeltas(tournamentId: number): Map<number, number> {
  * only way to ask this question at all.
  */
 export function stampCrossingBaseline(userId: number, tournamentId: number): void {
-  const { n } = stmtCrossingBoardsDone.get(tournamentId, userId) as { n: number };
-  if (n < BOARDS_PER_TOURNAMENT) return;
+  if (doneBoardCount(tournamentId, userId) < BOARDS_PER_TOURNAMENT) return;
   stmtStampCrossingBaseline.run(userId);
+}
+
+/**
+ * How many boards of one crossing this player has finished. Exported because
+ * the drift exhibit (demo.ts) asks the same question of its passer bots, and
+ * two prepared statements spelling out one definition is how they drift apart.
+ */
+export function doneBoardCount(tournamentId: number, userId: number): number {
+  return (stmtCrossingBoardsDone.get(tournamentId, userId) as { n: number }).n;
 }
 
 /**

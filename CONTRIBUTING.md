@@ -1987,9 +1987,16 @@ writes), so without an explicit trigger the Home rail would show a stale bar/med
 rest of the visit — including at the exact moment a medal is earned, the one moment this
 widget most wants to be right. So the same effect that flips on the toll receipt
 (`Board.tsx`'s `showReceipt` effect, keyed on the board's `state` going live → `'done'`)
-also calls `refresh()` when the board that just finished was the tournament's **last**
-one (`board.boardNo === board.totalBoards`) — an ordinary mid-tournament board finishing
-doesn't touch account state and skips it.
+also calls `refresh()` on every completed real board. It used to fire only on the
+tournament's **last** one (`board.boardNo === board.totalBoards`), on the theory that an
+ordinary mid-tournament board touches no account state. It does: `/api/me`'s `boards` count
+is exactly what smooths this bar board by board, so the rail sat frozen mid-crossing for the
+rest of the session. And as a stand-in for "my crossing just completed" — which the medal and
+Home's rating tile both need — that test only holds while boards are played IN ORDER: finish
+board 4 by URL first and the crossing completes on board 3, where it never fired. `boardView`
+carries no done-count to test honestly, so the gate is now just "a real board finished"
+(rehearsals still excluded — not a real tournament board). Four cheap `/api/me` per crossing,
+on a request that has just run a full Elo replay anyway.
 
 **Two call sites, two shapes.** `/api/me`'s `medals` field
 (`server/src/medals.ts`'s `medalProgressFor`) is the full `MedalProgress` — earned suits,

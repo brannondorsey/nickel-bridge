@@ -2864,14 +2864,15 @@ a.board-row:hover {
   align-items: baseline;
   gap: 8px;
   margin-top: 8px;
-  /* Wrap, centred, rather than let flex shrink the two items. Stats' delta is
-     short enough to sit on the label's baseline ("+34 THIS MONTH") and still
-     does; Home's names the period it measures ("−12 SINCE YOUR LAST CROSSING")
-     and does not fit beside the label at 390px. Shrinking is what a plain flex
-     row does there, and it broke both halves at once — the label folded to
-     NICKEL / RATING and jammed against the left edge while the delta broke
-     mid-phrase. Wrapping moves the delta whole onto its own centred line under
-     the label instead, which is also the right reading order for it. */
+  /* Wrap, centred, rather than let flex shrink the two items. Home's ▲12 fits
+     beside the label with room to spare; Stats' "+34 THIS MONTH" is the one
+     that can outgrow the line, and a longer caption than that would too.
+     Shrinking is what a plain flex row does there, and it breaks both halves at
+     once — the label folds to NICKEL / RATING and jams against the left edge
+     while the delta breaks mid-phrase. (Not hypothetical: Home carried a
+     "−12 SINCE YOUR LAST CROSSING" caption for one commit and did exactly
+     that.) Wrapping moves the delta whole onto its own centred line under the
+     label instead, which is also the right reading order for it. */
   flex-wrap: wrap;
   justify-content: center;
 }

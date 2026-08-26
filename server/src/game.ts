@@ -216,7 +216,6 @@ function save(b: GameBoard): void {
   );
 }
 
-/** function boundary defeats TS narrowing: advanceRobots mutates row.state */
 /**
  * Everything a completed board owes the rest of the app, in one place — the
  * three call sites below (submitCall, submitPlay, ensureAdvanced) had three
@@ -240,6 +239,7 @@ function settleCompletedBoard(b: GameBoard): void {
   stampCrossingBaseline(b.row.user_id, b.row.tournament_id);
 }
 
+/** function boundary defeats TS narrowing: advanceRobots mutates row.state */
 function boardDone(row: BoardRow): boolean {
   return row.state === 'done';
 }
