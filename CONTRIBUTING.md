@@ -737,6 +737,64 @@ own volume — `fly.toml` is shared across all of them, with the app name always
 per-environment via `--app` in CI (see `.github/workflows/ci.yml`'s
 `deploy-preview`/`deploy-demo`/`deploy-production` jobs).
 
+**Signing in is one origin's business, and every failure is recoverable.** Google OAuth
+lives in `server/src/auth.ts`, and the shape of it is a direct response to players emailing
+to say sign-in was broken — which, for three separate reasons, it was.
+
+**The app answers on more than one hostname, and the OAuth flow used to straddle them.**
+`redirectUri` is built from `BASE_URL`, so Google always returns a visitor to the canonical
+origin; the `oauth_state` cookie, though, is set by whichever host served `/auth/google`, and
+a cookie is scoped to its host. Production is `bridge.brannon.online` behind Cloudflare, but
+the same machine also serves `nickel-bridge.fly.dev` directly — that origin runs the whole
+app and, since it is production (neither `DEMO` nor `DEV_AUTH`), serves the production
+`robots.txt` with `Allow: /` rather than the throwaway shut-out. So an old link, a bookmark
+predating the custom domain, or anything a crawler surfaced put the state cookie on `.fly.dev`
+and the callback on `bridge.brannon.online`, which carried nothing: sign-in failed **100% of
+the time**, with nothing on screen explaining why. `/auth/google` now bounces to
+`${PUBLIC_ORIGIN}/auth/google` before issuing any state (`CANONICAL_HOST` in `config.ts` —
+null when `BASE_URL` names no origin, which is what keeps a deployment without one from
+redirecting its visitors to `localhost`). Deliberately scoped to that ONE route rather than
+applied as an app-wide canonical redirect: `scripts/cloudflare.mjs --snapshot/--purge`
+compares what the ORIGIN serves at `<app>.fly.dev` before and after a deploy, so redirecting
+that hostname wholesale would have it diffing redirects instead of content — finding every
+URL identical and purging nothing, the exact failure that script's doc comment warns about.
+
+**`oauth_state` holds a LIST of recent states, not one.** A single slot meant the second
+start of a sign-in silently voided the first, and a browser starts twice more often than it
+looks: two tabs, back-then-retry out of Google's account chooser, or an impatient second tap
+while a suspended Fly machine wakes. Whichever leg the visitor actually finished, the other
+had already overwritten the cookie. The values are joined by `.`, which base64url never
+produces, and capped at `OAUTH_STATE_MAX`. The window is `OAUTH_STATE_TTL_S` (30 min, up from
+10): a first-time visitor meets an account chooser, a password manager and usually a second
+factor on another device, and ten minutes did not cover it. The cookie is `Secure` on an https
+deployment — the session cookie beside it always was — which is safe because the edge answers
+plain http with a 301. It is cleared on success, so a spent state cannot authenticate a
+replayed callback, and deliberately NOT cleared on failure, since one stale leg says nothing
+about the others a browser still has in flight.
+
+**Four different failures used to answer `400 {"error":"bad oauth state"}`.** The
+cross-host split above; a visitor who cancelled at Google (`error=access_denied`, so no
+`code` — the old `!code` test read a deliberate choice as a protocol violation); an expired
+state; and a clobbered one. They are told apart now, logged apart (never logging the state
+values themselves — the shape is what makes the cause readable), and none is a dead end:
+`signInFailed` redirects to `/?signin=cancelled|expired|failed`, which `pages/Login.tsx`
+renders as one line above a working PLAY THE TOLL. That pairing is the fix — the old response
+was raw JSON with nothing to press, so a visitor whose only problem was slowness had no way
+to learn that trying again would work. An unrecognised `?signin=` value renders nothing, since
+the param rides in a shareable URL. A callback that can no longer complete but whose visitor
+is **already signed in** (the second of two tabs) just goes to `/`, rather than claiming a
+sign-in expired for someone who is demonstrably through the gate. That check lives inside
+`signInFailed` rather than at its call sites, and deliberately: it started at two of the four
+failure exits and was quietly missing from the other two, so the guarantee written here was
+wider than the code behind it. One gate on the one function every failure leaves through is a
+thing a later branch cannot forget to call. The canonical-host compare lowercases the `Host`
+header for the same class of reason — that header is case-insensitive and a string compare is
+not.
+
+`server/test/oauth.test.ts` drives the whole round trip through `app.inject()` with a cookie
+jar **per hostname** — the headline bug is invisible to any single-host test — and stubs
+Google at `fetch`. Eleven of its thirteen cases fail against the pre-fix code.
+
 **Security headers are set once, in the app, for every response.** `server/src/security.ts`
 holds the table — Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options`,
 `Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` — with a paragraph

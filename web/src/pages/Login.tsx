@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import type { LinkPolicy } from '../glossary/linkify';
 import { TERMS } from '../glossary/terms';
 import { Splash } from '../components/Splash';
@@ -47,12 +48,51 @@ const LANDING_LINKS: LinkPolicy = {
 /** The demonstration auction row in III — 1NT graded three stars, as the board really renders it. */
 const DEMO_CALL = makeBid(1, 4); // 1NT
 
+/**
+ * What the gate says when a sign-in came back without a session.
+ *
+ * `?signin=` is set by auth.ts's signInFailed — the OAuth callback now hands a
+ * visitor back here instead of answering `400 {"error":"bad oauth state"}`,
+ * which was a dead end with nothing to press. So this is the other half of
+ * that fix, and the whole point is that the toll gate and its button are on
+ * screen underneath: the line explains, the CTA right below it retries.
+ *
+ * Three reasons, because they are genuinely different and a visitor can tell:
+ * `cancelled` is something they chose and needs no apology, `expired` is the
+ * one that wants "again" in it, and `failed` is ours. An unrecognised value
+ * renders nothing rather than a fallback — the param is in a shareable URL,
+ * and a stranger opening a pasted link should not be told a sign-in of theirs
+ * went wrong.
+ *
+ * Voice per .claude/skills/nickel-bridge-design: warm, second person, inside
+ * the toll metaphor, and no period flavour in functional copy.
+ */
+const SIGNIN_NOTICE: Record<string, string> = {
+  expired: 'The gate closed before you came back through. Take it again — it only takes a moment.',
+  cancelled: 'You turned back at the gate. No toll paid; the crossing is still here when you want it.',
+  failed: 'Something went wrong at the gate, on our side. Try the toll again.',
+};
+
 export default function Login() {
+  const [params] = useSearchParams();
+  const notice = SIGNIN_NOTICE[params.get('signin') ?? ''];
   return (
     <div className="landing">
       <Splash
         pitch="A century-old bridge by another name. It wasn't a nickel then and it isn't now. This bridge is not a bridge."
-        cta={<SignInActions />}
+        cta={
+          <>
+            {/* role=status so a screen reader hears why the button is being
+                offered a second time, rather than finding an unexplained
+                landing page after leaving for Google. */}
+            {notice ? (
+              <p className="splash-notice" role="status">
+                {notice}
+              </p>
+            ) : null}
+            <SignInActions />
+          </>
+        }
         // The hero is a full 100dvh and, above the fold, is the identical
         // dead-end splash it has always been. Without something saying so,
         // most visitors never learn there's a page under it — which would
