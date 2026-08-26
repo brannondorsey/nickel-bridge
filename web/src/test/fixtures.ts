@@ -55,6 +55,11 @@ export const meFixture: Me = {
     // tile render sees the delta rather than the resting state.
     ratedTournaments: 12,
     eloDrift: 4,
+    // ...and the crossing that drift is measured FROM: worth +12, finished
+    // long enough ago (fixed epoch, so it is always well past the tile's
+    // one-hour window) that Home leads with the drift above rather than with
+    // this. A suite wanting the fresh-crossing caption overrides finishedAt.
+    lastCrossing: { delta: 12, finishedAt: 1700000000 },
     // Club earned; 12 tournaments (48 boards) toward diamond's 100-board
     // target = 48%, measured from zero per packages/core/src/medals.ts —
     // crossing the club threshold didn't reset this back to 0%.
@@ -79,6 +84,7 @@ export const meFreshCrosser: Me = {
     // baseline for a drift figure to measure from.
     ratedTournaments: 0,
     eloDrift: null,
+    lastCrossing: null,
     medals: { earned: [], target: 'c', pct: 0, tournamentsRemaining: 4 },
   },
 };

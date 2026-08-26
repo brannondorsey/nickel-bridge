@@ -14,6 +14,48 @@ import { ordinal, shortDate, timeGreeting, tournamentNo } from '../format';
 const tourneyNo = (t: TournamentInfo) => tournamentNo(t.number, t.id);
 
 /**
+ * How long after finishing a crossing the rating tile still reads "in the last
+ * crossing" — the window in which the swing you just earned is what you came
+ * back to the front door to see.
+ */
+const FRESH_CROSSING_S = 60 * 60;
+
+/**
+ * Which of the tile's two readings Home is showing, and with what number.
+ *
+ * The rating moves for two different reasons and the tile names which one:
+ * your own last crossing ("▲12 in the last crossing") or the evergreen replay
+ * restating history around you while you were away ("▼7 since your last
+ * crossing" — see eloDrift in server/src/tournaments.ts).
+ *
+ * The crossing reading wins for an hour after you finish one, because that is
+ * the figure you came back for. After that it KEEPS winning until drift is
+ * actually non-zero: drift is 0 on any quiet week, and a tile that fell silent
+ * an hour after every crossing would spend most of its life blank on the one
+ * screen a player opens daily. So the hand-off is an event — somebody else's
+ * play moving your rating — rather than a stopwatch.
+ *
+ * Note the two figures are complements, never a sum: stampCrossingBaseline
+ * folds a crossing's own swing into the drift baseline the moment it ends, so
+ * whichever is showing, the other is either zero or already spent.
+ *
+ * `delta` null means there is nothing to report — a rare resting state (a
+ * crossing that moved the rating exactly nowhere, or one that has yet to rate
+ * anybody) where the line falls back to reading NICKEL RATING.
+ */
+export function ratingReading(
+  user: { eloDrift: number | null; lastCrossing: { delta: number; finishedAt: number } | null },
+  nowSec: number,
+): { delta: number | null; caption: string } {
+  const drift = user.eloDrift ?? 0;
+  const last = user.lastCrossing;
+  const fresh = last !== null && nowSec - last.finishedAt < FRESH_CROSSING_S;
+  return fresh || drift === 0
+    ? { delta: last && last.delta !== 0 ? last.delta : null, caption: 'in the last crossing' }
+    : { delta: drift, caption: 'since your last crossing' };
+}
+
+/**
  * Home ("the bridge is open"): one live crossing at a time. The current
  * tournament is the toll gate — KEEP GOING when one is unfinished, PLAY THE
  * TOLL to be seated at a table otherwise — with every finished crossing
@@ -48,6 +90,11 @@ export default function Lobby() {
   // Non-null exactly when there is a rating worth leading with — see the note
   // beside the tile below for why `ratedTournaments` is the test.
   const rated = me?.user && me.user.ratedTournaments > 0 ? me.user : null;
+  // Read once per render rather than on a timer: nothing on this screen changes
+  // at the hour mark on its own (drift is what hands the caption over, and that
+  // arrives with a fresh /api/me), so a ticking clock would buy a re-render
+  // that says the same thing.
+  const reading = rated ? ratingReading(rated, Math.floor(Date.now() / 1000)) : null;
 
   const current = tournaments?.find((t) => (t.myDone ?? 0) < 4) ?? null;
   const finished = (tournaments ?? [])
@@ -83,14 +130,21 @@ export default function Lobby() {
             <div className="home-rating">
               <RatingTile
                 elo={rated.elo}
-                // Zero drift is the resting state of a screen opened daily, so
-                // it says nothing at all rather than drawing an arrow that
-                // claims nothing moved — see RatingTile's note on why Stats
-                // decides this differently for "+0 THIS MONTH".
-                delta={rated.eloDrift || null}
-                // No deltaLabel: Home takes the ladder's bare ▲12 / ▼12 rather
-                // than spelling the period out, and 'rating-drift' — opened by
-                // the label OR the arrow — is where the period gets explained.
+                // Which figure, and which of the two captions names it, is
+                // ratingReading's call — see its note above. A zero says
+                // nothing at all rather than drawing an arrow that claims
+                // nothing moved, which is also the one state where the line
+                // falls back to the NICKEL RATING label (RatingTile's note
+                // covers why Stats decides that differently for "+0 THIS
+                // MONTH").
+                delta={reading!.delta}
+                // Lowercase, and IN PLACE of the label rather than beside it:
+                // the ticker directly above already says what the number is,
+                // where what moved it is the thing a returning player is
+                // actually here to read. 'rating-drift' — opened by the delta,
+                // and by the label on the days it stands in — is where both
+                // periods get explained.
+                deltaCaption={reading!.caption}
                 explainTerm="rating-drift"
               />
             </div>

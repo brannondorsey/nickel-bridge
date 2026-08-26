@@ -188,6 +188,30 @@ const stmtRatingDrift = db.prepare(
 const stmtRatedTournamentCount = db.prepare(
   `SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`,
 );
+// The rating swing of the last crossing that actually RATED this player, and
+// when they finished it. Two things about the shape:
+//
+// `elo_history` carries no timestamp (it is wiped and replayed in tournament-id
+// order), so the finish time is bridged through the player's own last completed
+// board of that tournament — exactly the bridge stats.ts's stmtEloSeries and
+// activity.ts already use, and the reason the ORDER BY is on that bridged time
+// rather than on `h.tournament_id`: replay order is not play order, and a
+// months-old crossing resumed and finished this morning is the one being asked
+// about. `tournament_id DESC` only breaks a tie between two crossings whose
+// last boards landed in the same second.
+//
+// `kind = 'standard'` is spelled out rather than relied upon: recomputeElo only
+// ever writes standard rows today, and leaderboardMovement's query makes the
+// same belt-and-braces move for the same reason.
+const stmtLastRatedCrossing = db.prepare(
+  `SELECT h.after - h.before AS delta,
+          (SELECT MAX(b.updated_at) FROM boards b
+            WHERE b.tournament_id = h.tournament_id AND b.user_id = h.user_id AND b.state = 'done') AS finished_at
+   FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id AND t.kind = 'standard'
+   WHERE h.user_id = ?
+   ORDER BY finished_at DESC, h.tournament_id DESC
+   LIMIT 1`,
+);
 
 export interface Standing {
   userId: number;
@@ -887,6 +911,41 @@ export function eloDrift(userId: number): number | null {
   const row = stmtRatingDrift.get(userId) as { elo: number; baseline: number | null } | undefined;
   if (!row || row.baseline === null) return null;
   return row.elo - row.baseline;
+}
+
+/** What the last crossing to rate this player was worth, and when it ended. */
+export interface CrossingSwing {
+  /** signed points that crossing moved the rating — elo_history's after - before */
+  delta: number;
+  /** unix seconds: the player's own last completed board of that crossing */
+  finishedAt: number;
+}
+
+/**
+ * The rating swing of the last crossing that RATED this player — the other
+ * half of Home's tile, and deliberately not the same question as eloDrift().
+ *
+ * eloDrift is what moved while you were AWAY; this is what your own last
+ * crossing was worth. They are complements by construction: the moment a
+ * crossing ends, stampCrossingBaseline folds its swing into the baseline, so
+ * drift resets to 0 and this is the only thing left with anything to say.
+ * Home leads with this one for an hour after a crossing, and keeps leading
+ * with it until drift is actually non-zero (see Lobby.tsx) — a tile that fell
+ * silent an hour after every crossing would spend most of its life blank.
+ *
+ * "Last crossing that rated you", not "last crossing you finished": a crossing
+ * with no second human in the field rates nobody until one arrives, so it has
+ * no swing to name, and when that human does finish it the points show up as
+ * drift instead — which is the reading the other caption is for. `null` for a
+ * player no crossing has rated yet, the same population the tile's
+ * `ratedTournaments` gate already holds the greeting for.
+ */
+export function lastCrossingSwing(userId: number): CrossingSwing | null {
+  const row = stmtLastRatedCrossing.get(userId) as
+    | { delta: number; finished_at: number | null }
+    | undefined;
+  if (!row || row.finished_at === null) return null;
+  return { delta: row.delta, finishedAt: row.finished_at };
 }
 
 /**

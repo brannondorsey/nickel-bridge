@@ -42,17 +42,17 @@ describe('Home', () => {
     expect(screen.getByText(/Board 2 of 4 in progress/)).toBeInTheDocument();
   });
 
-  it('leads with the rating tile, and its drift as the ladder\'s own arrow', async () => {
+  it('leads with the rating tile, its drift as the ladder\'s own arrow, and no label', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
-    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
     // the hero number is per-digit (FlipDigits), so it is read off the tile
+    expect(await screen.findByText('since your last crossing')).toBeInTheDocument();
     expect(document.querySelector('.home-rating .flipdigits')).toHaveTextContent('1487');
-    // ▲, not "+4 SINCE YOUR LAST CROSSING" — glyph AND colour, matching
-    // Leaderboard.tsx's Movement, with the period explained by the sheet
+    // ▲, not "+4" — glyph AND colour, matching Leaderboard.tsx's Movement
     const delta = screen.getByText('▲4');
     expect(delta).toHaveClass('positive');
-    expect(screen.queryByText(/SINCE YOUR LAST CROSSING/)).not.toBeInTheDocument();
+    // ...and the caption stands IN PLACE of the label, not beside it
+    expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
     // ...in place of the greeting, not beside it
     expect(screen.queryByText(/Good (morning|afternoon|evening), Margaret/)).not.toBeInTheDocument();
     expect(screen.queryByText('The bridge is open.')).not.toBeInTheDocument();
@@ -63,21 +63,65 @@ describe('Home', () => {
     renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: -7 }) });
     const delta = await screen.findByText('▼7');
     expect(delta).toHaveClass('negative');
+    expect(screen.getByText('since your last crossing')).toBeInTheDocument();
   });
 
-  // Zero is the ordinary answer on a quiet week, and an arrow reading zero is
-  // a claim about nothing on a screen opened daily. Stats decides this the
-  // other way for "+0 THIS MONTH" — see RatingTile.
-  it('says nothing at all when nothing moved while you were away', async () => {
+  // Within the hour of finishing one, the tile names the swing you just
+  // earned rather than the drift — which is 0 anyway, since the crossing's own
+  // swing is folded into the baseline the moment it ends.
+  it('names the crossing you just finished for an hour after it ends', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
-    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: 0 }) });
+    const finishedAt = Math.floor(Date.now() / 1000) - 5 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 0, lastCrossing: { delta: 12, finishedAt } }),
+    });
+    expect(await screen.findByText('in the last crossing')).toBeInTheDocument();
+    expect(screen.getByText('▲12')).toHaveClass('positive');
+    expect(screen.queryByText('since your last crossing')).not.toBeInTheDocument();
+  });
+
+  // The hand-off is an event, not a stopwatch: drift is 0 on any quiet week,
+  // and a tile that fell silent an hour after every crossing would spend most
+  // of its life blank on the one screen a player opens daily.
+  it('keeps naming that crossing past the hour until something actually drifts', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    const finishedAt = Math.floor(Date.now() / 1000) - 3 * 24 * 60 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 0, lastCrossing: { delta: -6, finishedAt } }),
+    });
+    expect(await screen.findByText('in the last crossing')).toBeInTheDocument();
+    expect(screen.getByText('▼6')).toHaveClass('negative');
+  });
+
+  // ...and once it does, the caption hands over. The two figures are never
+  // summed — the crossing's own swing is already in the baseline drift
+  // measures from.
+  it('hands over to the drift caption once someone else has moved the rating', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    const finishedAt = Math.floor(Date.now() / 1000) - 3 * 24 * 60 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: -7, lastCrossing: { delta: 12, finishedAt } }),
+    });
+    expect(await screen.findByText('since your last crossing')).toBeInTheDocument();
+    expect(screen.getByText('▼7')).toBeInTheDocument();
+    expect(screen.queryByText('▲12')).not.toBeInTheDocument();
+  });
+
+  // Nothing moved either way — the one resting state with no arrow to draw,
+  // where the line falls back to saying what the number above it is. Stats
+  // decides this the other way for "+0 THIS MONTH" — see RatingTile.
+  it('falls back to the label when there is nothing at all to report', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 0, lastCrossing: { delta: 0, finishedAt: 1700000000 } }),
+    });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
     expect(document.querySelector('.rating-tile-delta')).toBeNull();
   });
 
   it('shows no delta before any crossing has finished', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
-    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null }) });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null, lastCrossing: null }) });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
     expect(document.querySelector('.rating-tile-delta')).toBeNull();
   });
@@ -98,16 +142,23 @@ describe('Home', () => {
   // me?", so BOTH it and the label open the term that answers it — a door on
   // the label alone would put the explanation beside the one number that
   // doesn't need it.
-  it('opens the rating-drift term from the label AND from the arrow', async () => {
+  it('opens the rating-drift term from the delta, under either caption', async () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, { me: meFixture });
-    expect(await screen.findByRole('button', { name: 'NICKEL RATING' })).toHaveClass('rating-tile-explain');
     // Named in WORDS, not "up-pointing triangle 4": the ladder's Movement can
     // wear the bare glyph because it is a non-focusable span, but this one is a
     // control. Same rule RehearsalRail's stubs follow.
-    const arrow = screen.getByRole('button', { name: 'Rating up 4 since your last crossing' });
+    const arrow = await screen.findByRole('button', { name: 'Rating up 4 since your last crossing' });
     expect(arrow).toHaveClass('rating-tile-explain');
     expect(arrow).toHaveTextContent('▲4');
+  });
+
+  // With nothing to report the label is the only thing on the line, so it has
+  // to keep carrying the door.
+  it('opens the term from the label when the label is what is showing', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    renderWithMe(<Lobby />, { me: withRating(meFixture, { eloDrift: null, lastCrossing: null }) });
+    expect(await screen.findByRole('button', { name: 'NICKEL RATING' })).toHaveClass('rating-tile-explain');
   });
 
 
