@@ -7,7 +7,7 @@ import { compareMin } from './compare.js';
 import { validateHandle } from './handle.js';
 import { completedBoardCount } from './stats.js';
 import { medalProgressFor } from './medals.js';
-import { eloDrift, provisionalMin, ratedTournamentCount } from './tournaments.js';
+import { eloDrift, lastCrossingSwing, provisionalMin, ratedTournamentCount } from './tournaments.js';
 
 /**
  * Google OAuth (authorization-code flow) with open signup, plus cookie
@@ -386,10 +386,23 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             // last finished a crossing, which is entirely other people's play
             // (see eloDrift/stampCrossingBaseline in tournaments.ts, and the
             // elo_at_last_crossing migration in db.ts for why it needs a
-            // stored baseline at all). Two indexed reads, on the same route
-            // that already pays for medals' two counts.
+            // stored baseline at all). Indexed reads, on the same route that
+            // already pays for medals' two counts.
             ratedTournaments: ratedTournamentCount(user.id),
             eloDrift: eloDrift(user.id),
+            // ...and the other half of that tile: what this player's last
+            // crossing was worth, and when it ended. The tile leads with THAT
+            // for an hour after a crossing ("▲12 in the last crossing") and
+            // with the drift above once somebody else's play has actually
+            // moved the rating ("▼7 since your last crossing"). null when that
+            // crossing has not rated them yet — see lastCrossingSwing for why
+            // naming an earlier one instead would be a wrong claim rather than
+            // a stale one. The hour is decided on the client, off `finishedAt`,
+            // for the reason the activity feed buckets its own days there: the
+            // figure is read against the reader's own clock, and a boolean
+            // computed here would already be stale by the time the page
+            // rendered.
+            lastCrossing: lastCrossingSwing(user.id),
           }
         : null,
       devAuth: process.env.DEV_AUTH === '1',

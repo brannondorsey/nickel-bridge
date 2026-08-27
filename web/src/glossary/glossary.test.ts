@@ -43,8 +43,8 @@ describe('glossary core data', () => {
     // 126 curated bridge terms + First crossing + Rating drift
     expect(TERMS.length).toBe(127);
     // Rating drift is the second non-bridge entry: it explains the home
-    // screen's own arrow, and both the NICKEL RATING label and the delta
-    // beside it open this sheet (ds/RatingTile.tsx).
+    // screen's own arrow — both of the readings that arrow can carry — and the
+    // delta itself is the door onto this sheet (ds/RatingTile.tsx).
     expect(TERMS.find((t) => t.slug === 'rating-drift')?.themes).toEqual(['scoring']);
     // the ledger's first non-bridge entry: the app tour, filed as a term
     const egg = TERMS.find((t) => t.slug === 'first-crossing');
