@@ -1875,16 +1875,25 @@ alone would leave the tile blank for most of the life of the one screen a player
 The hand-off is an event, not an elapsed time. The hour itself is judged on the client, off
 `lastCrossing.finishedAt`, for the reason the activity feed buckets its own days there: it is
 read against the reader's clock, and a boolean computed server-side would be stale before the
-page painted. Zero on either reading draws nothing at all and the line falls back to the label
-— a rare resting state, since a crossing that moves a rating exactly nowhere is uncommon.
+page painted. Zero on either reading draws nothing at all and the line falls back to the label,
+as does a last crossing that has yet to rate you — see `lastCrossingSwing` below for why that
+silence is the honest answer rather than a gap to fill.
 
-`lastCrossingSwing` is deliberately "the last crossing that RATED you", not the last one you
-finished: a crossing with no second human in its field rates nobody, so it has no swing to
-name, and when that human does arrive the points show up as drift instead — which is what the
-other caption is for. It orders by the crossing's own finish time (`MAX(boards.updated_at)`,
-the bridge `stats.ts` and `activity.ts` already use, since `elo_history` carries no timestamp),
-never by tournament id: replay order is not play order, and a months-old crossing finished this
-morning is the one being asked about.
+`lastCrossingSwing` means the last crossing you FINISHED, full stop — and answers `null` when
+that crossing has not rated you yet. **That null is the point of the query, not a defensive
+edge case.** A crossing rates nobody until a second human finishes the same field, so one you
+have just played can sit unrated for days; answering with the last crossing that DID rate you
+would put an older tournament's swing under a caption reading "in the last crossing", which is
+a quietly wrong claim rather than a merely stale one. Nothing is lost by staying silent: when
+that second human finishes, the points arrive as DRIFT (the baseline was stamped when you
+left), so the tile picks the news up under the caption that is accurate for them. That is also
+why the query starts from `boards` and LEFT JOINs `elo_history` rather than the other way
+round — the group-by/HAVING "every board of it is done" shape `activity.ts`'s
+`stmtAllCrossings` and `stats.ts`'s `stmtCompletedTournaments` already use, the same test
+`stampCrossingBaseline` applies. It orders by the crossing's own finish time
+(`MAX(boards.updated_at)`, the bridge `stats.ts` and `activity.ts` already use, since
+`elo_history` carries no timestamp), never by tournament id: replay order is not play order,
+and a months-old crossing finished this morning is the one being asked about.
 
 The `rating-drift` term (`explainTerm`) is the door on both readings, and its definition names
 both. That term is the second non-bridge entry in the ledger, after the First crossing easter

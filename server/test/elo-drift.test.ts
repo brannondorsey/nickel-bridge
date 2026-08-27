@@ -122,17 +122,26 @@ describe('rating drift since the last crossing', () => {
  * showing, the other is zero or already spent, since stampCrossingBaseline
  * folds a crossing's swing into the drift baseline the moment it ends.
  */
-describe('the last crossing to rate you', () => {
+describe('what your last crossing was worth', () => {
   const dave = addUser('SwingDave');
   const erin = addUser('SwingErin');
 
-  it('has nothing to name before a crossing has rated you', () => {
-    const t = addTournament('S1');
+  it('has nothing to name before a crossing is finished', () => {
     expect(lastCrossingSwing(dave)).toBeNull();
-    // ...including after finishing one nobody else has, which rates no one
+  });
+
+  /**
+   * The case this reading exists to get right. A crossing rates nobody until a
+   * second human finishes the same field, so one you have just played can sit
+   * unrated for days — and the tile must not fill that silence with an earlier
+   * crossing's swing under a caption that says "the LAST crossing". Null, so
+   * the tile falls back to its label and claims nothing.
+   */
+  it('stays silent while the crossing you just finished is still unrated', () => {
+    const t = addTournament('S1');
     finishCrossing(t, dave, 400, 4, 1_000_000);
     expect(lastCrossingSwing(dave)).toBeNull();
-    expect(eloDrift(dave)).toBe(0);
+    expect(eloDrift(dave)).toBe(0); // ...and drift has nothing to say either
   });
 
   it("names the crossing's own swing, stamped with when the player finished it", () => {
@@ -145,24 +154,46 @@ describe('the last crossing to rate you', () => {
     // ...bridged through HIS last board of it, not erin's later one
     expect(swing.finishedAt).toBe(1_000_000);
     // and the same points read as drift, because they arrived after he left —
-    // the two never both have something to say
+    // which is the caption Home actually shows here, since dave finished this
+    // crossing long before erin turned it into news
     expect(eloDrift(dave)).toBe(swing.delta);
     expect(lastCrossingSwing(erin)!.delta).toBe(elo(erin) - 1200);
     expect(eloDrift(erin)).toBe(0);
   });
 
   /**
+   * The half-step that makes the rule above worth having: a newer unrated
+   * crossing HIDES the rated one behind it, rather than letting an older
+   * figure keep answering to "the last crossing".
+   */
+  it('goes back to silence when a newer crossing is finished but unrated', () => {
+    const solo = addTournament('S1b');
+    expect(lastCrossingSwing(dave)).not.toBeNull(); // the rated S1 above
+    finishCrossing(solo, dave, 500, 4, 1_200_000);
+    expect(lastCrossingSwing(dave)).toBeNull();
+    // ...and it comes back, as that crossing's OWN swing, once someone rates it
+    finishCrossing(solo, erin, 50, 4, 1_200_500);
+    expect(lastCrossingSwing(dave)!.finishedAt).toBe(1_200_000);
+  });
+
+  it('ignores a crossing that is only part-played', () => {
+    const part = addTournament('S1c');
+    finishCrossing(part, dave, 700, 3, 1_300_000); // three boards of four
+    expect(lastCrossingSwing(dave)!.finishedAt).toBe(1_200_000);
+  });
+
+  /**
    * Replay order is not play order: elo_history replays in tournament-id
    * order, but a months-old crossing resumed and finished this morning is the
-   * one the tile is asking about. Ordered by id, this test's older tournament
-   * would win purely on its number.
+   * one the tile is asking about. Ordered by id, this test's later-numbered
+   * tournament would win purely on its number.
    */
   it('takes the most recently FINISHED crossing, not the highest tournament id', () => {
     const older = addTournament('S0-older');
-    finishCrossing(older, dave, 900, 4, 2_000_000); // higher id, finished later
+    finishCrossing(older, dave, 900, 4, 2_000_000); // lower id here, finished LAST
     finishCrossing(older, erin, 200, 4, 2_000_100);
     const stale = addTournament('S2-newer');
-    finishCrossing(stale, dave, 300, 4, 1_500_000); // higher id still, finished EARLIER
+    finishCrossing(stale, dave, 300, 4, 1_500_000); // higher id, finished EARLIER
     finishCrossing(stale, erin, 800, 4, 1_500_100);
     expect(lastCrossingSwing(dave)!.finishedAt).toBe(2_000_000);
   });

@@ -188,29 +188,37 @@ const stmtRatingDrift = db.prepare(
 const stmtRatedTournamentCount = db.prepare(
   `SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`,
 );
-// The rating swing of the last crossing that actually RATED this player, and
-// when they finished it. Two things about the shape:
+// The player's most recently FINISHED crossing, and what it was worth — `delta`
+// NULL when that crossing has not rated them yet. Three things about the shape:
 //
-// `elo_history` carries no timestamp (it is wiped and replayed in tournament-id
-// order), so the finish time is bridged through the player's own last completed
-// board of that tournament — exactly the bridge stats.ts's stmtEloSeries and
-// activity.ts already use, and the reason the ORDER BY is on that bridged time
-// rather than on `h.tournament_id`: replay order is not play order, and a
-// months-old crossing resumed and finished this morning is the one being asked
-// about. `tournament_id DESC` only breaks a tie between two crossings whose
-// last boards landed in the same second.
+// It starts from `boards` rather than from `elo_history`, and that is the whole
+// point of the query: asking elo_history for "the latest one" answers with the
+// latest crossing that RATED you, which is a different tournament the moment
+// your newest one is still sitting in a field of one. Naming an older crossing
+// as "the last crossing" is the confusing case; a LEFT JOIN reports the honest
+// one instead, and the null falls through to the label (see lastCrossingSwing).
 //
-// `kind = 'standard'` is spelled out rather than relied upon: recomputeElo only
-// ever writes standard rows today, and leaderboardMovement's query makes the
-// same belt-and-braces move for the same reason.
-const stmtLastRatedCrossing = db.prepare(
-  `SELECT h.after - h.before AS delta,
-          (SELECT MAX(b.updated_at) FROM boards b
-            WHERE b.tournament_id = h.tournament_id AND b.user_id = h.user_id AND b.state = 'done') AS finished_at
-   FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id AND t.kind = 'standard'
-   WHERE h.user_id = ?
-   ORDER BY finished_at DESC, h.tournament_id DESC
-   LIMIT 1`,
+// The group-by/HAVING shape is activity.ts's stmtAllCrossings and stats.ts's
+// stmtCompletedTournaments — "every board of it is done" is what finished means
+// here, the same test stampCrossingBaseline applies. The LEFT JOIN cannot
+// change COUNT(*): elo_history holds at most one row per (user, tournament), so
+// each board row still contributes exactly one, and `h.after - h.before` is
+// constant across the group for the same reason.
+//
+// ORDER BY is the bridged finish time rather than `tournament_id`: replay order
+// is not play order, and a months-old crossing resumed and finished this
+// morning is the one being asked about. `tournament_id DESC` only breaks a tie
+// between two crossings whose last boards landed in the same second.
+const stmtLastFinishedCrossing = db.prepare(
+  `SELECT h.after - h.before AS delta, MAX(b.updated_at) AS finished_at, COUNT(*) AS done
+     FROM boards b
+     JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+     LEFT JOIN elo_history h ON h.tournament_id = b.tournament_id AND h.user_id = b.user_id
+    WHERE b.user_id = ? AND b.state = 'done'
+    GROUP BY b.tournament_id
+   HAVING done >= ?
+    ORDER BY finished_at DESC, b.tournament_id DESC
+    LIMIT 1`,
 );
 
 export interface Standing {
@@ -922,8 +930,9 @@ export interface CrossingSwing {
 }
 
 /**
- * The rating swing of the last crossing that RATED this player — the other
- * half of Home's tile, and deliberately not the same question as eloDrift().
+ * What this player's last crossing was worth, and when they finished it — the
+ * other half of Home's tile, and deliberately not the same question as
+ * eloDrift().
  *
  * eloDrift is what moved while you were AWAY; this is what your own last
  * crossing was worth. They are complements by construction: the moment a
@@ -933,18 +942,26 @@ export interface CrossingSwing {
  * with it until drift is actually non-zero (see Lobby.tsx) — a tile that fell
  * silent an hour after every crossing would spend most of its life blank.
  *
- * "Last crossing that rated you", not "last crossing you finished": a crossing
- * with no second human in the field rates nobody until one arrives, so it has
- * no swing to name, and when that human does finish it the points show up as
- * drift instead — which is the reading the other caption is for. `null` for a
- * player no crossing has rated yet, the same population the tile's
- * `ratedTournaments` gate already holds the greeting for.
+ * It means the last crossing you FINISHED, full stop — and `null` when that
+ * crossing has not rated you yet, which is the case worth understanding. A
+ * crossing rates nobody until a second human finishes the same field, so one
+ * you have just played can sit unrated for days. Answering with the last
+ * crossing that DID rate you would put a figure under "in the last crossing"
+ * that belongs to some earlier tournament, which is a quietly wrong claim
+ * rather than a stale one. The null says the honest thing instead: the tile
+ * has nothing to report and falls back to the NICKEL RATING label.
+ *
+ * Nothing is lost by waiting. When that second human does finish the field,
+ * the points it finally hands out arrive as DRIFT — this player's baseline was
+ * stamped when they left — so the tile picks the news up under the other
+ * caption, which is the accurate one for points that landed while they were
+ * away. `null` also covers a player who has never finished a crossing at all.
  */
 export function lastCrossingSwing(userId: number): CrossingSwing | null {
-  const row = stmtLastRatedCrossing.get(userId) as
-    | { delta: number; finished_at: number | null }
+  const row = stmtLastFinishedCrossing.get(userId, BOARDS_PER_TOURNAMENT) as
+    | { delta: number | null; finished_at: number }
     | undefined;
-  if (!row || row.finished_at === null) return null;
+  if (!row || row.delta === null) return null;
   return { delta: row.delta, finishedAt: row.finished_at };
 }
 

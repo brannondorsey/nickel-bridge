@@ -70,12 +70,15 @@ export interface Me {
      */
     eloDrift: number | null;
     /**
-     * What the last crossing to RATE this player was worth, and when it ended
+     * What this player's last FINISHED crossing was worth, and when it ended
      * (unix seconds). Home's tile leads with this for an hour after a crossing
      * — "▲12 in the last crossing" — and hands over to `eloDrift` above only
-     * once somebody else's play has actually moved the rating. null = no
-     * crossing has rated them yet, the population the tile keeps the greeting
-     * for anyway. See lastCrossingSwing() in server/src/tournaments.ts.
+     * once somebody else's play has actually moved the rating. null when that
+     * crossing has not rated them yet (a field of one rates nobody until a
+     * second human finishes it) or when they have finished none at all; the
+     * tile falls back to its NICKEL RATING label there rather than naming an
+     * earlier crossing's swing. See lastCrossingSwing() in
+     * server/src/tournaments.ts.
      */
     lastCrossing: { delta: number; finishedAt: number } | null;
   } | null;

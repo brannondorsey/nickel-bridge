@@ -390,15 +390,18 @@ export function registerAuthRoutes(app: FastifyInstance): void {
             // already pays for medals' two counts.
             ratedTournaments: ratedTournamentCount(user.id),
             eloDrift: eloDrift(user.id),
-            // ...and the other half of that tile: what the last crossing to
-            // rate this player was worth, and when it ended. The tile leads
-            // with THAT for an hour after a crossing ("▲12 in the last
-            // crossing") and with the drift above once somebody else's play
-            // has actually moved the rating ("▼7 since your last crossing").
-            // The hour is decided on the client, off `finishedAt`, for the
-            // reason the activity feed buckets its own days there: the figure
-            // is read against the reader's own clock, and a boolean computed
-            // here would already be stale by the time the page rendered.
+            // ...and the other half of that tile: what this player's last
+            // crossing was worth, and when it ended. The tile leads with THAT
+            // for an hour after a crossing ("▲12 in the last crossing") and
+            // with the drift above once somebody else's play has actually
+            // moved the rating ("▼7 since your last crossing"). null when that
+            // crossing has not rated them yet — see lastCrossingSwing for why
+            // naming an earlier one instead would be a wrong claim rather than
+            // a stale one. The hour is decided on the client, off `finishedAt`,
+            // for the reason the activity feed buckets its own days there: the
+            // figure is read against the reader's own clock, and a boolean
+            // computed here would already be stale by the time the page
+            // rendered.
             lastCrossing: lastCrossingSwing(user.id),
           }
         : null,
