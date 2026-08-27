@@ -39,24 +39,33 @@ const FRESH_CROSSING_S = 60 * 60;
  * folds a crossing's own swing into the drift baseline the moment it ends, so
  * whichever is showing, the other is either zero or already spent.
  *
- * `delta` null means there is nothing to report, and the line falls back to
- * reading NICKEL RATING. Two ways to get there: nothing has moved at all, or
- * the last crossing has not been rated yet — a field of one rates nobody until
- * a second human finishes it, and `lastCrossing` is null until then rather
- * than naming an earlier crossing under a caption that says "the last" one.
- * Nothing is lost by waiting: those points arrive as drift when they land, and
- * get reported under the other caption, which is the accurate one for them.
+ * Note the crossing reading only WINS while it has something to say. A
+ * crossing can be worth exactly 0 — core's eloUpdates rounds, so any net swing
+ * under half a point lands there, not just a performance that matched the
+ * field exactly — and preferring a silent reading over a live one would hide a
+ * real drift figure behind the plain label for the rest of the hour. Priority
+ * is between two things that both have news; it is not a reason to report
+ * nothing.
+ *
+ * `delta` null therefore means neither has anything to say, and the line falls
+ * back to reading NICKEL RATING. Two ways to get there: nothing has moved at
+ * all, or the last crossing has not been rated yet — a field of one rates
+ * nobody until a second human finishes it, and `lastCrossing` is null until
+ * then rather than naming an earlier crossing under a caption that says "the
+ * last" one. Nothing is lost by waiting: those points arrive as drift when
+ * they land, and get reported under the other caption, which is the accurate
+ * one for them.
  */
 export function ratingReading(
   user: { eloDrift: number | null; lastCrossing: { delta: number; finishedAt: number } | null },
   nowSec: number,
 ): { delta: number | null; caption: string } {
   const drift = user.eloDrift ?? 0;
-  const last = user.lastCrossing;
-  const fresh = last !== null && nowSec - last.finishedAt < FRESH_CROSSING_S;
-  return fresh || drift === 0
-    ? { delta: last && last.delta !== 0 ? last.delta : null, caption: 'in the last crossing' }
-    : { delta: drift, caption: 'since your last crossing' };
+  const swing = user.lastCrossing?.delta ?? 0;
+  const fresh = user.lastCrossing !== null && nowSec - user.lastCrossing.finishedAt < FRESH_CROSSING_S;
+  if (swing !== 0 && (fresh || drift === 0)) return { delta: swing, caption: 'in the last crossing' };
+  if (drift !== 0) return { delta: drift, caption: 'since your last crossing' };
+  return { delta: null, caption: 'in the last crossing' };
 }
 
 /**

@@ -107,6 +107,36 @@ describe('Home', () => {
     expect(screen.queryByText('▲12')).not.toBeInTheDocument();
   });
 
+  // Priority is between two readings that both have news. A crossing worth
+  // exactly 0 has none — core's eloUpdates rounds, so any net swing under half
+  // a point lands there — and letting the fresh-crossing branch win anyway
+  // would hide a live drift figure behind the plain label for the rest of the
+  // hour, on the one screen built to report exactly that.
+  it('does not let a fresh crossing worth nothing bury a real drift', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    const finishedAt = Math.floor(Date.now() / 1000) - 10 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 5, lastCrossing: { delta: 0, finishedAt } }),
+    });
+    expect(await screen.findByText('since your last crossing')).toBeInTheDocument();
+    expect(screen.getByText('▲5')).toHaveClass('positive');
+    expect(screen.queryByText('NICKEL RATING')).not.toBeInTheDocument();
+  });
+
+  // ...but when BOTH have something to say, the fresh crossing still wins.
+  // That is the rule, not an accident of ordering: inside the hour, the swing
+  // you just earned is the figure you came back for.
+  it('prefers a fresh crossing over drift when both are non-zero', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    const finishedAt = Math.floor(Date.now() / 1000) - 10 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 5, lastCrossing: { delta: 18, finishedAt } }),
+    });
+    expect(await screen.findByText('in the last crossing')).toBeInTheDocument();
+    expect(screen.getByText('▲18')).toBeInTheDocument();
+    expect(screen.queryByText('▲5')).not.toBeInTheDocument();
+  });
+
   // Nothing moved either way — the one resting state with no arrow to draw,
   // where the line falls back to saying what the number above it is. Stats
   // decides this the other way for "+0 THIS MONTH" — see RatingTile.
@@ -114,6 +144,18 @@ describe('Home', () => {
     apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
     renderWithMe(<Lobby />, {
       me: withRating(meFixture, { eloDrift: 0, lastCrossing: { delta: 0, finishedAt: 1700000000 } }),
+    });
+    expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
+    expect(document.querySelector('.rating-tile-delta')).toBeNull();
+  });
+
+  // The same, but with the crossing still inside the freshness window — the
+  // label is only correct here because drift has nothing to say either.
+  it('falls back to the label for a fresh crossing worth nothing, with no drift', async () => {
+    apiMock.tournaments.mockResolvedValue({ tournaments: [tournamentComplete] });
+    const finishedAt = Math.floor(Date.now() / 1000) - 10 * 60;
+    renderWithMe(<Lobby />, {
+      me: withRating(meFixture, { eloDrift: 0, lastCrossing: { delta: 0, finishedAt } }),
     });
     expect(await screen.findByText('NICKEL RATING')).toBeInTheDocument();
     expect(document.querySelector('.rating-tile-delta')).toBeNull();

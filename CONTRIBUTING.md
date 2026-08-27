@@ -1879,6 +1879,15 @@ page painted. Zero on either reading draws nothing at all and the line falls bac
 as does a last crossing that has yet to rate you — see `lastCrossingSwing` below for why that
 silence is the honest answer rather than a gap to fill.
 
+**That priority only applies between two readings that both have news, and the distinction is
+load-bearing.** A crossing can be worth exactly 0 — `elo.ts` rounds each new rating, so any net
+swing under half a point lands there, not merely a performance that matched the field exactly —
+and the fresh-crossing branch winning *anyway* would fall through to the plain label and bury a
+live drift figure for the rest of the hour, on the screen built to report precisely that. So
+`ratingReading` tests the swing for news before it applies the preference at all, and drift is
+the fallback rather than the loser. `home.test.tsx` pins both halves: the fresh-but-worthless
+crossing yielding to drift, and the fresh-and-worth-something crossing still beating it.
+
 `lastCrossingSwing` means the last crossing you FINISHED, full stop — and answers `null` when
 that crossing has not rated you yet. **That null is the point of the query, not a defensive
 edge case.** A crossing rates nobody until a second human finishes the same field, so one you
