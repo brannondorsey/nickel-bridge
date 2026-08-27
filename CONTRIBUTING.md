@@ -168,8 +168,10 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 bottom bar standing in for the TabBar, and SignInActions — the ONE place
                 that resolves which sign-in doors a deployment has, and RatingTile — the
                 NICKEL RATING flip-digit hero Home and the Stats profile SHARE, differing only in
-                what its delta measures and whether it names the period (Home takes the ladder's
-                bare ▲12; both halves open the 'rating-drift' term), and MedalBar/MedalGlyphs —
+                what its delta measures and how it names the period — Stats keeps the label and
+                adds '+34 THIS MONTH' beside it, Home replaces the label with the delta itself,
+                '▲12 in the last crossing' / '▼7 since your last crossing'; either way the delta
+                opens the 'rating-drift' term — and MedalBar/MedalGlyphs —
                 the Home rail and the shared suit-glyph row, see "Medal progress" below)
                 + components/game/
                 (auction, bid box,
@@ -1849,20 +1851,68 @@ too, for players who finished ahead of you. Reading it costs `idx_elo_history_to
 tournament-first sibling of `idx_elo_history_user`; see the pair's note in `db.ts` for why one
 index cannot serve both directions.
 
-**Home leads with the rating tile, and its delta is the one thing this data model cannot
-subtract for.** A player a crossing has rated arrives at Home on their NICKEL RATING
-(`ds/RatingTile.tsx`, lifted out of the Stats hero so the two screens draw the same tile rather
-than two that resemble each other) with a delta beside it: how far the rating has moved
-since they last finished a crossing. On Home that delta is the ladder's own movement glyph —
-`▲12` / `▼12`, `Leaderboard.tsx`'s `Movement` idiom, glyph AND colour so it survives a flattened
-palette — while Stats keeps naming its period ("+34 THIS MONTH"). `deltaLabel` is what picks
-between the two shapes, and the split is about reading distance: a profile figure is studied,
-Home's is glanced at, and naming the period there cost two lines to say something the glossary
-says better. Which is why BOTH the label and the arrow open the `rating-drift` term
-(`explainTerm`) — a door on the label alone would put the explanation beside the one figure
-that doesn't need it. That term is the second non-bridge entry in the ledger, after the First
-crossing easter egg; `glossary.test.ts` pins the count and the Glossary page derives its
-"N CORE TERMS" from `TERMS.length` rather than a literal. The greeting still stands for a player no crossing has
+**Home leads with the rating tile, and the line under it is the delta rather than a label.**
+A player a crossing has rated arrives at Home on their NICKEL RATING (`ds/RatingTile.tsx`,
+lifted out of the Stats hero so the two screens draw the same tile rather than two that
+resemble each other). Where Stats keeps the `NICKEL RATING` label and names its period beside
+it in tracked caps ("+34 THIS MONTH", `deltaLabel`), Home replaces the label outright with the
+delta and a lowercase phrase (`deltaCaption`): `▲12 in the last crossing`. The ticker directly
+above already says what the number is, and what moved it is the thing a returning player is
+there to read. The split is about reading distance — a profile figure is studied, Home's is
+glanced at — and it decides the typography too: the figure keeps the ladder's movement glyph
+(`Leaderboard.tsx`'s `Movement` idiom, glyph AND colour so it survives a flattened palette) in
+tabular Besley, while the phrase beside it is an aside, which the design system settles as
+italic Crimson at `--muted`. The glossary's dotted rule therefore rides the CAPTION rather
+than the whole control: the sheet explains the period, so the words naming it are what should
+look answerable. On the days there is nothing to report the label comes back and carries the
+door itself.
+
+**The caption names which of two different questions the figure is answering, and they are
+complements rather than a sum.** `in the last crossing` is the swing the player earned
+themselves (`lastCrossingSwing`); `since your last crossing` is the drift that arrived while
+they were away (`eloDrift`). One is always spent when the other has something to say, because
+`stampCrossingBaseline` folds a crossing's own swing into the drift baseline the moment it
+ends. `Lobby.tsx`'s exported `ratingReading` is the one place that picks: the crossing reading
+wins for an hour after one finishes (that is the figure the player came back for), and then
+KEEPS winning until drift is actually non-zero. That second half is the part worth not
+"simplifying" into a stopwatch — drift is 0 on any quiet week, so handing over on the clock
+alone would leave the tile blank for most of the life of the one screen a player opens daily.
+The hand-off is an event, not an elapsed time. The hour itself is judged on the client, off
+`lastCrossing.finishedAt`, for the reason the activity feed buckets its own days there: it is
+read against the reader's clock, and a boolean computed server-side would be stale before the
+page painted. Zero on either reading draws nothing at all and the line falls back to the label,
+as does a last crossing that has yet to rate you — see `lastCrossingSwing` below for why that
+silence is the honest answer rather than a gap to fill.
+
+**That priority only applies between two readings that both have news, and the distinction is
+load-bearing.** A crossing can be worth exactly 0 — `elo.ts` rounds each new rating, so any net
+swing under half a point lands there, not merely a performance that matched the field exactly —
+and the fresh-crossing branch winning *anyway* would fall through to the plain label and bury a
+live drift figure for the rest of the hour, on the screen built to report precisely that. So
+`ratingReading` tests the swing for news before it applies the preference at all, and drift is
+the fallback rather than the loser. `home.test.tsx` pins both halves: the fresh-but-worthless
+crossing yielding to drift, and the fresh-and-worth-something crossing still beating it.
+
+`lastCrossingSwing` means the last crossing you FINISHED, full stop — and answers `null` when
+that crossing has not rated you yet. **That null is the point of the query, not a defensive
+edge case.** A crossing rates nobody until a second human finishes the same field, so one you
+have just played can sit unrated for days; answering with the last crossing that DID rate you
+would put an older tournament's swing under a caption reading "in the last crossing", which is
+a quietly wrong claim rather than a merely stale one. Nothing is lost by staying silent: when
+that second human finishes, the points arrive as DRIFT (the baseline was stamped when you
+left), so the tile picks the news up under the caption that is accurate for them. That is also
+why the query starts from `boards` and LEFT JOINs `elo_history` rather than the other way
+round — the group-by/HAVING "every board of it is done" shape `activity.ts`'s
+`stmtAllCrossings` and `stats.ts`'s `stmtCompletedTournaments` already use, the same test
+`stampCrossingBaseline` applies. It orders by the crossing's own finish time
+(`MAX(boards.updated_at)`, the bridge `stats.ts` and `activity.ts` already use, since
+`elo_history` carries no timestamp), never by tournament id: replay order is not play order,
+and a months-old crossing finished this morning is the one being asked about.
+
+The `rating-drift` term (`explainTerm`) is the door on both readings, and its definition names
+both. That term is the second non-bridge entry in the ledger, after the First crossing easter
+egg; `glossary.test.ts` pins the count and the Glossary page derives its "N CORE TERMS" from
+`TERMS.length` rather than a literal. The greeting still stands for a player no crossing has
 rated yet — `users.elo` reads `ELO_INITIAL` until one does, and 1200 presented as a hero figure
 claims something nobody earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards`
 or the medal rail's tournament count: a crossing only rates you once a second human finishes the
@@ -1878,18 +1928,20 @@ crossing, because your last crossing is the last thing that banked anything. So
 `users.elo_at_last_crossing` is written at the moment it is true (`stampCrossingBaseline` in
 `tournaments.ts`, called by `game.ts`'s `settleCompletedBoard` right after `recomputeElo` — the
 order is load-bearing, or a player's own swing reads as drift on the one screen built to exclude
-it), and `eloDrift()` is the subtraction. `/api/me` carries both fields, on the route that
-already pays for medals' two counts and already refreshes when a tournament's last board lands.
+it), and `eloDrift()` is the subtraction. `/api/me` carries those fields plus `lastCrossing`
+(the swing above and when it landed), on the route that already pays for medals' two counts and
+already refreshes when a tournament's last board lands.
 
 Three consequences worth having in hand before touching it. **A crossing that rated nobody still
 re-anchors** — a field of one human never reaches `recomputeElo`'s `complete.length < 2` gate,
 and when a second human finishes it later the points it finally hands out show up as drift, which
 is exactly the case this figure exists to report. **Your own swing is never drift**: it is folded
 into the baseline in the same breath, and it is already reported on that crossing's own result
-screen. And **zero renders as nothing at all** on Home — it is the resting state of a screen
-opened daily, and an arrow reading zero is a claim about nothing — where Stats keeps drawing
-"+0 THIS MONTH", a real finding about a month of play; `RatingTile` renders any non-null delta
-and leaves that editorial call to its two callers.
+screen — it is the OTHER caption's figure instead. And **zero renders as nothing at all** on
+Home — it is the resting state of a screen opened daily, and an arrow reading zero is a claim
+about nothing — where Stats keeps drawing "+0 THIS MONTH", a real finding about a month of
+play; `RatingTile` renders any non-null delta and leaves that editorial call to its two
+callers.
 
 The alternative considered and not taken was a second ratings replay restricted to
 `boards.updated_at <= T`, which needs no column and works retroactively. It was rejected on cost

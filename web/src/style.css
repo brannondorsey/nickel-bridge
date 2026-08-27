@@ -3448,15 +3448,17 @@ a.board-row:hover {
   align-items: baseline;
   gap: 8px;
   margin-top: 8px;
-  /* Wrap, centred, rather than let flex shrink the two items. Home's ▲12 fits
-     beside the label with room to spare; Stats' "+34 THIS MONTH" is the one
-     that can outgrow the line, and a longer caption than that would too.
-     Shrinking is what a plain flex row does there, and it breaks both halves at
-     once — the label folds to NICKEL / RATING and jams against the left edge
-     while the delta breaks mid-phrase. (Not hypothetical: Home carried a
-     "−12 SINCE YOUR LAST CROSSING" caption for one commit and did exactly
-     that.) Wrapping moves the delta whole onto its own centred line under the
-     label instead, which is also the right reading order for it. */
+  /* Wrap, centred, rather than let flex shrink the two items. Stats' "+34 THIS
+     MONTH" is the one that can outgrow the line beside the label, and a longer
+     caption than that would too. Shrinking is what a plain flex row does there,
+     and it breaks both halves at once — the label folds to NICKEL / RATING and
+     jams against the left edge while the delta breaks mid-phrase. (Not
+     hypothetical: Home carried a "−12 SINCE YOUR LAST CROSSING" caption beside
+     the label for one commit and did exactly that.) Wrapping moves the delta
+     whole onto its own centred line under the label instead, which is also the
+     right reading order for it. Home no longer shares the line at all — its
+     caption stands in for the label and wraps within itself, see
+     .rating-tile-delta-captioned below. */
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -3504,6 +3506,53 @@ a.board-row:hover {
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;
+}
+/* Home's captioned shape — "▲12 in the last crossing", standing IN PLACE of
+   the NICKEL RATING label (ds/RatingTile.tsx). The two halves are set as the
+   two different things the design system says they are: the figure keeps the
+   delta's tabular Besley numeral and its --positive/--negative ink, while the
+   period beside it is an aside, which means italic Crimson at --muted.
+
+   `white-space: normal` because this half is a phrase rather than a figure —
+   the line above wraps whole items, and at 390px "▼12 since your last
+   crossing" is the one that can outgrow it. */
+.rating-tile-delta-captioned {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  white-space: normal;
+}
+.rating-tile-figure {
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* The glossary's dotted rule rides the CAPTION, not the whole control: the
+   sheet explains the period ("since your last crossing" — why a rating moves
+   while you are away), so the words that name it are what should look
+   answerable, and a rule drawn in the figure's green under muted italic text
+   reads as two unrelated marks rather than one door.
+
+   Two classes, so this beats .rating-tile-explain's own underline on
+   specificity rather than on source order — that file already has one
+   order-dependent pair (the colourblind dark mirrors) and one is enough. */
+.rating-tile-delta-captioned.rating-tile-explain {
+  text-decoration: none;
+}
+.rating-tile-caption {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.rating-tile-explain .rating-tile-caption {
+  text-decoration: underline dotted currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
 }
 
 .chart-panel {

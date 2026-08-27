@@ -830,7 +830,7 @@ export const TERMS: GlossaryTerm[] = [
   {
     slug: 'rating-drift',
     term: 'Rating drift',
-    def: 'How far your Nickel rating has moved since you last finished a crossing — the small arrow beside the rating on the home screen. Every point of it comes from somebody else: when a new player finishes a board you have already played, that board is matchpointed again and your share of it moves.',
+    def: 'How far your Nickel rating has moved since you last finished a crossing — one of the two readings the arrow under the rating on the home screen can carry. Every point of it comes from somebody else: when a new player finishes a board you have already played, that board is matchpointed again and your share of it moves. (The other reading, “in the last crossing”, is the swing you earned yourself.)',
     example: 'You have not touched a card all week and the rating reads ▼3 — two friends finished a crossing you paid for on Sunday.',
     themes: ['scoring'],
     aliases: ['drift', 'rating movement'],

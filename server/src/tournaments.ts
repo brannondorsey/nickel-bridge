@@ -188,6 +188,38 @@ const stmtRatingDrift = db.prepare(
 const stmtRatedTournamentCount = db.prepare(
   `SELECT COUNT(*) AS n FROM elo_history WHERE user_id = ?`,
 );
+// The player's most recently FINISHED crossing, and what it was worth — `delta`
+// NULL when that crossing has not rated them yet. Three things about the shape:
+//
+// It starts from `boards` rather than from `elo_history`, and that is the whole
+// point of the query: asking elo_history for "the latest one" answers with the
+// latest crossing that RATED you, which is a different tournament the moment
+// your newest one is still sitting in a field of one. Naming an older crossing
+// as "the last crossing" is the confusing case; a LEFT JOIN reports the honest
+// one instead, and the null falls through to the label (see lastCrossingSwing).
+//
+// The group-by/HAVING shape is activity.ts's stmtAllCrossings and stats.ts's
+// stmtCompletedTournaments — "every board of it is done" is what finished means
+// here, the same test stampCrossingBaseline applies. The LEFT JOIN cannot
+// change COUNT(*): elo_history holds at most one row per (user, tournament), so
+// each board row still contributes exactly one, and `h.after - h.before` is
+// constant across the group for the same reason.
+//
+// ORDER BY is the bridged finish time rather than `tournament_id`: replay order
+// is not play order, and a months-old crossing resumed and finished this
+// morning is the one being asked about. `tournament_id DESC` only breaks a tie
+// between two crossings whose last boards landed in the same second.
+const stmtLastFinishedCrossing = db.prepare(
+  `SELECT h.after - h.before AS delta, MAX(b.updated_at) AS finished_at, COUNT(*) AS done
+     FROM boards b
+     JOIN tournaments t ON t.id = b.tournament_id AND t.kind = 'standard'
+     LEFT JOIN elo_history h ON h.tournament_id = b.tournament_id AND h.user_id = b.user_id
+    WHERE b.user_id = ? AND b.state = 'done'
+    GROUP BY b.tournament_id
+   HAVING done >= ?
+    ORDER BY finished_at DESC, b.tournament_id DESC
+    LIMIT 1`,
+);
 
 export interface Standing {
   userId: number;
@@ -887,6 +919,50 @@ export function eloDrift(userId: number): number | null {
   const row = stmtRatingDrift.get(userId) as { elo: number; baseline: number | null } | undefined;
   if (!row || row.baseline === null) return null;
   return row.elo - row.baseline;
+}
+
+/** What the last crossing to rate this player was worth, and when it ended. */
+export interface CrossingSwing {
+  /** signed points that crossing moved the rating — elo_history's after - before */
+  delta: number;
+  /** unix seconds: the player's own last completed board of that crossing */
+  finishedAt: number;
+}
+
+/**
+ * What this player's last crossing was worth, and when they finished it — the
+ * other half of Home's tile, and deliberately not the same question as
+ * eloDrift().
+ *
+ * eloDrift is what moved while you were AWAY; this is what your own last
+ * crossing was worth. They are complements by construction: the moment a
+ * crossing ends, stampCrossingBaseline folds its swing into the baseline, so
+ * drift resets to 0 and this is the only thing left with anything to say.
+ * Home leads with this one for an hour after a crossing, and keeps leading
+ * with it until drift is actually non-zero (see Lobby.tsx) — a tile that fell
+ * silent an hour after every crossing would spend most of its life blank.
+ *
+ * It means the last crossing you FINISHED, full stop — and `null` when that
+ * crossing has not rated you yet, which is the case worth understanding. A
+ * crossing rates nobody until a second human finishes the same field, so one
+ * you have just played can sit unrated for days. Answering with the last
+ * crossing that DID rate you would put a figure under "in the last crossing"
+ * that belongs to some earlier tournament, which is a quietly wrong claim
+ * rather than a stale one. The null says the honest thing instead: the tile
+ * has nothing to report and falls back to the NICKEL RATING label.
+ *
+ * Nothing is lost by waiting. When that second human does finish the field,
+ * the points it finally hands out arrive as DRIFT — this player's baseline was
+ * stamped when they left — so the tile picks the news up under the other
+ * caption, which is the accurate one for points that landed while they were
+ * away. `null` also covers a player who has never finished a crossing at all.
+ */
+export function lastCrossingSwing(userId: number): CrossingSwing | null {
+  const row = stmtLastFinishedCrossing.get(userId, BOARDS_PER_TOURNAMENT) as
+    | { delta: number | null; finished_at: number }
+    | undefined;
+  if (!row || row.delta === null) return null;
+  return { delta: row.delta, finishedAt: row.finished_at };
 }
 
 /**
