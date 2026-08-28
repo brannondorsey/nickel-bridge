@@ -898,8 +898,8 @@ independent ways, which together are the whole of the "low res and off-centre" r
 
 So `scripts/app-icons.mjs` draws the same mark onto square paper tiles with real margins,
 `web/public/site.webmanifest` names them, and `web/index.html` links the manifest plus
-`apple-touch-icon.png`. The favicon is untouched — it is still the right answer for a tab.
-Four things about the shape:
+`apple-touch-icon.png`. The favicon keeps its job — it is still the right answer for a tab,
+and it gained a dark mode of its own (below). Four things about the shape:
 
 - **The manifest is the table, and the generator reads it** rather than keeping a second
   list beside it — the same move `seo.ts` makes for robots.txt and the sitemap. Add a size
@@ -928,6 +928,38 @@ Four things about the shape:
   favicon — i.e. straight back to the letterboxed tile — with nothing red anywhere. The
   six files are also in `scripts/cloudflare.mjs`'s `STATIC_FILES`, so they cache at the edge
   and `--purge` drops exactly the tiles a regeneration moved.
+
+**The favicon has a dark mode; the home-screen tiles cannot.** The two are asked the same
+question and only one can answer it, which is worth writing down because the obvious
+assumption is that a manifest icon works like a favicon:
+
+- **The tab icon does it with a media query inside the SVG.** `favicon.svg` carries a
+  `<style>` block with `@media (prefers-color-scheme: dark)` swapping the stroke from
+  `--verdigris` to the night `--ink`. It costs nothing at runtime and cannot regress a
+  browser without SVG-favicon support, which already ignores the file whole.
+- **It follows the OS, never the app's own Day/Night lever.** A favicon is fetched outside
+  the document, so it can read neither `[data-theme]` nor a custom property — the same
+  constraint that makes the splash river scene ship as two files. A player who sets the app
+  to Night on a light-mode machine keeps the day favicon. Following the app instead would
+  need JS swapping the `<link>`, which is possible and deliberately not done: the favicon
+  barely renders on mobile, and on desktop the OS and the preference almost always agree.
+- **Dark mode is a stroke swap and NOT a charcoal background**, which is the thing to
+  re-read before "fixing" it. The canvas is 160×122, so a background rect paints a
+  letterboxed bar rather than the square box a browser fits the icon into; squaring the
+  canvas to allow one would shrink the mark in light mode too, to buy a background nobody
+  sees against an already-dark tab strip. `server/test/favicon.test.ts` refuses a `<rect>`
+  for that reason, and holds both literals against style.css's tokens — it lives in the
+  server workspace because web's vitest config sets `css: false`, so `style.css?raw` there
+  is an EMPTY STRING and the whole cross-check would pass vacuously.
+- **The manifest has no equivalent, and this is not an oversight to route around.** There
+  is no `color_scheme` on a manifest icon — it is a [w3c/manifest proposal](https://github.com/w3c/manifest/issues/975),
+  unshipped. Even pointing an icon entry at a media-query SVG only bakes in whichever theme
+  was current when the app was added, and Chrome's WebAPK rasterises PNGs at install time
+  anyway. So the tiles are one fixed pair of artworks; making them dark would mean making
+  them *permanently* dark, for everyone, which is a brand decision and not a theming one.
+  The one real launcher-side lever is `purpose: "monochrome"` (Android 13+ themed icons),
+  which discards colour entirely and lets the OS tint the alpha channel to the wallpaper —
+  not a dark variant, and deliberately not shipped.
 
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
