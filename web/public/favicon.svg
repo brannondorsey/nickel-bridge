@@ -1,1 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 122"><g stroke="#6F8F68" fill="none"><line x1="0" y1="10" x2="160" y2="10" stroke-width="14"/><path d="M8 112 Q80 38 152 112" stroke-width="10"/><line x1="8" y1="10" x2="8" y2="112" stroke-width="10"/><line x1="152" y1="10" x2="152" y2="112" stroke-width="10"/><line x1="80" y1="10" x2="80" y2="75" stroke-width="7"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 122">
+  <!--
+    The browser TAB icon, and only that — the home-screen tiles are separate
+    PNGs drawn by scripts/app-icons.mjs, because a tab wants transparent
+    linework and a launcher wants a square, padded tile.
+
+    Dark mode is a STROKE swap and deliberately not a background: the canvas is
+    160x122, so a filled rect paints a letterboxed bar rather than the square
+    box a browser fits the icon into. Squaring the canvas to allow one would
+    shrink the mark in light mode too, and buy a background nobody sees against
+    an already-dark tab strip.
+
+    It follows the OS, never the app's own Day/Night lever: a favicon is fetched
+    outside the document, so it can read neither [data-theme] nor --verdigris.
+    That is the same constraint that makes the splash river scene ship as two
+    files (see the .splash-bridge note in web/src/style.css), and it is why
+    these two colours are literals. web/src/appIcons.test.ts holds them against
+    style.css so a token edit can't silently leave the tab behind.
+
+    Nothing here can regress a browser without SVG-favicon support: it already
+    ignores this file whole and falls back to the PNG tiles.
+  -->
+  <style>
+    g { stroke: #6f8f68 }
+    @media (prefers-color-scheme: dark) { g { stroke: #ece7dc } }
+  </style>
+  <g stroke="#6F8F68" fill="none">
+    <line x1="0" y1="10" x2="160" y2="10" stroke-width="14"/>
+    <path d="M8 112 Q80 38 152 112" stroke-width="10"/>
+    <line x1="8" y1="10" x2="8" y2="112" stroke-width="10"/>
+    <line x1="152" y1="10" x2="152" y2="112" stroke-width="10"/>
+    <line x1="80" y1="10" x2="80" y2="75" stroke-width="7"/>
+  </g>
+</svg>

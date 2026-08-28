@@ -155,7 +155,12 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 seo.test.ts (the drift guard between that table and App.tsx's
                 isPublicPath — the only test that imports across the workspace
                 boundary, and the reason App.tsx exports the gate),
-                public/ (favicon.svg + og-image.png, the checked-in social share card),
+                public/ (favicon.svg — the browser TAB icon, and only that; og-image.png,
+                the checked-in social share card; site.webmanifest + icon-*.png +
+                apple-touch-icon.png, the home-screen icon set — see "The home-screen
+                icon" below),
+                appIcons.test.ts (the drift guard holding that manifest and index.html's
+                apple-touch-icon link against the PNGs actually checked in),
                 pages/Compare.tsx (the Compare screen — draws the server's
                 verdicts, re-derives no statistics),
                 replay/ (useReplay.ts — the shared replay driver extracted from the
@@ -232,7 +237,10 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 the edge work is judged by; read its header before trusting a number,
                 that API punishes two obvious approaches), og-image.mjs (regenerates the
                 checked-in social share card web/public/og-image.png — offline, no
-                running instance needed)
+                running instance needed), app-icons.mjs (regenerates the home-screen
+                icon set from web/public/site.webmanifest — also offline; the manifest
+                is the table, this draws what it names, and --dark draws the parked
+                charcoal set into docs/images/app-icons-dark/ instead)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            analyze-design.md — the Analyze design record, with its concept-exploration
                 board analyze-concepts.html (three directions; the owner chose B,
@@ -262,6 +270,10 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html;
+                images/app-icons-dark/ — the PARKED charcoal home-screen tiles, served by
+                nothing (a launcher tile can't follow the OS theme, so a dark one is a
+                permanent choice for everyone — its README has the preview and the
+                one-command promotion);
                 screenshots/ + images-redesign/ + images/ — the README shots, the design-review
                 sweep, and the pre-redesign "before" (each dir has a README)
 .claude         CLAUDE.md symlink (→ this file) + settings.json (the permission +
@@ -875,6 +887,97 @@ mathematical letters) onto their Latin twin *for the key only*, so a handle nobo
 visually distinguish from another player's collides on the unique index instead of joining
 them on the ladder. Its doc comment says what the curated map does not claim to catch.
 
+**The home-screen icon is a separate asset from the favicon, and conflating them is
+what broke it.** For a long time the shell declared exactly one icon — `/favicon.svg`,
+the BridgeMark glyph — and a phone asked to make a home-screen tile had nothing else to
+work with. That file is correct for a browser tab and wrong for a launcher in three
+independent ways, which together are the whole of the "low res and off-centre" report:
+
+- **It is not square.** The glyph's viewBox is 160×122, so a launcher building a square
+  tile letterboxes it: the deck line lands hard against the top edge with a band of dead
+  space under the arch. Nothing is centred because nothing was ever composed for a square.
+- **It has no safe zone.** The deck line spans x=0..160 and the piers sit on the outer
+  edges, so any mask with a radius — Android's adaptive-icon circle, iOS's superellipse —
+  cuts through the mark rather than around it.
+- **It was never offered at the size being asked for.** Nothing here is genuinely low
+  resolution; it is an un-art-directed downscale of a drawing whose thinnest stroke is 7
+  units of 160.
+
+So `scripts/app-icons.mjs` draws the same mark onto square paper tiles with real margins,
+`web/public/site.webmanifest` names them, and `web/index.html` links the manifest plus
+`apple-touch-icon.png`. The favicon keeps its job — it is still the right answer for a tab,
+and it gained a dark mode of its own (below). Four things about the shape:
+
+- **The manifest is the table, and the generator reads it** rather than keeping a second
+  list beside it — the same move `seo.ts` makes for robots.txt and the sitemap. Add a size
+  to the manifest and the next run draws it. The one file it cannot carry is
+  `apple-touch-icon.png`: iOS reads that from a `<link>` and ignores the manifest entirely,
+  so the generator parses the tag (`sizes` attribute included) instead of hardcoding it.
+- **Two artworks, because the two purposes crop differently.** A `"maskable"` tile has to
+  keep everything inside a circle of 80% of the width, which for a mark this wide is a
+  tighter bound than it looks — a centred w×h box fits when `hypot(w, h) <= 0.8·S`, capping
+  the width at ~0.636·S at the glyph's 160:122. `MARK_MASKABLE` sits under it and the paper
+  bleeds to all four edges; `MARK_ANY` is more generous, for the surfaces shown uncropped.
+  Ship only one of the two and Android either crops the piers off or shrinks the whole tile
+  onto a white background of its own.
+- **`display: "standalone"` is a launch-behaviour decision riding along with an icon fix**,
+  and worth knowing as such. Before this the app asked for nothing, so whatever a home-screen
+  launch did was the platform's own default; now it asks. The `apple-mobile-*` metas say the
+  same thing the pre-manifest way, for the iOS versions that read those instead. The one
+  thing to watch if a sign-in report ever arrives from a home-screen user: an iOS Home Screen
+  web app has historically kept its own cookie jar, so an OAuth redirect that bounces out to
+  Safari and back can land the session in the wrong place. Not observed here, and the flow
+  stays in-app on current iOS — but it is the failure this line would cause, so it is written
+  down rather than rediscovered.
+- **The outputs are checked in and nothing in the build regenerates them**, exactly like
+  `og-image.png`. That is what `web/src/appIcons.test.ts` exists for: a manifest entry whose
+  PNG was never generated is a 404 the launcher answers by silently falling back to the
+  favicon — i.e. straight back to the letterboxed tile — with nothing red anywhere. The
+  six files are also in `scripts/cloudflare.mjs`'s `STATIC_FILES`, so they cache at the edge
+  and `--purge` drops exactly the tiles a regeneration moved.
+- **A charcoal set exists and is deliberately not served.** `--dark` draws the same tiles
+  on the night palette, defaulting to `docs/images/app-icons-dark/` rather than to
+  `web/public/`, so the parked artwork can never quietly replace the shipped set —
+  promoting is an explicit `--dark web/public` and a commit, with no manifest, shell or
+  test edit, since the filenames match. The archive is a PREVIEW rather than a source:
+  promotion redraws from the manifest, so one gone stale against a newly added size
+  cannot ship a short set. Owner's call, taken with the tiles on both a dark and a light
+  wallpaper in front of it — see that directory's README.
+
+**The favicon has a dark mode; the home-screen tiles cannot.** The two are asked the same
+question and only one can answer it, which is worth writing down because the obvious
+assumption is that a manifest icon works like a favicon:
+
+- **The tab icon does it with a media query inside the SVG.** `favicon.svg` carries a
+  `<style>` block with `@media (prefers-color-scheme: dark)` swapping the stroke from
+  `--verdigris` to the night `--ink`. It costs nothing at runtime and cannot regress a
+  browser without SVG-favicon support, which already ignores the file whole.
+- **It follows the OS, never the app's own Day/Night lever.** A favicon is fetched outside
+  the document, so it can read neither `[data-theme]` nor a custom property — the same
+  constraint that makes the splash river scene ship as two files. A player who sets the app
+  to Night on a light-mode machine keeps the day favicon. Following the app instead would
+  need JS swapping the `<link>`, which is possible and deliberately not done: the favicon
+  barely renders on mobile, and on desktop the OS and the preference almost always agree.
+- **Dark mode is a stroke swap and NOT a charcoal background**, which is the thing to
+  re-read before "fixing" it. The canvas is 160×122, so a background rect paints a
+  letterboxed bar rather than the square box a browser fits the icon into; squaring the
+  canvas to allow one would shrink the mark in light mode too, to buy a background nobody
+  sees against an already-dark tab strip. `server/test/favicon.test.ts` refuses a `<rect>`
+  for that reason, and holds both literals against style.css's tokens — it lives in the
+  server workspace because web's vitest config sets `css: false`, so `style.css?raw` there
+  is an EMPTY STRING and the whole cross-check would pass vacuously.
+- **The manifest has no equivalent, and this is not an oversight to route around.** There
+  is no `color_scheme` on a manifest icon — it is a [w3c/manifest proposal](https://github.com/w3c/manifest/issues/975),
+  unshipped. Even pointing an icon entry at a media-query SVG only bakes in whichever theme
+  was current when the app was added, and Chrome's WebAPK rasterises PNGs at install time
+  anyway. So the tiles are one fixed pair of artworks; making them dark would mean making
+  them *permanently* dark, for everyone, which is a brand decision and not a theming one.
+  The one real launcher-side lever is `purpose: "monochrome"` (Android 13+ themed icons),
+  which discards colour entirely and lets the OS tint the alpha channel to the wallpaper —
+  not a dark variant, and deliberately not shipped. The charcoal tiles themselves are
+  drawn and parked in `docs/images/app-icons-dark/` against the day someone wants to make
+  that permanent choice.
+
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
 a dedicated `performance-1x` core and holds it for Fly's whole idle window (~6-8 min
@@ -1061,12 +1164,16 @@ runner's PoP, so the one vantage point it can see is the one it just repaired. O
 `/assets/index-3uRpM-0Y.js`, a filename that at origin returns the SPA fallback as `text/html`.
 The origin has the property the edge lacks — one machine, same bytes for every caller.
 
-Sampling ~8 URLs answers for all 132 because the prerendered pages are not independent: each is
-a copy of the same built `index.html` with its head span and `#root` swapped, so all of them
-embed that build's content-hashed `/assets/index-<hash>.js` and move together. `/` alone would
-do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata change, which the
-prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML set; the
-four static files purge individually.
+The sample is **four HTML pages plus every file in `STATIC_FILES`** — 14 URLs today, against 140
+purgeable ones. Stated as the rule rather than a count on purpose: the last time `STATIC_FILES`
+grew, three hand-derived figures in this file and in the script went stale in the same commit.
+Four HTML samples answer for the whole prerendered set because those pages are not independent:
+each is a copy of the same built `index.html` with its head span and `#root` swapped, so all of
+them embed that build's content-hashed `/assets/index-<hash>.js` and move together. `/` alone
+would do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata change,
+which the prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML
+set; each static file purges individually, which is why every one of them is sampled rather than
+stood in for.
 
 Both halves are collected independently: an HTML sample moving expands to the whole HTML set,
 a static file moving purges just itself, and a deploy that does both purges both. That is not a

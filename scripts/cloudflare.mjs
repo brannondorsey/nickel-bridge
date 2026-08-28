@@ -177,7 +177,25 @@ const IMMUTABLE_PREFIX = '/assets/';
  * are the two that matter most: they are the first thing a crawler fetches, so caching
  * them is what turns a crawl visit into zero origin requests.
  */
-const STATIC_FILES = ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.svg'];
+export const STATIC_FILES = [
+  '/robots.txt',
+  '/sitemap.xml',
+  '/og-image.png',
+  '/favicon.svg',
+  // The home-screen icon set (scripts/app-icons.mjs) and the manifest that
+  // names it. Unhashed like the two above, so they belong here for the same
+  // two reasons: they cache at the edge, and --purge samples each one
+  // individually, so re-running the generator drops exactly the tiles that
+  // moved rather than the whole HTML set. They are fetched rarely — once when
+  // someone adds the app to their home screen — but that fetch is a machine
+  // wake like any other, and it is the one moment the icon has to be right.
+  '/site.webmanifest',
+  '/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+];
 
 /**
  * Paths that must never cache but that SITE_ROUTES does not describe.
@@ -762,8 +780,10 @@ export function changedPaths(site, before, allPaths, after, paths) {
  *
  * The origin has the property the edge lacks: one machine, same bytes for every caller. So
  * the question becomes "what did THIS deploy change", answered before/after against origin,
- * and the edge is never consulted. It also costs ~16 origin requests per deploy instead of
- * ~264, on a machine the deploy wakes anyway.
+ * and the edge is never consulted. It also costs two reads per SAMPLED path (snapshot, then
+ * after) instead of two per purgeable one — 28 origin requests per deploy rather than 280 at
+ * today's counts — on a machine the deploy wakes anyway. Phrased as the rule because the
+ * absolute numbers move whenever STATIC_FILES does; samplePaths() is the authority.
  *
  * The one thing this deliberately cannot do is repair staleness left by an EARLIER missed
  * purge — it only knows about this deploy. `edge-upkeep.yml` runs `--purge --force` weekly
