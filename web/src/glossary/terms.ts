@@ -828,12 +828,20 @@ export const TERMS: GlossaryTerm[] = [
     related: ['fit', 'limit-raise'],
   },
   {
+    // The slug stays 'rating-drift' though the term no longer does. It is
+    // already prerendered at /glossary/rating-drift and listed in the sitemap,
+    // so renaming it would 404 a crawled URL to buy nothing a reader can see.
     slug: 'rating-drift',
-    term: 'Rating drift',
-    def: 'How far your Nickel rating has moved since you last finished a crossing — one of the two readings the arrow under the rating on the home screen can carry. Every point of it comes from somebody else: when a new player finishes a board you have already played, that board is matchpointed again and your share of it moves. (The other reading, “in the last crossing”, is the swing you earned yourself.)',
-    example: 'You have not touched a card all week and the rating reads ▼3 — two friends finished a crossing you paid for on Sunday.',
+    // Named for the line rather than for one of its readings. The home tile
+    // carries TWO (ds/RatingTile.tsx), the delta is the one door onto this
+    // sheet whichever is showing, and a sheet titled 'Rating drift' told a
+    // player who had just tapped '▼15 in the last crossing' that every point
+    // of it came from somebody else — which is the other reading's story.
+    term: 'Rating movement',
+    def: 'The line under your Nickel rating on the home screen, which reports one of two things and names which. “In the last crossing” is the swing you just earned yourself in the last tournament. “Since your last crossing” is drift: points that arrived while you were away, because another player finished a tournament you’ve previously played. The version you see differs based on the scenario that is most relevant to you at the moment.',
+    example: '“▲12 in the last crossing” is a good night at the table; “▼3 since your last crossing” is two friends finishing a tournament you played on Sunday.',
     themes: ['scoring'],
-    aliases: ['drift', 'rating movement'],
+    aliases: ['drift', 'rating drift', 'rating change'],
     // Searchable by those aliases, never auto-linked — the First crossing
     // precedent for an app-vocabulary entry. 'drift' is an ordinary English
     // word, and the first receipt caption or tour line that happens to use it
