@@ -1909,14 +1909,25 @@ round — the group-by/HAVING "every board of it is done" shape `activity.ts`'s
 `elo_history` carries no timestamp), never by tournament id: replay order is not play order,
 and a months-old crossing finished this morning is the one being asked about.
 
-The `rating-drift` term (`explainTerm`) is the door on both readings, and its definition names
-both. That term is the second non-bridge entry in the ledger, after the First crossing easter
-egg; `glossary.test.ts` pins the count and the Glossary page derives its "N CORE TERMS" from
-`TERMS.length` rather than a literal. The greeting still stands for a player no crossing has
-rated yet — `users.elo` reads `ELO_INITIAL` until one does, and 1200 presented as a hero figure
-claims something nobody earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards`
-or the medal rail's tournament count: a crossing only rates you once a second human finishes the
-same field, so a player can have several behind them and still be carrying 1200.
+**One term is the door on both readings, so it is named for the LINE rather than for either
+one of them.** `explainTerm` is a single slug whichever caption is showing, and the sheet it
+opens reads **Rating movement**: it defines the crossing swing and the drift in turn, and says
+which one you are looking at. It shipped as "Rating drift", named for the only reading the tile
+had at the time, and the second reading landed with nothing but a parenthetical added to it —
+so tapping "▼15 in the last crossing", a figure the player earned at the table, opened a sheet
+headed "Rating drift" saying every point of it came from somebody else. Its **slug stays
+`rating-drift`**, which is deliberate rather than an oversight: that URL is prerendered and in
+the sitemap, and renaming it would 404 a crawled page to buy nothing a reader can see. If the
+tile ever gives each reading its own door, that is when this becomes two terms. That term is
+the second non-bridge entry in the ledger, after the First crossing easter egg;
+`glossary.test.ts` pins the count, pins the term against a regression to naming one reading,
+and the Glossary page derives its "N CORE TERMS" from `TERMS.length` rather than a literal.
+
+The greeting still stands for a player no crossing has rated yet — `users.elo` reads
+`ELO_INITIAL` until one does, and 1200 presented as a hero figure claims something nobody
+earned. That gate is `ratedTournaments` (elo_history rows), NOT `boards` or the medal rail's
+tournament count: a crossing only rates you once a second human finishes the same field, so a
+player can have several behind them and still be carrying 1200.
 
 **The delta needed a stored snapshot, and reading why is the whole point of this section.**
 Every other Elo surface here is recompute-on-read, and that model has no memory of what a rating
