@@ -55,6 +55,21 @@ describe('purge decision', () => {
     expect(sample.filter((p) => STATIC.includes(p))).toEqual(STATIC);
   });
 
+  it('samples four HTML pages and every static file', () => {
+    // The shape CONTRIBUTING.md's edge section states as a RULE rather than a
+    // count, after the count went stale: growing STATIC_FILES from 4 entries to
+    // 10 silently invalidated three hand-derived figures in the docs. Every
+    // static file must be sampled because each purges individually; four HTML
+    // pages stand in for the whole prerendered set because they all embed the
+    // same content-hashed bundle and move together. Change either half and the
+    // prose in CONTRIBUTING.md and cloudflare.mjs's purge() comment needs the
+    // same edit.
+    expect(sample.filter((p) => !STATIC.includes(p))).toEqual(['/', '/glossary', sample[2], sample[3]]);
+    expect(sample.filter((p) => !STATIC.includes(p))).toHaveLength(4);
+    expect(sample[2]).toMatch(/^\/glossary\//);
+    expect(sample[3]).toMatch(/^\/glossary\//);
+  });
+
   it('purges nothing when the deploy changed no cached output', () => {
     expect(decide(snapshot(), unchanged())).toEqual([]);
   });

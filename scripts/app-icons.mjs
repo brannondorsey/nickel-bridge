@@ -105,9 +105,15 @@ const palette = dark ? PALETTES.dark : PALETTES.light;
  * parked set can never quietly replace the shipped one — promoting it is an
  * explicit `--dark web/public`.
  */
-const outDir =
-  args.find((a) => !a.startsWith('--')) ??
-  resolve(root, dark ? 'docs/images/app-icons-dark' : 'web/public');
+const explicitOut = args.find((a) => !a.startsWith('--'));
+const outDir = explicitOut ?? resolve(root, dark ? 'docs/images/app-icons-dark' : 'web/public');
+/**
+ * Is this run refreshing the parked archive, as opposed to drawing tiles for
+ * somewhere else? Only then is the contact sheet written — promoting with
+ * `--dark web/public` must not drop a 150 kB docs image into the served
+ * directory, and a light run has no archive to illustrate.
+ */
+const writingArchive = dark && !explicitOut;
 
 /** Mark width as a fraction of the tile, per purpose. See the doc comment. */
 const MARK_ANY = 0.7;
@@ -177,21 +183,101 @@ function appleTouchIcon() {
   return { file: href, size: Number(size), purpose: 'any' };
 }
 
+/**
+ * Inline a woff2 from node_modules as a data: URI. og-image.mjs's move and the
+ * same reason: the sheet must render identically with no network, rather than
+ * silently falling back to a system face on a machine that can't reach Google.
+ */
+function font(rel) {
+  return `data:font/woff2;base64,${readFileSync(resolve(root, 'node_modules', rel)).toString('base64')}`;
+}
+
+/**
+ * docs/images/app-icons-dark/preview.png — the contact sheet its README shows.
+ *
+ * It exists because the parked set is a decision somebody will re-open months
+ * from now, and the question ("should the tile be charcoal?") is not one you
+ * can answer from five PNGs in a directory listing: it needs both sets under
+ * the launcher masks, and side by side at home-screen size on a dark AND a
+ * light wallpaper, which is the actual trade. It renders here rather than in a
+ * throwaway script so the README's "refresh it with --dark" is TRUE — the first
+ * draft of this file wrote the tiles and not the sheet, so that instruction
+ * quietly did nothing, which is the same silent-drift failure the rest of this
+ * change is careful about.
+ *
+ * `light` is read off web/public rather than redrawn, so the sheet always shows
+ * what is genuinely shipping today next to what is parked.
+ */
+async function writePreview(browser, darkTiles) {
+  const uri = (buf) => `data:image/png;base64,${buf.toString('base64')}`;
+  const shipping = (file) => uri(readFileSync(resolve(root, 'web/public', file)));
+  const parked = (file) => uri(darkTiles.get(file));
+
+  const row = (get) => `
+    <div class="row">
+      <div><div class="t" style="background-image:url(${get('icon-512.png')})"></div><p class="cap">any</p></div>
+      <div><div class="t circle" style="background-image:url(${get('icon-maskable-512.png')})"></div><p class="cap">maskable circle</p></div>
+      <div><div class="t squircle" style="background-image:url(${get('icon-maskable-512.png')})"></div><p class="cap">maskable squircle</p></div>
+      <div><div class="t squircle" style="background-image:url(${get('apple-touch-icon.png')})"></div><p class="cap">apple-touch</p></div>
+    </div>`;
+  const onWall = (cls, label) => `
+    <div><div class="wall ${cls}">
+      <span class="s squircle" style="background-image:url(${parked('icon-maskable-512.png')})"></span>
+      <span class="s squircle" style="background-image:url(${shipping('icon-maskable-512.png')})"></span>
+    </div><p class="cap">${label} — parked · shipping</p></div>`;
+
+  const html = `<!doctype html><meta charset="utf-8"><style>
+    @font-face{font-family:Besley;src:url(${font('@fontsource-variable/besley/files/besley-latin-wght-normal.woff2')}) format('woff2');font-weight:100 900}
+    @font-face{font-family:Besley;font-style:italic;src:url(${font('@fontsource-variable/besley/files/besley-latin-wght-italic.woff2')}) format('woff2');font-weight:100 900}
+    body{margin:0;padding:30px 34px;background:#0d0d0d;font-family:Besley,serif;color:${PALETTES.light.paper}}
+    h2{font-size:11px;letter-spacing:.15em;text-transform:uppercase;margin:0 0 3px;color:#b9b4a9;font-weight:700}
+    .sub{font-size:11px;font-style:italic;color:#6e6a62;margin:0 0 14px}
+    .row{display:flex;gap:26px;align-items:flex-start;margin-bottom:22px}
+    .t{width:96px;height:96px;background-size:contain;background-repeat:no-repeat;background-position:center}
+    .s{width:52px;height:52px;background-size:contain;background-repeat:no-repeat;background-position:center}
+    .circle{border-radius:50%} .squircle{border-radius:23%}
+    .cap{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#5a564f;margin:8px 0 0;text-align:center}
+    hr{border:0;border-top:1px solid #2c2a26;margin:22px 0}
+    .wall{display:flex;gap:20px;padding:16px 20px;border-radius:10px;align-items:center}
+    .w1{background:linear-gradient(140deg,#1d3b3f,#3d5340 60%,#8a7440)}
+    .w2{background:linear-gradient(140deg,#e8e2d4,#cfd6cd 60%,#b9c2b0)}
+  </style>
+  <h2>Parked — dark tiles</h2>
+  <p class="sub">Night --paper ${PALETTES.dark.paper} with a ${PALETTES.dark.mark} mark, under the launcher masks.</p>
+  ${row(parked)}
+  <hr><h2>Shipping — paper tiles, for comparison</h2>
+  <p class="sub">What is live today, straight out of web/public.</p>
+  ${row(shipping)}
+  <hr><h2>On a wallpaper, at home-screen size</h2>
+  <p class="sub">The whole point of the choice: the tile is permanent, the wallpaper is not.</p>
+  <div class="row">${onWall('w1', 'dark wallpaper')}${onWall('w2', 'light wallpaper')}</div>`;
+
+  const page = await browser.newPage({ viewport: { width: 660, height: 640 }, deviceScaleFactor: 2 });
+  await page.setContent(html);
+  await page.evaluate(() => document.fonts.ready);
+  const png = await page.screenshot({ type: 'png', fullPage: true });
+  await page.close();
+  writeFileSync(resolve(outDir, 'preview.png'), png);
+  console.log(`preview.png  contact sheet  ${png.length.toLocaleString()} bytes`);
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   // Same launch line as og-image.mjs / ui-check.mjs / readme-shots.mjs.
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium' });
   try {
+    const written = new Map();
     for (const { file, size, purpose } of [...manifestIcons(), appleTouchIcon()]) {
       const svg = tile(size, purpose === 'maskable' ? MARK_MASKABLE : MARK_ANY);
       const page = await browser.newPage({ viewport: { width: size, height: size }, deviceScaleFactor: 1 });
       await page.setContent(`<!doctype html><style>html,body{margin:0;padding:0}</style>${svg}`);
       const png = await page.screenshot({ type: 'png' });
       await page.close();
-      const path = resolve(outDir, file);
-      writeFileSync(path, png);
+      writeFileSync(resolve(outDir, file), png);
+      written.set(file, png);
       console.log(`${file}  ${size}×${size}  ${purpose}  ${dark ? 'dark' : 'light'}  ${png.length.toLocaleString()} bytes`);
     }
+    if (writingArchive) await writePreview(browser, written);
   } finally {
     await browser.close();
   }

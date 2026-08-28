@@ -780,8 +780,10 @@ export function changedPaths(site, before, allPaths, after, paths) {
  *
  * The origin has the property the edge lacks: one machine, same bytes for every caller. So
  * the question becomes "what did THIS deploy change", answered before/after against origin,
- * and the edge is never consulted. It also costs ~16 origin requests per deploy instead of
- * ~264, on a machine the deploy wakes anyway.
+ * and the edge is never consulted. It also costs two reads per SAMPLED path (snapshot, then
+ * after) instead of two per purgeable one — 28 origin requests per deploy rather than 280 at
+ * today's counts — on a machine the deploy wakes anyway. Phrased as the rule because the
+ * absolute numbers move whenever STATIC_FILES does; samplePaths() is the authority.
  *
  * The one thing this deliberately cannot do is repair staleness left by an EARLIER missed
  * purge — it only knows about this deploy. `edge-upkeep.yml` runs `--purge --force` weekly

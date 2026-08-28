@@ -1162,12 +1162,16 @@ runner's PoP, so the one vantage point it can see is the one it just repaired. O
 `/assets/index-3uRpM-0Y.js`, a filename that at origin returns the SPA fallback as `text/html`.
 The origin has the property the edge lacks — one machine, same bytes for every caller.
 
-Sampling ~8 URLs answers for all 132 because the prerendered pages are not independent: each is
-a copy of the same built `index.html` with its head span and `#root` swapped, so all of them
-embed that build's content-hashed `/assets/index-<hash>.js` and move together. `/` alone would
-do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata change, which the
-prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML set; the
-four static files purge individually.
+The sample is **four HTML pages plus every file in `STATIC_FILES`** — 14 URLs today, against 140
+purgeable ones. Stated as the rule rather than a count on purpose: the last time `STATIC_FILES`
+grew, three hand-derived figures in this file and in the script went stale in the same commit.
+Four HTML samples answer for the whole prerendered set because those pages are not independent:
+each is a copy of the same built `index.html` with its head span and `#root` swapped, so all of
+them embed that build's content-hashed `/assets/index-<hash>.js` and move together. `/` alone
+would do; `/glossary` and two term pages are belt-and-braces for a `seo.ts` metadata change,
+which the prerender reads but the bundle does not. Any HTML sample moving purges the whole HTML
+set; each static file purges individually, which is why every one of them is sampled rather than
+stood in for.
 
 Both halves are collected independently: an HTML sample moving expands to the whole HTML set,
 a static file moving purges just itself, and a deploy that does both purges both. That is not a
