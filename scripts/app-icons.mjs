@@ -40,8 +40,22 @@
  * an ordinary `npm run build` never needs a browser. Re-run it only when the
  * bridge mark or the brand paper/verdigris tokens change:
  *
- *   node scripts/app-icons.mjs            # → web/public/
- *   node scripts/app-icons.mjs /tmp/out   # somewhere else
+ *   node scripts/app-icons.mjs                  # → web/public/ (what ships)
+ *   node scripts/app-icons.mjs /tmp/out         # somewhere else
+ *   node scripts/app-icons.mjs --dark           # → docs/images/app-icons-dark/
+ *   node scripts/app-icons.mjs --dark web/public  # ...and ship those instead
+ *
+ * THE DARK SET IS PARKED, NOT SHIPPED. A launcher tile cannot follow the OS
+ * theme — see "The favicon has a dark mode; the home-screen tiles cannot" in
+ * CONTRIBUTING.md — so a charcoal tile is a permanent choice for everyone, not
+ * a dark-mode variant. The owner chose paper and asked for the alternative to
+ * be kept, so `--dark` draws the same tiles on the night palette and defaults
+ * to writing them into docs/, where nothing serves them. Promoting is the
+ * second command above plus a commit: the filenames are identical, so the
+ * manifest, index.html and the tests need no edit at all. Note the archive is
+ * a PREVIEW rather than a source — promotion re-draws from the manifest, so an
+ * archive that has gone stale against a newly added size cannot ship a short
+ * set.
  *
  * THE MANIFEST IS THE TABLE, and this script reads it rather than keeping a
  * second list beside it — the same move server/src/seo.ts makes for robots.txt
@@ -66,15 +80,34 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
-const outDir = process.argv[2] ?? resolve(root, 'web/public');
-
 /**
  * Brand tokens, spelled out rather than imported: this runs under bare Node
  * with no bundler, and web/src/style.css is not a module. Keep in sync with
  * --paper and --verdigris there (and with .claude/skills/nickel-bridge-design).
  */
-const PAPER = '#FCFBF8';
-const VERDIGRIS = '#6F8F68';
+const PALETTES = {
+  /** Ships. Brand paper, brand verdigris. */
+  light: { paper: '#FCFBF8', mark: '#6F8F68' },
+  /**
+   * Parked. The night --paper and --ink, so a charcoal tile matches the app at
+   * night and the favicon's own dark stroke rather than inventing a third
+   * charcoal. The mark is off-white here and not the night --verdigris
+   * (#8cab84) — same call the favicon makes, and a one-literal change.
+   */
+  dark: { paper: '#171512', mark: '#ECE7DC' },
+};
+
+const args = process.argv.slice(2);
+const dark = args.includes('--dark');
+const palette = dark ? PALETTES.dark : PALETTES.light;
+/**
+ * `--dark` defaults to the archive rather than to web/public, so drawing the
+ * parked set can never quietly replace the shipped one — promoting it is an
+ * explicit `--dark web/public`.
+ */
+const outDir =
+  args.find((a) => !a.startsWith('--')) ??
+  resolve(root, dark ? 'docs/images/app-icons-dark' : 'web/public');
 
 /** Mark width as a fraction of the tile, per purpose. See the doc comment. */
 const MARK_ANY = 0.7;
@@ -89,8 +122,8 @@ const GLYPH_H = 122;
  * (variant="glyph") and web/public/favicon.svg. Same copy-rather-than-import
  * reason as og-image.mjs's footer mark.
  */
-const GLYPH = `
-  <g stroke="${VERDIGRIS}" fill="none">
+const glyph = (mark) => `
+  <g stroke="${mark}" fill="none">
     <line x1="0" y1="10" x2="160" y2="10" stroke-width="14" />
     <path d="M8 112 Q80 38 152 112" stroke-width="10" />
     <line x1="8" y1="10" x2="8" y2="112" stroke-width="10" />
@@ -110,8 +143,8 @@ function tile(size, fraction) {
   const x = (size - w) / 2;
   const y = (size - h) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="${PAPER}" />
-  <svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="0 0 ${GLYPH_W} ${GLYPH_H}">${GLYPH}</svg>
+  <rect width="${size}" height="${size}" fill="${palette.paper}" />
+  <svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="0 0 ${GLYPH_W} ${GLYPH_H}">${glyph(palette.mark)}</svg>
 </svg>`;
 }
 
@@ -157,7 +190,7 @@ async function main() {
       await page.close();
       const path = resolve(outDir, file);
       writeFileSync(path, png);
-      console.log(`${file}  ${size}×${size}  ${purpose}  ${png.length.toLocaleString()} bytes`);
+      console.log(`${file}  ${size}×${size}  ${purpose}  ${dark ? 'dark' : 'light'}  ${png.length.toLocaleString()} bytes`);
     }
   } finally {
     await browser.close();

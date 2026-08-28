@@ -237,7 +237,8 @@ scripts         e2e.mjs (full two-user tournament against a running instance), u
                 checked-in social share card web/public/og-image.png — offline, no
                 running instance needed), app-icons.mjs (regenerates the home-screen
                 icon set from web/public/site.webmanifest — also offline; the manifest
-                is the table, this draws what it names)
+                is the table, this draws what it names, and --dark draws the parked
+                charcoal set into docs/images/app-icons-dark/ instead)
 e2e             smoke.spec.ts — Playwright smoke at phone viewport (390×844)
 docs            analyze-design.md — the Analyze design record, with its concept-exploration
                 board analyze-concepts.html (three directions; the owner chose B,
@@ -267,6 +268,10 @@ docs            analyze-design.md — the Analyze design record, with its concep
                 spec, with its clickable prototype
                 onboarding-prototype.html and concept-exploration board
                 onboarding-concepts.html;
+                images/app-icons-dark/ — the PARKED charcoal home-screen tiles, served by
+                nothing (a launcher tile can't follow the OS theme, so a dark one is a
+                permanent choice for everyone — its README has the preview and the
+                one-command promotion);
                 screenshots/ + images-redesign/ + images/ — the README shots, the design-review
                 sweep, and the pre-redesign "before" (each dir has a README)
 .claude         CLAUDE.md symlink (→ this file) + settings.json (the permission +
@@ -928,6 +933,14 @@ and it gained a dark mode of its own (below). Four things about the shape:
   favicon — i.e. straight back to the letterboxed tile — with nothing red anywhere. The
   six files are also in `scripts/cloudflare.mjs`'s `STATIC_FILES`, so they cache at the edge
   and `--purge` drops exactly the tiles a regeneration moved.
+- **A charcoal set exists and is deliberately not served.** `--dark` draws the same tiles
+  on the night palette, defaulting to `docs/images/app-icons-dark/` rather than to
+  `web/public/`, so the parked artwork can never quietly replace the shipped set —
+  promoting is an explicit `--dark web/public` and a commit, with no manifest, shell or
+  test edit, since the filenames match. The archive is a PREVIEW rather than a source:
+  promotion redraws from the manifest, so one gone stale against a newly added size
+  cannot ship a short set. Owner's call, taken with the tiles on both a dark and a light
+  wallpaper in front of it — see that directory's README.
 
 **The favicon has a dark mode; the home-screen tiles cannot.** The two are asked the same
 question and only one can answer it, which is worth writing down because the obvious
@@ -959,7 +972,9 @@ assumption is that a manifest icon works like a favicon:
   them *permanently* dark, for everyone, which is a brand decision and not a theming one.
   The one real launcher-side lever is `purpose: "monochrome"` (Android 13+ themed icons),
   which discards colour entirely and lets the OS tint the alpha channel to the wallpaper —
-  not a dark variant, and deliberately not shipped.
+  not a dark variant, and deliberately not shipped. The charcoal tiles themselves are
+  drawn and parked in `docs/images/app-icons-dark/` against the day someone wants to make
+  that permanent choice.
 
 **Machine time is bought by the request**, so the request log records who is asking. With
 `auto_stop_machines = 'suspend'` and `min_machines_running = 0`, *any* inbound request wakes
