@@ -40,12 +40,18 @@ describe('glossary core data', () => {
   });
 
   it('covers the whole curated sheet (plus the app entries filed as terms)', () => {
-    // 126 curated bridge terms + First crossing + Rating drift
+    // 126 curated bridge terms + First crossing + Rating movement
     expect(TERMS.length).toBe(127);
-    // Rating drift is the second non-bridge entry: it explains the home
+    // Rating movement is the second non-bridge entry: it explains the home
     // screen's own arrow — both of the readings that arrow can carry — and the
-    // delta itself is the door onto this sheet (ds/RatingTile.tsx).
-    expect(TERMS.find((t) => t.slug === 'rating-drift')?.themes).toEqual(['scoring']);
+    // delta itself is the door onto this sheet (ds/RatingTile.tsx). The term is
+    // pinned because it is the one door onto BOTH readings, so it must not go
+    // back to naming one of them: 'Rating drift' headed a sheet reached by
+    // tapping '▼15 in the last crossing', which is the other reading entirely.
+    // The slug stays as it was — it is prerendered and in the sitemap.
+    const movement = TERMS.find((t) => t.slug === 'rating-drift');
+    expect(movement?.themes).toEqual(['scoring']);
+    expect(movement?.term).toBe('Rating movement');
     // the ledger's first non-bridge entry: the app tour, filed as a term
     const egg = TERMS.find((t) => t.slug === 'first-crossing');
     expect(egg?.action?.to).toBe('/tour');
