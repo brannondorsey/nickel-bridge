@@ -365,7 +365,7 @@ ol.notes b{font-family:'Besley',serif; font-weight:700; font-size:12.5px; letter
         </ul></div>
         <div class="against"><h3>Against</h3><ul>
           <li>Two figures with different denominators — calls against declared boards. The copy has to keep them apart, or it reads as one ratio.</li>
-          <li>The carried column is play-confounded: overtricks are partly declarer skill, not only a light auction. It is corroboration, never proof, and should be worded as such.</li>
+          <li>The carried column is play-confounded — overtricks are partly declarer skill, not only a light auction — and the adage behind it is an IMP-and-rubber argument about game decisions, not a matchpoint one. Corroboration, never proof, and worded as such. See the precedent section below.</li>
           <li>Needs one small new classifier — has the opposition bid? — since <code class="num">bidCategory</code> buckets every pass together regardless of whose auction it is, and a pass in a contested auction is the single most conservative act available.</li>
         </ul></div>
       </div>
@@ -374,6 +374,31 @@ ol.notes b{font-family:'Besley',serif; font-weight:700; font-size:12.5px; letter
 </section>
 
 <hr class="rule">
+
+<!-- ============================= PRECEDENT ============================= -->
+<section class="sec" style="margin-top:0">
+  <div class="sec-kick"><span class="roman">The precedent</span><h2>What is borrowed, and what is not</h2></div>
+  <p class="lede">Strip the toll house off this board and most of it turns out to be established bridge practice wearing new words. One piece is not, and it is worth being straight about which.</p>
+
+  <h3 style="margin-top:26px">Borrowed, and long established</h3>
+  <ol class="notes">
+    <li><b>The question is already on the convention card.</b> The standard ACBL card has boxes for <em>light</em>, <em>normal</em> or <em>sound</em> preempt style, a "very light" marker for one-level overcalls, and a light-versus-sound distinction on openings. Per-player bidding conservatism is not an axis this board invented — it is a declared attribute on the disclosure form every pair fills in before play. What is proposed is measuring the thing the card asks you to self-report.</li>
+    <li><b>Scoring a call against a distribution of expert opinion is the oldest bidding contest there is.</b> The Bridge World's Master Solvers' Club scores each candidate call out of 100, the director "guided by the votes and comments of a panel of experts," and prints the panel's vote split beside every answer; BBO's Bidders Challenge runs the same format at scale. The stored policy is a machine stand-in for that vote split — which means <b>BID ACCURACY already is an MSC-style score</b>. What is new here is reading the <em>direction</em> of the split, which MSC prints on every problem and has never aggregated across a solver's record.</li>
+    <li><b>Comparing the contract to double-dummy par is textbook.</b> "Bid to par, better than par, worse than par" is the standard enumeration; the par contract is a defined term with its own literature, and the method is formalised in a granted US patent for rating bidding performance. This is phase two — and it is the <em>most</em> established idea on the board, so the ordering deserves saying plainly: phase one goes first because it is free and retroactive, not because it is the better measure.</li>
+    <li><b>Splitting on whether the opponents have bid is a recognised fault line.</b> The contested auction is its own discipline with its own textbooks; the Law of Total Tricks exists specifically to answer how high to compete; "failing to balance loses more matchpoints than any other reason" is mainstream coaching. Honest caveat: that is consensus and simulation, not a measured error-rate study — I found none.</li>
+    <li><b>And bidding is where the variance is.</b> Across 252,434 deals from 932 elite tournaments, deals where the two tables reached <em>different contracts</em> swung 5.88 IMPs on average; deals with the same contract and different card play swung 1.64. That is the argument for putting a bidding statistic on the profile at all.</li>
+  </ol>
+
+  <h3 style="margin-top:30px">Not borrowed — no precedent found</h3>
+  <ol class="notes" start="6" style="counter-reset:n 5">
+    <li><b>The measure itself.</b> A probability-weighted expected contract <em>height</em>, differenced against the height actually bid, does not appear in the bridge literature or in any bridge product I could find. Funbridge reports attack-and-defence splits, contract types, success rates and a per-deal comparison against the optimal line; neither it nor BBO nor Shark Bridge publishes a signed bidding-tendency figure. The nearest precedent is cross-domain: in chess, average centipawn loss is the direct ancestor of bid accuracy — engine-relative, unsigned, aggregated over a career — while Lichess Insights derives further engine-relative traits and ChessBase's Style Report derives an aggressiveness score from positional features. <em>Engine-relative style trait, shipped in a consumer game app</em> is well precedented. It just has not been done in bridge.</li>
+  </ol>
+
+  <h3 style="margin-top:30px">Borrowed, but weaker than it first looked</h3>
+  <ol class="notes" start="7" style="counter-reset:n 6">
+    <li><b>Overtricks as corroboration of a light auction.</b> The adage is real and documented — bidding for the maximum means you should fail to make your contract about as often as you exceed it, and if you never fail you are not aiming high enough. But it is at its strongest at IMPs and rubber, and about game and slam decisions. <b>This is a matchpoint app</b>, where an overtrick in a partscore is itself worth matchpoints and the arithmetic of bidding one more is a different sum. Treatment III's <b>CARRIED</b> column should stay corroboration and be worded as corroboration; it must not be the column the finding rests on.</li>
+  </ol>
+</section>
 
 <!-- ============================= LIMITS ============================= -->
 <section class="sec" style="margin-top:0">
