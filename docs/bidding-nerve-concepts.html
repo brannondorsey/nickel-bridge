@@ -1,0 +1,515 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Weighbridge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Besley:ital,wght@0,400..900;1,400..700&family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=Josefin+Sans:wght@600&family=Poiret+One&display=swap">
+<style>
+/* ---------- tokens (verbatim from the design system) ---------- */
+:root{
+  --ink:#141414; --paper:#FCFBF8; --panel:#FFFFFF; --surface:#F1EFE9;
+  --line:#D8D5CE; --hair:#E4E1D8; --dash:#B9B4A9; --muted:#6E6A62;
+  --verdigris:#6F8F68; --track:#EDEBE4;
+  --suit-s:#141414; --suit-h:#C22F21; --suit-d:#9E6A00; --suit-c:#00775A;
+  --accent:#C22F21; --positive:#00775A; --negative:#C22F21;
+}
+/* This board is a DOCUMENT, not app chrome: it stays printed-paper in both
+   themes, exactly as docs/analyze-concepts.html does. Every colour below is
+   painted explicitly, so it holds on either host ground. */
+
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper); color:var(--ink); font-family:'Crimson Pro',Georgia,serif; font-size:17px; line-height:1.5}
+.wrap{max-width:1420px; margin:0 auto; padding:34px 30px 90px}
+
+/* ---------- chrome ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap}
+.wordmark{font-family:'Poiret One',cursive; font-size:19px; letter-spacing:.14em; text-transform:uppercase}
+.crumb{margin-left:auto}
+.label{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted)}
+h1{font-family:'Crimson Pro',serif; font-weight:600; font-size:44px; line-height:1.1; margin:26px 0 6px; max-width:20ch; text-wrap:balance}
+.sub{font-family:'Crimson Pro',serif; font-style:italic; color:var(--muted); font-size:19px; margin-bottom:16px}
+.lede{max-width:74ch; font-size:18px; margin-bottom:12px}
+.aside{font-style:italic; color:var(--muted)}
+em,i{font-style:italic}
+.num{font-family:'Besley',serif; font-variant-numeric:tabular-nums}
+hr.rule{border:0; border-top:1px solid var(--line); margin:38px 0}
+h2{font-family:'Crimson Pro',serif; font-weight:600; font-size:29px; line-height:1.15}
+h3{font-family:'Besley',serif; font-weight:700; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); margin-bottom:9px}
+p+p{margin-top:11px}
+.cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:26px 34px; margin-top:18px}
+.cols p{max-width:62ch}
+.glyph-h{color:var(--suit-h)} .glyph-d{color:var(--suit-d)} .glyph-c{color:var(--suit-c)} .glyph-s{color:var(--suit-s)}
+
+/* ---------- section headers ---------- */
+.sec{margin-top:54px}
+.sec-kick{display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; border-top:2px solid var(--ink); padding-top:13px; margin-bottom:12px}
+.sec-kick .roman{font-family:'Besley',serif; font-weight:800; font-size:13px; letter-spacing:.18em; color:var(--muted)}
+.sec-kick .verdict{margin-left:auto}
+
+/* the ink stamp, for the recommendation */
+.stamp{display:inline-block; border:2px solid var(--suit-h); color:var(--suit-h); border-radius:50%;
+  padding:4px 12px; transform:rotate(-4deg); font-family:'Josefin Sans',sans-serif; font-weight:600;
+  font-size:10px; letter-spacing:.22em; white-space:nowrap;
+  -webkit-mask-image:linear-gradient(105deg,#000 55%,rgba(0,0,0,.45) 100%);
+  mask-image:linear-gradient(105deg,#000 55%,rgba(0,0,0,.45) 100%)}
+
+/* ---------- spec cards + tables ---------- */
+.card{border:1px solid var(--ink); background:var(--panel); padding:16px 18px 15px}
+.card.quiet{border:1px solid var(--line)}
+.card.inset{background:var(--surface); border:1px solid var(--line)}
+.card h3{margin-bottom:8px}
+.formula{font-family:'Besley',serif; font-variant-numeric:tabular-nums; font-size:14px; line-height:2.05; white-space:pre-wrap}
+.formula b{font-weight:800}
+.formula span.cm{color:var(--muted); font-style:italic; font-family:'Crimson Pro',serif; font-size:14.5px}
+
+table{border-collapse:collapse; font-size:14px; width:100%}
+th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+th{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); background:var(--surface); white-space:nowrap}
+td.n{font-family:'Besley',serif; font-variant-numeric:tabular-nums; white-space:nowrap}
+.scroll{overflow-x:auto}
+.light{color:var(--negative); font-weight:700}
+.heavy{color:var(--positive); font-weight:700}
+.true{color:var(--muted); font-weight:700}
+
+/* ---------- the live weighbridge ---------- */
+.wb{display:grid; grid-template-columns:minmax(280px,1fr) minmax(300px,1.15fr); gap:0; border:1px solid var(--ink); background:var(--panel); margin-top:20px}
+.wb-pick{border-right:1px solid var(--line); padding:15px 17px}
+@media (max-width:760px){ .wb{grid-template-columns:1fr} .wb-pick{border-right:0; border-bottom:1px solid var(--line)} }
+.wb-pick button{display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--line);
+  padding:8px 11px; margin-bottom:7px; cursor:pointer; font-family:'Crimson Pro',serif; font-size:15px; color:var(--ink); line-height:1.35}
+.wb-pick button:last-child{margin-bottom:0}
+.wb-pick button:hover{border-color:var(--ink)}
+.wb-pick button:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.wb-pick button[aria-pressed="true"]{background:var(--surface); border-color:var(--ink); box-shadow:3px 3px 0 rgba(20,20,20,.12)}
+.wb-pick button .who{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px}
+.wb-read{padding:15px 18px}
+.wb-row{display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:5px 0; border-bottom:1px solid var(--hair); font-size:14.5px}
+.wb-row:last-of-type{border-bottom:0}
+.wb-row .k{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.wb-row .v{font-family:'Besley',serif; font-variant-numeric:tabular-nums; font-weight:700; font-size:15px}
+.wb-total{border-top:1px solid var(--ink); margin-top:7px; padding-top:8px}
+.wb-total .v{font-weight:800; font-size:19px}
+.wb-policy{font-size:12px; color:var(--muted); letter-spacing:.04em; padding:4px 0 2px; line-height:1.7}
+.wb-note{font-style:italic; color:var(--muted); font-size:14px; margin-top:9px; min-height:3.2em}
+
+/* ---------- the beam ---------- */
+.beam{display:block; position:relative; height:15px; background:var(--track); border:1px solid var(--line)}
+.beam-centre{position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--ink)}
+.beam-gate{position:absolute; top:-3px; bottom:-3px; width:0; border-left:1.5px dashed var(--ink); opacity:.6}
+.beam-fill{position:absolute; top:0; bottom:0; display:grid; place-items:center}
+.beam-fill.f-light{background:var(--negative)}
+.beam-fill.f-heavy{background:var(--positive)}
+.beam-fill.f-level{background:var(--dash)}
+.beam-margin{font-family:'Besley',serif; font-weight:700; font-size:8.5px; letter-spacing:.06em; color:var(--paper); padding:0 5px; white-space:nowrap}
+.beam-ends{display:flex; justify-content:space-between; margin-top:5px}
+
+/* ---------- the phone mockups ---------- */
+.mocks{display:grid; grid-template-columns:390px minmax(300px,1fr); gap:34px; align-items:start; margin-top:18px}
+@media (max-width:900px){ .mocks{grid-template-columns:1fr} }
+.phone{width:390px; max-width:100%; border:1px solid var(--line); background:var(--paper); padding:14px 15px 18px}
+.perf{border:1px solid var(--ink); background:var(--panel); position:relative; padding:12px 14px 12px 20px}
+.perf::before{content:''; position:absolute; left:7px; top:0; bottom:0; border-left:1.5px dashed var(--ink)}
+.perf-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:9px}
+.perf-head .fig{font-family:'Besley',serif; font-weight:800; font-variant-numeric:tabular-nums; font-size:13px}
+.mock-note{font-family:'Crimson Pro',serif; font-style:italic; color:var(--muted); font-size:13.5px; margin-top:9px; line-height:1.42}
+.mock-cap{margin-top:10px}
+
+/* ledger rows inside a mock */
+.lrow{display:grid; grid-template-columns:104px 1fr auto; gap:9px; align-items:center; padding:4px 0}
+.lrow .lab{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+.lrow b{font-family:'Besley',serif; font-variant-numeric:tabular-nums; font-size:12.5px}
+.lcount{font-family:'Crimson Pro',serif; font-style:italic; font-size:12.5px; color:var(--muted); grid-column:2 / -1; margin-top:-2px}
+
+/* the two-column receipt (concept III) */
+.receipt{display:grid; grid-template-columns:1fr 1px 1fr; gap:0 14px; margin:4px 0 2px}
+.receipt .divider{background:var(--line)}
+.rcol h4{font-family:'Besley',serif; font-weight:700; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-bottom:5px}
+.rfig{font-family:'Besley',serif; font-weight:800; font-variant-numeric:tabular-nums; font-size:26px; line-height:1.1}
+.rfig .u{font-size:11px; font-weight:700; letter-spacing:.12em; color:var(--muted); display:block; margin-top:2px}
+.rsub{font-family:'Crimson Pro',serif; font-style:italic; font-size:12.5px; color:var(--muted); margin-top:4px; line-height:1.35}
+.verdict-line{border-top:1px solid var(--ink); margin-top:11px; padding-top:9px; font-size:14.5px}
+
+/* pros / cons */
+.pc{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:18px; margin-top:16px}
+.pc ul{list-style:none}
+.pc li{position:relative; padding-left:16px; margin-bottom:6px; font-size:15px; line-height:1.42; max-width:58ch}
+.pc li::before{position:absolute; left:0; top:0; font-family:'Besley',serif; font-weight:700}
+.pc .for li::before{content:'+'; color:var(--positive)}
+.pc .against li::before{content:'−'; color:var(--negative)}
+
+/* footnote list */
+ol.notes{margin-top:14px; padding-left:0; list-style:none; counter-reset:n}
+ol.notes li{counter-increment:n; position:relative; padding-left:30px; margin-bottom:13px; max-width:78ch}
+ol.notes li::before{content:counter(n); position:absolute; left:0; top:1px; font-family:'Besley',serif; font-weight:800; font-size:12px; color:var(--muted)}
+ol.notes b{font-family:'Besley',serif; font-weight:700; font-size:12.5px; letter-spacing:.06em; text-transform:uppercase}
+
+.footer{margin-top:56px; border-top:1px solid var(--line); padding-top:14px; display:flex; gap:14px; flex-wrap:wrap; align-items:baseline}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important; animation:none !important} }
+</style>
+
+<div class="wrap">
+
+<div class="brand">
+  <svg width="26" height="20" viewBox="0 0 160 122" aria-hidden="true" fill="none" stroke="#6F8F68" stroke-width="7" stroke-linecap="round">
+    <path d="M4 74 H156"/><path d="M22 74 V112"/><path d="M138 74 V112"/>
+    <path d="M22 74 C50 22, 110 22, 138 74"/><path d="M80 74 V38"/>
+  </svg>
+  <span class="wordmark">Nickel Bridge</span>
+  <span class="label crumb">Concept board · bidding nerve</span>
+</div>
+
+<h1>The Weighbridge</h1>
+<p class="sub">Do you declare your load light, or heavy?</p>
+
+<p class="lede">Every stat on the profile today asks how <em>well</em> you bid. None asks how <em>high</em>. <b>BID ACCURACY</b> is unsigned by construction — a player who is chronically a level under the table and a player who is chronically a level over score identically, because <code class="num">gradeFromProbs</code> only reads the probability the model put on the call you actually made, never which direction you missed in. This board proposes the missing axis, and three ways to draw it.</p>
+
+<p class="lede aside">A weighbridge is the platform scale at a toll house: a wagon is weighed before it crosses, and the toll is set by the load. You declare your load when you bid. The weighbridge says whether you declared it light.</p>
+
+<hr class="rule">
+
+<!-- ============================= THE MEASUREMENT ============================= -->
+<section class="sec" style="margin-top:0">
+  <div class="sec-kick"><span class="roman">The measurement</span><h2>One number per call, in levels</h2></div>
+
+  <div class="cols">
+    <div>
+      <p>Every human call already stores the model's full masked policy over the legal actions — <code class="num">BidEvaluation.probs</code>, 38 floats, softmaxed over legal calls only and renormalised (<code class="num">model.ts</code>'s <code class="num">policy()</code>). It is written to <code class="num">boards.bid_evals</code> on every call and has never been read by anything but the call inspector.</p>
+      <p>That distribution is the baseline. Give every legal call a <b>height</b> — the level it commits the auction to — and the model's expected height is the load the table expected you to declare. Your own call's height, minus that, is the <b>lean</b>: negative light, positive heavy, in levels.</p>
+    </div>
+    <div class="card">
+      <h3>The definition</h3>
+      <div class="formula"><span class="cm">h₀ = level of the last bid so far (0 if none)</span>
+<b>height(a)</b> = isBid(a) ? bidLevel(a) : h₀
+<b>assessed</b>  = Σ probs[a] · height(a)
+<b>lean</b>      = height(call) − assessed</div>
+    </div>
+  </div>
+
+  <p class="lede" style="margin-top:22px">Three properties fall out of that definition, and each one is a thing a cruder version gets wrong.</p>
+
+  <div class="cols" style="margin-top:6px">
+    <div>
+      <h3>A strain disagreement scores zero</h3>
+      <p>3NT where the model wanted 3<span class="glyph-c">♣</span> is a <em>shape</em> opinion, not a nerve one — both are height 3, so the lean is ~0. Comparing your call to the argmax alone would have charged you a full step for choosing a different denomination at the same height.</p>
+    </div>
+    <div>
+      <h3>Doubles fall out of this axis</h3>
+      <p>X and XX add no height, so doubling where the model passes reads 0.00 here. That is correct: the axe is a separate temperament, and it gets its own small reading rather than polluting this one.</p>
+    </div>
+    <div>
+      <h3>The baseline already knows the table</h3>
+      <p><code class="num">encode.ts</code> puts vulnerability, seat and the whole auction into the observation, so "expected height" is situational, not a constant. Favourable vulnerability licenses more, and the baseline already believes that — which is exactly what a naïve aggression figure gets wrong.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Weigh a call yourself</h3>
+  <div class="wb">
+    <div class="wb-pick" id="wb-pick"></div>
+    <div class="wb-read">
+      <div class="wb-row"><span class="k">Your call</span><span class="v" id="wb-call">—</span></div>
+      <div class="wb-row"><span class="k">Its height</span><span class="v" id="wb-height">—</span></div>
+      <div class="wb-row"><span class="k">Assessed by the table</span><span class="v" id="wb-assessed">—</span></div>
+      <div class="wb-policy num" id="wb-policy"></div>
+      <div class="wb-row wb-total"><span class="k">The lean</span><span class="v" id="wb-lean">—</span></div>
+      <div style="margin-top:12px">
+        <span class="beam" aria-hidden="true">
+          <span class="beam-gate" style="left:38%"></span>
+          <span class="beam-gate" style="left:62%"></span>
+          <span class="beam-fill" id="wb-fill"><span class="beam-margin" id="wb-fill-label"></span></span>
+          <span class="beam-centre"></span>
+        </span>
+        <div class="beam-ends"><span class="label">← 2 levels light</span><span class="label">2 levels heavy →</span></div>
+      </div>
+      <p class="wb-note" id="wb-note"></p>
+    </div>
+  </div>
+  <p class="aside" style="margin-top:9px; font-size:14.5px">Illustrative policies, chosen to show each property. The arithmetic is the real one.</p>
+</section>
+
+<hr class="rule">
+
+<!-- ============================= TREATMENT I ============================= -->
+<section class="sec">
+  <div class="sec-kick"><span class="roman">I</span><h2>The Beam</h2><span class="label verdict">One figure, on a balance</span></div>
+  <p class="lede">The mean lean across every graded call, drawn on the Compare screen's own beam: centre is even-handed, the fill grows left for light and right for heavy, and the dashed gates are the margin below which the lean sits inside its own measurement error. Below its gate it stays grey and names nothing.</p>
+
+  <div class="mocks">
+    <div class="phone">
+      <div class="perf">
+        <div class="perf-head"><span class="label">The weighbridge — 218 calls weighed</span><span class="fig">Ø 0.31 LIGHT</span></div>
+        <span class="beam" aria-hidden="true">
+          <span class="beam-gate" style="left:43.5%"></span><span class="beam-gate" style="left:56.5%"></span>
+          <span class="beam-fill f-light" style="right:50%; width:15.5%"><span class="beam-margin">0.31</span></span>
+          <span class="beam-centre"></span>
+        </span>
+        <div class="beam-ends"><span class="label">Light</span><span class="label">Heavy</span></div>
+        <p class="mock-note">You declare about a third of a level under what the table expects — lighter than 78% of the field.</p>
+      </div>
+    </div>
+    <div>
+      <div class="pc">
+        <div class="for"><h3>For</h3><ul>
+          <li>One glanceable figure, in the tile rhythm the page already has.</li>
+          <li>Drops into Compare for nothing: it is a mean of a continuous score, so <code class="num">σ/√n</code> is its error model — the same one bid accuracy already uses — and <code class="num">compare.ts</code> is a pure function of two <code class="num">PlayerStats</code>. Two players with identical accuracy and opposite nerve is the most interesting row that screen could draw.</li>
+          <li>Reuses <code class="num">ds/BeamBar</code> unchanged. No new component.</li>
+        </ul></div>
+        <div class="against"><h3>Against</h3><ul>
+          <li>A scalar hides where the lean lives. A player who is a level light in competition and half a level heavy at their own auctions averages to zero and is told they are even-handed — the one reading that is certainly false.</li>
+          <li>Says nothing actionable. "You bid light" is a horoscope until it is paired with what the cards returned.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= TREATMENT II ============================= -->
+<section class="sec">
+  <div class="sec-kick"><span class="roman">II</span><h2>The Load Table</h2><span class="label verdict">A shape, not a score</span></div>
+  <p class="lede">Refuse the scalar. Bucket every weighed call by its lean and draw the distribution — the profile's existing <b>TRICKS MADE</b> stem chart, pointed at a different quantity, with the unclamped mean as its dashed marker. Temperament is a spread, and a player who is wild in both directions is a different player from one who is quietly, consistently light.</p>
+
+  <div class="mocks">
+    <div class="phone">
+      <div class="perf">
+        <div class="perf-head"><span class="label">The weighbridge — 218 calls</span><span class="fig">Ø −0.31</span></div>
+        <svg viewBox="0 0 326 116" width="100%" height="116" role="img" aria-label="Distribution of bidding lean: most calls at level, tail toward light.">
+          <line x1="0" y1="82" x2="326" y2="82" stroke="#141414" stroke-width="1"/>
+          <g fill="#141414">
+            <rect x="18"  y="76" width="20" height="6"/>
+            <rect x="66"  y="61" width="20" height="21"/>
+            <rect x="114" y="47" width="20" height="35"/>
+            <rect x="153" y="40" width="20" height="42"/>
+            <rect x="201" y="58" width="20" height="24"/>
+            <rect x="249" y="72" width="20" height="10"/>
+            <rect x="288" y="79" width="20" height="3"/>
+          </g>
+          <g font-family="Besley,serif" font-size="9.5" font-weight="700" fill="#6E6A62" text-anchor="middle" letter-spacing="0.5">
+            <text x="28" y="96">−3</text><text x="76" y="96">−2</text><text x="124" y="96">−1</text>
+            <text x="163" y="96">0</text><text x="211" y="96">+1</text><text x="259" y="96">+2</text><text x="298" y="96">+3</text>
+          </g>
+          <g font-family="Besley,serif" font-size="9" font-weight="700" fill="#141414" text-anchor="middle">
+            <text x="28" y="71">3%</text><text x="76" y="56">11%</text><text x="124" y="42">19%</text>
+            <text x="163" y="35">37%</text><text x="211" y="53">21%</text><text x="259" y="67">7%</text><text x="298" y="74">2%</text>
+          </g>
+          <line x1="148" y1="20" x2="148" y2="82" stroke="#C22F21" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="142" y="14" font-family="Besley,serif" font-size="9" font-weight="700" fill="#C22F21" text-anchor="end">Ø −0.31</text>
+          <g font-family="Besley,serif" font-size="9.5" font-weight="700" fill="#6E6A62" letter-spacing="1.6">
+            <text x="0" y="110">LIGHT</text><text x="326" y="110" text-anchor="end">HEAVY</text>
+          </g>
+        </svg>
+        <p class="mock-note">Levels declared against levels assessed. Calls where you and the table agreed on the height sit at nought.</p>
+      </div>
+    </div>
+    <div>
+      <div class="pc">
+        <div class="for"><h3>For</h3><ul>
+          <li>Honest about spread, which the mean throws away. A flat, wide distribution and a tight one centred in the same place are different players.</li>
+          <li>Byte-for-byte the idiom already on the page (<code class="num">trickDelta</code> → <code class="num">ds/StemChart</code>), so it costs no new component and reads as native on first sight.</li>
+        </ul></div>
+        <div class="against"><h3>Against</h3><ul>
+          <li>The centre bucket dominates. Most calls in most auctions are agreed, so the chart is mostly one spike and a reader has to work to see the skew that is the actual finding.</li>
+          <li>No figure to hand the tiles row, the Compare beam, or a percentile. A distribution cannot be ranked.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= TREATMENT III ============================= -->
+<section class="sec">
+  <div class="sec-kick"><span class="roman">III</span><h2>The Weighbridge Ticket</h2><span class="stamp verdict">Recommended</span></div>
+  <p class="lede">The declared load beside the load actually carried. Your lean is one column; the profile's existing trick differential — <code class="num">trickDelta.avgDelta</code>, tricks made against tricks contracted for, already computed on every declaring board — is the other. Neither figure is new. <b>The cross-reading is the finding</b>, and it is the only version of this stat that tells a player something they can act on.</p>
+
+  <div class="mocks">
+    <div class="phone">
+      <div class="perf">
+        <div class="perf-head"><span class="label">The weighbridge — 218 calls</span><span class="fig">78th PCTL</span></div>
+        <div class="receipt">
+          <div class="rcol">
+            <h4>Declared</h4>
+            <div class="rfig">0.31<span class="u">Levels light</span></div>
+            <p class="rsub">under what the table assessed, per call</p>
+          </div>
+          <div class="divider"></div>
+          <div class="rcol">
+            <h4>Carried</h4>
+            <div class="rfig">+0.58<span class="u">Tricks over</span></div>
+            <p class="rsub">above your contract, across 61 declared</p>
+          </div>
+        </div>
+        <div class="verdict-line">
+          You bid light and then take the tricks anyway. <span class="aside">Six of your last twenty partscores made game.</span>
+        </div>
+        <div style="border-top:1px solid var(--hair); margin-top:11px; padding-top:9px">
+          <div class="label" style="margin-bottom:7px">Where the lean lives</div>
+          <div class="lrow">
+            <span class="lab">Your auction</span>
+            <span class="beam" aria-hidden="true"><span class="beam-gate" style="left:43.5%"></span><span class="beam-gate" style="left:56.5%"></span><span class="beam-fill f-level" style="right:50%; width:4%"></span><span class="beam-centre"></span></span>
+            <b>−0.08</b>
+          </div>
+          <div class="lcount">96 calls · even-handed</div>
+          <div class="lrow">
+            <span class="lab">Contested</span>
+            <span class="beam" aria-hidden="true"><span class="beam-gate" style="left:43.5%"></span><span class="beam-gate" style="left:56.5%"></span><span class="beam-fill f-light" style="right:50%; width:27%"><span class="beam-margin">0.54</span></span><span class="beam-centre"></span></span>
+            <b>−0.54</b>
+          </div>
+          <div class="lcount">122 calls · light</div>
+        </div>
+        <p class="mock-note">You hold your own auctions at the right height. It is when they bid that you step off — half a level, every time.</p>
+      </div>
+    </div>
+    <div>
+      <div class="pc">
+        <div class="for"><h3>For</h3><ul>
+          <li><b>It is a finding, not a horoscope.</b> Light plus overtricks means the caution is costing tricks you were always going to take. Light plus <em>going down</em> means the caution is not the leak — the play is, and the panel should say so instead of nagging about the bidding.</li>
+          <li>The contested split is where the leak actually lives, and it is the split the literature keeps pointing at: letting the opponents buy the contract cheaply is the classic modern leak, and it is invisible in an all-calls average.</li>
+          <li>Keeps I's virtues — the headline percentile still ranks, each row still gets a gated beam, and the Compare row is still free.</li>
+        </ul></div>
+        <div class="against"><h3>Against</h3><ul>
+          <li>Two figures with different denominators — calls against declared boards. The copy has to keep them apart, or it reads as one ratio.</li>
+          <li>The carried column is play-confounded: overtricks are partly declarer skill, not only a light auction. It is corroboration, never proof, and should be worded as such.</li>
+          <li>Needs one small new classifier — has the opposition bid? — since <code class="num">bidCategory</code> buckets every pass together regardless of whose auction it is, and a pass in a contested auction is the single most conservative act available.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ============================= LIMITS ============================= -->
+<section class="sec" style="margin-top:0">
+  <div class="sec-kick"><span class="roman">The honest limits</span><h2>What it cannot say</h2></div>
+  <ol class="notes">
+    <li><b>The zero point is the model's, not the truth's.</b> The baseline is the SL policy — an imitation learner with a SAYC style of its own. If it is systematically sound or systematically pushy against expert humans, every player's absolute figure shifts with it. <em>The fix is the same one the page already uses:</em> lead with the <b>percentile</b> against the field, computed in <code class="num">fieldPercentiles</code>'s existing sweep. Everyone is measured against the same model, so the ranking survives any constant bias the absolute figure does not. Print the raw lean beside it, and say on screen what it is relative to.</li>
+    <li><b>A lean inside its own error is not a lean.</b> Report <code class="num">σ/√n</code> over the per-call leans and refuse to name a direction below <code class="num">GATE_SIGMA</code> — Compare's discipline, applied here. Below the gate the panel says <em>even-handed so far</em> rather than inventing a temperament from nine calls.</li>
+    <li><b>Describe the result, never the player.</b> Pavlicek's bidding-judgment material is deliberately written in terms of the bid — <em>overbid</em>, <em>underbid</em> — and never the person. "You declared half a level light in contested auctions" is a measurement. "You are a conservative bidder" is a label the player did not ask for and cannot argue with.</li>
+    <li><b>This is a matchpoint app.</b> The correct amount of aggression is scoring-dependent, and every board here is matchpoints. Nothing needs to change today, but the figure should not be quoted as a general bridge virtue.</li>
+    <li><b>One thing to verify before building.</b> <code class="num">probs</code> is required on <code class="num">BidEvaluation</code> and written on every call, but <code class="num">web/src/api.ts</code> already carries "absent on old boards" comments for two later fields — so the oldest rows deserve a check through the outreach skill's read-only path. If any row lacks it, the fallback is exact and needs no new data: <code class="num">height(call) − height(bestCall)</code>, using the stored argmax. Coarser, never wrong.</li>
+  </ol>
+</section>
+
+<hr class="rule">
+
+<!-- ============================= COST ============================= -->
+<section class="sec" style="margin-top:0">
+  <div class="sec-kick"><span class="roman">What it costs</span><h2>Nothing new is computed</h2></div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Input</th><th>Where it already lives</th><th>New work</th></tr></thead>
+      <tbody>
+        <tr><td>Policy over legal calls</td><td class="n">boards.bid_evals → probs[38]</td><td>None — stored on every call since the beginning</td></tr>
+        <tr><td>The call you made</td><td class="n">boards.bid_evals → call</td><td>None</td></tr>
+        <tr><td>Auction height h₀, and whose auction it is</td><td class="n">boards.calls + boardConditions(boardNo).dealer</td><td>Two small pure functions in core</td></tr>
+        <tr><td>Field percentile</td><td class="n">fieldPercentiles' existing stmtAllDoneEvals sweep</td><td>One extra parse in a query that already parses every row</td></tr>
+        <tr><td>Tricks carried (treatment III)</td><td class="n">totals.trickDelta.avgDelta</td><td>None</td></tr>
+        <tr><td>Compare row</td><td class="n">compare.ts, pure over two PlayerStats</td><td>One FULL_TILT value, measured against production</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="lede" style="margin-top:16px">No double-dummy solve, no model inference, no new column. Every figure is <b>retroactive over every board ever played</b>, so a player with a record sees a real reading the day it ships rather than an empty panel that fills up over the next month.</p>
+
+  <div class="card inset" style="margin-top:22px">
+    <h3>Phase two — the same question, asked of the cards</h3>
+    <p style="max-width:78ch">Everything above is measured against the table's <em>expectation</em>. The stronger version measures against the deal: was the contract you bought above, at, or below double-dummy par — <b>stopped short</b>, <b>on par</b>, or <b>overboard</b>. That is the established analysis, and the machinery is already here (<code class="num">dealerParFor</code>, <code class="num">ddTableTricks</code>, wired up in <code class="num">analyze.ts</code>'s <code class="num">computePar</code>).</p>
+    <p style="max-width:78ch">It is deliberately not phase one. Par is the slowest DDS call in the app and runs only when someone opens Analyze with <code class="num">?par=1</code>, so the only boards that carry it are the boards a player chose to review — which is exactly the sample you cannot build a career statistic from. It becomes available the day <code class="num">board_analyses.par</code> coverage is near-total or a backfill is run, and then the two sit side by side and say different things: <em>what the table expected of you</em>, against <em>what the cards would have allowed</em>.</p>
+  </div>
+</section>
+
+<div class="footer">
+  <span class="label">Nickel Bridge · concept board</span>
+  <span class="aside" style="font-size:14px">Owner's call: I, II or III. Recommendation is III, with II's distribution behind the ledger fold the bidding panel already has.</span>
+</div>
+
+</div>
+
+<script>
+(function () {
+  // Four decision nodes, each chosen to demonstrate one property of the
+  // definition. Policies are illustrative; the arithmetic below is the real
+  // formula, run live so the reader can check it.
+  var CASES = [
+    {
+      who: 'Partner opened 1♥, right-hand opponent passed',
+      hand: 'You hold a limit raise. You bid 2♥.',
+      h0: 1, call: '2♥', callHeight: 2,
+      policy: [['3♥', 3, 0.60], ['2♥', 2, 0.25], ['2NT', 2, 0.10], ['4♥', 4, 0.05]],
+      note: 'The table wanted an invitation. You took the cheap raise, and the lean says so — but only by what the policy actually put on the higher calls, not by a whole step for missing an argmax.'
+    },
+    {
+      who: 'Partner opened 1♥, right-hand opponent passed',
+      hand: 'The same hand. You pass.',
+      h0: 1, call: 'Pass', callHeight: 1,
+      policy: [['3♥', 3, 0.60], ['2♥', 2, 0.25], ['2NT', 2, 0.10], ['4♥', 4, 0.05]],
+      note: 'A pass leaves the auction at its current height, so passing over a live opening is the most conservative act on the board — and the measure reads it that way without a special case for pass.'
+    },
+    {
+      who: 'Your side is at 2♠; you are choosing the game',
+      hand: 'You bid 3NT where the table prefers 3♣.',
+      h0: 2, call: '3NT', callHeight: 3,
+      policy: [['3♣', 3, 0.62], ['3♦', 3, 0.08], ['3NT', 3, 0.30]],
+      note: 'Nought. You disagreed about the denomination, not the height — a shape opinion, which this axis is deliberately blind to. Bid accuracy is where that disagreement gets scored.'
+    },
+    {
+      who: 'They have bid to 3♠ and it is passed to you',
+      hand: 'You come in with 4♥.',
+      h0: 3, call: '4♥', callHeight: 4,
+      policy: [['Pass', 3, 0.85], ['X', 3, 0.15]],
+      note: 'A full level heavy. Had you doubled instead, the lean would be exactly 0.00 — the axe carries no height, so it stays off this axis and gets its own reading.'
+    }
+  ];
+
+  var pick = document.getElementById('wb-pick');
+  var els = {
+    call: document.getElementById('wb-call'),
+    height: document.getElementById('wb-height'),
+    assessed: document.getElementById('wb-assessed'),
+    policy: document.getElementById('wb-policy'),
+    lean: document.getElementById('wb-lean'),
+    fill: document.getElementById('wb-fill'),
+    fillLabel: document.getElementById('wb-fill-label'),
+    note: document.getElementById('wb-note')
+  };
+
+  function render(i) {
+    var c = CASES[i];
+    var assessed = c.policy.reduce(function (s, p) { return s + p[2] * p[1]; }, 0);
+    var lean = c.callHeight - assessed;
+    var dir = lean < -0.05 ? 'light' : lean > 0.05 ? 'heavy' : 'level';
+
+    els.call.textContent = c.call;
+    els.height.textContent = c.callHeight.toFixed(2);
+    els.assessed.textContent = assessed.toFixed(2);
+    els.policy.textContent = c.policy
+      .map(function (p) { return Math.round(p[2] * 100) + '% ' + p[0] + ' (h' + p[1] + ')'; })
+      .join('  ·  ');
+    els.lean.textContent = dir === 'level'
+      ? '0.00 TRUE'
+      : (lean > 0 ? '+' : '−') + Math.abs(lean).toFixed(2) + ' ' + dir.toUpperCase();
+    els.lean.style.color = dir === 'light' ? '#C22F21' : dir === 'heavy' ? '#00775A' : '#6E6A62';
+
+    // Track spans ±2 levels; a full tilt is half the width.
+    var width = Math.min(50, (Math.abs(lean) / 2) * 50);
+    els.fill.className = 'beam-fill f-' + dir;
+    els.fill.style.cssText = lean < 0
+      ? 'right:50%; width:' + width + '%'
+      : 'left:50%; width:' + width + '%';
+    els.fillLabel.textContent = width > 12 ? Math.abs(lean).toFixed(2) : '';
+    els.note.textContent = c.note;
+
+    Array.prototype.forEach.call(pick.children, function (b, j) {
+      b.setAttribute('aria-pressed', String(j === i));
+    });
+  }
+
+  CASES.forEach(function (c, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = '<span class="who"></span>';
+    b.firstChild.textContent = c.who;
+    b.appendChild(document.createTextNode(c.hand));
+    b.addEventListener('click', function () { render(i); });
+    pick.appendChild(b);
+  });
+
+  render(0);
+})();
+</script>
