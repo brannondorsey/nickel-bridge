@@ -60,7 +60,7 @@ export function StemChart({
 
   return (
     <div className="stemchart">
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
         <line x1="0" y1={BASELINE} x2={W} y2={BASELINE} stroke="var(--line)" strokeWidth="1" />
         <line x1={xAvg} y1="8" x2={xAvg} y2={BASELINE} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="4 3" />
         <text

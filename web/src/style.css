@@ -288,7 +288,83 @@
   --radius-btn: 2px;
   --radius-chip: 3px;
   --radius-card: 4px;
-  --screen-w: 390px;
+}
+
+/* ======================= the responsive ladder =======================
+ * The app was drawn for one screen — a 390px phone. Everything below is what
+ * lets those same screens become a tablet page and a desktop page.
+ *
+ * THE RULE, and it is worth stating before any number: A PAGE NEVER CAPS ITS
+ * OWN WIDTH. There is no sheet of paper centred in an ocean of margin — at
+ * every size the layout is drawn for the viewport it is actually being viewed
+ * on. What caps is individual ELEMENTS, and only those with a reason to: a
+ * paragraph stops at its reading measure, a primary button stops at the width
+ * a thumb can cross, the trick table stops where its four seats stop reading
+ * as a table. Width that no element wants is spent on LAYOUT — a second
+ * column, a rail, a wider fan of cards — never on emptiness.
+ *
+ * This replaced a `--shell-max` ladder that stepped the whole app 430 → 600 →
+ * 680px. It was mobile-first, it was safe, and it was wrong: a 1440px desktop
+ * got a 680px ribbon down the middle, which reads as a phone app someone left
+ * open on a monitor rather than as a desktop app. If you ever find yourself
+ * adding `max-width` to a page root, that is this bug coming back — cap the
+ * element that looks wrong, or give the page a second column.
+ *
+ * THE THREE STEPS, and why these numbers. They are content breakpoints, not
+ * device ones:
+ *   720px  — where one column of phone-width content starts reading as a
+ *            ribbon. Tablet portrait (768) is just inside it, which is the point.
+ *   1024px — where a second column of panels, or a rail beside the table, is
+ *            affordable: 1024 minus page padding still leaves two ~450px columns.
+ *   1400px — where a third column is, and where a two-column page should stop
+ *            growing its columns and start growing its gutters instead.
+ *
+ * There is no CSS-native way to name a breakpoint (custom media queries are
+ * still unshipped), so these three numbers appear literally in every @media
+ * block in this file. `grep -n 'min-width: 1024px'` finds every rule at a
+ * step. Do not introduce a fourth number without adding it here.
+ *
+ * MOBILE-FIRST, and strictly so. Every rule outside a min-width query is the
+ * phone design, unchanged; every responsive rule is additive. That is not a
+ * style preference — it is what makes "did I regress the phone?" answerable
+ * by reading a diff instead of by re-shooting every screen. */
+:root {
+  /* THE PAGE GUTTER — the EXTRA breathing room a page takes at width, on top
+     of the 16px paddings already drawn into the phone components. Pages add it
+     themselves rather than the shell imposing it, because several things here
+     are deliberately full-bleed: the landing page's folds, the board's trick
+     table, the TabBar. 0 on the phone, so every base rule is untouched. */
+  --page-pad: 0px;
+  /* THE READING MEASURE — how wide a single column of prose, or of stacked
+     controls, is allowed to get before it stops being readable. ~68 characters
+     at the body size. This is the cap elements wear so that pages don't. */
+  --measure: 34rem;
+  /* THE ACTION WIDTH. A primary button is a target, not a container: past the
+     width a thumb (or an eye) can cross in one movement it stops reading as a
+     button and starts reading as a bar with a word in it. So the stacked
+     action columns at the foot of the board, the crossing and the landing
+     page's doors all stop here and centre, whatever the page is doing. */
+  --action-w: 22rem;
+  /* THE WIDTH A HAND FAN ACTUALLY GETS. --card-h (token block further down)
+     sizes every card in the app from it. It is the viewport by default, and
+     the board's own main column at desktop, where the auction moves out into
+     a rail and the cards inherit the space it left. */
+  --fan-space: 100vw;
+}
+@media (min-width: 720px) {
+  :root {
+    --page-pad: 12px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --page-pad: 24px;
+  }
+}
+@media (min-width: 1400px) {
+  :root {
+    --page-pad: 40px;
+  }
 }
 
 /* ---- base ---- */
@@ -341,8 +417,9 @@ input {
 
 .shell {
   position: relative;
-  max-width: 430px;
-  margin: 0 auto;
+  /* No max-width, at any size, deliberately — see "the responsive ladder"
+     above. The shell is the viewport; the layout inside it is what adapts. */
+  width: 100%;
   /* svh, NOT dvh — same reasoning as .splash below. Every action button
    * pinned to the foot of a page (.board-actions, .tourney-actions, the
    * TabBar/SignInBar, …) gets there via `margin-top: auto` inside a flex
@@ -372,12 +449,9 @@ input {
   }
 }
 
-@media (min-width: 640px) {
-  .shell {
-    border-left: var(--border-hairline);
-    border-right: var(--border-hairline);
-  }
-}
+/* (A hairline down each side of the shell used to live here, for the years
+   when it was a 430px sheet with the page showing either side of it. There is
+   no either side any more.) */
 
 /* ---- shared utilities ---- */
 
@@ -521,7 +595,28 @@ input {
   min-height: 100svh;
   overflow: hidden;
   background: var(--paper);
-  padding-bottom: 130px;
+  /* The river scene is the only thing pinned to the hero's bottom edge, and
+     THREE numbers used to be tuned against its 146px height by hand: this
+     padding (130), the image's own height (146) and .landing-cue's offset
+     (162). They are one number now, because the scene has to grow on a wide
+     screen — see --splash-scene-h below — and three hand-tuned constants
+     tracking one growing thing is three chances to forget one. Resolves to
+     130px at the phone height, i.e. byte-identical to what it replaced. */
+  --splash-scene-h: 146px;
+  padding-bottom: calc(var(--splash-scene-h) - 16px);
+}
+/* The scene is drawn 640×240 and repeats horizontally, so its height is a
+   free choice rather than a crop budget. */
+@media (min-width: 720px) {
+  .splash {
+    /* Height, not width, is the axis this grows on — and now that the scene
+       tiles rather than crops (see .splash-scene), height is the ONLY thing
+       this number controls: it sets the scale of the drawing, and the viewport
+       decides how many arches' worth of bridge that scale buys. vh keeps it a
+       footer at the same share of the hero the phone gives it (146/844 ≈ 17%)
+       instead of a band that grows into the page on a wide monitor. */
+    --splash-scene-h: clamp(146px, 20vh, 260px);
+  }
 }
 /* The fallback for browsers with neither svh nor dvh — they never had the
    stutter, but without this they get min-height: auto and no hero at all.
@@ -559,7 +654,13 @@ input {
 
 .splash-word {
   font-family: var(--font-display);
-  font-size: 32px;
+  /* The one piece of fluid type in the app, and the only place it is right:
+     this is display type on an otherwise empty screen, so it should fill the
+     screen it is given. Everything else stays at its drawn size and lets the
+     measure do the adapting. The floor binds up to ~590px of viewport, so the
+     phone is 32px to the pixel; the slope is what makes a 1440px monitor read
+     as a monitor rather than as a phone screenshot with a small word on it. */
+  font-size: clamp(32px, 3.4vw + 12px, 76px);
   letter-spacing: 0.16em;
   color: var(--ink);
   animation: nbWordIn 0.9s ease-out both;
@@ -613,6 +714,18 @@ input {
   color: var(--muted);
   animation: nbSubIn 0.6s ease-out 1.1s both;
 }
+/* The gate grows with the wordmark. A 280px sign-in column under a 61px
+   display line reads as a phone control that wandered onto a monitor; these
+   are the same two numbers the phone uses, scaled once. */
+@media (min-width: 1024px) {
+  .splash-cta {
+    width: min(340px, 100%);
+  }
+  .splash-pitch {
+    max-width: 38ch;
+    font-size: 16px;
+  }
+}
 
 .splash-bridge {
   position: absolute;
@@ -624,31 +737,30 @@ input {
 .splash-auto .splash-bridge {
   animation: nbBridgeRise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both, nbBridgeOut 0.6s ease-in 2.1s forwards;
 }
-.splash-bridge img {
-  display: block;
-  width: 100%;
-  height: 146px;
-  object-fit: cover;
-  object-position: bottom;
+/* The bridge tiles; it does not stretch and it does not crop. See the comment
+   in Splash.tsx for why this stopped being an <img>. `auto 100%` fits the
+   drawing by HEIGHT — so the deck, the arch crowns, the piers and the water
+   are all on screen at every viewport — and repeat-x continues the span
+   sideways for as much width as there is. It really is seamless rather than
+   nearly: the drawing's own edges (x=0 and x=640) each carry half of the same
+   2.5px pier line, and the arch curve is at a springing point on both, so two
+   tiles butted together reconstruct exactly one pier and one unbroken arch. */
+.splash-scene {
+  height: var(--splash-scene-h);
+  background-image: url('./assets/bridge-river-scene.svg');
+  background-repeat: repeat-x;
+  background-position: bottom center;
+  background-size: auto 100%;
 }
-/* two static assets (day/night), CSS-swapped by theme — an <img>-loaded SVG can't see
-   the host page's custom properties, so the night ink/verdigris recolor has to ship
-   as its own file rather than react to --ink/--verdigris live. */
-.splash-bridge img.night-scene {
-  display: none;
-}
-[data-theme='night'] .splash-bridge img.day-scene {
-  display: none;
-}
-[data-theme='night'] .splash-bridge img.night-scene {
-  display: block;
+/* two static assets (day/night), CSS-swapped by theme — an SVG loaded as an image
+   can't see the host page's custom properties, so the night ink/verdigris recolor
+   has to ship as its own file rather than react to --ink/--verdigris live. */
+[data-theme='night'] .splash-scene {
+  background-image: url('./assets/bridge-river-scene-night.svg');
 }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme]) .splash-bridge img.day-scene {
-    display: none;
-  }
-  html:not([data-theme]) .splash-bridge img.night-scene {
-    display: block;
+  html:not([data-theme]) .splash-scene {
+    background-image: url('./assets/bridge-river-scene-night.svg');
   }
 }
 
@@ -929,6 +1041,42 @@ a.ds-btn-secondary:hover {
   color: var(--ink);
 }
 
+/* ---- the sheet at width ----
+ * A bottom sheet is a phone idiom: it rises from the edge your thumb is at,
+ * and the SCREEN's edges are its left and right sides — which is exactly why
+ * it is drawn with a top border and no others. Centre that same box on a
+ * 1440px page and the borders it hasn't got become the whole story: a 430px
+ * slab with two raw cut edges, parked on the bottom of the window for no
+ * reason anyone can see. That is what "chopped off on both sides" is.
+ *
+ * So past 720 it stops being a sheet and becomes the shape the rest of this
+ * app already has a name for — a ticket: four borders, the ticket's own hard
+ * offset shadow, centred in the viewport rather than pinned to its foot, and
+ * no drag grip, because there is nothing left to drag. Everything inside is
+ * untouched, and below 720 so is everything else.
+ *
+ * It is one rule rather than one per caller because .sheet is ds/Dialog, and
+ * every bottom-anchored panel in the app is a Dialog — the glossary term
+ * sheet, the call inspector, the handle picker. */
+@media (min-width: 720px) {
+  .sheet {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    width: min(100% - var(--space-6) * 2, 34rem);
+    max-width: none;
+    border: 1.5px solid var(--ink);
+    box-shadow: var(--ticket-shadow);
+    padding: 16px 20px 20px;
+    /* dvh so a long definition can still use the window it has, capped so a
+       short one doesn't become a column on a tall screen */
+    max-height: min(80dvh, 42rem);
+  }
+  .sheet-grip {
+    display: none;
+  }
+}
+
 /* ---- Toast ---- */
 .toast {
   display: flex;
@@ -1159,6 +1307,22 @@ a.ds-btn-secondary:hover {
   color: var(--ink);
   box-shadow: inset 0 3px 0 var(--ink);
 }
+
+/* Past the phone the gates stop sharing the width and take only what their
+   labels need, centred. Stretched across a monitor they are six words a
+   hand's breadth apart, which reads as a stretched phone bar rather than as a
+   toolbar — and the turnstile scroll the growing is for cannot trigger at
+   these widths anyway. */
+@media (min-width: 720px) {
+  .tabbar-scroll {
+    justify-content: center;
+  }
+  .tabbar a {
+    flex: 0 0 auto;
+    padding-inline: 30px;
+  }
+}
+
 .tabbar-fade {
   position: absolute;
   right: 0;
@@ -1212,6 +1376,19 @@ a.ds-btn-secondary:hover {
   cursor: crosshair;
   /* the plot scrubs on horizontal drag, so keep vertical scrolling with the page */
   touch-action: pan-y;
+}
+/* The three hand-rolled charts are drawn against a 326-unit design width and
+   scale uniformly from it — `height: auto` is what makes the viewBox's own
+   aspect ratio decide the height, so a wider container makes the whole
+   drawing bigger instead of stretching it on x. See Sparkline's geometry note
+   for what the stretched version cost. `display: block` kills the inline
+   baseline gap the taller box would otherwise show under it. */
+.sparkline-plot > svg,
+.stemchart > svg,
+.daygrid-plot > svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 .sparkline-plot:focus-visible {
   outline: 2px solid var(--accent);
@@ -1472,11 +1649,44 @@ a.ds-btn-secondary:hover {
      (5px corner pad + printed-value width) for a wide canonical hand (three
      10s plus honors) from the fanLayout.ts width table: D = 255.27, so the
      factor is 66 / 255.27 = 0.2586. Capped at 82.5px (125% of the old 66px
-     card); the 56px floor is the old minimum, kept purely as a readability
-     guard — it only wins below a ~300px shell. Resolves to ≈77px on a 390px
-     phone, ≈69px at 360px, 82.5px from 411px up (and on desktop). */
-  --card-h: clamp(56px, calc((min(100vw, 430px) - 92px) * 0.2586), 82.5px);
+     card at the base step); the 56px floor is the old minimum, kept purely as
+     a readability guard — it only wins below a ~300px shell. Resolves to ≈77px
+     on a 390px phone, ≈69px at 360px, 82.5px from a 411px shell up.
+
+     The width it measures is --fan-space: the space the FAN is actually given,
+     which is the viewport on the phone (identical to the old min(100vw, 430px)
+     at every phone width) and the board's main column at desktop, where the
+     auction has moved into a rail. Measuring the viewport directly there would
+     size cards from space the fan does not have and overflow the column. */
+  --card-h: clamp(56px, calc((var(--fan-space) - 92px) * 0.2586), var(--card-h-cap));
+  /* The cap, stepped with the ladder. Below 720px it is the old 82.5px to the
+     pixel, so every phone renders byte-identically to before; above it the
+     fit formula is what actually binds until the shell gets wide enough for
+     the cap to take over again. FAN_GAP (fanLayout.ts) stays a fixed 6px at
+     every size on purpose — it is the whitespace the eye reads BETWEEN two
+     printed values, not a share of the card, and scaling it would make the
+     92px constant above circular. */
+  --card-h-cap: 82.5px;
   --card-w: calc(var(--card-h) * 46 / 66);
+}
+/* The cap past the phone. It is a cap on legibility, not on fit — the formula
+   above already guarantees the fan fits — so 118px is simply how big a playing
+   card wants to be at arm's length, about 1.45× the phone card.
+
+   ONE step rather than one per ladder rung, because the vh term separates the
+   real cases better than a width step could, and the vh term is not decoration.
+   Phones are portrait and desktops are landscape, so the moment the app claims
+   desktop the scarce axis flips from width to HEIGHT: the play screen stacks
+   dummy, the table and your own fan — about 3.6 card heights plus ~390px of
+   chrome — so a 900px-tall window affords roughly 140px of card and a 700px one
+   about 85. Sized on width alone, a wide-but-short window gets big beautiful
+   cards and a hand that scrolls off the bottom, which is the one thing a card
+   game must never do. So a tall tablet held in portrait gets the full 118 and a
+   short laptop at the same width gets ~100. */
+@media (min-width: 720px) {
+  :root {
+    --card-h-cap: min(118px, 12vh);
+  }
 }
 
 /* ---- PlayingCard: corner-indexed, suit triad ---- */
@@ -2277,6 +2487,12 @@ a.ds-btn-secondary:hover {
 }
 
 /* ---- play-row: TrickArea + a side dummy rail (East/West dummy) ---- */
+/* The play area's wrapper. No box on the phone — its children lay out as the
+   flex items of .board-page they have always been — and the board's centred
+   grid past 1024. See the comment beside it in Board.tsx. */
+.play-phase {
+  display: contents;
+}
 .play-row {
   display: flex;
   align-items: stretch;
@@ -2299,6 +2515,31 @@ a.ds-btn-secondary:hover {
   gap: 6px;
   padding: 10px 10px 10px 14px;
   background: var(--panel);
+}
+/* At 96px a five-card suit run ("10 8 6 4 2") outgrows the line and strands
+   its last rank alone beneath it — invisible on the exhibits mined before
+   this step existed, since none happened to expose a dummy that long, but
+   a 5-card suit run with a two-digit rank (a "10") is enough to hit it.
+   Tablet is still inside the plain flex .play-row (the board-rail GRID
+   below doesn't start until 1024), so widening here is a one-property
+   change: .trick's flex: 1 absorbs whatever the rail takes. 8rem is the
+   same width the desktop step already uses, so the desktop step now only
+   has padding left to add. */
+@media (min-width: 720px) {
+  .dummy-rail {
+    width: 8rem;
+  }
+}
+/* At 1024 the rail already has the 8rem --board-main reserves for it, so
+   what's left to spend is PADDING: at 8rem with 24px of padding the suit
+   lines read as squeezed against the table. Filling the allowance exactly is
+   also what tucks the auction tray in — any surplus in the main column
+   becomes centring slack, and the tray ends up that much further from the
+   table than the gutter it is supposed to sit at. */
+@media (min-width: 1024px) {
+  .dummy-rail {
+    padding: 12px 16px;
+  }
 }
 .dummy-rail-left {
   padding: 10px 14px 10px 10px;
@@ -2465,6 +2706,67 @@ a.board-row:hover {
   flex-direction: column;
   flex: 1;
 }
+
+/* ---- Home at width ----
+ * Home is two things stacked: what you can do next (the open crossing, the
+ * medal rail) and what you have already done (the toll log). On a phone that
+ * order is the whole design — you scroll past the first to reach the second.
+ * Given a desktop it reads better as a desk: the play side on the left, the
+ * ledger open beside it, and the greeting across the top of both. Nobody has
+ * to scroll to see what they did last week.
+ *
+ * The log takes column 2 explicitly and everything else is auto-placed, so a
+ * notice, a loading state or a future panel lands in the play column without
+ * this block needing to know about it. */
+@media (min-width: 1024px) {
+  .home {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .home > .appheader,
+  .home > .home-greeting,
+  .home > .home-rating,
+  .home > .notice-error {
+    grid-column: 1 / -1;
+  }
+  .home > .home-tolls {
+    grid-column: 2;
+    /* row 3 is the first row under the header and the greeting; the span keeps
+       the log in its own column for the whole page rather than letting it set
+       the height of one row */
+    grid-row: 3 / span 99;
+  }
+}
+/* Past 1400 the play column stops growing — a ticket stub and a progress rail
+   have a natural size — and the ledger takes the extra, where more width is
+   more of the record on screen. */
+@media (min-width: 1400px) {
+  /* The ledger stops growing too. A crossing's row reads "5 · Aug 23 · 4
+     players · 16.7% · 1ST" — at 1fr on a 1440px page that is 900px of rule
+     with the figures stranded at either end. 42rem is the width the line
+     wants, and the leftover goes to gutters either side, which is the ladder's
+     own rule for a two-column page past 1400. Flanking 1fr COLUMNS rather than
+     a max-width on the page, so the header and the greeting still span the
+     paper: a centred grid cannot bleed its own masthead out to the edge. */
+  .home {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem) minmax(0, 42rem) minmax(0, 1fr);
+  }
+  .home > * {
+    grid-column: 2;
+  }
+  .home > .appheader,
+  .home > .home-greeting,
+  .home > .home-rating,
+  .home > .notice-error {
+    grid-column: 1 / -1;
+  }
+  .home > .home-tolls {
+    grid-column: 3;
+  }
+}
 .home-greeting {
   padding: 20px 16px 0;
 }
@@ -2474,7 +2776,12 @@ a.board-row:hover {
    because holding 20px 16px 0 keeps the vertical rhythm of the screen
    identical whichever of the two is showing. It is the screen's ONE hero
    number, per the design system's rule; the medal rail's percentage below is
-   a plain .num figure beside its bar, not a second one. */
+   a plain .num figure beside its bar, not a second one.
+
+   Because it stands where the greeting stands, it has to be named wherever
+   the greeting is named: both "at width" blocks above span it across the
+   whole page. Left out, it is auto-placed like an ordinary panel and the
+   screen's one hero number ends up squeezed into the narrow play column. */
 .home-rating {
   display: flex;
   flex-direction: column;
@@ -2564,6 +2871,33 @@ a.board-row:hover {
   flex: 1;
   padding-bottom: 24px;
 }
+
+/* ---- Rankings at width ----
+ * The ladder is one long ranked list and must stay one list — splitting a
+ * ranking across two columns asks the reader to work out that #14 is at the
+ * top of the right-hand column, which is a puzzle, not a layout. So the width
+ * goes to the house table instead, which is a separate list that was only ever
+ * below the ladder because there was nowhere else to put it. */
+@media (min-width: 1024px) {
+  .rankings {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .rankings > .appheader,
+  .rankings > .rank-head,
+  .rankings > .rank-provisional-note,
+  .rankings > .rank-move-row,
+  .rankings > .notice-error,
+  .rankings > .empty-note {
+    grid-column: 1 / -1;
+  }
+  .rankings > .rank-house {
+    grid-column: 2;
+  }
+}
 .rank-head {
   padding: 18px 16px 0;
   display: flex;
@@ -2606,6 +2940,7 @@ a.board-row:hover {
   white-space: nowrap;
   padding: 0 14px;
 }
+
 .rankings .rank-panel {
   margin: 12px 16px 0;
   padding: 6px 14px 6px 20px;
@@ -2696,6 +3031,51 @@ a.board-row:hover {
   flex: 1;
   padding-bottom: 24px;
 }
+
+/* ---- Traffic at width ----
+ * The feed is seven days, each its own panel, read newest first. A phone
+ * scrolls them down the page and that reading — today, then yesterday, then
+ * back through the week — is the screen's whole shape, so past 1024 the days
+ * become COLUMNS and the same walk backwards through the week becomes a
+ * horizontal scroll. Nothing else about a day changes: same head, same hours
+ * rule, same rows.
+ *
+ * A previous revision wrapped them into a two- then three-column grid instead.
+ * It fits more days on screen and it breaks the one thing the feed is: reading
+ * order. Days ran left-to-right and then wrapped, so "the day before
+ * yesterday" could be the top-right panel or the middle-left one depending on
+ * the viewport, and a week no longer had a direction.
+ *
+ * `minmax(22rem, 1fr)` is what makes it scroll rather than squeeze: with seven
+ * days that is ~2500px of track against a 1440px page, so the free space is
+ * negative and every column takes its 22rem minimum. On a screen wide enough
+ * to hold all seven the same rule lets them share the width instead. The
+ * columns are top-aligned rather than stretched — a quiet Tuesday is a short
+ * column, and padding it out to Saturday's height would be inventing traffic.
+ */
+@media (min-width: 1024px) {
+  .traffic {
+    padding-inline: var(--page-pad);
+  }
+  .traffic-week {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(22rem, 1fr);
+    align-items: start;
+    gap: var(--space-4);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    /* room for the scrollbar so it never sits on a panel's border */
+    padding-bottom: var(--space-3);
+  }
+  .traffic-day {
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  /* the day's own 16px side margins become the grid's gap out here — but that
+     pair of overrides cannot live in this block, because the base rules they
+     override are declared further down the file. See the note beside them. */
+}
 .traffic-head {
   padding: 18px 16px 0;
   display: flex;
@@ -2736,21 +3116,77 @@ a.board-row:hover {
   margin: 0 16px;
   padding: 6px 14px 6px 20px;
 }
+/* The other half of "Traffic at width" (above), and it has to sit HERE rather
+   than up there with the rest of it: media queries add no specificity, so
+   `.traffic-dayhead { padding: … 16px … }` and `.traffic .traffic-panel
+   { margin: 0 16px }` — both declared above, both textually identical
+   selectors — simply win the tie on source order and the override is a silent
+   no-op. It shipped that way for one review round. Out here the day's own side
+   margins collapse and `.traffic-week`'s `gap` becomes the only gutter, which
+   is what keeps the day head's text on the panel's own left edge. */
+@media (min-width: 1024px) {
+  .traffic .traffic-panel {
+    margin-inline: 0;
+  }
+  .traffic-dayhead {
+    padding-inline: 0;
+  }
+}
 .daystrip {
   padding: 8px 0 2px;
   border-bottom: 1px solid var(--line);
 }
-.daystrip svg {
+/* The plot stretches on x alone and every rule in it carries
+   non-scaling-stroke, so a 2.4x-wide panel gets a 2.4x-wide DAY and not a
+   2.4x-thicker hairline. The hour labels are HTML below it rather than <text>
+   inside it — see DayStrip.tsx for the whole argument. The two heights add up
+   to the 36 units the single SVG used to occupy, which is what keeps the
+   phone's strip (where the panel is exactly 324px wide, so the old scale was
+   1.0) pixel-identical. */
+.daystrip-plot {
+  position: relative;
+}
+.daystrip-plot svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 26px;
 }
-.daystrip-tick text {
+/* The `now` flag is the one FILLED shape on the strip, and a fill has no
+   non-scaling-stroke to save it from the x-stretch — so it is a CSS triangle
+   pinned to the same fraction its hairline is drawn at. */
+.daystrip-flag {
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin-left: -3px;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--accent);
+}
+.daystrip-tick {
+  position: relative;
+  height: 10px;
+}
+.daystrip-tick span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  line-height: 10px;
   font-family: var(--font-label);
   font-weight: 400;
   font-size: 8.5px;
   letter-spacing: 0.09em;
-  fill: var(--muted);
+  color: var(--muted);
+}
+/* the outer two sit ON the ends of the axis rather than centred over them,
+   which is what textAnchor start/end did inside the old SVG */
+.daystrip-tick span:first-child {
+  transform: none;
+}
+.daystrip-tick span:last-child {
+  transform: translateX(-100%);
 }
 .traffic-row {
   display: grid;
@@ -2845,6 +3281,141 @@ a.board-row:hover {
   flex: 1;
   padding-bottom: 24px;
 }
+/* The two page wrappers generate no box on a phone — the panels inside them
+   are flex items of .stats-page exactly as they were before the wrappers
+   existed — and the page titles they carry are for the spread only. See the
+   comment beside them in Player.tsx.
+
+   Declared BEFORE "Stats at width" below, and it has to be: media queries add
+   no specificity, so a later `display: none` at equal specificity would beat
+   the `display: flex` inside the query and the two page titles would simply
+   never appear (they didn't, first time round). */
+.stats-col {
+  display: contents;
+}
+.stats-col-head {
+  display: none;
+}
+/* ---- Stats at width: two ledger pages ----
+ * The profile is a ledger of a dozen small panels stacked in one column. Given
+ * a wide screen it does not want to become a dashboard — it wants to become a
+ * two-page SPREAD: what you did on the left page, what it came to on the
+ * right, with the masthead (header, rating, compare) running across the top of
+ * both.
+ *
+ * The previous revision made it two columns at 1024 and three at 1400 and let
+ * the panels fall wherever grid put them. Two things went wrong. Auto-placement
+ * is sparse — its cursor never moves backwards — so a panel declared after the
+ * charts could only land BELOW them, and the right-hand side of the page began
+ * halfway down the left; at three columns the whole thing became a masonry of
+ * a dozen boxes at a dozen different heights, with the charts squeezed into a
+ * third of the width they are worth reading at. That is the "noisy" this is
+ * fixing, and it is a placement problem rather than a styling one: the fix is
+ * the two .stats-col wrappers in Player.tsx, which say which page a panel
+ * belongs to instead of leaving it to the cursor.
+ *
+ * No `gap` and no inner padding on the grid itself: every panel already carries
+ * its own `margin: 12px 16px 0`, so two neighbours make a 32px gutter — the same
+ * measurement as the phone, reused rather than re-specified. The page's own
+ * `--page-pad` then sits outside those margins, so the outer inset is the two
+ * added together. */
+@media (min-width: 1024px) {
+  .stats-page {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .stats-page > .appheader,
+  .stats-page > .stats-hero,
+  .stats-page > .empty-note,
+  .stats-page > .stats-gated,
+  /* the signed-in "no such player" message, which renders in the same slot as
+     .stats-gated and should span like it rather than sit in half a column */
+  .stats-page > .notice-error,
+  .stats-page > .stats-footer {
+    grid-column: 1 / -1;
+  }
+  /* The wrappers stop being invisible and become the two pages. A column is a
+     flex stack rather than a grid so a page can gain or lose a panel without
+     anything here counting rows. */
+  .stats-page > .stats-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .stats-page > .stats-col-record {
+    grid-column: 1;
+  }
+  .stats-page > .stats-col-count {
+    grid-column: 2;
+  }
+  /* Each page is titled, and only here: on a phone there is one column and
+     nothing to tell apart, so a heading over it would be a label on the
+     obvious. The rule runs to the column's edge, so the two heads read as the
+     tops of two pages rather than as two more panels. */
+  .stats-col-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-5) 16px var(--space-1);
+  }
+  .stats-col-head::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--line);
+  }
+  /* THE COUNT, as one ruled ledger rather than eight boxes. Eight bordered
+     tiles in two rows is the single noisiest thing on this page at width —
+     eight frames competing with the six panels under them — and the ledger
+     idiom the rest of the app already uses (hairline between rows, the panel's
+     own border closing the block) says exactly the same thing more quietly.
+     The phone keeps its tiles: at 390px they are two-up and read as cards, and
+     there are no neighbouring frames for them to fight. */
+  .stats-page .stats-tiles {
+    gap: 0;
+    column-gap: var(--space-5);
+    border: 1px solid var(--ink);
+    background: var(--panel);
+    padding: 0 14px;
+  }
+  .stats-page .stats-tiles > .stat-tile {
+    border: 0;
+    border-bottom: 1px solid var(--line-quiet);
+    background: transparent;
+    padding: 10px 0;
+  }
+  /* the bottom row rules would double the panel's own border. Eight tiles, two
+     per row (see Player.tsx) — so the last two are the last row. */
+  .stats-page .stats-tiles > .stat-tile:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+/* Past 1400 the columns stop growing and the GUTTERS grow instead — the
+   ladder's own rule for a two-column page (see "the responsive ladder"). A
+   sparkline is not more readable at 700px than at 560, and a page of 700px
+   panels reads as two columns of nothing-in-the-middle. */
+@media (min-width: 1400px) {
+  .stats-page {
+    grid-template-columns: repeat(2, minmax(0, 36rem));
+    justify-content: center;
+  }
+}
+/* The toll log is an ordinary panel in the spread rather than a masthead
+   across it. It used to span, from when the page was a 1000px sheet and two
+   columns; at full width that made a 1300px panel around a calendar drawn for
+   326, i.e. a small chart marooned in a lot of ruled paper. One column is the
+   width it wants. */
+@media (min-width: 720px) {
+  .stats-page .daygrid-plot {
+    max-width: 34rem;
+    margin-inline: auto;
+  }
+}
+
+
 .stats-hero {
   display: flex;
   flex-direction: column;
@@ -3375,6 +3946,21 @@ a.stat-tile:hover {
 .cmp-page {
   padding-bottom: 24px;
 }
+/* The two page wrappers generate no box on a phone — the panels inside them
+   are children of .cmp-page exactly as they were before the wrappers existed.
+   See the comment beside them in Compare.tsx.
+
+   Declared before "Compare at width" below by convention rather than by
+   necessity: the override there is `.cmp-page > .cmp-col`, a class more
+   specific than this, so it would win from anywhere in the file. The reason
+   to keep the order anyway is that the NEXT rule added here might not be —
+   media queries add no specificity, so a bare `.cmp-col` declared after the
+   query would silently beat it. .stats-col's own comment records that trap
+   actually biting, on its `.stats-col-head { display: none }` half, which is
+   overridden by a bare selector and so genuinely depends on the order. */
+.cmp-col {
+  display: contents;
+}
 .cmp-who {
   display: flex;
   align-items: center;
@@ -3754,6 +4340,17 @@ a.stat-tile:hover {
   padding: 20px 16px;
   text-align: center;
 }
+/* A centred box of prose rather than a panel of figures, so it stops at the
+   reading measure (plus its own 16px padding either side, which box-sizing
+   counts inside the cap) and centres. At 720 rather than with the spread at
+   1024: a paragraph reaches its measure as soon as the column is wider than
+   one, and nothing here needs a second column to exist. */
+@media (min-width: 720px) {
+  .cmp-thin {
+    max-width: calc(var(--measure) + 32px);
+    margin-inline: auto;
+  }
+}
 .cmp-thin-lead {
   font-size: 17px;
   margin: 0 0 10px;
@@ -3776,6 +4373,16 @@ a.stat-tile:hover {
 }
 .cmp-footer {
   margin: 20px 16px 0;
+}
+/* A button the width of the page is not a bigger button (see --action-w) — the
+   same declaration .board-actions/.tourney-actions take, at the same step, and
+   for the same reason. Past 1024 it spans both pages of the spread, so the same
+   centring puts it on the spread's own axis. */
+@media (min-width: 720px) {
+  .cmp-footer {
+    width: min(100%, var(--action-w));
+    margin-inline: auto;
+  }
 }
 
 /* ---- Settings ----
@@ -3804,6 +4411,38 @@ a.stat-tile:hover {
   letter-spacing: 0.14em;
   border-radius: var(--radius-btn);
 }
+
+/* ---- the settings lever at width ----
+ * `flex: 1` above is right on a phone, where a two-segment switch is two 170px
+ * halves of a 360px screen and reads as a switch. Given a 640px settings
+ * column it makes two 320px slabs, and a slab with the word OFF in the middle
+ * of it is not a control, it is a banner. Past 720 the segments take their own
+ * words' width and the switch sits at the head of its column, so every lever
+ * on the page starts at the same left edge and the column gets a spine.
+ *
+ * Scoped to .settings-panel rather than left on the bare class, because the
+ * same component is two other things elsewhere and neither wants this. The
+ * ladder's movement switch (.rank-move-row) shares a space-between row with a
+ * label and keeps its segments EVEN by splitting a 172px min-width between
+ * them — see its own comment above, which is describing `flex: 1` doing that
+ * job — and Analyze's lens switch spans its panel on purpose. Neither sets
+ * `flex` itself, so a bare-class override at this specificity would silently
+ * reach both.
+ *
+ * It also sits immediately AFTER the rule it overrides, which the scoping now
+ * makes belt-and-braces rather than load-bearing: media queries add no
+ * specificity, so an equal-specificity `.pref-switch button { flex: 1 }`
+ * declared later would simply win. (See "the responsive ladder" — that trap
+ * has now been paid for four times in this file.) */
+@media (min-width: 720px) {
+  .settings-panel .pref-switch {
+    flex-wrap: wrap;
+  }
+  .settings-panel .pref-switch button {
+    flex: 0 0 auto;
+    padding-inline: 22px;
+  }
+}
 .pref-switch button.active {
   background: var(--btn-primary-bg);
   border-color: var(--btn-primary-bg);
@@ -3826,6 +4465,23 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+/* ---- Settings at width ----
+ * One perforated panel of identical rows, so the panel is the grid: two
+ * settings side by side rather than one column of very wide ones. The rows
+ * keep their own borders and their own internal layout — only how many fit
+ * across changes. */
+@media (min-width: 1024px) {
+  .settings-page {
+    padding-inline: var(--page-pad);
+  }
+  .settings-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: var(--space-5);
+  }
 }
 .settings-body {
   display: flex;
@@ -3868,6 +4524,17 @@ a.stat-tile:hover {
 .settings-error {
   margin-top: 2px;
 }
+@media (min-width: 720px) {
+  /* Sign out is a way out, not a call to action. At --action-w it is the
+     widest control on a page where every other lever now takes its own words'
+     width (see "the settings lever at width"), which reads as emphasis this
+     particular button should not have. */
+  .settings-foot .ds-btn {
+    width: auto;
+    align-self: center;
+    padding-inline: 28px;
+  }
+}
 .settings-foot {
   margin-top: auto;
   display: flex;
@@ -3889,6 +4556,35 @@ a.stat-tile:hover {
   flex-direction: column;
   flex: 1;
   padding-bottom: 18px;
+}
+
+/* ---- The crossing at width ----
+ * A scoresheet and the field it was scored against — two ledgers that are read
+ * against each other, so on a desk they sit side by side rather than one under
+ * the other. The postmark hero and the actions run across both, as the
+ * masthead and the footer of the sheet. */
+@media (min-width: 1024px) {
+  .tourney-page {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .tourney-page > .screenheader,
+  .tourney-page > .tourney-result-hero,
+  .tourney-page > .tourney-actions,
+  .tourney-page > .notice-error {
+    grid-column: 1 / -1;
+  }
+  .tourney-page > .tourney-field,
+  .tourney-page > .tourney-field-hint {
+    grid-column: 2;
+  }
+  /* the foot of a document, not a full-width slab */
+  .tourney-page > .tourney-actions {
+    justify-self: center;
+  }
 }
 .tourney-sheet {
   padding: 14px 16px 0;
@@ -4211,6 +4907,13 @@ a.stat-tile:hover {
 .board-page .meaning-panel {
   margin: 10px 12px 0;
 }
+/* The play phase wraps the tray and its toasts in .board-rail (see PlayPhase
+   in Board.tsx). `display: contents` means that wrapper generates no box, so
+   every rule here and every phone measurement is unchanged — it only becomes a
+   real element at the width where it becomes a real rail. */
+.board-rail {
+  display: contents;
+}
 .board-page .auction {
   margin: 12px 12px 0;
 }
@@ -4222,6 +4925,404 @@ a.stat-tile:hover {
 }
 .board-page .play-row .trick {
   margin: 0;
+}
+
+/* ---- the board at width ----
+ * Two different problems, and they want opposite answers.
+ *
+ * Everything on this screen is a fixed-column thing pretending to be fluid: a
+ * four-column auction tray, a five-column bid grid, a compass with four seats
+ * pinned to the box's own edges. Stretched to 900px they do not get better,
+ * they get emptier — the tray's columns drift apart, the bid plates become
+ * slabs, and North and South end up a hand's breadth from East and West. So
+ * each of those caps ITSELF (the page never does — see "the responsive
+ * ladder") and the width they decline goes to the cards.
+ *
+ * But declining width is not the same as having nowhere to put it, and past
+ * 1024px there is far too much to leave as margin. So the board stops being
+ * one column and becomes two: the auction — the one thing on screen you read
+ * rather than act on — moves out into a RAIL, and everything you act on (the
+ * table, the hands, the bid box) takes the main column, with the cards sized
+ * from that column via --fan-space. The vertical stack loses a tray's worth of
+ * height in the bargain, which on a landscape desktop is the scarce axis.
+ *
+ * The caps below live HERE, after the .board-page spacing rules above, for a
+ * reason worth knowing: those rules are two-class selectors (`.board-page
+ * .trick`), so a one-class `.trick { margin-inline: auto }` anywhere earlier
+ * loses the cascade to `.board-page .trick { margin: 8px 0 0 }` and the capped
+ * box sits flush left — which is exactly what happened, and looked for all the
+ * world like the max-width not applying at all.
+ *
+ * `width: 100%` is the second half of that same trap and is equally
+ * load-bearing. These are all flex items in .board-page's column; a flex item
+ * whose cross size is `auto` is STRETCHED, so there is no free space for auto
+ * margins to absorb and they resolve to zero. A definite width is what turns
+ * the leftover into free space.
+ *
+ * The caps are expressed against the card token wherever the thing is really
+ * sized by cards (the trick), and in rem where it is sized by type (the tray,
+ * the bid grid, the prose) — a bid plate does not want to be bigger just
+ * because the cards are. */
+@media (min-width: 720px) {
+  .board-page {
+    padding-inline: var(--page-pad);
+  }
+  /* The whole double-ruled frame is capped, not just the tray inside it: the
+     frame IS the tray's edge, and a 34rem table floating inside an 840px box
+     reads as a mis-sized border rather than as a wider table. */
+  .board-page .auction {
+    width: 100%;
+    max-width: var(--measure);
+    margin-inline: auto;
+  }
+
+  /* prose, not layout: read line by line, so they take a measure */
+  .board-page .meaning-panel,
+  .board-page .grade-toast,
+  .board-page .toast,
+  .board-page .flip-note,
+  .board-page .notice,
+  .board-page .notice-error {
+    width: 100%;
+    max-width: var(--measure);
+    margin-inline: auto;
+  }
+  .bidbox-wrap {
+    width: 100%;
+    max-width: 32rem;
+    margin-inline: auto;
+  }
+
+  /* The table stops growing. What the box has to hold is four cards and a
+     meter — ~6.4 card widths is that, with air. The --surface fill narrowing
+     to match is the point rather than a side effect: it reads as a card table
+     on a desk instead of as a band across the page. */
+  .board-page .trick {
+    width: 100%;
+    max-width: calc(var(--card-w) * 6.4);
+    margin-inline: auto;
+  }
+  .trick-meter {
+    width: max(118px, calc(var(--card-w) * 1.7));
+  }
+  /* the E/W-dummy case: the rail and the table travel together, so the pair
+     centres and the table keeps its cap but not its own auto margins */
+  .board-page .play-row {
+    justify-content: center;
+  }
+  .board-page .play-row .trick {
+    width: auto;
+    margin-inline: 0;
+  }
+}
+
+/* The auction moves, the hand does not. On a phone the bidding screen has no
+ * slack: the tray, the feedback and the hand fill it, and `.bid-decision`'s
+ * `margin-top: auto` (see the docked-bidding block above) simply pins the
+ * decision cluster to the dock. On a tall tablet there is suddenly 300px of
+ * it, and that rule spends all of it in ONE gap between the tray and the
+ * feedback, leaving two islands with a hole between them.
+ *
+ * Moving the auto margin to the TRAY instead puts the slack above it, where it
+ * reads as page margin, and groups tray + feedback + hand into one block
+ * sitting on the dock. The stability the original was protecting is unchanged,
+ * and that is the point of doing it this way round rather than the other: the
+ * last child's bottom edge is still fixed to the dock, so a feedback panel
+ * that grows by two lines pushes the TRAY up rather than pushing the hand
+ * down.
+ *
+ * It must be an auto MARGIN and never `justify-content: flex-end` on
+ * .bid-scroll, which is the same composition and is a real bug. .bid-scroll is
+ * an `overflow-y: auto` flex container, and when a flex container's content
+ * overflows, `justify-content` still pushes it off the START edge — where
+ * scrollTop cannot reach it, since scrollTop cannot go negative. Measured in
+ * Chromium: with flex-end and 300px of content in a 200px box, the first child
+ * sat 99px above the box's top and scrollHeight stayed equal to clientHeight,
+ * i.e. the browser did not even report it as scrollable. That is not
+ * hypothetical here — at 1194x834 a full competitive auction plus a meaning
+ * panel plus the fan does overflow this region, and the earliest calls in the
+ * tray would have become unreachable. An auto margin has no such failure mode:
+ * auto margins absorb POSITIVE free space only and resolve to zero when the
+ * space is negative, so the same layout degrades into an ordinary scroll. */
+@media (min-width: 720px) and (max-width: 1023.98px) {
+  .board-page .bid-scroll > .auction {
+    margin-top: auto;
+  }
+  .bid-decision {
+    margin-top: 0;
+  }
+}
+
+/* ---- the board at width (>=1024): ONE BLOCK, AND IT CENTRES ----
+ * The phone draws the board as a single column down the middle of the screen:
+ * what has been said, then the table, then your hand. A desktop has no more
+ * HEIGHT than a phone does — usually less, since it is landscape — so the
+ * width has to buy something the vertical stack cannot, and what it buys here
+ * is CARDS.
+ *
+ * An earlier revision spent it on two full-height columns of the PAGE instead:
+ * a 20rem rail pinned to the left edge of the paper, the table and the hands
+ * in a 1fr column beside it, both hugging the top of a 900px window with 550px
+ * of empty paper underneath. Three things were wrong with it and only the last
+ * is a matter of taste. The pieces sat at opposite edges of the viewport, so
+ * they read as three unrelated screens rather than as one table. The cards
+ * stayed at the ~108px the PHONE's height affords, because nothing about
+ * moving the tray sideways gave the fan any more room to be big in. And the
+ * hand — the thing you are actually looking at — ended up nowhere near the
+ * middle of the screen.
+ *
+ * So the rail is no longer a column of the page; it is the left-hand side of a
+ * BLOCK, and the block centres. `1fr` spacers either side do the centring
+ * while the board's own head still spans the full width — a centred grid
+ * cannot bleed its own masthead out to the paper's edge without knowing its
+ * offset, and it does not have to when the spacers are grid columns of their
+ * own. Taking the tray out of the vertical stack is what pays for the cards:
+ * the play cap goes 118px → 150px, which is the whole point of the exercise.
+ *
+ * The BIDDING screen deliberately does not get this treatment — see its own
+ * block below. It has no table and no dummy, so a rail beside it would be a
+ * rail beside nothing. */
+@media (min-width: 1024px) {
+  /* The rail takes a SHARE of the page rather than a fixed slab. At 1024 a flat
+     20rem is a fifth of the window, and every pixel of it is a pixel the cards
+     don't get; the tray reads perfectly well a little narrower. The clamp's
+     floor is where the four-column tray starts to crowd. */
+  :root:has(.board-page) {
+    --board-rail: clamp(17rem, 26vw, 20rem);
+  }
+  :root:has(.board-page:not(.analyze-page) .trick) {
+    /* What the main column has to work with: the viewport less the rail, the
+       three gutters (two flanking the block, one inside it) and the page
+       padding. Bidding keeps the base 100vw — there is nothing beside it. */
+    --board-avail: calc(100vw - var(--board-rail) - var(--space-5) * 3 - var(--page-pad) * 2);
+    --fan-space: var(--board-avail);
+    /* THE CARD SIZE IS BOUNDED BY THE TABLE, NOT ONLY BY THE FAN. --card-h's
+       own fit term sizes cards so a 13-card fan fits --fan-space, which is the
+       right question on the phone, where the fan is the widest thing on the
+       screen. Here it isn't: the table sits BESIDE the dummy rail, so the row
+       it lives in wants 6.4 card widths (its cap) plus the rail's 8rem. Left
+       to the fan alone, a 1024px window sized cards from a 584px fan and then
+       asked a 504px table to share 584px with a 128px rail — and .trick's
+       height is a fixed multiple of the card, so what gave was its WIDTH. It
+       came out tall and narrow with the played cards overlapping the trick
+       meter. 4.46 is 6.4 × 46/66, i.e. the table's cap expressed in card
+       HEIGHTS, which is the unit this token is in.
+
+       Height is still the other scarce axis on a landscape screen: this phase
+       stacks the table, your fan and its labels — about 2.6 card heights plus
+       ~130px of chrome — so 20vh keeps that inside a 700px-tall window, and
+       the 150px ceiling stops the cards outgrowing the table on a tall one. */
+    --card-h-cap: min(150px, 20vh, calc((var(--board-avail) - 8rem) / 4.46));
+    /* The width of the play composition itself: the table at its cap plus the
+       dummy rail beside it. This is what the main column is, and it is derived
+       from the card token rather than measured from the DOM — see the grid. */
+    --board-main: min(var(--board-avail), calc(var(--card-w) * 6.4 + 8rem));
+  }
+}
+@media (min-width: 1400px) {
+  :root:has(.board-page) {
+    --board-rail: clamp(20rem, 26vw, 24rem);
+  }
+}
+
+/* PLAY. This phase renders its parts as a flat list of siblings under
+ * .board-page (dummy, table, your fan, notices, hints — most of them
+ * conditional), so there is nothing to hang grid areas off. Everything
+ * therefore goes to the main column by default and the two things that don't
+ * say so afterwards: the head spans everything, the tray takes the rail.
+ *
+ * :has(.trick) is "we are in the play phase" — the trick table is the one
+ * element only this phase renders. Analyze is excluded by name: it mounts the
+ * same components inside its own two-lens layout, which does its own thing
+ * with the width.
+ *
+ * The main column is max-content rather than 1fr, and that is what lets the
+ * block hug its contents and centre instead of stretching to the paper. What
+ * max-content ends up measuring is the fan, because every other child that
+ * could run away with it is already capped by the 720 block above — prose at
+ * --measure, the table at 6.4 card widths. Sizing the column from the cards is
+ * exactly right here.
+ *
+ * Where :has() is unsupported the whole treatment drops and the board stays
+ * the single centred column the 720 block builds — narrower than it needs to
+ * be, but not broken. */
+@media (min-width: 1024px) {
+  /* THE MASTHEAD STAYS AT THE TOP. This grid used to be .board-page itself,
+     with `align-content: center` — which centres every row it owns, and one of
+     those rows is the board's own header. On a tall window that floated the
+     masthead a third of the way down the page, which is not what centring the
+     board means. The head is now a plain flex child of .board-page, above the
+     grid, exactly where a header goes; only the play area centres, in the
+     space the head leaves. */
+  .board-page:not(.analyze-page) > .play-phase {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) var(--board-rail) minmax(0, var(--board-main)) minmax(0, 1fr);
+    column-gap: var(--space-5);
+    align-content: center;
+    /* a beat under the masthead's rule, so the board is not welded to it */
+    margin-top: var(--space-5);
+  }
+  .board-page:not(.analyze-page) > .play-phase > * {
+    grid-column: 3;
+  }
+  .board-page:not(.analyze-page):has(.play-phase) > .board-head {
+    /* the head is the page's own masthead; the page padding is already on
+       .board-page, so pull the rule back out to the paper's edge */
+    margin-inline: calc(var(--page-pad) * -1);
+    padding-inline: calc(16px + var(--page-pad));
+  }
+  /* The rail: the tray, and whatever the board has to say about the auction —
+     the grade for the call you just made, the flip note. News, not
+     instructions, so it reads beside the table rather than pushing it down the
+     screen. The play hint and any error stay in the main column, where the
+     hand is and where they are about to matter. */
+  .board-page:not(.analyze-page) > .play-phase > .board-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    grid-column: 2;
+    /* the span keeps the rail in its column for the whole height of the play
+       area rather than letting it set the height of the first row alone */
+    grid-row: 1 / span 99;
+    align-self: start;
+    /* The tray's top edge sits ON the table's, which is what makes the two
+       read as one object rather than as a sidebar parked next to a screen.
+       4px is .trick's own top margin (see its base rule), not a coincidence,
+       so the two move together if that ever changes. */
+    margin-top: 4px;
+  }
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .auction,
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .grade-toast,
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .flip-note {
+    /* the rail is the measure in here */
+    max-width: none;
+    margin-inline: 0;
+  }
+  .board-page:not(.analyze-page) > .play-phase .board-rail > .auction {
+    /* the rail's own gap spaces this stack; the tray's phone margins would
+       double it and break the top alignment above */
+    margin: 0;
+  }
+  /* The table claims the column instead of shrinking to its own contents. The
+     720 block hands it `width: auto` inside a .play-row so the table and the
+     rail can travel together and centre as a pair; out here the pair IS the
+     column, so the table takes whatever the rail leaves and stops at its own
+     6.4-card cap. Without this the row is only as wide as the cards currently
+     on the table — which is two of them by the end of a trick. */
+  .board-page:not(.analyze-page) > .play-phase > .play-row {
+    justify-content: center;
+  }
+  .board-page:not(.analyze-page) > .play-phase > .play-row > .trick {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    max-width: calc(var(--card-w) * 6.4);
+  }
+}
+
+/* BIDDING at width. Unlike the play screen there is no table and no dummy —
+ * this phase is exactly three things and all three are yours: what has been
+ * said, what you hold, and what you can say. A phone stacks them down the
+ * middle, and that IS the right arrangement; the only thing wrong with it on a
+ * desktop is the size of everything in it.
+ *
+ * A previous revision made this two columns at 1024 and THREE at 1400 (tray,
+ * hand, box). It reads as a real card table when described and as three
+ * separate screens in use: the tray and the box end at opposite edges of a
+ * 1440px window with the hand marooned between them, so every glance from what
+ * was bid to what you can bid crosses the whole monitor.
+ *
+ * So bidding stays one centred column with bigger cards, and it keeps two
+ * things from the phone rather than dropping them. The dock stays DOCKED — the
+ * base .bidding-dock rule (100dvh, box pinned to the foot) is simply left
+ * alone, and the hole it used to open between the tray and the hand is closed
+ * by centring the scroll region's content instead of hugging the dock with it.
+ * And the dock's tinted band still runs EDGE TO EDGE: a 34rem plate of surface
+ * fill floating in the middle of a 1440px page is a ribbon, while a band
+ * across the foot of the screen is a bidding box. The plates inside it do not
+ * move — .bidbox-wrap's own 32rem cap centres them exactly where the column
+ * above puts everything else. */
+@media (min-width: 1024px) {
+  :root:has(.board-page.bidding-dock) {
+    /* Bidding stacks exactly one hand: nothing above it but a tray, nothing
+       below it but the box. So the hand can be the size the screen implies —
+       it is the thing you are actually looking at while you decide — and the
+       fit half of --card-h still binds first if the window is narrow. */
+    --card-h-cap: min(150px, 26vh);
+  }
+  /* Centre the tray/feedback/hand group in the space above the dock. It must
+     be auto MARGINS and never `justify-content: center` on .bid-scroll, which
+     is the same composition and is a real bug: .bid-scroll is an
+     overflow-y: auto flex container, and when a flex container's content
+     overflows, justify-content still pushes it off the START edge — where
+     scrollTop cannot reach it, since scrollTop cannot go negative. Measured in
+     Chromium: with 300px of content in a 200px box the first child sat 99px
+     above the box's top and scrollHeight stayed equal to clientHeight, i.e.
+     the browser did not even report it as scrollable. Auto margins absorb
+     POSITIVE free space only and resolve to zero when the space is negative,
+     so the same layout degrades into an ordinary scroll. */
+  .board-page .bid-scroll > .auction {
+    margin-top: auto;
+  }
+  .bid-decision {
+    margin-top: 0;
+    margin-bottom: auto;
+  }
+}
+/* The dock's band runs to the WINDOW's edges, not the page's. .board-page takes
+   --page-pad past 720, which is right for everything that reads as content and
+   wrong for this: the dock is the bottom edge of the screen, and a tinted band
+   floating 40px short of the glass either side reads as a panel that failed to
+   reach. Negative margin then equal padding, so the band grows and the plates
+   inside it do not move — .bidbox-wrap's own cap centres them, and the pull is
+   symmetric. Declared after the >=1024 block above so it applies to both steps
+   (720 and up), which is also where .board-page's padding starts. */
+@media (min-width: 720px) {
+  .bid-dock {
+    margin-inline: calc(var(--page-pad) * -1);
+    padding-inline: var(--page-pad);
+  }
+}
+/* THE RECEIPT at width. The result is a document — a hero figure, the field it
+ * was scored against, and the auction that got there — so it reads as a spread
+ * rather than a scroll: the headline across the top, the two ledgers side by
+ * side beneath it, the actions across the foot. */
+@media (min-width: 1024px) {
+  .result {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-5);
+    align-content: start;
+    /* A receipt is a document, and a document has a width. Run the two ledgers
+       edge to edge on a 1440px page and the field table's contract column ends
+       up a third of a metre from its percentages. 68rem is ~3/4 of a 1440px
+       page, which is where it still reads as one sheet; past that the gutters
+       take the rest, which is the ladder's rule for a two-column page.
+
+       `width: 100%` is the load-bearing half — see "Two cascade traps" in
+       CONTRIBUTING.md. .board-page is a flex COLUMN, so a child's cross size
+       is its width: auto margins there stop it stretching and resolve it to
+       fit-content instead, and the cap never binds. Measured without it, this
+       sat at a content-driven 860px at every width — 72% of a 1194px page and
+       43% of a 2000px one, i.e. exactly the wrong way round. */
+    width: 100%;
+    max-width: 68rem;
+    margin-inline: auto;
+  }
+  .result > .result-hero,
+  .result > .board-actions {
+    grid-column: 1 / -1;
+  }
+  .result > .result-field {
+    grid-column: 1;
+  }
+  .result > .result-bidding {
+    grid-column: 2;
+  }
+  .result > .board-actions {
+    justify-self: center;
+  }
 }
 
 /* ---- claim: announcement overlay ---- */
@@ -4349,6 +5450,15 @@ a.stat-tile:hover {
   flex-direction: column;
   gap: 8px;
 }
+/* see --action-w: a CTA that spans a 1440px page is not a bigger button, it is
+   a worse one */
+@media (min-width: 720px) {
+  .board-actions,
+  .tourney-actions {
+    width: min(100%, var(--action-w));
+    margin-inline: auto;
+  }
+}
 
 /* result */
 .result-hero {
@@ -4447,6 +5557,15 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+/* Same argument as .result above — the itemised toll is a sheet of paper, and
+   a sheet has a width. */
+@media (min-width: 1024px) {
+  .receipt {
+    width: 100%;
+    max-width: 68rem;
+    margin-inline: auto;
+  }
 }
 .receipt-panel {
   margin: 18px 12px 0;
@@ -4644,6 +5763,8 @@ a.stat-tile:hover {
   flex: 1;
   padding-bottom: 24px;
 }
+
+
 .gloss-head {
   padding: 18px 16px 0;
   display: flex;
@@ -4703,6 +5824,37 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
 }
+
+/* ---- Glossary at width ----
+ * An index of ~124 terms grouped by letter, set the way a printed glossary
+ * sets one: two or three columns that FLOW, rather than a grid of letter
+ * blocks. A grid was the first attempt and it reads worse — the letters are
+ * wildly different lengths (# has one term, S has twenty), so each grid row is
+ * as tall as its tallest letter and the short ones leave holes. Columns fill
+ * continuously and balance themselves, so the page has no holes in it.
+ *
+ * The one print rule that has to come along: a letterhead may not be the last
+ * thing in a column. break-after: avoid moves it to the top of the next
+ * column with its first terms, which is the whole reason letterheads exist. */
+@media (min-width: 1024px) {
+  .glossary {
+    padding-inline: var(--page-pad);
+  }
+  .gloss-list {
+    display: block;
+    columns: 2;
+    column-gap: var(--space-6);
+  }
+  .gloss-letterhead {
+    break-after: avoid;
+  }
+}
+@media (min-width: 1400px) {
+  .gloss-list {
+    columns: 3;
+  }
+}
+
 .gloss-letterhead {
   display: flex;
   align-items: center;
@@ -5163,9 +6315,9 @@ a.stat-tile:hover {
    is untouched — and it fades in last, after the CTA has had its moment. */
 .landing-cue {
   position: absolute;
-  /* clear of the river scene, which is 146px tall at bottom: 0 — the cue must
-     never print over the bridge linework */
-  bottom: 162px;
+  /* clear of the river scene, whatever height it has grown to at this width —
+     the cue must never print over the bridge linework */
+  bottom: calc(var(--splash-scene-h) + 16px);
   left: 0;
   right: 0;
   text-align: center;
@@ -5326,6 +6478,218 @@ a.stat-tile:hover {
   margin-top: 12px;
 }
 
+/* ---- the pamphlet at width ----
+ * The folds stay full-bleed — an edge-to-edge rule between two sections is
+ * what makes them read as folds rather than as cards — but their CONTENT gets
+ * a measure. 62ch is the point where a line of Crimson at 15.5px stops being
+ * comfortably re-readable; without it the pitch runs 150 characters wide on a
+ * desktop and nobody finishes a sentence.
+ *
+ * The whole block is centred rather than left-aligned because the hero above
+ * it is centred, and a pamphlet whose cover is centred and whose pages are
+ * ragged-left reads as two designs. */
+@media (min-width: 720px) {
+  .landing-panel {
+    padding: 52px 32px 80px;
+    display: grid;
+    grid-template-columns: minmax(0, 62ch);
+    justify-content: center;
+  }
+  .landing-foot {
+    padding: 34px 32px 44px;
+  }
+  /* The three doors keep the primary CTA's weight instead of becoming three
+     equally-wide bars the width of the page. */
+  .landing-door-actions {
+    max-width: var(--action-w);
+  }
+}
+
+/* At desktop the section numeral leaves the flow and sets in the margin, the
+ * way a printed pamphlet numbers its folds: the rubric is beside the title,
+ * not stacked above it. Placement is explicit rather than by nth-child — every
+ * child is column 2 and the numeral claims column 1 row 1 — so a section can
+ * gain or lose a paragraph without the layout caring. */
+@media (min-width: 1024px) {
+  .landing-panel {
+    grid-template-columns: 5rem minmax(0, 44ch) minmax(0, 34rem);
+    column-gap: 3rem;
+  }
+  .landing-panel > * {
+    grid-column: 2;
+  }
+  .landing-panel > .landing-no {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    text-align: right;
+    /* drops the numeral onto the title's cap line rather than its ascent */
+    margin-top: 9px;
+  }
+  .landing-panel > .landing-title {
+    margin-top: 0;
+  }
+
+  /* THE THIRD COLUMN, and why every fold has something for it. A pamphlet page
+     is copy plus one thing you can look at, and each of these folds already had
+     its own: the specimen ledger, the graded call, the ticket motifs, the three
+     doors — and, on the folds that are pure argument, the italic aside, which
+     becomes a margin note beside the paragraph it qualifies. So the desktop
+     layout is not "the phone with a hole on the right"; it is the same content
+     read the way print would set it.
+     Row 2 is the first row under the title, so the figure starts level with the
+     opening line of copy rather than with the heading above it. */
+  .landing-panel > .landing-specimen,
+  .landing-panel > .landing-grade,
+  .landing-panel > .landing-motifs,
+  .landing-panel > .landing-aside {
+    grid-column: 3;
+    grid-row: 2 / span 99;
+    align-self: start;
+    margin-top: 0;
+  }
+  /* The doors are the exception, and they are the exception because they are
+     the last thing on the page rather than a figure beside an argument. Set in
+     the figure column they sit ~190px right of the page's centre line, with a
+     centred bridge mark and a centred closing line directly underneath — three
+     elements, two alignments. Spanning the whole fold and centring puts them
+     on the same axis as the mark below and as the hero at the top, which is
+     where a closing call to action belongs. */
+  .landing-panel > .landing-door-actions {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-top: var(--space-5);
+  }
+  /* the plates fill the column; the doors do not — a door is a button, and
+     --action-w is where a button stops being one (see the token) */
+  .landing-panel > .landing-specimen,
+  .landing-panel > .landing-grade,
+  .landing-panel > .landing-motifs {
+    max-width: none;
+  }
+}
+/* More room for the figure, not for the line length: the copy column is
+   already at its measure, so past 1400 only the plate beside it grows. */
+@media (min-width: 1400px) {
+  .landing-panel {
+    grid-template-columns: 6rem minmax(0, 46ch) minmax(0, 44rem);
+    column-gap: 4rem;
+  }
+}
+
+/* ---- Analyze at width ----
+ * The overview lens is a headline (what the cards were worth) and two ledgers
+ * (where it turned, and the lines you have tried since). Read side by side
+ * they answer each other: the moment in the ledger is the dot on the rail
+ * above it. The play lens is left alone entirely — it is a board replay, and
+ * the board already knows what to do with a wide screen. */
+@media (min-width: 1024px) {
+  /* :has(.analyze-par) is "the overview lens is showing" — that panel is the
+     one element only this lens renders. Matched positively rather than as
+     :not(the play lens) because the play lens renders its parts as a flat list
+     of siblings, exactly as PlayPhase does, and half of a grid applied to
+     those would be worse than no grid at all. */
+  .analyze-page:has(.analyze-par) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .analyze-page:has(.analyze-par) > .screenheader,
+  .analyze-page:has(.analyze-par) > .analyze-lens,
+  .analyze-page:has(.analyze-par) > .notice-error {
+    grid-column: 1 / -1;
+  }
+  .analyze-page:has(.analyze-par) > .analyze-moments,
+  .analyze-page:has(.analyze-par) > .analyze-rehearsals {
+    grid-column: 2;
+  }
+}
+
+/* ---- Compare at width: the headline and the ledger behind it ----
+ * The screen is a dozen panels stacked in one column, and at width it wants
+ * to become a two-page SPREAD, exactly as the profile does (see "Stats at
+ * width" above — same shape, same reasoning, and the two should stay in step):
+ * the headline this screen reaches on the left page — who these two are to
+ * each other, where the beam tips, the verdict — and the long ledger behind
+ * it on the right, ending in the note on what a gate is. The masthead (the
+ * header and the two players) runs across the top of both, and the closing
+ * action across the foot.
+ *
+ * The previous revision put the beam panels in a `3fr` column and pinned the
+ * head-to-head slip, the common ground and the verdict to a `2fr` one, and let
+ * everything else fall where grid put it. That drew a CHECKERBOARD rather than
+ * two columns: auto-placement is sparse, so each unpinned panel took the next
+ * free row of column one while the pinned pieces landed in column two a row or
+ * two later, leaving a hole of dead paper beside every one of them. It is a
+ * placement problem rather than a styling one, and the fix is the same two
+ * wrappers the profile uses — .cmp-col in Compare.tsx, which say which page a
+ * panel belongs to instead of leaving it to the cursor.
+ *
+ * The columns are EQUAL, where the old rule's were 3fr/2fr. Both pages are
+ * mostly beam rows now that the split is the reading order rather than
+ * beams-vs-commentary, and a bar's width is its own scale — so there is no
+ * case for starving one page to feed the other.
+ *
+ * No `gap` and no inner padding on the grid itself: every panel already
+ * carries its own `margin: 12px 16px 0`, so two neighbours make a 32px gutter
+ * — the phone's measurement, reused rather than re-specified. The page's own
+ * `--page-pad` then sits outside those margins, so the outer inset is the two
+ * added together. */
+@media (min-width: 1024px) {
+  .cmp-page {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: start;
+    padding-inline: var(--page-pad);
+  }
+  .cmp-page > .screenheader,
+  .cmp-page > .cmp-who,
+  .cmp-page > .loading,
+  /* the error and the too-thin states render in place of the whole spread,
+     so they span it rather than sitting in half a column */
+  .cmp-page > .notice-error,
+  .cmp-page > .cmp-thin,
+  .cmp-page > .cmp-footer {
+    grid-column: 1 / -1;
+  }
+  /* The wrappers stop being invisible and become the two pages. A column is a
+     flex stack rather than a grid so a page can gain or lose a panel — a
+     detail panel with nothing drawn is omitted entirely — without anything
+     here counting rows. */
+  .cmp-page > .cmp-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .cmp-page > .cmp-col-headline {
+    grid-column: 1;
+  }
+  .cmp-page > .cmp-col-detail {
+    grid-column: 2;
+  }
+  /* The cut now heads the right page rather than dividing one column, so it
+     loses the top margin that spaced it off the panel above it and sits level
+     with the left page's first panel instead of a row below it. */
+  .cmp-page .cmp-cut {
+    margin-top: 12px;
+  }
+}
+/* Past 1400 the columns stop growing and the GUTTERS grow instead — the
+   ladder's own rule for a two-column page, and the profile spread's own 1400
+   rule one level up. A beam row is not more readable at 900px than at 560: the
+   bar is a margin against a gate, and past a point the extra width is spent on
+   the distance between a figure and the label naming it. */
+@media (min-width: 1400px) {
+  .cmp-page {
+    grid-template-columns: repeat(2, minmax(0, 36rem));
+    justify-content: center;
+  }
+}
+
 /* ============================== ANALYZE ==============================
    The Second Crossing — /t/:tid/b/:no/analyze. Everything here is built on
    the base tokens (var()-chained), so night mode repaints it for free; cost
@@ -5344,6 +6708,20 @@ a.stat-tile:hover {
 .analyze-lens .pref-switch button {
   font-size: 9.5px;
   letter-spacing: 0.1em;
+}
+/* The lens pair is a reading position, not a call to action, and it heads a
+   page whose every other element is centred or spans. Past 720 it stops being
+   two half-page slabs and becomes two buttons on the page's own axis. Scoped
+   here rather than on the bare class for the reason given beside the settings
+   gate's copy of this: .rank-move-row wants its segments to stay even. */
+@media (min-width: 720px) {
+  .analyze-lens .pref-switch {
+    justify-content: center;
+  }
+  .analyze-lens .pref-switch button {
+    flex: 0 0 auto;
+    padding-inline: 22px;
+  }
 }
 
 /* ---- the moments ledger ---- */

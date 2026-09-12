@@ -8,9 +8,16 @@ export interface SparkPoint {
   value: number;
 }
 
-/** Plot geometry, in SVG user units. The plot stretches to its container
- *  (`preserveAspectRatio="none"`), so these are a design width rather than
- *  pixels — 326 is the same figure DayGrid and StemChart are drawn against. */
+/** Plot geometry, in SVG user units. The plot scales UNIFORMLY to its
+ *  container (style.css gives it `height: auto`), so these are a design width
+ *  rather than pixels — 326 is the same figure DayGrid and StemChart are drawn
+ *  against, and it is roughly the phone's own plot width, so on the design
+ *  viewport one user unit is one pixel.
+ *
+ *  It used to stretch on x alone (`preserveAspectRatio="none"`), which is
+ *  invisible at 326-in-330 and indefensible at 326-in-960: on a desktop the
+ *  DayGrid's squares became 3:1 lozenges and StemChart's <text> labels were
+ *  drawn stretched, since a non-uniform viewBox scales glyphs too. */
 const W = 326;
 const TOP = 14;
 const BASE = 76;
@@ -156,7 +163,7 @@ export function Sparkline({
           if (document.activeElement !== plotRef.current) setSelected(null);
         }}
       >
-        <svg width="100%" height="86" viewBox={`0 0 ${W} 86`} preserveAspectRatio="none" aria-hidden="true">
+        <svg width="100%" height="86" viewBox={`0 0 ${W} 86`} aria-hidden="true">
           <line x1="0" y1={TOP} x2={W} y2={TOP} stroke="var(--line)" strokeWidth="1" strokeDasharray="3 4" />
           {refValue !== undefined ? (
             <line className="sparkline-ref" x1="0" y1={y(refValue)} x2={W} y2={y(refValue)} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="5 4" />

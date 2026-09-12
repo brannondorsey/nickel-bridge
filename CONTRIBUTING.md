@@ -195,7 +195,9 @@ web             main.tsx → App.tsx (router + MeContext auth + splash gating + 
                 [data-theme="night"] + its @media (prefers-color-scheme: dark) twin hold
                 the night token overrides; [data-suit-palette="colorblind"] + its
                 [data-theme="night"] and @media twins hold the colorblind suit-color
-                overrides — see "Night mode" below)
+                overrides — see "Night mode" below; and "the responsive ladder", the ONE
+                place the tablet/desktop breakpoints and the measure/action/page tokens live —
+                see "No sheet: the page is the viewport" below)
 tools           offline Python weight conversion + golden-fixture generation;
                 gen_trace_fixture.mjs regenerates the robot determinism trace;
                 policy_probe.mjs prints the model's policy for any hand + auction
@@ -227,6 +229,9 @@ tools           offline Python weight conversion + golden-fixture generation;
                 analyze_trace.mjs, see "Tuning Analyze's moment floor" below
 scripts         e2e.mjs (full two-user tournament against a running instance), ui-check.mjs
                 (design-review sweep of every screen → docs/images-redesign/),
+                responsive-check.mjs (the same walk shot at all four ladder viewports,
+                `<name>@<width>.png` — the review artifact for any breakpoint change,
+                see "No sheet: the page is the viewport" below),
                 readme-shots.mjs (the README's marketing shots → docs/screenshots/ —
                 plays an ordinary tournament on a DEMO=1 instance, see that dir's README),
                 cloudflare.mjs (the CDN edge config, DERIVED from server/src/seo.ts —
@@ -2289,6 +2294,251 @@ the human plays the North hand — see `humanControls` and the `flipped` handlin
 
 **better-sqlite3 is synchronous:** DB calls are not awaited; prepared statements live as
 module-level constants next to the functions that use them. Match that style.
+
+**No sheet: the page is the viewport.** The app was drawn for a 390px phone and `.shell` was a
+hard `max-width: 430px`, so on a tablet or a desktop it was a ribbon in an ocean of paper. A
+first pass stepped that cap 430 → 600 → 680px, which was mobile-first and safe and still
+wrong: a 1440px desktop got a 680px ribbon down the middle, which reads as a phone app
+someone left open on a monitor. **`.shell` now has no `max-width` at any size, and neither
+does any page root.** What caps is individual ELEMENTS, and only those with a reason to — a
+paragraph at its reading measure, a primary button at the width a thumb can cross, the trick
+table where its four seats stop reading as a table. Width that no element wants is spent on
+LAYOUT — a second column, a rail, a wider fan of cards — never on emptiness. **If you find
+yourself adding `max-width` to a page root, that is this bug coming back**: cap the element
+that looks wrong, or give the page another column. The whole mechanism is three tokens plus
+three numbers, declared together under "the responsive ladder" at the top of
+`web/src/style.css`:
+
+- **`--measure` (34rem)** is what a single column of prose or of stacked controls may reach;
+  **`--action-w` (22rem)** is where a primary button stops being a target and becomes a bar
+  with a word in it; **`--page-pad`** is the extra breathing room a page takes at width, added
+  by the page rather than imposed by the shell, because the landing folds, the trick table and
+  the TabBar are deliberately full-bleed. A fourth, `--fan-space`, is below.
+- **The three breakpoints are 720 / 1024 / 1400, and they are content breakpoints.** 720 is
+  where one column of phone-width content starts reading as a ribbon; 1024 is where a second
+  column of panels, or a rail beside the table, is affordable; 1400 is where a third is. There
+  is no CSS-native way to name a breakpoint, so those numbers appear literally in every
+  `@media` block in the file — `grep -n 'min-width: 1024px'` finds every rule at a step. **Do
+  not introduce a fourth number** without adding it to the ladder's comment.
+- **Mobile-first, strictly.** Every rule outside a `min-width` query is the phone design,
+  untouched; every responsive rule is additive. That is what makes "did I regress the phone?"
+  answerable by reading a diff instead of by re-shooting every screen.
+- **Media queries do not add specificity, and this file is long.** Two of the rules in this
+  pass silently did nothing at first because a later, equal-specificity base rule won on
+  source order (`.tabbar a { flex: 1 0 auto }` beating the centred-toolbar override, and the
+  1400px three-column bidding grid sitting above the 1024px two-column one). A responsive
+  override belongs immediately AFTER the rule it overrides, not in a tidy block somewhere
+  else.
+
+**Every screen has a desktop shape, and it is a content decision.** Home is the play side and
+the toll ledger side by side (the ledger stopping at 42rem past 1400 — a crossing's row is a
+date, a field size and two figures, and 900px of rule between them is not more of the record);
+the profile is a two-page SPREAD — THE RECORD on the left, THE COUNT on the right — whose
+columns stop growing at 1400 and spend the rest on gutters; Traffic is the week as columns,
+walked sideways; the Glossary flows into two or three print columns
+(`columns`, not a grid — the letters are wildly uneven, and a grid row as tall as its tallest
+letter leaves holes a flowing column doesn't); a crossing is its scoresheet beside its field;
+Rankings keeps the ladder as one list (splitting a ranking across columns is a puzzle, not a
+layout) and gives the width to the house table. Each lives in an `at width` block beside its
+own screen's CSS.
+
+**Compare is a two-page spread like the profile, and the wrappers are the whole lesson.** Its
+desktop shape shipped once as beam panels in a `3fr` column with the head-to-head slip, the
+common ground and the verdict pinned to a `2fr` one, everything else left to fall where grid
+put it — and it drew a CHECKERBOARD. This is the profile's masonry bug a second time and the
+fix is the same: grid auto-placement is sparse, so each unpinned panel took the next free row
+of column one while the pinned pieces landed in column two a row or two later, leaving a hole
+of dead paper beside every one of them. Two `.cmp-col` wrappers in `Compare.tsx` now say which
+page a panel belongs to instead of leaving it to the cursor (`display: contents` below 1024,
+so the phone is untouched). **If you add a second column to a screen, reach for the wrappers
+first** — pinning individual panels with `grid-column` is the thing that keeps failing, and it
+fails silently, because each rule on its own does exactly what it says.
+
+Two decisions on top of that shape. **The split is the IN DETAIL cut**, which is what lets one
+contiguous cut yield two pages: the screen's reading order is already headline then ledger, so
+the left page carries who these two are to each other, where the beam tips and the verdict,
+and the right page carries the long ledger, the context panel and the note on what a gate is —
+in the phone's own DOM order, unchanged. Grouping it the other way round (commentary on one
+page, beams on the other) would interleave, and a wrapper cannot. At width the cut also heads
+the right page, which is why neither page carries a head of its own — though not in every
+state: a pair whose every sub-bucket row is set aside gets no detail panel and therefore no
+cut, and that page opens on FOR CONTEXT's own panel heading instead. **And the columns are EQUAL**, where
+the old rule's were 3fr/2fr: both pages are mostly beam rows once the split is the reading
+order rather than beams-vs-commentary, and a bar's width is its own scale, so there is no case
+for starving one page to feed the other. Past 1400 they stop growing at 36rem each and the
+gutters take the rest, the same rule the profile spread takes one level up — a beam row is not
+more readable at 900px than at 560. The masthead spans the top of both pages and the closing
+CTA the foot. That CTA's `--action-w` cap and the ineligible state's reading-measure cap are
+both at **720**, not with the spread at 1024: neither needs a second column to exist, and a
+button or a paragraph reaches its limit as soon as the column is wider than one. Putting them
+at 1024 left an 802px button and an 802px box of prose at tablet portrait, which is one of the
+four viewports `scripts/responsive-check.mjs` shoots.
+
+**The board is one block, and the block centres.** A desktop has no more HEIGHT than a phone
+does — usually less, since it is landscape — so the width has to buy something the vertical
+stack cannot, and on the play screen what it buys is CARDS. Past 1024 the auction tray leaves
+the stack for a rail beside the table, its top edge on the table's (4px, `.trick`'s own top
+margin, not a coincidence), and tray + table + dummy + hand centre together as one object;
+freeing that vertical space is what takes the play cap from 118px to 150px. The centring is
+done by `1fr` spacer COLUMNS either side rather than a `max-width`, because the board's own
+head still has to bleed to the paper's edge and a centred grid cannot do that without knowing
+its own offset. The main column is `max-content`, which ends up measuring the fan — every
+other child is already capped by the 720 block (prose at `--measure`, the table at 6.4 card
+widths).
+
+An earlier revision made this two full-height columns of the PAGE (a 20rem rail pinned to the
+left edge, everything else in a 1fr column) and the bidding screen three at 1400 — tray, hand,
+box. It describes well and reads badly: the pieces sit at opposite edges of the viewport, so
+they read as three unrelated screens rather than one table, and every glance from what was bid
+to what you can bid crosses the whole monitor. So **bidding does not get the rail at all** —
+it has no table and no dummy, so a rail beside it would be a rail beside nothing. It stays the
+phone's single centred column with bigger cards, **the dock stays docked** (the base
+`.bidding-dock` 100dvh rule is simply left alone, and the hole it used to open between the
+tray and the hand is closed by centring the scroll region's content instead of hugging the
+dock with it), and **the dock's tinted band still runs edge to edge** — a 34rem plate of
+surface fill floating mid-page is a ribbon, a band across the foot of the screen is a bidding
+box; the plates inside it keep `.bidbox-wrap`'s own 32rem cap and do not move.
+
+One structural note: `PlayPhase` renders its parts as a flat list of siblings, so the rail is a
+real element (`.board-rail`, `display: contents` on the phone — it generates no box, so every
+phone measurement is unchanged) rather than three grid-placement rules, which is what the first
+attempt did and which let the grid's own rows stretch a two-line toast to 280px.
+
+**The main column is a DEFINITE width, and that is the whole ballgame.** It shipped once as
+`minmax(0, max-content)`, which reads as "as wide as the widest thing in it" and behaves as "as
+wide as the hand you are still holding": the fan is that widest thing, and it loses a card every
+trick. The table is `width: 100%` inside it and `.trick`'s HEIGHT is a fixed multiple of the
+card, so what gave was the table's WIDTH — by the last trick it was a tall narrow box with the
+played cards sitting on top of the trick meter. `--board-main` is computed from the card token
+instead (`min(--board-avail, --card-w * 6.4 + 8rem)` — the table at its cap plus the dummy rail
+beside it), so it depends on the viewport and nothing else. Measured at 1440: the table is
+669×350 with sixteen cards on screen and 669×350 with four.
+
+**And the card cap is bounded by the TABLE, not only by the fan.** `--card-h`'s fit term sizes
+cards so a 13-card fan fits `--fan-space`, which is the right question on a phone, where the fan
+is the widest thing on the screen. Here it isn't: the table shares its row with the dummy rail.
+Left to the fan alone, a 1024px window sized cards from a 584px fan and then asked a 504px table
+to share 584px with a 128px rail. So the cap carries a third term,
+`(--board-avail - 8rem) / 4.46` — 4.46 being 6.4 × 46/66, the table's cap expressed in card
+HEIGHTS, which is the unit the token is in. The rail is itself a `clamp(17rem, 26vw, 20rem)`
+share rather than a flat slab, because at 1024 a fixed 20rem is a fifth of the window and the
+cards pay for every pixel of it.
+
+**The block centres vertically too**, and the MASTHEAD is not part of it. `align-content:
+center` first went on `.board-page` itself, which owns the header's row as well as the board's
+— so on a tall window it floated the masthead a third of the way down the page, which is not
+what centring the board means. The grid is now `.play-phase`, a wrapper around everything
+PlayPhase renders (`display: contents` on the phone, so the phone is untouched — the same trick
+`.board-rail` uses, and the shape `.bid-phase` already had for the other half of the screen).
+The head stays a plain flex child of `.board-page` above it, and only the play area centres, in
+the space the head leaves.
+
+**The dummy rail fills the allowance exactly, and that is what tucks the tray in.** `--board-main`
+reserves 8rem for the rail; the phone's rail is 96px, so any surplus became centring slack
+inside the main column and the auction tray ended up that much further from the table than the
+gutter it is supposed to sit at. The two halves land at different steps, and the split is not
+cosmetic. **The width goes to 8rem at 720**, because the phone's 96px is too narrow for the
+CONTENT: a five-card suit run carrying a two-digit rank ("10 8 6 4 2") outgrows the line and
+strands its last rank alone beneath it. That bites at tablet, which is still inside the plain
+flex `.play-row` — the board-rail grid doesn't start until 1024 — so widening there is a
+one-property change that `.trick`'s `flex: 1` absorbs. **The padding goes on at 1024**, where
+the rail already has its full allowance and what is left to spend is breathing room: at 8rem
+with 24px of it the suit lines read as squeezed against the table. None of the exhibits mined
+before the tablet step existed happened to expose a dummy with a suit that long, which is why
+the wrap went unnoticed.
+
+**The dock's band reaches the glass.** `.board-page` takes `--page-pad` past 720, which is right
+for everything that reads as content and wrong for the bid dock: it is the bottom edge of the
+screen, and a tinted band stopping short of the window either side reads as a panel that failed
+to arrive. It is pulled back out with a negative inline margin and given the same value back as
+padding, so the band grows and the plates inside it do not move.
+
+**A receipt is a document, and a document has a width.** `.result` and `.receipt` cap at 68rem
+past 1024 — about 3/4 of a 1440px page — rather than running the two ledgers edge to edge, which
+put the field table's contract column a third of a metre from its percentages. The `width: 100%`
+beside that cap is load-bearing rather than decoration: `.board-page` is a flex COLUMN, so a
+child's cross size is its width, and `margin-inline: auto` there stops it stretching and
+resolves it to fit-content instead. Measured without it the receipt sat at a content-driven
+860px at every width — 72% of a 1194px page and 43% of a 2000px one, i.e. exactly the wrong way
+round.
+
+**Cards size from the space the FAN gets, and from the viewport's HEIGHT.** `--card-h`'s fit
+formula measures `--fan-space`, which is the viewport on the phone (identical to the old
+`min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
+the viewport there would size cards from space the fan does not have and overflow the column.
+`--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
+`min(150px, 20vh, (--board-avail - 8rem) / 4.46)` on the PLAY screen (the third term is the
+table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
+stacks exactly one hand and can afford the looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
+landscape, so the moment the app claims desktop the scarce axis flips from width to height.
+The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
+of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
+Sized on width alone, a wide-but-short window gets beautiful cards and a hand that scrolls off
+the bottom. `FAN_GAP` (`fanLayout.ts`) deliberately stays a fixed 6px at every size: it is the
+whitespace between two printed values rather than a share of the card, and scaling it would
+make the fit formula's own constant circular.
+
+**Two cascade traps, both recorded beside the rules they bit.** `.board-page .trick` beats a
+one-class `.trick { margin-inline: auto }`, so a capped box sits flush left and it looks
+exactly like `max-width` not applying. And a flex item whose cross size is `auto` is
+*stretched*, so auto margins have no free space to absorb until you give it `width: 100%`.
+
+**The bridge tiles; it does not crop.** The river scene under the landing hero is a 640×240
+drawing whose arch pattern meets itself exactly at its own edges, so it is a `repeat-x`
+background sized `auto 100%` — the whole height is always on screen and the span continues for
+as much width as there is. As an `<img>` it could only be `object-fit: cover`, which scales by
+WIDTH: at 1440 that magnified the drawing 2.25× inside a fixed-height band and cropped
+everything above the waterline, so the desktop hero showed a river and no bridge. It is
+genuinely seamless rather than nearly — the drawing's own edges each carry half of the same
+pier line, and the arch curve is at a springing point on both.
+
+**The three hand-rolled charts scale uniformly now.** `Sparkline`, `StemChart` and `DayGrid`
+were drawn against a 326-unit design width and stretched on x alone
+(`preserveAspectRatio="none"`), which is invisible at 326-in-330 and indefensible at
+326-in-960: the toll log's days became 3:1 lozenges and the stem chart's `<text>` labels were
+drawn stretched, since a non-uniform viewBox scales glyphs too. They now scale on both axes
+(`height: auto` in `style.css`), so a wider panel makes the whole drawing bigger.
+
+**`DayStrip` is the exception, and it is the exception because it carries TYPE.** Uniform
+scaling is right for a sparkline and wrong for an axis: the traffic feed's hours rule is
+`width: 100%` over a 324-unit viewBox, so a tablet's ~770px panel scaled every user unit 2.4×
+— including `<text>`, which put "12 AM / 6 AM / NOON / 6 PM" on screen at ~20px, twice the size
+of the clock times in the rows beneath it, and nothing inside a uniformly-scaled SVG can opt
+out. So the plot scales on x alone with `vector-effect: non-scaling-stroke` on every rule (a
+stretched 1px hairline would otherwise thicken with the panel) and the hour labels are HTML
+below it, positioned at their own fractions of the width, where a px is a px at every viewport.
+The `now` flag went the same way — it is the one FILLED shape on the strip, and a fill has no
+`non-scaling-stroke` to save it. The two heights add to the 36 units the single SVG occupied,
+which is what keeps the phone identical: at 390 the panel is exactly 324px wide, so the old
+scale was 1.0 (measured after the change: strip height 46.77px → 47, every tick within 0.2px
+of where it was).
+
+**A bottom sheet is a phone idiom, so past 720 it stops being one.** `ds/Dialog` (`.sheet`) is
+the only bottom-anchored panel in the app — the glossary term sheet, the call inspector, the
+handle picker are all Dialogs — and it is drawn with a top border and no others because on a
+phone the SCREEN's edges are its left and right sides. Centre that same box on a 1440px page
+and the borders it hasn't got become the whole story: a 430px slab with two raw cut edges,
+parked on the bottom of the window for no reason anyone can see. Past 720 it becomes the shape
+the app already has a name for — a ticket: four borders, the ticket's own offset shadow,
+centred in the viewport, no drag grip. One rule, not one per caller.
+
+**How wide a button gets is a decision, and the default is wrong at width.** `.ds-btn` is
+`display: block; width: 100%` and `.pref-switch button` is `flex: 1`, both correct on a phone
+and both wrong the moment the column is 640px: a segmented lever becomes two 320px slabs with
+OFF and ON in the middle of them, which is a banner rather than a control. Past 720 the switch
+segments take their own words' width and sit at the head of their column, so every lever on the
+settings gate starts at the same left edge; a primary CTA caps at `--action-w`; and a secondary
+way out (Sign out) takes its own width rather than `--action-w`, which would make it the widest
+control on the page. The landing page's closing doors are the one CTA that spans its whole
+fold and centres — they are the last thing on the page, on the same axis as the bridge mark
+and the closing line under them, rather than a figure beside an argument. Analyze's lens pair is
+scoped the same way and centred on the page's own axis: it heads a page where everything else is
+centred or spans, and it is a reading position rather than two half-page slabs.
+
+**Reviewing a breakpoint change:** `node scripts/responsive-check.mjs http://localhost:3000
+./shots` walks the app once against a `DEV_AUTH=1` server and shoots every screen at 390, 834,
+1194 and 1440, as `<name>@<width>.png`. The 390 column is the regression net — nothing in it
+may change.
 
 **Night mode is a token swap, not per-component dark styles.** `[data-theme="night"]` on
 `<html>` overrides the base color tokens in `style.css` (`--ink`, `--paper`, `--panel`,
