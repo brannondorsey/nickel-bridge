@@ -3301,10 +3301,11 @@ a.board-row:hover {
  * the two .stats-col wrappers in Player.tsx, which say which page a panel
  * belongs to instead of leaving it to the cursor.
  *
- * No gap and no padding on the grid itself: every panel already carries its own
- * `margin: 12px 16px 0`, so two neighbours make a 32px gutter and the outer
- * edges keep the page's own 16px — the same measurements as the phone, reused
- * rather than re-specified. */
+ * No `gap` and no inner padding on the grid itself: every panel already carries
+ * its own `margin: 12px 16px 0`, so two neighbours make a 32px gutter — the same
+ * measurement as the phone, reused rather than re-specified. The page's own
+ * `--page-pad` then sits outside those margins, so the outer inset is the two
+ * added together. */
 @media (min-width: 1024px) {
   .stats-page {
     display: grid;
@@ -3936,10 +3937,14 @@ a.stat-tile:hover {
    are children of .cmp-page exactly as they were before the wrappers existed.
    See the comment beside them in Compare.tsx.
 
-   Declared BEFORE "Compare at width" below, and it has to be: media queries
-   add no specificity, so a later equal-specificity `display: contents` would
-   beat the `display: flex` inside the query and there would be no columns at
-   all. Same trap .stats-col's own comment records. */
+   Declared before "Compare at width" below by convention rather than by
+   necessity: the override there is `.cmp-page > .cmp-col`, a class more
+   specific than this, so it would win from anywhere in the file. The reason
+   to keep the order anyway is that the NEXT rule added here might not be —
+   media queries add no specificity, so a bare `.cmp-col` declared after the
+   query would silently beat it. .stats-col's own comment records that trap
+   actually biting, on its `.stats-col-head { display: none }` half, which is
+   overridden by a bare selector and so genuinely depends on the order. */
 .cmp-col {
   display: contents;
 }
@@ -4322,6 +4327,17 @@ a.stat-tile:hover {
   padding: 20px 16px;
   text-align: center;
 }
+/* A centred box of prose rather than a panel of figures, so it stops at the
+   reading measure (plus its own 16px padding either side, which box-sizing
+   counts inside the cap) and centres. At 720 rather than with the spread at
+   1024: a paragraph reaches its measure as soon as the column is wider than
+   one, and nothing here needs a second column to exist. */
+@media (min-width: 720px) {
+  .cmp-thin {
+    max-width: calc(var(--measure) + 32px);
+    margin-inline: auto;
+  }
+}
 .cmp-thin-lead {
   font-size: 17px;
   margin: 0 0 10px;
@@ -4344,6 +4360,16 @@ a.stat-tile:hover {
 }
 .cmp-footer {
   margin: 20px 16px 0;
+}
+/* A button the width of the page is not a bigger button (see --action-w) — the
+   same declaration .board-actions/.tourney-actions take, at the same step, and
+   for the same reason. Past 1024 it spans both pages of the spread, so the same
+   centring puts it on the spread's own axis. */
+@media (min-width: 720px) {
+  .cmp-footer {
+    width: min(100%, var(--action-w));
+    margin-inline: auto;
+  }
 }
 
 /* ---- Settings ----
@@ -6593,10 +6619,11 @@ a.stat-tile:hover {
  * beams-vs-commentary, and a bar's width is its own scale — so there is no
  * case for starving one page to feed the other.
  *
- * No gap and no padding on the grid itself: every panel already carries its
- * own `margin: 12px 16px 0`, so two neighbours make a 32px gutter and the
- * outer edges keep the page's own 16px — the phone's measurements, reused
- * rather than re-specified. */
+ * No `gap` and no inner padding on the grid itself: every panel already
+ * carries its own `margin: 12px 16px 0`, so two neighbours make a 32px gutter
+ * — the phone's measurement, reused rather than re-specified. The page's own
+ * `--page-pad` then sits outside those margins, so the outer inset is the two
+ * added together. */
 @media (min-width: 1024px) {
   .cmp-page {
     display: grid;
@@ -6631,25 +6658,11 @@ a.stat-tile:hover {
   .cmp-page > .cmp-col-detail {
     grid-column: 2;
   }
-  /* The cut is the right page's head, so it loses the top margin that spaced
-     it off the panel it used to divide — it now sits level with the left
-     page's first panel instead of a row below it. */
+  /* The cut now heads the right page rather than dividing one column, so it
+     loses the top margin that spaced it off the panel above it and sits level
+     with the left page's first panel instead of a row below it. */
   .cmp-page .cmp-cut {
     margin-top: 12px;
-  }
-  /* A button the width of a 1440px page is not a bigger button (see
-     --action-w) — the same rule .board-actions/.tourney-actions take at 720.
-     It spans both pages, so it centres on the spread's own axis. */
-  .cmp-footer {
-    width: min(100%, var(--action-w));
-    margin-inline: auto;
-  }
-  /* The ineligible state is a centred box of prose rather than a panel of
-     figures, so it takes the measure plus its own padding rather than the
-     spread. */
-  .cmp-thin {
-    max-width: calc(var(--measure) + 32px);
-    margin-inline: auto;
   }
 }
 /* Past 1400 the columns stop growing and the GUTTERS grow instead — the

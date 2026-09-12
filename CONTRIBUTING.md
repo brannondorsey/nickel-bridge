@@ -2252,14 +2252,20 @@ contiguous cut yield two pages: the screen's reading order is already headline t
 the left page carries who these two are to each other, where the beam tips and the verdict,
 and the right page carries the long ledger, the context panel and the note on what a gate is —
 in the phone's own DOM order, unchanged. Grouping it the other way round (commentary on one
-page, beams on the other) would interleave, and a wrapper cannot. The cut is also the right
-page's own head, which is why that page has no other one. **And the columns are EQUAL**, where
+page, beams on the other) would interleave, and a wrapper cannot. At width the cut also heads
+the right page, which is why neither page carries a head of its own — though not in every
+state: a pair whose every sub-bucket row is set aside gets no detail panel and therefore no
+cut, and that page opens on FOR CONTEXT's own panel heading instead. **And the columns are EQUAL**, where
 the old rule's were 3fr/2fr: both pages are mostly beam rows once the split is the reading
 order rather than beams-vs-commentary, and a bar's width is its own scale, so there is no case
 for starving one page to feed the other. Past 1400 they stop growing at 36rem each and the
 gutters take the rest, the same rule the profile spread takes one level up — a beam row is not
 more readable at 900px than at 560. The masthead spans the top of both pages and the closing
-CTA the foot, capped at `--action-w`.
+CTA the foot. That CTA's `--action-w` cap and the ineligible state's reading-measure cap are
+both at **720**, not with the spread at 1024: neither needs a second column to exist, and a
+button or a paragraph reaches its limit as soon as the column is wider than one. Putting them
+at 1024 left an 802px button and an 802px box of prose at tablet portrait, which is one of the
+four viewports `scripts/responsive-check.mjs` shoots.
 
 **The board is one block, and the block centres.** A desktop has no more HEIGHT than a phone
 does — usually less, since it is landscape — so the width has to buy something the vertical

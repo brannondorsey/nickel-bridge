@@ -429,8 +429,12 @@ export default function Compare() {
           the same thing twice more, in bigger type. The names of the set-aside
           rows only appear where the panel has something to compare them to.
 
-          The cut is also this page's own head at width, which is why it needs
-          none of its own — it already names what the page holds. */}
+          At width the cut also heads this page, which is why neither page
+          carries a head of its own — it already names what the page holds.
+          Note it is not guaranteed to: this test is exactly the state where
+          there is no cut either, so a pair whose every sub-bucket row is set
+          aside opens the right page on FOR CONTEXT's own panel heading
+          instead. That reads fine, since a panel states what it holds. */}
       {detailPanels.length > 0 ? (
         <div className="cmp-cut">
           <span>{DETAIL_HEADING}</span>
