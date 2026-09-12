@@ -17,10 +17,18 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const { changedPaths, samplePaths, purgeUrls } = await import(resolve(root, 'scripts/cloudflare.mjs'));
+const { changedPaths, samplePaths, purgeUrls, STATIC_FILES } = await import(resolve(root, 'scripts/cloudflare.mjs'));
 
 const SITE = { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo' };
-const STATIC = ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.svg'];
+/**
+ * Imported rather than re-listed. This was a hand-kept copy, and it drifted the
+ * first time STATIC_FILES grew (the home-screen icon set): the arithmetic below
+ * is `allPaths.length - STATIC.length`, so a stale copy fails these two cases
+ * with an off-by-N that says nothing about what actually changed. The literal
+ * beneath it keeps the part that IS a second opinion — that the crawler surface
+ * is in the list at all — without pinning a length nobody maintains.
+ */
+const STATIC: string[] = STATIC_FILES;
 
 const sample: string[] = samplePaths();
 const allPaths: string[] = purgeUrls([SITE.host]).map((u: string) => new URL(u).pathname);
@@ -37,6 +45,31 @@ const decide = (before: unknown, after: Record<string, string | null>) =>
   changedPaths(SITE, before, allPaths, after, sample);
 
 describe('purge decision', () => {
+  it('treats the crawler surface as individually-purgeable static files', () => {
+    // The four that motivated splitting static from HTML in the first place: a
+    // crawl visit fetches these and nothing else, and each moves independently
+    // of the build, so each has to purge on its own rather than with the pages.
+    for (const p of ['/robots.txt', '/sitemap.xml', '/og-image.png', '/favicon.svg']) {
+      expect(STATIC).toContain(p);
+    }
+    expect(sample.filter((p) => STATIC.includes(p))).toEqual(STATIC);
+  });
+
+  it('samples four HTML pages and every static file', () => {
+    // The shape CONTRIBUTING.md's edge section states as a RULE rather than a
+    // count, after the count went stale: growing STATIC_FILES from 4 entries to
+    // 10 silently invalidated three hand-derived figures in the docs. Every
+    // static file must be sampled because each purges individually; four HTML
+    // pages stand in for the whole prerendered set because they all embed the
+    // same content-hashed bundle and move together. Change either half and the
+    // prose in CONTRIBUTING.md and cloudflare.mjs's purge() comment needs the
+    // same edit.
+    expect(sample.filter((p) => !STATIC.includes(p))).toEqual(['/', '/glossary', sample[2], sample[3]]);
+    expect(sample.filter((p) => !STATIC.includes(p))).toHaveLength(4);
+    expect(sample[2]).toMatch(/^\/glossary\//);
+    expect(sample[3]).toMatch(/^\/glossary\//);
+  });
+
   it('purges nothing when the deploy changed no cached output', () => {
     expect(decide(snapshot(), unchanged())).toEqual([]);
   });
