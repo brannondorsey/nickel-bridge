@@ -2235,6 +2235,32 @@ Rankings keeps the ladder as one list (splitting a ranking across columns is a p
 layout) and gives the width to the house table. Each lives in an `at width` block beside its
 own screen's CSS.
 
+**Compare is a two-page spread like the profile, and the wrappers are the whole lesson.** Its
+desktop shape shipped once as beam panels in a `3fr` column with the head-to-head slip, the
+common ground and the verdict pinned to a `2fr` one, everything else left to fall where grid
+put it — and it drew a CHECKERBOARD. This is the profile's masonry bug a second time and the
+fix is the same: grid auto-placement is sparse, so each unpinned panel took the next free row
+of column one while the pinned pieces landed in column two a row or two later, leaving a hole
+of dead paper beside every one of them. Two `.cmp-col` wrappers in `Compare.tsx` now say which
+page a panel belongs to instead of leaving it to the cursor (`display: contents` below 1024,
+so the phone is untouched). **If you add a second column to a screen, reach for the wrappers
+first** — pinning individual panels with `grid-column` is the thing that keeps failing, and it
+fails silently, because each rule on its own does exactly what it says.
+
+Two decisions on top of that shape. **The split is the IN DETAIL cut**, which is what lets one
+contiguous cut yield two pages: the screen's reading order is already headline then ledger, so
+the left page carries who these two are to each other, where the beam tips and the verdict,
+and the right page carries the long ledger, the context panel and the note on what a gate is —
+in the phone's own DOM order, unchanged. Grouping it the other way round (commentary on one
+page, beams on the other) would interleave, and a wrapper cannot. The cut is also the right
+page's own head, which is why that page has no other one. **And the columns are EQUAL**, where
+the old rule's were 3fr/2fr: both pages are mostly beam rows once the split is the reading
+order rather than beams-vs-commentary, and a bar's width is its own scale, so there is no case
+for starving one page to feed the other. Past 1400 they stop growing at 36rem each and the
+gutters take the rest, the same rule the profile spread takes one level up — a beam row is not
+more readable at 900px than at 560. The masthead spans the top of both pages and the closing
+CTA the foot, capped at `--action-w`.
+
 **The board is one block, and the block centres.** A desktop has no more HEIGHT than a phone
 does — usually less, since it is landscape — so the width has to buy something the vertical
 stack cannot, and on the play screen what it buys is CARDS. Past 1024 the auction tray leaves

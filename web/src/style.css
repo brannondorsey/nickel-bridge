@@ -3932,6 +3932,17 @@ a.stat-tile:hover {
 .cmp-page {
   padding-bottom: 24px;
 }
+/* The two page wrappers generate no box on a phone — the panels inside them
+   are children of .cmp-page exactly as they were before the wrappers existed.
+   See the comment beside them in Compare.tsx.
+
+   Declared BEFORE "Compare at width" below, and it has to be: media queries
+   add no specificity, so a later equal-specificity `display: contents` would
+   beat the `display: flex` inside the query and there would be no columns at
+   all. Same trap .stats-col's own comment records. */
+.cmp-col {
+  display: contents;
+}
 .cmp-who {
   display: flex;
   align-items: center;
@@ -6557,29 +6568,99 @@ a.stat-tile:hover {
   }
 }
 
-/* ---- Compare at width ----
- * The beam panel is the screen — a dozen rows of a diverging bar, and every
- * one of them is more readable the more width it gets, because the width IS
- * the scale. So it takes the larger column and the three commentary pieces
- * (the head-to-head slip, the common ground, the verdict) stack beside it. */
+/* ---- Compare at width: the headline and the ledger behind it ----
+ * The screen is a dozen panels stacked in one column, and at width it wants
+ * to become a two-page SPREAD, exactly as the profile does (see "Stats at
+ * width" above — same shape, same reasoning, and the two should stay in step):
+ * the headline this screen reaches on the left page — who these two are to
+ * each other, where the beam tips, the verdict — and the long ledger behind
+ * it on the right, ending in the note on what a gate is. The masthead (the
+ * header and the two players) runs across the top of both, and the closing
+ * action across the foot.
+ *
+ * The previous revision put the beam panels in a `3fr` column and pinned the
+ * head-to-head slip, the common ground and the verdict to a `2fr` one, and let
+ * everything else fall where grid put it. That drew a CHECKERBOARD rather than
+ * two columns: auto-placement is sparse, so each unpinned panel took the next
+ * free row of column one while the pinned pieces landed in column two a row or
+ * two later, leaving a hole of dead paper beside every one of them. It is a
+ * placement problem rather than a styling one, and the fix is the same two
+ * wrappers the profile uses — .cmp-col in Compare.tsx, which say which page a
+ * panel belongs to instead of leaving it to the cursor.
+ *
+ * The columns are EQUAL, where the old rule's were 3fr/2fr. Both pages are
+ * mostly beam rows now that the split is the reading order rather than
+ * beams-vs-commentary, and a bar's width is its own scale — so there is no
+ * case for starving one page to feed the other.
+ *
+ * No gap and no padding on the grid itself: every panel already carries its
+ * own `margin: 12px 16px 0`, so two neighbours make a 32px gutter and the
+ * outer edges keep the page's own 16px — the phone's measurements, reused
+ * rather than re-specified. */
 @media (min-width: 1024px) {
   .cmp-page {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
     align-items: start;
     padding-inline: var(--page-pad);
   }
   .cmp-page > .screenheader,
   .cmp-page > .cmp-who,
+  .cmp-page > .loading,
+  /* the error and the too-thin states render in place of the whole spread,
+     so they span it rather than sitting in half a column */
   .cmp-page > .notice-error,
-  .cmp-page > .cmp-thin {
+  .cmp-page > .cmp-thin,
+  .cmp-page > .cmp-footer {
     grid-column: 1 / -1;
   }
-  .cmp-page > .cmp-slip,
-  .cmp-page > .cmp-common,
-  .cmp-page > .cmp-verdict {
+  /* The wrappers stop being invisible and become the two pages. A column is a
+     flex stack rather than a grid so a page can gain or lose a panel — a
+     detail panel with nothing drawn is omitted entirely — without anything
+     here counting rows. */
+  .cmp-page > .cmp-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .cmp-page > .cmp-col-headline {
+    grid-column: 1;
+  }
+  .cmp-page > .cmp-col-detail {
     grid-column: 2;
+  }
+  /* The cut is the right page's head, so it loses the top margin that spaced
+     it off the panel it used to divide — it now sits level with the left
+     page's first panel instead of a row below it. */
+  .cmp-page .cmp-cut {
+    margin-top: 12px;
+  }
+  /* A button the width of a 1440px page is not a bigger button (see
+     --action-w) — the same rule .board-actions/.tourney-actions take at 720.
+     It spans both pages, so it centres on the spread's own axis. */
+  .cmp-footer {
+    width: min(100%, var(--action-w));
+    margin-inline: auto;
+  }
+  /* The ineligible state is a centred box of prose rather than a panel of
+     figures, so it takes the measure plus its own padding rather than the
+     spread. */
+  .cmp-thin {
+    max-width: calc(var(--measure) + 32px);
+    margin-inline: auto;
+  }
+}
+/* Past 1400 the columns stop growing and the GUTTERS grow instead — the
+   ladder's own rule for a two-column page, and the profile spread's own 1400
+   rule one level up. A beam row is not more readable at 900px than at 560: the
+   bar is a margin against a gate, and past a point the extra width is spent on
+   the distance between a figure and the label naming it. */
+@media (min-width: 1400px) {
+  .cmp-page {
+    grid-template-columns: repeat(2, minmax(0, 36rem));
+    justify-content: center;
   }
 }
 
