@@ -2516,15 +2516,28 @@ a.ds-btn-secondary:hover {
   padding: 10px 10px 10px 14px;
   background: var(--panel);
 }
-/* At width the rail is the 8rem --board-main reserves for it, not the phone's
-   96px, and it spends the difference on PADDING: at 96px with 24px of padding
-   the suit lines have 72px to live in and read as squeezed against the table.
-   Filling the allowance exactly is also what tucks the auction tray in — any
-   surplus in the main column becomes centring slack, and the tray ends up that
-   much further from the table than the gutter it is supposed to sit at. */
-@media (min-width: 1024px) {
+/* At 96px a five-card suit run ("10 8 6 4 2") outgrows the line and strands
+   its last rank alone beneath it — invisible on the exhibits mined before
+   this step existed, since none happened to expose a dummy that long, but
+   a 5-card suit run with a two-digit rank (a "10") is enough to hit it.
+   Tablet is still inside the plain flex .play-row (the board-rail GRID
+   below doesn't start until 1024), so widening here is a one-property
+   change: .trick's flex: 1 absorbs whatever the rail takes. 8rem is the
+   same width the desktop step already uses, so the desktop step now only
+   has padding left to add. */
+@media (min-width: 720px) {
   .dummy-rail {
     width: 8rem;
+  }
+}
+/* At 1024 the rail already has the 8rem --board-main reserves for it, so
+   what's left to spend is PADDING: at 8rem with 24px of padding the suit
+   lines read as squeezed against the table. Filling the allowance exactly is
+   also what tucks the auction tray in — any surplus in the main column
+   becomes centring slack, and the tray ends up that much further from the
+   table than the gutter it is supposed to sit at. */
+@media (min-width: 1024px) {
+  .dummy-rail {
     padding: 12px 16px;
   }
 }
