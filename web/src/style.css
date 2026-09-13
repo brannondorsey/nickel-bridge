@@ -2205,6 +2205,20 @@ a.ds-btn-secondary:hover {
      66px card */
   height: max(230px, calc(var(--card-h) * 1.6 + 110px));
 }
+/* The auction rail beside this table is deliberately left content-sized —
+   a short auction can leave it much shorter than the table + hand fan
+   column beside it. Rather than padding the rail out to match, the freed
+   room is spent on the side that already wants it: a roomier table, not
+   just bigger cards riding along for free via --card-h. +110px becomes
+   +150px so the box itself gains real air around the card-derived term, on
+   top of whatever --card-h-cap's own bump below buys. Analyze reuses .trick
+   for its own two-lens layout and is excluded — this is the ordinary play
+   screen's table only. */
+@media (min-width: 1024px) {
+  .board-page:not(.analyze-page) .trick {
+    height: max(230px, calc(var(--card-h) * 1.6 + 150px));
+  }
+}
 /* "Trick clearing: tap" (settings gate) is holding a completed trick on the
    table — the dashed outline is the same "held, tap to advance" vocabulary
    --border-sealed uses elsewhere, applied to the whole box since that's the
@@ -2506,6 +2520,13 @@ a.ds-btn-secondary:hover {
      short one never leaves the box looking squashed */
   height: auto;
   min-height: max(230px, calc(var(--card-h) * 1.6 + 110px));
+}
+/* The E/W-dummy sibling of the +150px bump above .trick's own base rule,
+   same reasoning: filling the vertical room a short auction leaves free. */
+@media (min-width: 1024px) {
+  .board-page:not(.analyze-page) .play-row .trick {
+    min-height: max(230px, calc(var(--card-h) * 1.6 + 150px));
+  }
 }
 .dummy-rail {
   width: 96px;
@@ -5117,6 +5138,23 @@ a.stat-tile:hover {
        dummy rail beside it. This is what the main column is, and it is derived
        from the card token rather than measured from the DOM — see the grid. */
     --board-main: min(var(--board-avail), calc(var(--card-w) * 6.4 + 8rem));
+  }
+}
+/* Raises --card-h-cap's flat ceiling (overriding the block directly above)
+   so the table and hand fan fill the vertical room a short auction leaves
+   free beside the rail, instead of sitting small next to blank paper. The
+   150px/20vh terms above are usually what's actually binding on an ordinary
+   desktop window — the width-derived term already solves for "the table's
+   own 6.4-card-width budget fills --board-avail exactly," so it is rarely
+   the smallest of the three. Raising just those two ceilings is what
+   actually grows the table and hand fan, and --board-main above is already
+   derived from --card-w, so the table's width cap and the trick-meter (both
+   `calc(var(--card-w) * …)`) grow with it for free — no other token needs
+   touching. The width-derived term is untouched, so a narrow desktop window
+   still degrades exactly as the base rule intended. */
+@media (min-width: 1024px) {
+  :root:has(.board-page:not(.analyze-page) .trick) {
+    --card-h-cap: min(190px, 25vh, calc((var(--board-avail) - 8rem) / 4.46));
   }
 }
 @media (min-width: 1400px) {
