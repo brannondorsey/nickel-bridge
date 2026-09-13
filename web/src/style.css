@@ -4487,12 +4487,24 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
-  /* 24px bottom, matching the page-bottom convention .rankings/.traffic/
-     .cmp-page/.glossary all use above the sticky TabBar — 20px left the
-     device-local caption in .settings-foot sitting noticeably tighter
-     against the divider than every other screen's own last line. */
-  padding: 14px 16px 24px;
+  padding: 14px 16px 20px;
   gap: 12px;
+}
+/* 24px bottom at 1024px+, matching the page-bottom convention .rankings/
+   .traffic/.cmp-page/.glossary all use above the sticky TabBar — 20px left
+   the device-local caption in .settings-foot sitting noticeably tighter
+   against the divider than every other screen's own last line at that
+   width, where the crowding was actually observed. Deliberately its own
+   block AFTER the base rule above (not folded into the 1024px block up
+   top) — media queries add no specificity, so an equal-specificity
+   `.settings-body` declared later in the file would simply win, and the
+   base rule already sits below that one. Phone keeps its original 20px:
+   the crowding was never reported there, and CLAUDE.md's "the page is the
+   viewport" rule holds every unscoped declaration to the phone design. */
+@media (min-width: 1024px) {
+  .settings-body {
+    padding-bottom: 24px;
+  }
 }
 .setting-row {
   display: flex;
@@ -4543,7 +4555,17 @@ a.stat-tile:hover {
      rule the board page's meaning panel/toasts take. Left-aligned rather
      than centred (no margin-inline: auto): the label above it is left-set,
      and at 1024+ the row sits in its own grid column besides, so a centred
-     note would drift off the label's edge for no reason. */
+     note would drift off the label's edge for no reason.
+
+     Inert below 720px (unscoped) and right at the 1024px 2-column step,
+     where a column comes to ~476px against --measure's 544px (34rem) — but
+     NOT inert for the rest of the desktop range: --page-pad grows with the
+     viewport (24px at 1024px, 40px at 1400px+) while the two columns still
+     split what's left evenly, so a column crosses 544px around ~1160px and
+     keeps growing (~561px at 1194px, ~660px at 1440px). Past that point
+     this cap is doing real work — capping the note rather than letting it
+     stretch across a ~650px column — which is desirable, just worth
+     knowing it isn't a no-op the way it is at 1024px itself. */
   .setting-note {
     max-width: var(--measure);
   }
