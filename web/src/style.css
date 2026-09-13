@@ -4487,7 +4487,11 @@ a.stat-tile:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 14px 16px 20px;
+  /* 24px bottom, matching the page-bottom convention .rankings/.traffic/
+     .cmp-page/.glossary all use above the sticky TabBar — 20px left the
+     device-local caption in .settings-foot sitting noticeably tighter
+     against the divider than every other screen's own last line. */
+  padding: 14px 16px 24px;
   gap: 12px;
 }
 .setting-row {
@@ -4533,6 +4537,15 @@ a.stat-tile:hover {
     width: auto;
     align-self: center;
     padding-inline: 28px;
+  }
+
+  /* prose, not layout: read line by line, so it takes a measure — the same
+     rule the board page's meaning panel/toasts take. Left-aligned rather
+     than centred (no margin-inline: auto): the label above it is left-set,
+     and at 1024+ the row sits in its own grid column besides, so a centred
+     note would drift off the label's edge for no reason. */
+  .setting-note {
+    max-width: var(--measure);
   }
 }
 .settings-foot {
@@ -5316,6 +5329,13 @@ a.stat-tile:hover {
   }
   .result > .result-field {
     grid-column: 1;
+    /* Auto-placement lands .deal-diagram in column 2 of this SAME row, and a
+       grid item's default align-self is stretch — so a short field (few rows)
+       was stretched down to match the deal diagram's ~370px height, leaving a
+       blank strip inside the panel's own drawn border. The panel is a ticket
+       of rows, not a column meant to match its neighbour; size it to its own
+       content instead. */
+    align-self: start;
   }
   .result > .result-bidding {
     grid-column: 2;
