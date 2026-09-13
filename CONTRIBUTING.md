@@ -2436,9 +2436,16 @@ the space the head leaves.
 **The dummy rail fills the allowance exactly, and that is what tucks the tray in.** `--board-main`
 reserves 8rem for the rail; the phone's rail is 96px, so any surplus became centring slack
 inside the main column and the auction tray ended up that much further from the table than the
-gutter it is supposed to sit at. Past 1024 the rail is the full 8rem and spends the difference
-on padding — at 96px with 24px of it, the suit lines had 72px to live in and read as squeezed
-against the table.
+gutter it is supposed to sit at. The two halves land at different steps, and the split is not
+cosmetic. **The width goes to 8rem at 720**, because the phone's 96px is too narrow for the
+CONTENT: a five-card suit run carrying a two-digit rank ("10 8 6 4 2") outgrows the line and
+strands its last rank alone beneath it. That bites at tablet, which is still inside the plain
+flex `.play-row` — the board-rail grid doesn't start until 1024 — so widening there is a
+one-property change that `.trick`'s `flex: 1` absorbs. **The padding goes on at 1024**, where
+the rail already has its full allowance and what is left to spend is breathing room: at 8rem
+with 24px of it the suit lines read as squeezed against the table. None of the exhibits mined
+before the tablet step existed happened to expose a dummy with a suit that long, which is why
+the wrap went unnoticed.
 
 **The dock's band reaches the glass.** `.board-page` takes `--page-pad` past 720, which is right
 for everything that reads as content and wrong for the bid dock: it is the bottom edge of the
