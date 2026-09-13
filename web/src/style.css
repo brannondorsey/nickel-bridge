@@ -2740,17 +2740,21 @@ a.board-row:hover {
     grid-row: 3 / span 99;
   }
 }
-/* Past 1400 the play column stops growing — a ticket stub and a progress rail
-   have a natural size — and the ledger takes the extra, where more width is
-   more of the record on screen. */
+/* Past 1400 the play column stops growing — a ticket stub and a progress
+   rail have a natural size, so growing them further would just leave the
+   ticket's own text stretching toward a headline. What happens to the
+   leftover width is the medal rail's presence: see the two rules below. */
 @media (min-width: 1400px) {
-  /* The ledger stops growing too. A crossing's row reads "5 · Aug 23 · 4
-     players · 16.7% · 1ST" — at 1fr on a 1440px page that is 900px of rule
-     with the figures stranded at either end. 42rem is the width the line
-     wants, and the leftover goes to gutters either side, which is the ladder's
-     own rule for a two-column page past 1400. Flanking 1fr COLUMNS rather than
-     a max-width on the page, so the header and the greeting still span the
-     paper: a centred grid cannot bleed its own masthead out to the edge. */
+  /* Without a rail (a brand-new account — medals gate on boards > 0, see
+     Lobby.tsx) there is nothing past the ticket and the ledger, so the pair
+     keeps the plain two-column shape: the ledger stops growing too. A
+     crossing's row reads "5 · Aug 23 · 4 players · 16.7% · 1ST" — at 1fr on a
+     1440px page that is 900px of rule with the figures stranded at either
+     end. 42rem is the width the line wants on its own, and the leftover goes
+     to gutters either side, which is the ladder's own rule for a two-column
+     page past 1400. Flanking 1fr COLUMNS rather than a max-width on the page,
+     so the header and the greeting still span the paper: a centred grid
+     cannot bleed its own masthead out to the edge. */
   .home {
     grid-template-columns: minmax(0, 1fr) minmax(0, 26rem) minmax(0, 42rem) minmax(0, 1fr);
   }
@@ -2765,6 +2769,29 @@ a.board-row:hover {
   }
   .home > .home-tolls {
     grid-column: 3;
+  }
+  /* Once the rail DOES exist, spending the same leftover width on gutters
+     instead of on it is the worse trade — a third column earns its keep
+     here in a way an empty one wouldn't (see above). The rail already reads
+     fine at the ticket's own natural width elsewhere on this screen
+     (MedalBar.tsx: track, then glyphs and a sentence that wraps happily), so
+     20rem — narrower than the ticket, since the rail has no ticket-stub
+     graphic eating into it — is comfortable rather than cramped. The ledger
+     gives back some of the 42rem it wants on its own to make room: a
+     crossing's row is still well clear of the "stranded figures" width
+     above at 34rem, so a rail with real content and nowhere to go is the
+     worse waste of the two. :has() rather than a second ".home-tolls" rule
+     keyed on absence, because the thing that changed is a sibling existing
+     at all, not a property of the tolls panel itself — the same test
+     `.analyze-page:has(.analyze-par)` already makes for its own two lenses. */
+  .home:has(> .medal-bar) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem) minmax(0, 20rem) minmax(0, 34rem) minmax(0, 1fr);
+  }
+  .home:has(> .medal-bar) > .medal-bar {
+    grid-column: 3;
+  }
+  .home:has(> .medal-bar) > .home-tolls {
+    grid-column: 4;
   }
 }
 .home-greeting {
@@ -2819,6 +2846,25 @@ a.board-row:hover {
 .home-current-sub {
   color: var(--muted);
   font-size: 13px;
+}
+/* Home's two-column desk (see "Home at width" above) doesn't arrive until
+   1024, so from 720 up to that point .home-current is still one full-bleed
+   block — same width the phone gives it, just stretched across a much wider
+   page. The ticket stub + blurb is one short line at phone size and reads
+   fine hugging the card's left edge on a phone; stretched across a tablet
+   page it leaves a bare gap the width-spanning CTA button right below never
+   has, since a button fills whatever it's given. Bumping the blurb to the
+   app's other "wider viewport" reading size (same step .splash-pitch takes
+   past 1024, applied one breakpoint earlier since this card's cramped range
+   starts at 720) closes most of that gap without turning a subhead into a
+   headline. */
+@media (min-width: 720px) {
+  .home-current-text {
+    font-size: 16px;
+  }
+  .home-current-sub {
+    font-size: 14.5px;
+  }
 }
 .home-tolls {
   padding: 20px 16px 24px;
@@ -3393,16 +3439,21 @@ a.board-row:hover {
     border-bottom: 0;
   }
 }
-/* Past 1400 the columns stop growing and the GUTTERS grow instead — the
-   ladder's own rule for a two-column page (see "the responsive ladder"). A
-   sparkline is not more readable at 700px than at 560, and a page of 700px
-   panels reads as two columns of nothing-in-the-middle. */
-@media (min-width: 1400px) {
-  .stats-page {
-    grid-template-columns: repeat(2, minmax(0, 36rem));
-    justify-content: center;
-  }
-}
+/* Past 1400 this used to freeze both columns at `minmax(0, 36rem)` and
+   centre the pair, on the theory that a sparkline gains nothing past ~560px.
+   That reasoning is sound for the ELEMENT but the rule capped the PAGE: the
+   ladder's own top law is "a page never caps its own width... what caps is
+   individual elements, and only those with a reason to" (see "the responsive
+   ladder" above) — a page-level freeze is exactly the "sheet of paper centred
+   in an ocean of margin" bug that law exists to prevent. Measured at 1440 it
+   put ~144px of dead margin on each side, nearly 3x Rankings/Traffic/
+   Compare's ~40-54px `--page-pad`-only gutter on the same viewport, which is
+   the one thing every other screen at this width agrees on. So the two
+   columns now keep growing with the page like `.rankings`' pair does, and
+   `--page-pad` alone sets the gutter; a panel that genuinely wants the
+   reading-measure cap (the toll log below) wears it itself rather than the
+   whole page wearing it for that panel's sake. `.cmp-page` still has the old
+   centred-pair rule (a separate screen, a separate fix). */
 /* The toll log is an ordinary panel in the spread rather than a masthead
    across it. It used to span, from when the page was a 1000px sheet and two
    columns; at full width that made a 1300px panel around a calendar drawn for
@@ -3803,8 +3854,52 @@ a.stat-tile:hover {
   gap: 4px 12px;
 }
 
+/* `order: 1` (undone at 1024 below) is what actually keeps the JSX move in
+   Player.tsx phone-order-preserving, not the move itself. Below 1024 both
+   `.stats-col` wrappers are `display: contents`, so this panel — now
+   declared early, ahead of BID ACCURACY, for the two-column balance — would
+   otherwise render early on a phone too: 4th of eleven panels instead of
+   9th. Flex `order` sorts into buckets first (all `order: 0` items in their
+   own document order, then all `order: 1` items in THEIRS) rather than
+   letting one item slot into the middle of another bucket, so restoring the
+   exact phone position takes three coordinated bumps, not one: this panel
+   plus VERSUS THE FIELD and RIVALRIES (below) all move to the `order: 1`
+   bucket, and because those two were already the last two panels in
+   document order, the bucket's internal (document) order reproduces the
+   original phone sequence byte for byte: TOLL LOG..BID ACCURACY..the tile
+   ledger (all still `order: 0`, untouched), then TRICKS TAKEN, VERSUS THE
+   FIELD, RIVALRIES. This is a real trade-off rather than a free lunch: it
+   fixes the VISUAL order a sighted phone reader scrolls through, but a
+   screen reader's linear reading order still follows the DOM (Player.tsx's
+   order), so an assistive-tech visit hears this panel ahead of BID ACCURACY
+   even though it now draws after the tile ledger. Accepted because the
+   alternative — reverting the desktop balance fix, or reintroducing
+   per-panel grid placement (rejected above for the sparse-auto-placement
+   masonry it produced) — is worse, and every panel here is a static
+   histogram with no interactive control whose position getting scrambled
+   would break a workflow. */
 .stats-page .stats-trickdelta {
   margin: 12px 16px 0;
+  order: 1;
+}
+/* Undoes the base rule's `order: 1` above for THIS panel only, at and above
+   1024 — where `.stats-col-record` is its own flex column and this panel is
+   a genuine document-order sibling of BID ACCURACY there (Player.tsx
+   declares it just before), so `order: 1` would otherwise push it to the
+   end of that column, after BID ACCURACY: exactly the placement the JSX
+   move exists to avoid. Declared here, right after the base rule, rather
+   than folded into the existing far-earlier `@media (min-width: 1024px)`
+   block above — media queries add no specificity, so at equal specificity
+   the LATER rule in the file wins regardless of which one sits inside a
+   query, and that earlier block is textually before the base `order: 1}`
+   rule this is meant to override (the same trap `.stats-col`'s own comment
+   already flags for `display`). VERSUS THE FIELD and RIVALRIES need no
+   matching reset: they stay last in `.stats-col-count` either way, bumped
+   or not, so their own `order: 1` two rules below is correct unconditionally. */
+@media (min-width: 1024px) {
+  .stats-page .stats-trickdelta {
+    order: 0;
+  }
 }
 .stats-trickdelta-note {
   margin-top: 11px;
@@ -3847,8 +3942,15 @@ a.stat-tile:hover {
   fill: var(--accent);
 }
 
+/* `order: 1`, paired with TRICKS TAKEN's and RIVALRIES' own — see the long
+   comment above TRICKS TAKEN for why three coordinated bumps are what it
+   takes to keep a phone's flattened flex order matching the pre-move
+   sequence. This one and RIVALRIES were already the last two panels in
+   document order, so the bump is a no-op for them at every width: it exists
+   only so TRICKS TAKEN's bump has somewhere to land behind. */
 .stats-page .stats-versus {
   margin: 12px 16px 0;
+  order: 1;
 }
 .stats-versus-row {
   display: grid;
@@ -3863,8 +3965,13 @@ a.stat-tile:hover {
   font-size: 12.5px;
 }
 
+/* `order: 1` — see the comment above TRICKS TAKEN. This is the last panel
+   in document order already, so the bump changes nothing here either; it is
+   part of the same coordinated group for the same reason VERSUS THE FIELD
+   is. */
 .stats-page .stats-rivals {
   margin: 12px 16px 0;
+  order: 1;
 }
 .stats-rival-row {
   display: block;
@@ -4459,6 +4566,15 @@ a.stat-tile:hover {
   justify-content: center;
   font-size: 1.2em;
   padding-top: 2px;
+}
+/* At width the switch above stops stretching full-width (.pref-switch button
+   goes flex: 0 0 auto), so it sits at the row's left edge like the label and
+   note above it — but this strip stayed centered across the whole row,
+   drifting away from the buttons it's confirming. Left-align it to match. */
+@media (min-width: 720px) {
+  .suit-preview {
+    justify-content: flex-start;
+  }
 }
 
 .settings-page {
@@ -5585,6 +5701,27 @@ a.stat-tile:hover {
   font-size: 12px;
   color: var(--muted);
 }
+/* Hidden on the phone design, where the row has no room to spare between the
+   label and the amount — label+caption sit at the left and the score at the
+   right with nothing between them, same as it always has. */
+.receipt-bar {
+  display: none;
+}
+/* At tablet width and up there's finally room to fill that gap, so a line
+   item gets the same proportional bar the tournament summary's board-by-board
+   ledger (.tourney-board-pct) and the Result screen's field table
+   (.fieldtable-pct) already draw with this exact PctBar — reused here rather
+   than a second bar invented for the receipt, just scaled against this
+   receipt's own lines (lineBarPct) instead of a matchpoint percentage, since
+   a toll line has no 0-100 scale of its own. */
+@media (min-width: 720px) {
+  .receipt-bar {
+    display: block;
+    flex: 1 1 auto;
+    width: auto;
+    align-self: center;
+  }
+}
 .receipt-amount {
   margin-left: auto;
   font-family: var(--font-label);
@@ -6678,11 +6815,16 @@ a.stat-tile:hover {
     margin-top: 12px;
   }
 }
-/* Past 1400 the columns stop growing and the GUTTERS grow instead — the
-   ladder's own rule for a two-column page, and the profile spread's own 1400
-   rule one level up. A beam row is not more readable at 900px than at 560: the
-   bar is a margin against a gate, and past a point the extra width is spent on
-   the distance between a figure and the label naming it. */
+/* Past 1400 the columns stop growing and the GUTTERS grow instead. A beam
+   row is not more readable at 900px than at 560: the bar is a margin against
+   a gate, and past a point the extra width is spent on the distance between
+   a figure and the label naming it. NOTE: the profile spread (`.stats-page`)
+   dropped its own copy of this rule — measured at 1440 it produced ~144px of
+   dead margin against Rankings/Traffic/this-page-below-1400's ~40-54px
+   `--page-pad` gutter, which is the "page never caps its own width" law (see
+   "the responsive ladder") catching up with a page-level freeze. This block
+   is unchanged for now — it wasn't in scope for that fix — but the same
+   argument applies here and this is probably next. */
 @media (min-width: 1400px) {
   .cmp-page {
     grid-template-columns: repeat(2, minmax(0, 36rem));

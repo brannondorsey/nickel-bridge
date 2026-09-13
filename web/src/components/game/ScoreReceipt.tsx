@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { BoardView, ScoreLine } from '../../api';
 import { Button } from '../ds/Button';
+import { PctBar } from '../ds/PctBar';
 import { PerforatedPanel } from '../ds/PerforatedPanel';
 import { Postmark } from '../ds/Postmark';
 import { postmarkDate, signedScore, tournamentNo, vulLabel } from '../../format';
@@ -63,7 +64,15 @@ export function ScoreReceipt({
         {bd ? (
           <>
             {bd.lines.map((line, i) => (
-              <ReceiptRow key={i} index={i} label={line.label} detail={line.detail} caption={caption(line)} amount={line.amount} />
+              <ReceiptRow
+                key={i}
+                index={i}
+                label={line.label}
+                detail={line.detail}
+                caption={caption(line)}
+                amount={line.amount}
+                barPct={lineBarPct(line.amount, bd.lines)}
+              />
             ))}
             <div className="receipt-rule" style={{ '--i': bd.lines.length } as CSSProperties} />
             <ReceiptRow
@@ -127,6 +136,7 @@ export function ReceiptRow({
   detail,
   caption,
   amount,
+  barPct,
   total = false,
 }: {
   index: number;
@@ -134,6 +144,12 @@ export function ReceiptRow({
   detail?: string;
   caption?: string;
   amount: number;
+  /** This line's amount as a percentage of the receipt's largest line, for
+   *  the proportional fill between the label and the score — see
+   *  `lineBarPct` below. Undefined on a total row (nothing to be
+   *  proportional TO once the lines are summed) or the single passed-out
+   *  row, where `<PctBar>` renders nothing at all. */
+  barPct?: number;
   total?: boolean;
 }) {
   return (
@@ -141,6 +157,7 @@ export function ReceiptRow({
       <div className="receipt-row-main">
         <span className="label-caps receipt-label">{label}</span>
         {detail ? <span className="receipt-detail num">{detail}</span> : null}
+        {barPct !== undefined ? <PctBar pct={barPct} className="receipt-bar" /> : null}
         <span className={`receipt-amount num${amount < 0 ? ' negative' : ''}`}>
           {total ? (amount === 0 ? '0' : signedScore(amount)) : amount < 0 ? `−${-amount}` : amount}
         </span>
@@ -152,6 +169,20 @@ export function ReceiptRow({
       ) : null}
     </div>
   );
+}
+
+/**
+ * A line's proportional fill against the receipt's own biggest line — the
+ * same "proportional bar between label and score" idiom the tournament
+ * summary's board-by-board ledger and the field table already use via
+ * `PctBar`, just scaled against this receipt's own lines rather than a
+ * matchpoint percentage (a toll line has no natural 0-100 scale of its own).
+ * Exported for `AdjustedReceipt.tsx`, which itemizes a rehearsal's own score
+ * through the same `ReceiptRow`.
+ */
+export function lineBarPct(amount: number, lines: ScoreLine[]): number {
+  const max = Math.max(1, ...lines.map((l) => Math.abs(l.amount)));
+  return Math.round((Math.abs(amount) / max) * 100);
 }
 
 /** Teaching aside for a receipt line — warm, precise, one clause. Exported for
