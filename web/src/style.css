@@ -2209,14 +2209,17 @@ a.ds-btn-secondary:hover {
    a short auction can leave it much shorter than the table + hand fan
    column beside it. Rather than padding the rail out to match, the freed
    room is spent on the side that already wants it: a roomier table, not
-   just bigger cards riding along for free via --card-h. +110px becomes
-   +150px so the box itself gains real air around the card-derived term, on
-   top of whatever --card-h-cap's own bump below buys. Analyze reuses .trick
-   for its own two-lens layout and is excluded — this is the ordinary play
-   screen's table only. */
+   just bigger cards riding along for free via --card-h. The box's air
+   around the card-derived term goes 110px → 150px, but only as far as
+   --play-stack-room says the window can actually pay for it — see that
+   token. The fallback is the base 110px, so a browser without :has()
+   (which is where --play-stack-room is declared) keeps the base rule's
+   own value rather than losing the declaration altogether. Analyze reuses
+   .trick for its own two-lens layout and is excluded — this is the
+   ordinary play screen's table only. */
 @media (min-width: 1024px) {
   .board-page:not(.analyze-page) .trick {
-    height: max(230px, calc(var(--card-h) * 1.6 + 150px));
+    height: max(230px, calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
   }
 }
 /* "Trick clearing: tap" (settings gate) is holding a completed trick on the
@@ -2521,11 +2524,21 @@ a.ds-btn-secondary:hover {
   height: auto;
   min-height: max(230px, calc(var(--card-h) * 1.6 + 110px));
 }
-/* The E/W-dummy sibling of the +150px bump above .trick's own base rule,
-   same reasoning: filling the vertical room a short auction leaves free. */
+/* The E/W-dummy sibling of the air bump above .trick's own base rule, same
+   reasoning: filling the vertical room a short auction leaves free.
+
+   `height: auto` is restated here, and that is the point of the rule rather
+   than a tidy-up. The bump above is written as
+   `.board-page:not(.analyze-page) .trick` — three classes to this rule's
+   two — so it outranks the `height` the rule directly above sets and pins
+   the E/W table to a fixed height instead of letting it grow to the rail
+   beside it. Proved by injecting a 900px child at 1512×900: the box stopped
+   growing. This table's height is content-driven under its min-height, so
+   it has to win here whatever the ordinary table's rule says. */
 @media (min-width: 1024px) {
   .board-page:not(.analyze-page) .play-row .trick {
-    min-height: max(230px, calc(var(--card-h) * 1.6 + 150px));
+    height: auto;
+    min-height: max(230px, calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
   }
 }
 .dummy-rail {
@@ -5146,15 +5159,58 @@ a.stat-tile:hover {
    150px/20vh terms above are usually what's actually binding on an ordinary
    desktop window — the width-derived term already solves for "the table's
    own 6.4-card-width budget fills --board-avail exactly," so it is rarely
-   the smallest of the three. Raising just those two ceilings is what
-   actually grows the table and hand fan, and --board-main above is already
-   derived from --card-w, so the table's width cap and the trick-meter (both
+   the smallest of the three. Raising that ceiling is what actually grows
+   the table and hand fan, and --board-main above is already derived from
+   --card-w, so the table's width cap and the trick-meter (both
    `calc(var(--card-w) * …)`) grow with it for free — no other token needs
    touching. The width-derived term is untouched, so a narrow desktop window
-   still degrades exactly as the base rule intended. */
+   still degrades exactly as the base rule intended.
+
+   BUT THE FREE ROOM IS VERTICAL, SO IT HAS TO BE SPENT AGAINST A VERTICAL
+   BUDGET — the same way --board-avail above is what keeps the width growth
+   honest. Raised as a pair of flat ceilings (190px, and 20vh → 25vh) this
+   grew the page whether or not the window had anywhere to put it: measured
+   on the N/S-dummy board, 1512×900 went from a 902px page in a 900px
+   viewport to a 1086px one, which put the turn hint and the player's own
+   seat line 170px below the fold. A player cannot read the table they were
+   given more of.
+
+   --play-stack-room is that budget, and it is ONE budget rather than one
+   per layout. The N/S-dummy board is the tighter of the two: it stacks
+   dummy's fan, the table and your own fan down one column — 1 + 1.6 + 1 =
+   3.6 card heights — with the masthead, seat line, hint and gutters
+   measuring 252px around them, where the E/W-dummy board puts dummy in the
+   rail beside the table and so only stacks 2.6. Budgeting each separately
+   would buy the E/W board ~100px more at 900px of viewport and cost a
+   visible jump for it: dummy is not tabled until the opening lead, so the
+   stack a board is in CHANGES mid-play, and a budget that tracked it would
+   resize the player's own hand the moment dummy appeared. Sizing both off
+   the tighter column is the price of the cards holding still. At the 150px
+   card ceiling and the table's base 110px of air that column is
+   252 + 540 + 110 = 902px, which is what /t/6/b/3 measures at 1440–1600 ×
+   900. So anything past ~902px of viewport is blank paper the centred play
+   grid is leaving above and below the board, and anything short of it is
+   already overflowing — 920px is that figure plus an 18px cushion for the
+   chrome that can vary by a line (a wrapped hint, a taller notice).
+
+   The room is then spent cheapest-first, which is also intent-first: the
+   table's own air costs 1px of page per px (--trick-air, up to the 150px
+   the flat version wanted), and only what is left over goes to the cards at
+   3.6px of page per px. Both terms are zero-growth at 902px and below, so
+   every window that had no room to give renders exactly as it did before
+   this block existed — including 1280×720 and 1366×768, where the board
+   already overflowed. 20vh stays in the min() as the short-window guard it
+   always was; it is never the binding term once the affine one is. */
 @media (min-width: 1024px) {
   :root:has(.board-page:not(.analyze-page) .trick) {
-    --card-h-cap: min(190px, 25vh, calc((var(--board-avail) - 8rem) / 4.46));
+    --play-stack-room: max(0px, calc(100vh - 920px));
+    --trick-air: min(150px, calc(110px + var(--play-stack-room)));
+    --card-h-cap: min(
+      190px,
+      20vh,
+      calc(150px + max(0px, var(--play-stack-room) - 40px) / 3.6),
+      calc((var(--board-avail) - 8rem) / 4.46)
+    );
   }
 }
 @media (min-width: 1400px) {
