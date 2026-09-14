@@ -3901,6 +3901,29 @@ a.stat-tile:hover {
     order: 0;
   }
 }
+/* ...and the same reordering has to be paid for in SPACING, because `+` reads
+   document order and the eye reads `order`. `.chart-panel + .chart-panel`
+   tightens a RUN of chart panels from 16px to 12px, and the JSX move dropped
+   this panel between the last of that run and BID ACCURACY — so BID ACCURACY
+   stopped matching it and took 16px, pushing itself and the six panels under
+   it 4px down the page at EVERY width. Measured at 390px: 797 differing
+   pixels, a band at y 777-798, on a change that is meant to be inert below
+   1024. Below 1024 the `order` bump above has already carried this panel back
+   behind the tile ledger, so what the reader actually sees above BID ACCURACY
+   is still the last chart of the run and the run's own 12px is still the right
+   answer. At 1024 and up the bump is undone and this panel really does sit
+   above it, so the 16px a different kind of panel earns is restored — which is
+   also why this is a pair of rules rather than one `max-width` query: the file
+   is mobile-first throughout (there is not a single `@media (max-width`), and
+   the desktop case is the exception here, not the base. */
+.stats-page .stats-trickdelta + .chart-panel {
+  margin-top: 12px;
+}
+@media (min-width: 1024px) {
+  .stats-page .stats-trickdelta + .chart-panel {
+    margin-top: 16px;
+  }
+}
 .stats-trickdelta-note {
   margin-top: 11px;
   padding-top: 11px;
