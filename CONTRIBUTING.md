@@ -2467,8 +2467,9 @@ formula measures `--fan-space`, which is the viewport on the phone (identical to
 `min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
 the viewport there would size cards from space the fan does not have and overflow the column.
 `--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
-`min(150px, 20vh, (--board-avail - 8rem) / 4.46)` on the PLAY screen (the third term is the
-table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
+`min(190px, 20vh, 150px + max(0, --play-stack-room - 40px) / 3.6, (--board-avail - 8rem) /
+4.46)` on the PLAY screen (the last term is the table's — see the board section above) and
+`min(150px, 26vh)` on the BIDDING screen, which
 stacks exactly one hand and can afford the looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
 landscape, so the moment the app claims desktop the scarce axis flips from width to height.
 The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
@@ -2478,10 +2479,37 @@ the bottom. `FAN_GAP` (`fanLayout.ts`) deliberately stays a fixed 6px at every s
 whitespace between two printed values rather than a share of the card, and scaling it would
 make the fit formula's own constant circular.
 
-**Two cascade traps, both recorded beside the rules they bit.** `.board-page .trick` beats a
+**The table grows into blank paper and nothing else, and `--play-stack-room` is the budget
+that says how much of it there is.** `.play-phase` centres itself in the space the masthead
+leaves, so a tall window really does hold blank paper above and below the board, and spending
+it on a roomier table (`.trick`'s air goes 110px → 150px) and bigger cards is worth doing. A
+flat pair of raised ceilings is the version that does NOT work, because the room is vertical
+and flat ceilings do not know how tall the window is: measured on the N/S-dummy board
+(`/t/6/b/3`), 1512×900 went from a 902px page in a 900px viewport to a 1086px one, putting the
+turn hint and the player's own seat line 170px below the fold — a table you were given more of
+and cannot read. So `--play-stack-room` is `max(0px, 100vh - 920px)`: the N/S-dummy column is
+3.6 card heights (dummy's fan, the table at 1.6, your own fan) plus 252px of masthead, seat
+line, hint and gutters, which at the 150px card ceiling and the base 110px of air measures
+902px — plus an 18px cushion for chrome that can vary by a line. The room is spent
+cheapest-first, which is also intent-first: the table's own air costs 1px of page per px, and
+only the remainder goes to the cards at 3.6px of page per px. Both terms are zero-growth at
+902px and below, so every window that had no room to give — 1280×720 and 1366×768, where the
+board already overflowed, and 1440–1600×900, where it fits by 2px — renders exactly as it did
+before. It is ONE budget rather than one per layout even though the E/W-dummy board stacks only
+2.6 card heights and could afford ~100px more at 900: dummy is not tabled until the opening
+lead, so the stack a board is in changes mid-play, and a budget tracking it would resize the
+player's own hand the moment dummy appeared.
+
+**Three cascade traps, all recorded beside the rules they bit.** `.board-page .trick` beats a
 one-class `.trick { margin-inline: auto }`, so a capped box sits flush left and it looks
-exactly like `max-width` not applying. And a flex item whose cross size is `auto` is
+exactly like `max-width` not applying. A flex item whose cross size is `auto` is
 *stretched*, so auto margins have no free space to absorb until you give it `width: 100%`.
+And the play screen's own `.board-page:not(.analyze-page) .trick` — three classes — outranks
+`.play-row .trick { height: auto }`, which is two, so setting a `height` on the ordinary table
+silently pinned the E/W-dummy table to it as well; that one is content-driven under a
+`min-height` so it can match the rail beside it, and it now restates `height: auto` at four
+classes of its own. Proved by injecting a 900px child into the box at 1512×900 and watching it
+refuse to grow.
 
 **The bridge tiles; it does not crop.** The river scene under the landing hero is a 640×240
 drawing whose arch pattern meets itself exactly at its own edges, so it is a `repeat-x`
