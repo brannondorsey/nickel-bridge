@@ -59,6 +59,8 @@ out.demands = db.prepare(\`
   GROUP BY b.tournament_id, b.user_id ORDER BY at\`).all();
 out.tournaments = db.prepare(\`
   SELECT id, created_at, difficulty FROM tournaments WHERE kind='standard' ORDER BY id\`).all();
+out.claimCut = db.prepare(\`
+  SELECT MIN(created_at) AS c FROM tournaments WHERE kind='standard' AND claim_rule='pessimistic'\`).get().c;
 console.log(JSON.stringify(out));
 `;
 
@@ -88,6 +90,10 @@ const trace = {
   players: players.length,
   // Real per-tournament field sizes, to sanity-check the replay against reality.
   actual: { tournaments: raw.tournaments.length, demands: raw.demands.length },
+  // When the pessimistic claim rule started, as an offset like every event
+  // time. calibrate_placement.mjs's backfill fallback never routes a player
+  // into a simulated tournament created before it. null if no such tournament.
+  claimCutT: raw.claimCut == null ? null : raw.claimCut - t0,
   events: raw.demands
     .map((d) => ({ t: d.at - t0, p: pIndex.get(d.uid), done: d.done, spanS: d.last - d.at }))
     .sort((a, b) => a.t - b.t || a.p - b.p),

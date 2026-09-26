@@ -91,7 +91,7 @@ import { join } from 'node:path';
 
 process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), 'nb-calib-')), 'throwaway.db');
 process.env.AI_PLAYERS = '0';
-const { chooseTournament, PLACEMENT } = await import('../server/dist/tournaments.js');
+const { chooseBackfill, chooseTournament, PLACEMENT } = await import('../server/dist/tournaments.js');
 
 const DAY = 86400;
 const arg = (flag, dflt) => {
@@ -127,6 +127,20 @@ const DEFAULTS = {
   graceCap: PLACEMENT.GRACE_CAP,
   /** deficit scoring only: field size past which a tournament stops needing players */
   target: 6,
+  /**
+   * The "don't open a solo board while a played one is waiting" fallback.
+   * When the scoring tier would CREATE, join instead any unplayed candidate
+   * that already has >= 1 human finisher and was created under the
+   * pessimistic claim rule (at or after trace.claimCutT) — so a fast player
+   * backfills existing fields rather than opening solo tournaments, while
+   * never being routed into a pre-fix, optimistic-claim tournament. Off by
+   * default so every existing row is unchanged.
+   */
+  joinAny: false,
+  /** Which such candidate to take — any ORDERINGS key. */
+  joinAnyOrder: 'rescueThenFullest',
+  /** How far back the fallback may reach, in days (the normal tiers keep windowD). */
+  joinAnyWindowD: PLACEMENT.BACKLOG_WINDOW_S / DAY,
 };
 
 function simulate(trace, opts = {}) {
@@ -137,13 +151,12 @@ function simulate(trace, opts = {}) {
   // Which tier decided each placement. Load-bearing diagnostic rather than
   // trivia: a knob in a tier that never runs cannot change any outcome, and
   // three of the four proposed changes live in the scoring tier.
-  const via = { grace: 0, score: 0, create: 0 };
+  const via = { grace: 0, score: 0, backfill: 0, create: 0 };
 
   for (const ev of trace.events) {
     const now = ev.t;
-    const eligible = tournaments.filter(
-      (c) => now - c.createdAt < o.windowD * DAY && !c.joins.some((j) => j.p === ev.p),
-    );
+    const unplayed = tournaments.filter((c) => !c.joins.some((j) => j.p === ev.p));
+    const eligible = unplayed.filter((c) => now - c.createdAt < o.windowD * DAY);
     let pick = null;
 
     if (useReal) {
@@ -171,6 +184,39 @@ function simulate(trace, opts = {}) {
       }
     } else {
       pick = choose(eligible, now, o, rng, via);
+    }
+
+    if (!pick && useReal && PLACEMENT.BACKFILL) {
+      // Production's backfill tier, via the real chooseBackfill. Candidates
+      // shaped as stmtBackfillCandidates does: pessimistic-claim only (created
+      // at or after the trace's cutover), no window, finishers = humans done
+      // with every board by now.
+      const cut = trace.claimCutT ?? 0;
+      const cands = unplayed
+        .filter((c) => c.createdAt >= cut)
+        .map((c) => ({
+          id: c.id,
+          created_at: c.createdAt,
+          starters: c.joins.length,
+          finishers: c.joins.filter((j) => j.done === 4 && j.finishAt <= now).length,
+        }));
+      const chosen = chooseBackfill(cands);
+      if (chosen) {
+        pick = tournaments.find((c) => c.id === chosen.id);
+        via.backfill++;
+      }
+    } else if (!pick && o.joinAny) {
+      const cut = trace.claimCutT ?? 0;
+      const backfill = unplayed.filter(
+        (c) =>
+          c.createdAt >= cut &&
+          now - c.createdAt < o.joinAnyWindowD * DAY &&
+          c.joins.some((j) => j.done === 4 && j.finishAt <= now),
+      );
+      if (backfill.length) {
+        pick = backfill.sort(ORDERINGS[o.joinAnyOrder])[0];
+        via.backfill++;
+      }
     }
 
     if (!pick) {
@@ -343,7 +389,22 @@ function metrics(trace, tournaments, o, via) {
     medSpanH: +median(spans).toFixed(1),
     viaGrace: via.grace,
     viaScore: via.score,
+    viaBackfill: via.backfill,
     viaCreate: via.create,
+    // Solo share for each of the three busiest players, busiest first. The
+    // aggregate solo% hides WHO is alone: production's shape is a few heavy
+    // players out-producing everyone, and a heavy player who exhausts the
+    // pool opens solo boards back to back — the case the backfill fallback
+    // exists for. Printed as busiest/2nd/3rd.
+    topSolo: Object.entries(trace.events.reduce((a, e) => ((a[e.p] = (a[e.p] || 0) + 1), a), {}))
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 3)
+      .map(([p]) => {
+        const mine = tournaments.filter((t) => t.joins.some((j) => j.p === +p));
+        const alone = mine.filter((t) => new Set(t.joins.map((j) => j.p)).size === 1).length;
+        return Math.round((100 * alone) / mine.length);
+      })
+      .join('/'),
     hist,
   };
 }
@@ -399,6 +460,11 @@ const SHIPPED = {
   create: 'threshold',
   spread: true,
   tauD: PLACEMENT.TAU_S / DAY,
+  // The backfill tier, exactly as production runs it: on/off from
+  // PLACEMENT.BACKFILL, no reach limit, rescue-then-fullest.
+  joinAny: PLACEMENT.BACKFILL,
+  joinAnyOrder: 'rescueThenFullest',
+  joinAnyWindowD: Infinity,
 };
 
 const COLS = [
@@ -415,7 +481,9 @@ const COLS = [
   ['span h', 'medSpanH', 7],
   ['grace', 'viaGrace', 6],
   ['score', 'viaScore', 6],
+  ['backfl', 'viaBackfill', 6],
   ['new', 'viaCreate', 5],
+  ['top3 solo%', 'topSolo', 11],
 ];
 const header = () => {
   console.log(COLS.map(([h, , w]) => h.padStart(w)).join(' '));
@@ -520,6 +588,21 @@ if (has('--set')) {
   for (const target of [2, 3, 4, 6, 8, 12]) {
     row(simulate(trace, { ...SHIPPED, name: `target=${target}`, target }));
   }
+} else if (sweep === 'backfill') {
+  // The joinAny fallback: which ordering, and how far back it may reach.
+  header();
+  row(simulate(trace, CURRENT));
+  row(simulate(trace, SHIPPED));
+  row(simulate(trace, { ...SHIPPED, name: `shipped, backfill ${PLACEMENT.BACKFILL ? 'OFF' : 'ON'}`, joinAny: !PLACEMENT.BACKFILL }));
+  for (const joinAnyOrder of ['rescueThenFullest', 'freshest', 'fullest', 'emptiestOldest']) {
+    for (const joinAnyWindowD of [30, 60, 3650]) {
+      row(simulate(trace, { ...SHIPPED, name: `bf ${joinAnyOrder.slice(0, 10)} ${joinAnyWindowD === 3650 ? 'all' : joinAnyWindowD + 'd'}`, joinAny: true, joinAnyOrder, joinAnyWindowD }));
+    }
+  }
+  const h = (m) => Object.entries(m.hist).sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}:${v}`).join('  ');
+  console.log(`\n  current  ${h(simulate(trace, CURRENT))}`);
+  console.log(`  bf all   ${h(simulate(trace, { ...SHIPPED, joinAny: true, joinAnyWindowD: Infinity }))}   (humans : tournaments)`);
+  console.log(`\n  claim-rule cutover at t=${trace.claimCutT ?? 'none (trace predates claimCutT; nothing excluded)'}s`);
 } else if (sweep === 'ablate') {
   // One knob at a time reverted from the proposal, so each earns its place.
   header();
@@ -541,5 +624,5 @@ if (has('--set')) {
     const m = simulate(trace, o);
     console.log(`  ${label}  ` + Object.entries(m.hist).sort((a,b)=>a[0]-b[0]).map(([k, v]) => `${k}:${v}`).join('  '));
   }
-  console.log('\n--sweep grace | gracecap | gracettl | tau | window | target | ablate');
+  console.log('\n--sweep grace | gracecap | gracettl | tau | window | target | backfill | ablate');
 }

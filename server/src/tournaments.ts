@@ -90,6 +90,41 @@ const stmtCandidates = db.prepare(
      AND t.difficulty = ?
    GROUP BY t.id`,
 );
+// The backfill fallback's candidates (see PLACEMENT.BACKFILL and
+// chooseBackfill below): every tournament the user has never touched, of
+// their difficulty, with at least one human who FINISHED it — all
+// BOARDS_PER_TOURNAMENT boards done, the same test a crossing needs before it
+// can rate anyone, rather than stmtCandidates' "any done board". Unlike
+// stmtCandidates there is no backlog window: the point is to reach fields
+// whose popularity score decayed below ln 2 long ago. Only pessimistic-claim
+// tournaments qualify — the optimistic ones predate the claim fix, and a
+// player should not be sent back into that gate by placement. Humans only,
+// for the same reason as above: the personas finish every ai_field
+// tournament, so counting them would make every tournament a candidate.
+const stmtBackfillCandidates = db.prepare(
+  `WITH fin AS (
+     SELECT b.tournament_id AS tid, b.user_id
+     FROM boards b JOIN users u ON u.id = b.user_id
+     WHERE u.kind = 'human' AND b.state = 'done'
+     GROUP BY b.tournament_id, b.user_id
+     HAVING COUNT(*) >= ?
+   ),
+   st AS (
+     SELECT b.tournament_id AS tid, COUNT(DISTINCT b.user_id) AS n
+     FROM boards b JOIN users u ON u.id = b.user_id
+     WHERE u.kind = 'human'
+     GROUP BY b.tournament_id
+   )
+   SELECT t.*, COUNT(fin.user_id) AS finishers, st.n AS starters
+   FROM tournaments t
+   JOIN fin ON fin.tid = t.id
+   JOIN st ON st.tid = t.id
+   WHERE t.kind = 'standard'
+     AND t.claim_rule = 'pessimistic'
+     AND t.difficulty = ?
+     AND NOT EXISTS (SELECT 1 FROM boards mb WHERE mb.tournament_id = t.id AND mb.user_id = ?)
+   GROUP BY t.id`,
+);
 // ai_field = 1: every tournament created for real play gets the benchmark AI
 // personas (ai-players.ts); the /api/play route enqueues their boards right
 // after placement returns. Raw-inserted fixture/test tournaments and demo
@@ -509,6 +544,32 @@ export const PLACEMENT = {
   SAMPLE_RATIO: 0.8,
   /** Threshold: what a brand-new tournament would score (1 finisher, age 0). */
   NEW_TOURNAMENT_SCORE: Math.LN2,
+  /**
+   * Backfill before creating. When true, a player who would otherwise get a
+   * brand-new tournament is instead placed into an unplayed, pessimistic-claim
+   * tournament that already has a human finisher, from any age (chooseBackfill).
+   * SET TO false TO SWITCH BACK — nothing else changes: placement is then
+   * exactly the grace + scoring tiers it was before.
+   *
+   * Why it exists: a lone finisher scores ln 2 · e^(−age/τ), which is below
+   * the create threshold at every age > 0, and a two-finisher field falls
+   * below it after ~14 days. So a player faster than everyone else combined
+   * exhausts the young fields and then opens solo tournaments back to back —
+   * production, Sept 2026: one returning player opened 31 in a row while 62
+   * played-but-thin pessimistic fields sat unreachable. Replayed through
+   * tools/calibrate_placement.mjs (--sweep backfill, 558 real demands):
+   * orphaned tournaments 51 → 7, solo crossings 9.1% → 1.3%, field at the
+   * average crossing 3.85 → 4.15. The price is co-presence — the median gap
+   * between a field's first and last arrival goes 40h → 161h, since the
+   * people you are compared against may have played it weeks ago.
+   *
+   * When to flip it back: that trade suits a small, uneven population where
+   * the alternative is nobody to compare against. With steady daily traffic
+   * the grace tier fills fresh tournaments on its own and the backfill mostly
+   * spends players on stale fields — re-run --sweep backfill against a fresh
+   * trace (it compares the shipped policy with and without it) and decide.
+   */
+  BACKFILL: true,
 };
 
 export interface PlacementCandidate extends TournamentRow {
@@ -577,8 +638,9 @@ export function tournamentScore(donePlayers: number, ageSec: number): number {
  * a rescue; it sorts last among the non-solo group, behind every board where
  * an extra player actually deepens a field.
  */
-function graceOrder(a: PlacementCandidate, b: PlacementCandidate): number {
-  const stranded = (c: PlacementCandidate) => (c.starters === 1 ? 0 : 1);
+type Orderable = Pick<PlacementCandidate, 'starters' | 'created_at' | 'id'>;
+function graceOrder(a: Orderable, b: Orderable): number {
+  const stranded = (c: Orderable) => (c.starters === 1 ? 0 : 1);
   return (
     stranded(a) - stranded(b) || // rescue anyone sitting alone
     b.starters - a.starters || // else deepen the fullest field
@@ -635,6 +697,27 @@ export function chooseTournament(
   return pool[pool.length - 1].c; // float-drift safety
 }
 
+export interface BackfillCandidate extends TournamentRow {
+  /** Distinct humans who finished every board — the fields that can rate. */
+  finishers: number;
+  /** Distinct humans with any board row. */
+  starters: number;
+}
+
+/**
+ * The backfill tier (PLACEMENT.BACKFILL): pick one of stmtBackfillCandidates
+ * rather than create, or null when there are none. Ordered by graceOrder —
+ * rescue a field stuck at one human first (joining it is what finally rates
+ * them), else deepen the fullest, freshest as the tie-break. That is the
+ * `rescueThenFullest` ordering calibrate_placement.mjs measured for this tier;
+ * `fullest` alone left three times the solo tournaments. Deterministic, so no
+ * rng: nothing here competes on score, and graceOrder is a total order.
+ */
+export function chooseBackfill(candidates: BackfillCandidate[]): BackfillCandidate | null {
+  const eligible = candidates.filter((c) => c.finishers > 0);
+  return eligible.length ? [...eligible].sort(graceOrder)[0] : null;
+}
+
 /**
  * Just-in-time placement:
  *  1. resume a tournament the user has started but not finished (window-free:
@@ -642,7 +725,9 @@ export function chooseTournament(
  *  2. else serve a candidate from the backlog window via chooseTournament()
  *     (grace force-join, then popularity × recency scoring with weighted
  *     sampling near the top),
- *  3. else create a fresh one — which the grace tier then fills with the next
+ *  3. else, while PLACEMENT.BACKFILL is on, join an older field that already
+ *     has a human finisher (chooseBackfill — no backlog window),
+ *  4. else create a fresh one — which the grace tier then fills with the next
  *     few requesters.
  *
  * `nowSec`/`rng` are injectable for tests; production uses the real clock and
@@ -652,7 +737,7 @@ export function chooseTournament(
 export function placeUser(
   userId: number,
   difficulty: Difficulty,
-  opts: { nowSec?: number; rng?: () => number } = {},
+  opts: { nowSec?: number; rng?: () => number; backfill?: boolean } = {},
 ): { tournament: TournamentRow; nextBoard: number } {
   const nowSec = opts.nowSec ?? Math.floor(Date.now() / 1000);
   const rng = opts.rng ?? Math.random;
@@ -664,6 +749,10 @@ export function placeUser(
       difficulty,
     ) as PlacementCandidate[];
     t = chooseTournament(candidates, nowSec, rng) ?? undefined;
+  }
+  if (!t && (opts.backfill ?? PLACEMENT.BACKFILL)) {
+    const backfill = stmtBackfillCandidates.all(BOARDS_PER_TOURNAMENT, difficulty, userId) as BackfillCandidate[];
+    t = chooseBackfill(backfill) ?? undefined;
   }
   if (!t) {
     const schedule = JSON.stringify(Array(BOARDS_PER_TOURNAMENT).fill(difficulty));
