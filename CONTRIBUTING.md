@@ -1674,7 +1674,9 @@ haven't played, in two tiers: a **grace window** force-joins young (< 48h), unde
 in placement sits (see "Tuning placement" below and its doc comment); then
 candidates are scored `log(1 + distinct finishers) · e^(−age/τ)` and one is weighted-random
 sampled from those near the top score. If nothing beats what a brand-new tournament would
-score (`ln 2`), a new one is created — which the grace window then fills. All knobs live in
+score (`ln 2`), the **backfill** tier (`PLACEMENT.BACKFILL`, on) joins any unplayed,
+pessimistic-claim tournament of any age with a human finisher (`chooseBackfill`); only if
+there is none is a new one created — which the grace window then fills. All knobs live in
 the `PLACEMENT` const in `tournaments.ts`. Tournaments older than the window are archived
 from placement but stay resumable and completable via direct URL (boards deal lazily), and
 still count in the Elo replay. Full design rationale: [TOURNAMENT-SELECTION.md](TOURNAMENT-SELECTION.md).
@@ -1709,14 +1711,18 @@ easy to get wrong from first principles:
   move; solo rate and co-presence span are elastic, roughly 2× best to worst. So pick the
   ordering that fixes loneliness and co-presence without spending depth — `--sweep frontier`
   prints them together.
-- **`--sweep backfill` models an UNSHIPPED fallback** for the case the scoring tier cannot
-  reach: a heavy player who has exhausted every young field. Today a lone finisher never
-  beats `ln 2`, so such a player opens solo tournaments back to back (production, Sept
-  2026: 31 in a row). The fallback, instead of creating, joins any unplayed candidate with
-  ≥1 human finisher created under the pessimistic claim rule (the trace's `claimCutT`, so
-  pre-fix optimistic tournaments are never offered). Measured 2026-09-26, 558 demands:
-  orphans 51 → 7, solo 9.1% → 1.3%, the third-busiest player's solo share 28% → 0% — paid
-  for in co-presence, median first-to-last arrival 40h → 161h at a 60-day reach.
+- **The backfill tier is SHIPPED, and switching it back is one line** (`PLACEMENT.BACKFILL
+  = false`). It covers what the scoring tier cannot reach: a heavy player who has exhausted
+  every young field, for whom a lone finisher never beats `ln 2` — so they opened solo
+  tournaments back to back (production, Sept 2026: 31 in a row). Instead of creating, it
+  joins any unplayed pessimistic-claim tournament with ≥1 human finisher, any age. The
+  placement tests pass `backfill` explicitly, so flipping the flag leaves them green.
+  `--sweep backfill` prints production with and without it; the simulator's `current`
+  calls the real `chooseBackfill` whenever the flag is on, and the trace's `claimCutT`
+  keeps pre-fix optimistic tournaments out. Measured 2026-09-26, 558 demands: orphans 51 →
+  7, solo 9.1% → 1.3%, the third-busiest player's solo share 28% → 0% — paid for in
+  co-presence, median first-to-last arrival 40h → 161h. Worth re-running once traffic grows:
+  that trade is right for a small, uneven population and wrong for a busy one.
 
 **Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo-bridge.brannon.online):**
 the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the

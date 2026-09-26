@@ -91,7 +91,7 @@ import { join } from 'node:path';
 
 process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), 'nb-calib-')), 'throwaway.db');
 process.env.AI_PLAYERS = '0';
-const { chooseTournament, PLACEMENT } = await import('../server/dist/tournaments.js');
+const { chooseBackfill, chooseTournament, PLACEMENT } = await import('../server/dist/tournaments.js');
 
 const DAY = 86400;
 const arg = (flag, dflt) => {
@@ -186,7 +186,26 @@ function simulate(trace, opts = {}) {
       pick = choose(eligible, now, o, rng, via);
     }
 
-    if (!pick && o.joinAny) {
+    if (!pick && useReal && PLACEMENT.BACKFILL) {
+      // Production's backfill tier, via the real chooseBackfill. Candidates
+      // shaped as stmtBackfillCandidates does: pessimistic-claim only (created
+      // at or after the trace's cutover), no window, finishers = humans done
+      // with every board by now.
+      const cut = trace.claimCutT ?? 0;
+      const cands = unplayed
+        .filter((c) => c.createdAt >= cut)
+        .map((c) => ({
+          id: c.id,
+          created_at: c.createdAt,
+          starters: c.joins.length,
+          finishers: c.joins.filter((j) => j.done === 4 && j.finishAt <= now).length,
+        }));
+      const chosen = chooseBackfill(cands);
+      if (chosen) {
+        pick = tournaments.find((c) => c.id === chosen.id);
+        via.backfill++;
+      }
+    } else if (!pick && o.joinAny) {
       const cut = trace.claimCutT ?? 0;
       const backfill = unplayed.filter(
         (c) =>
@@ -441,6 +460,11 @@ const SHIPPED = {
   create: 'threshold',
   spread: true,
   tauD: PLACEMENT.TAU_S / DAY,
+  // The backfill tier, exactly as production runs it: on/off from
+  // PLACEMENT.BACKFILL, no reach limit, rescue-then-fullest.
+  joinAny: PLACEMENT.BACKFILL,
+  joinAnyOrder: 'rescueThenFullest',
+  joinAnyWindowD: Infinity,
 };
 
 const COLS = [
@@ -569,6 +593,7 @@ if (has('--set')) {
   header();
   row(simulate(trace, CURRENT));
   row(simulate(trace, SHIPPED));
+  row(simulate(trace, { ...SHIPPED, name: `shipped, backfill ${PLACEMENT.BACKFILL ? 'OFF' : 'ON'}`, joinAny: !PLACEMENT.BACKFILL }));
   for (const joinAnyOrder of ['rescueThenFullest', 'freshest', 'fullest', 'emptiestOldest']) {
     for (const joinAnyWindowD of [30, 60, 3650]) {
       row(simulate(trace, { ...SHIPPED, name: `bf ${joinAnyOrder.slice(0, 10)} ${joinAnyWindowD === 3650 ? 'all' : joinAnyWindowD + 'd'}`, joinAny: true, joinAnyOrder, joinAnyWindowD }));
@@ -576,7 +601,7 @@ if (has('--set')) {
   }
   const h = (m) => Object.entries(m.hist).sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}:${v}`).join('  ');
   console.log(`\n  current  ${h(simulate(trace, CURRENT))}`);
-  console.log(`  bf 30d   ${h(simulate(trace, { ...SHIPPED, joinAny: true }))}   (humans : tournaments)`);
+  console.log(`  bf all   ${h(simulate(trace, { ...SHIPPED, joinAny: true, joinAnyWindowD: Infinity }))}   (humans : tournaments)`);
   console.log(`\n  claim-rule cutover at t=${trace.claimCutT ?? 'none (trace predates claimCutT; nothing excluded)'}s`);
 } else if (sweep === 'ablate') {
   // One knob at a time reverted from the proposal, so each earns its place.
