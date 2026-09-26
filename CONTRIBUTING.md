@@ -1709,6 +1709,14 @@ easy to get wrong from first principles:
   move; solo rate and co-presence span are elastic, roughly 2× best to worst. So pick the
   ordering that fixes loneliness and co-presence without spending depth — `--sweep frontier`
   prints them together.
+- **`--sweep backfill` models an UNSHIPPED fallback** for the case the scoring tier cannot
+  reach: a heavy player who has exhausted every young field. Today a lone finisher never
+  beats `ln 2`, so such a player opens solo tournaments back to back (production, Sept
+  2026: 31 in a row). The fallback, instead of creating, joins any unplayed candidate with
+  ≥1 human finisher created under the pessimistic claim rule (the trace's `claimCutT`, so
+  pre-fix optimistic tournaments are never offered). Measured 2026-09-26, 558 demands:
+  orphans 51 → 7, solo 9.1% → 1.3%, the third-busiest player's solo share 28% → 0% — paid
+  for in co-presence, median first-to-last arrival 40h → 161h at a 60-day reach.
 
 **Demo mode (`DEMO=1`, PR previews + the permanent demo app at demo-bridge.brannon.online):**
 the preview comment's `/demo` link (or the demo app's `/demo` URL) signs the
