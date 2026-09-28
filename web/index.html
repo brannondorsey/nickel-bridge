@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- No maximum-scale / user-scalable=no. Those were here to stop iOS zooming a
+         tapped input, which is worth nothing next to what they cost: they disable
+         pinch-zoom outright, which is the primary reading aid for low-vision users
+         and the only way anyone enlarges a 13-card fan. The app now claims tablets
+         and desktops, where a pinned scale is simply wrong. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#fcfbf8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--
