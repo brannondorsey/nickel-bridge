@@ -5248,8 +5248,23 @@ a.stat-tile:hover {
     /* Bidding stacks exactly one hand: nothing above it but a tray, nothing
        below it but the box. So the hand can be the size the screen implies —
        it is the thing you are actually looking at while you decide — and the
-       fit half of --card-h still binds first if the window is narrow. */
-    --card-h-cap: min(150px, 26vh);
+       fit half of --card-h still binds first if the window is narrow.
+
+       The third term is the HEIGHT that is actually left, and it is what
+       keeps your hand and its HCP above the dock. A landscape tablet is the
+       case that broke without it: at 1024x768 the dock alone is ~358px, and
+       26vh still asked for 150px cards, so the scroll region overflowed and —
+       since an overflowing region opens at its top — the dock sat over the
+       bottom of the hand and the seat line (the HCP) was off screen entirely.
+       --bid-chrome is everything in the column that is not a card: masthead,
+       tray (one row of calls), an open meaning panel, the fan's and seat
+       line's own padding, and the dock. Hand-measured in Chromium, so a
+       change to any of those heights wants it re-measured; overshooting is
+       safe (a longer auction degrades into the ordinary scroll, same as
+       before), undershooting just leaves cards a little smaller than they
+       could be. */
+    --bid-chrome: 728px;
+    --card-h-cap: min(150px, 26vh, calc(100dvh - var(--bid-chrome)));
   }
   /* Centre the tray/feedback/hand group in the space above the dock. It must
      be auto MARGINS and never `justify-content: center` on .bid-scroll, which
@@ -5268,6 +5283,57 @@ a.stat-tile:hover {
   .bid-decision {
     margin-top: 0;
     margin-bottom: auto;
+  }
+}
+/* Short landscape screens (an iPad on its side, a 720p laptop): the height
+ * term above alone is not enough. At 1024x768 728px of chrome leaves 40px of
+ * card — under --card-h's 56px floor — and at 1280x720 it leaves nothing at
+ * all. So below 900px tall the same pieces tighten: the dock's padding and
+ * gaps, the bid plates (44 -> 40px, still a comfortable target with a
+ * pointer or a thumb on a tablet), and the spacing around the meaning panel,
+ * fan and seat line. Nothing moves or reorders; the chrome just comes down
+ * to 652px. Measured with the meaning panel open: cards 116px at 1024x768,
+ * 150px at 1180x820, 68px at 1280x720 — hand and HCP clear of the dock at
+ * all three, where before all three cut the hand off. */
+@media (min-width: 1024px) and (max-height: 900px) {
+  :root:has(.board-page.bidding-dock) {
+    --bid-chrome: 652px;
+  }
+  .bidding-dock .bidbox-wrap {
+    padding: 6px 12px 8px;
+  }
+  .bidding-dock .bidbox .grid {
+    gap: 4px;
+  }
+  .bidding-dock .bidbox .grid + .grid,
+  .bidding-dock .bidbox .callrow {
+    margin-top: 4px;
+    gap: 4px;
+  }
+  .bidding-dock .bidbox button.bid {
+    min-height: 40px;
+  }
+  .bidding-dock .bidbox-fold {
+    padding: 4px 0 2px;
+  }
+  .bidding-dock .confirm-row {
+    margin-top: 6px;
+  }
+  .bidding-dock .confirm-row .ds-btn {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+  .bidding-dock .bid-decision {
+    padding-bottom: 6px;
+  }
+  .bidding-dock .meaning-panel {
+    margin-top: 6px;
+  }
+  .bidding-dock .board-fan {
+    padding-top: 4px;
+  }
+  .bidding-dock .seat-line {
+    padding-top: 4px;
   }
 }
 /* The dock's band runs to the WINDOW's edges, not the page's. .board-page takes

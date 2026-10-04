@@ -2468,8 +2468,13 @@ formula measures `--fan-space`, which is the viewport on the phone (identical to
 the viewport there would size cards from space the fan does not have and overflow the column.
 `--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
 `min(150px, 20vh, (--board-avail - 8rem) / 4.46)` on the PLAY screen (the third term is the
-table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
-stacks exactly one hand and can afford the looser `vh` term. The `vh` term is the part worth understanding: phones are portrait and desktops are
+table's — see the board section above) and `min(150px, 26vh, 100dvh - --bid-chrome)` on the
+BIDDING screen, which stacks exactly one hand and can afford the looser `vh` term. That third
+term is the height left once the masthead, tray, meaning panel and the ~358px dock are paid
+for, and it is not optional: without it a landscape tablet (1024×768) asked for 150px cards,
+the scroll region overflowed, and the dock sat over the bottom of the hand with the HCP line
+off screen. Below 900px tall the dock and the gaps around the hand also tighten (bid plates
+44 → 40px) so that budget leaves real cards — 116px at 1024×768, 68px at 1280×720. The `vh` term is the part worth understanding: phones are portrait and desktops are
 landscape, so the moment the app claims desktop the scarce axis flips from width to height.
 The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
 of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
