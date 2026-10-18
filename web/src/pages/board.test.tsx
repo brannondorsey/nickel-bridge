@@ -1656,6 +1656,19 @@ describe('Board — toll receipt', () => {
     expect(screen.getByText('100, vulnerable')).toBeInTheDocument();
     expect(screen.getByText('Toll refused')).toBeInTheDocument();
     expect(screen.getAllByText('−100').length).toBe(2); // penalty line + total
+    // ...and with NO proportional bar. A defeated contract's breakdown is one
+    // line (score.ts returns early on undertricks), so a bar scaled against
+    // the receipt's biggest line is 100% by construction — a full-width fill
+    // in the same ink a made contract's biggest EARNER gets. See lineBarPct.
+    expect(document.querySelector('.receipt-bar')).toBeNull();
+  });
+
+  it('draws the proportional bars on a made contract, where there is something to be proportional to', async () => {
+    apiMock.board.mockResolvedValue(boardDone);
+    renderBoard();
+    await userEvent.click(await screen.findByRole('button', { name: /VIEW THE TOLL RECEIPT/ }));
+    // odd tricks 120 and the game bonus 500: one bar per line, none on the total
+    expect(document.querySelectorAll('.receipt-bar').length).toBe(2);
   });
 
   // A tournament (not just a board) completing can change account state Board
@@ -1750,6 +1763,30 @@ describe('Board — rehearsal', () => {
 
     expect(screen.getByRole('button', { name: /TRY ANOTHER LINE/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to analyze/i })).toBeInTheDocument();
+  });
+
+  it('leaves the bar off a rehearsal that went down, where the receipt is one penalty line', async () => {
+    // a rehearsal's own score genuinely can be negative — it shares ReceiptRow
+    // and lineBarPct with the toll receipt, so the penalty reads the same way
+    // here: red amount, no proportional fill
+    apiMock.board.mockResolvedValue({
+      ...boardDoneRehearsal,
+      result: {
+        ...boardDoneRehearsal.result!,
+        contractLabel: '4♠-1 by S',
+        tricksDeclarer: 9,
+        scoreNS: -100,
+        breakdown: {
+          lines: [{ kind: 'undertricks' as const, label: 'Down one', detail: '100, vulnerable', amount: -100 }],
+          vulnerable: true,
+          total: -100,
+        },
+      },
+    });
+    renderBoard();
+    expect(await screen.findByText('REHEARSAL')).toBeInTheDocument();
+    expect(screen.getByText('Down one')).toBeInTheDocument();
+    expect(document.querySelector('.receipt-bar')).toBeNull();
   });
 
   it("falls back to a plain caption, no MP delta sentence, when the origin field was too small to matchpoint (lineMatchpoints null)", async () => {

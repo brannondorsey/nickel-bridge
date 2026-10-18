@@ -444,15 +444,56 @@ export default function Player() {
       ) : (
         <>
           {/* THE TWO PAGES. Below 1024 both wrappers are `display: contents`
-              (the .board-rail trick), so they generate no box and every panel
-              lays out exactly as the sibling it used to be — the phone's DOM
-              order, and its rendering, are untouched. Past 1024 they become
-              the spread's two columns: what you did on the left, what it came
-              to on the right. Wrappers rather than per-panel `grid-column`
-              rules because grid's sparse auto-placement never moves its cursor
+              (the .board-rail trick), so they generate no box and a panel
+              left in the wrapper it started in lays out exactly as the
+              sibling it used to be — the phone's DOM order, and its
+              rendering, are untouched. Past 1024 they become the spread's
+              two columns: what you did on the left, what it came to on the
+              right. Wrappers rather than per-panel `grid-column` rules
+              because grid's sparse auto-placement never moves its cursor
               backwards, so a right-hand panel declared after four left-hand
               ones lands four rows down and the second page starts halfway
-              down the first. */}
+              down the first. (TRICKS TAKEN below is the one panel moved
+              between wrappers, and needs style.css's help to stay
+              phone-order-preserving — see its own comment.)
+
+              TRICKS TAKEN is declared here, at the end of THE RECORD, rather
+              than with its five neighbors on THE COUNT below — it is placed
+              purely to keep the two pages a close height (the four charts up
+              here otherwise run noticeably shorter than THE COUNT's six
+              panels + the tile ledger), and a histogram of outcomes is close
+              enough kin to the three trend charts above it that the move
+              costs the page's "what you did / what it came to" split very
+              little. `stats.test.tsx` pins TOLL LOG first and BID ACCURACY
+              immediately followed by BIDDING then CONTRACTS MADE, which are
+              the two page boundary's only tested seams; TRICKS TAKEN sits on
+              neither, and was lifted whole from between the tile ledger and
+              VERSUS THE FIELD, so their own adjacency is untouched. BIDDING
+              or CONTRACTS MADE would read more naturally moved instead, but
+              either alone breaks the pinned seam, and moving both together
+              (to keep that seam intact) overshoots the balance the other
+              way — measured against the demo gallery's "A well-traveled
+              stats page" exhibit, this single move already closes most of
+              the gap.
+
+              This move is NOT phone-order-preserving on its own — `display:
+              contents` flattens both wrappers into one sequence on a phone,
+              so declaring the panel four positions earlier in THE RECORD's
+              JSX puts it four positions earlier in the phone's DOM and,
+              left alone, its rendering too (4th of eleven panels instead of
+              9th, ahead of BID ACCURACY instead of after the tile ledger).
+              What actually keeps the phone's VISUAL order unchanged is a
+              trio of coordinated `order` bumps in style.css — see the
+              comment above `.stats-page .stats-trickdelta` there — which
+              re-sorts this panel behind BID ACCURACY/BIDDING/CONTRACTS
+              MADE/the tile ledger below 1024px only, undone again at
+              1024px where this panel's own document position (ahead of
+              BID ACCURACY, inside `.stats-col-record`) is already the
+              wanted one. That CSS restores the SIGHTED phone reading order
+              byte for byte; a screen reader's linear order still follows
+              the DOM, so it meets this panel ahead of BID ACCURACY rather
+              than after the tile ledger — a disclosed trade-off, not an
+              oversight. */}
           <div className="stats-col stats-col-record">
             <div className="stats-col-head">
               <span className="label-caps">THE RECORD</span>
@@ -530,6 +571,37 @@ export default function Player() {
             </ChartPanel>
           ) : null}
 
+          {stats.trickDelta.avgDelta !== null ? (
+            <PerforatedPanel
+              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'}`}
+              className="stats-trickdelta num"
+            >
+              <StemChart
+                points={stats.trickDelta.buckets.map((b) => ({
+                  tick: TRICK_DELTA_TICKS[b.delta],
+                  pct: Math.round((b.count / stats.trickDelta.boards) * 100),
+                  count: b.count,
+                }))}
+                avgIndex={stats.trickDelta.avgDelta + 3}
+                avgLabel={`Ø ${stats.trickDelta.avgDelta >= 0 ? '+' : '−'}${Math.abs(stats.trickDelta.avgDelta)}`}
+                leftCaption="short of contract"
+                rightCaption="over contract"
+              />
+              <div className="stats-trickdelta-note">
+                <GlossaryProse text={trickDeltaNote(stats.trickDelta.avgDelta)} />
+              </div>
+            </PerforatedPanel>
+          ) : null}
+
+          {/* BID ACCURACY stays the LAST thing in THE RECORD — TRICKS TAKEN is
+              declared above it rather than after, even though it reads as the
+              record's closing panel — because `stats.test.tsx` pins BID
+              ACCURACY's heading immediately followed by BIDDING's, which is
+              also THE COUNT's first panel; below 1024 both wrappers are
+              `display: contents` (see "THE TWO PAGES" above), so any panel
+              text placed after BID ACCURACY here would land between those two
+              headings on a phone regardless of which wrapper it is written
+              inside. Ahead of it, TRICKS TAKEN cannot land on that seam. */}
           <ChartPanel
             heading="BID ACCURACY"
             figure={t.avgBidAccuracy !== null ? `Ø ${t.avgBidAccuracy}%` : undefined}
@@ -751,28 +823,6 @@ export default function Player() {
               to={isMe && t.tops.latest ? `/t/${t.tops.latest.tournamentId}/b/${t.tops.latest.boardNo}` : undefined}
             />
           </div>
-
-          {stats.trickDelta.avgDelta !== null ? (
-            <PerforatedPanel
-              heading={`TRICKS TAKEN — ${stats.trickDelta.boards} CONTRACT${stats.trickDelta.boards === 1 ? '' : 'S'}`}
-              className="stats-trickdelta num"
-            >
-              <StemChart
-                points={stats.trickDelta.buckets.map((b) => ({
-                  tick: TRICK_DELTA_TICKS[b.delta],
-                  pct: Math.round((b.count / stats.trickDelta.boards) * 100),
-                  count: b.count,
-                }))}
-                avgIndex={stats.trickDelta.avgDelta + 3}
-                avgLabel={`Ø ${stats.trickDelta.avgDelta >= 0 ? '+' : '−'}${Math.abs(stats.trickDelta.avgDelta)}`}
-                leftCaption="short of contract"
-                rightCaption="over contract"
-              />
-              <div className="stats-trickdelta-note">
-                <GlossaryProse text={trickDeltaNote(stats.trickDelta.avgDelta)} />
-              </div>
-            </PerforatedPanel>
-          ) : null}
 
           {percentileRows.length > 0 ? (
             <PerforatedPanel heading="VERSUS THE FIELD" className="stats-versus num">

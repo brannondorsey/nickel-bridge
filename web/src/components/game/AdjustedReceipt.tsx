@@ -5,7 +5,7 @@ import { PerforatedPanel } from '../ds/PerforatedPanel';
 import { signedScore, vulLabel } from '../../format';
 import { ContractLabel } from './ContractLabel';
 import { GlossaryProse } from './GlossaryProse';
-import { ReceiptRow, caption } from './ScoreReceipt';
+import { ReceiptRow, caption, lineBarPct } from './ScoreReceipt';
 
 /**
  * The end of a "Play From Here" rehearsal — deliberately not a toll receipt,
@@ -66,7 +66,15 @@ export function AdjustedReceipt({
         {bd ? (
           <>
             {bd.lines.map((line, i) => (
-              <ReceiptRow key={i} index={i} label={line.label} detail={line.detail} caption={caption(line)} amount={line.amount} />
+              <ReceiptRow
+                key={i}
+                index={i}
+                label={line.label}
+                detail={line.detail}
+                caption={caption(line)}
+                amount={line.amount}
+                barPct={lineBarPct(line.amount, bd.lines)}
+              />
             ))}
             <div className="receipt-rule" style={{ '--i': bd.lines.length } as CSSProperties} />
             <ReceiptRow

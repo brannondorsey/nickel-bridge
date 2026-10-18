@@ -2329,12 +2329,22 @@ three numbers, declared together under "the responsive ladder" at the top of
   1400px three-column bidding grid sitting above the 1024px two-column one). A responsive
   override belongs immediately AFTER the rule it overrides, not in a tidy block somewhere
   else.
+- **`order` moves the eye; `+` moves with the DOM.** The profile declares TRICKS TAKEN inside
+  THE RECORD purely to balance the two columns' heights, and a trio of `order` bumps puts it
+  back where a phone reader expects it — but `.chart-panel + .chart-panel`, which tightens a
+  run of charts from 16px to 12px, reads document order and so stopped matching BID ACCURACY,
+  pushing it and the six panels under it 4px down the page at every width. Anywhere `order`
+  re-sorts flex children, every adjacent-sibling rule over them has to be re-stated for the
+  order the reader actually sees.
 
 **Every screen has a desktop shape, and it is a content decision.** Home is the play side and
 the toll ledger side by side (the ledger stopping at 42rem past 1400 — a crossing's row is a
 date, a field size and two figures, and 900px of rule between them is not more of the record);
 the profile is a two-page SPREAD — THE RECORD on the left, THE COUNT on the right — whose
-columns stop growing at 1400 and spend the rest on gutters; Traffic is the week as columns,
+columns keep growing with the page, `--page-pad` alone setting the gutter (they used to freeze
+at 36rem each past 1400, which capped the PAGE rather than an element and put ~144px of dead
+margin a side at 1440, against the ~40-54px every other screen agrees on at that width; a
+panel that genuinely wants the reading measure now wears it itself); Traffic is the week as columns,
 walked sideways; the Glossary flows into two or three print columns
 (`columns`, not a grid — the letters are wildly uneven, and a grid row as tall as its tallest
 letter leaves holes a flowing column doesn't); a crossing is its scoresheet beside its field;
@@ -2366,8 +2376,10 @@ cut, and that page opens on FOR CONTEXT's own panel heading instead. **And the c
 the old rule's were 3fr/2fr: both pages are mostly beam rows once the split is the reading
 order rather than beams-vs-commentary, and a bar's width is its own scale, so there is no case
 for starving one page to feed the other. Past 1400 they stop growing at 36rem each and the
-gutters take the rest, the same rule the profile spread takes one level up — a beam row is not
-more readable at 900px than at 560. The masthead spans the top of both pages and the closing
+gutters take the rest — a beam row is not more readable at 900px than at 560. The profile
+spread used to do the same and no longer does (see above); the argument is the same for both,
+and the counter-argument — that this caps the page rather than the element — applies here too,
+so expect this block to go the same way. The masthead spans the top of both pages and the closing
 CTA the foot. That CTA's `--action-w` cap and the ineligible state's reading-measure cap are
 both at **720**, not with the spread at 1024: neither needs a second column to exist, and a
 button or a paragraph reaches its limit as soon as the column is wider than one. Putting them
