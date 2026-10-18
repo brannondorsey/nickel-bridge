@@ -2147,12 +2147,36 @@ a.ds-btn-secondary:hover {
   flex: 1;
   min-height: 0;
 }
+/* YOUR HAND AND ITS HCP ARE NEVER THE PART THAT SCROLLS AWAY. Whenever this
+   region's content outgrows it — a long auction, an open meaning panel, a short
+   landscape screen — something has to leave the screen, and an ordinary scroll
+   region opens at its TOP, so what left was the bottom: the dock sat over the
+   hand and the seat line with your HCP was gone. That is the reverse of what a
+   bidder needs, since the hand is the one thing on this screen you are deciding
+   about. `column-reverse` makes the scroll origin the BOTTOM edge — a scroll
+   container starts at its main-start, and overflow runs off the end, which is
+   now the top — so the hand and seat line always sit on the dock and the
+   overflow comes out of the oldest rows of the tray, which stay one scroll away.
+   The visual order is put back with `order` on .bid-decision below, so the tray
+   still reads above the hand. This holds at any size without measuring
+   anything, which is the point: an earlier fix sized cards against a hand-tuned
+   budget of the chrome around them, and the first two-row auction overran it.
+
+   The min-height is the other half: it keeps room for the hand itself, so on a
+   screen too short for the dock AND a hand (a phone held sideways) the DOCK is
+   what gives, scrolling inside itself, rather than this region collapsing to
+   nothing. 4rem covers the fan's top padding, the seat line and .bid-decision's
+   own bottom padding. Note this is a min-height on an overflow container, so
+   it never forces a scroll where there was none. */
 .bid-scroll {
   flex: 1;
-  min-height: 0;
+  min-height: calc(var(--card-h) + 4rem);
   overflow-y: auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
+}
+.bid-scroll > .bid-decision {
+  order: -1;
 }
 /* auction stays at the top; the decision cluster (feedback, hand, seat line) is
    pushed to the bottom of the scroll region so it hugs the dock, with the slack
@@ -2164,7 +2188,13 @@ a.ds-btn-secondary:hover {
   padding-bottom: var(--space-3);
 }
 .bid-dock {
-  flex-shrink: 0;
+  /* Shrinks only once .bid-scroll is down to its min-height (it has the flex
+     basis of 0 and takes every spare pixel first), i.e. only on a screen too
+     short to fit both; it then scrolls its own plates rather than covering
+     the hand. */
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
   border-top: 1px solid var(--ink);
   background: var(--surface);
 }
@@ -5248,23 +5278,10 @@ a.stat-tile:hover {
     /* Bidding stacks exactly one hand: nothing above it but a tray, nothing
        below it but the box. So the hand can be the size the screen implies —
        it is the thing you are actually looking at while you decide — and the
-       fit half of --card-h still binds first if the window is narrow.
-
-       The third term is the HEIGHT that is actually left, and it is what
-       keeps your hand and its HCP above the dock. A landscape tablet is the
-       case that broke without it: at 1024x768 the dock alone is ~358px, and
-       26vh still asked for 150px cards, so the scroll region overflowed and —
-       since an overflowing region opens at its top — the dock sat over the
-       bottom of the hand and the seat line (the HCP) was off screen entirely.
-       --bid-chrome is everything in the column that is not a card: masthead,
-       tray (one row of calls), an open meaning panel, the fan's and seat
-       line's own padding, and the dock. Hand-measured in Chromium, so a
-       change to any of those heights wants it re-measured; overshooting is
-       safe (a longer auction degrades into the ordinary scroll, same as
-       before), undershooting just leaves cards a little smaller than they
-       could be. */
-    --bid-chrome: 728px;
-    --card-h-cap: min(150px, 26vh, calc(100dvh - var(--bid-chrome)));
+       fit half of --card-h still binds first if the window is narrow. Height
+       is what this cannot see, which is why the short-screen block below
+       exists — and why .bid-scroll keeps the hand on the dock regardless. */
+    --card-h-cap: min(150px, 26vh);
   }
   /* Centre the tray/feedback/hand group in the space above the dock. It must
      be auto MARGINS and never `justify-content: center` on .bid-scroll, which
@@ -5285,19 +5302,17 @@ a.stat-tile:hover {
     margin-bottom: auto;
   }
 }
-/* Short landscape screens (an iPad on its side, a 720p laptop): the height
- * term above alone is not enough. At 1024x768 728px of chrome leaves 40px of
- * card — under --card-h's 56px floor — and at 1280x720 it leaves nothing at
- * all. So below 900px tall the same pieces tighten: the dock's padding and
- * gaps, the bid plates (44 -> 40px, still a comfortable target with a
- * pointer or a thumb on a tablet), and the spacing around the meaning panel,
- * fan and seat line. Nothing moves or reorders; the chrome just comes down
- * to 652px. Measured with the meaning panel open: cards 116px at 1024x768,
- * 150px at 1180x820, 68px at 1280x720 — hand and HCP clear of the dock at
- * all three, where before all three cut the hand off. */
-@media (min-width: 1024px) and (max-height: 900px) {
+/* Short screens at width (a tablet on its side, a foldable, a 720p laptop).
+ * .bid-scroll already guarantees the hand and its HCP sit on the dock, so this
+ * block is not what keeps them visible — it is what keeps the AUCTION visible
+ * beside them, since overflow there comes out of the tray. The dock is ~358px
+ * of plates, more than half of a 686px-tall screen, so below 900px tall it
+ * tightens (padding, gaps, plates 44 -> 40px — still a comfortable target) and
+ * the cards stop sizing from width alone. From 720, not 1024: the tablet band
+ * holds the same short landscape screens (an 810x686 foldable is in it). */
+@media (min-width: 720px) and (max-height: 900px) {
   :root:has(.board-page.bidding-dock) {
-    --bid-chrome: 652px;
+    --card-h-cap: min(110px, 13vh);
   }
   .bidding-dock .bidbox-wrap {
     padding: 6px 12px 8px;

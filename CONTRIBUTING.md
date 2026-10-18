@@ -2468,13 +2468,22 @@ formula measures `--fan-space`, which is the viewport on the phone (identical to
 the viewport there would size cards from space the fan does not have and overflow the column.
 `--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
 `min(150px, 20vh, (--board-avail - 8rem) / 4.46)` on the PLAY screen (the third term is the
-table's — see the board section above) and `min(150px, 26vh, 100dvh - --bid-chrome)` on the
-BIDDING screen, which stacks exactly one hand and can afford the looser `vh` term. That third
-term is the height left once the masthead, tray, meaning panel and the ~358px dock are paid
-for, and it is not optional: without it a landscape tablet (1024×768) asked for 150px cards,
-the scroll region overflowed, and the dock sat over the bottom of the hand with the HCP line
-off screen. Below 900px tall the dock and the gaps around the hand also tighten (bid plates
-44 → 40px) so that budget leaves real cards — 116px at 1024×768, 68px at 1280×720. The `vh` term is the part worth understanding: phones are portrait and desktops are
+table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
+stacks exactly one hand and can afford the looser `vh` term; below 900px tall at any width
+from 720 the bidding cap drops to `min(110px, 13vh)` and the dock's plates tighten (44 → 40px),
+so a short landscape screen keeps the auction in view as well as the hand.
+
+**On the bidding screen your hand and its HCP never scroll away, at any size — and that is
+structural, not tuned.** `.bid-scroll` (the region between the masthead and the dock) is
+`flex-direction: column-reverse` with `.bid-decision` given `order: -1`, so it reads in the same
+order but its scroll origin is the BOTTOM edge: whatever doesn't fit comes out of the oldest
+rows of the tray, one scroll away, instead of the hand. An ordinary scroll region opens at its
+top, so overflow used to land on the hand — the dock sat over the cards and the HCP line was
+off screen. The first fix sized cards against a hand-measured budget of the chrome around
+them, and failed on the first two-row auction and on every tablet narrower than 1024; don't go
+back to measuring. Its other half is `.bid-scroll`'s `min-height` (one hand plus its seat line)
+and a dock that may shrink and scroll its own plates: on a screen too short for both (a phone
+held sideways) the bid box is what scrolls, never the hand. The `vh` term is the part worth understanding: phones are portrait and desktops are
 landscape, so the moment the app claims desktop the scarce axis flips from width to height.
 The play screen stacks dummy, the table and your own fan — about 3.6 card heights plus ~390px
 of chrome — so a 900px-tall window affords roughly 140px of card and a 700px one about 85.
