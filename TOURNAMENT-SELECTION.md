@@ -14,7 +14,7 @@ whole point of the app.
 
 ## The algorithm
 
-`POST /api/play` → `placeUser` picks a tournament in four tiers:
+`POST /api/play` → `placeUser` picks a tournament in five tiers:
 
 1. **Resume** — if you have a started-but-unfinished tournament, you go back to it. This
    tier has no time window: your own unfinished tournaments never expire on you.
@@ -41,8 +41,14 @@ whole point of the app.
    among those within `SAMPLE_RATIO` (80%) of the top score (never below the threshold),
    proportional to score. Sampling instead of argmax keeps simultaneous arrivals from all
    piling onto a single tournament.
-4. **Create** — if nothing beats the threshold, a fresh tournament is created… which the
-   grace window then fills with the next few requesters.
+4. **Backfill** (`PLACEMENT.BACKFILL`, on) — if nothing beats the threshold, join a
+   tournament you've never touched that already has a human who **finished** it (all four
+   boards) and was created under the pessimistic claim rule, at any age — no backlog window.
+   Ordered like the grace tier (`chooseBackfill` reuses `graceOrder`): a field stuck at one
+   human first, then the fullest, then the newest. See
+   [Backfill before creating](#backfill-before-creating).
+5. **Create** — if there's nothing to backfill either, a fresh tournament is created… which
+   the grace window then fills with the next few requesters.
 
 ### Why the threshold is `ln 2`
 
@@ -51,7 +57,47 @@ So joining an existing candidate is only worth it if it scores at least that hyp
 `(1 finisher, age 0)` tournament. A corollary: outside the grace window a candidate
 effectively needs **two or more finishers** to be joined — a lone finisher's score
 `ln 2 · e^(−age/τ)` sits below the threshold at any age > 0. That's deliberate: past its
-grace window, a one-player tournament isn't worth joining over fresh boards.
+grace window, a one-player tournament isn't worth joining over fresh boards — in the
+*scoring* tier. The backfill tier below exists because that reasoning broke down in practice.
+
+### Backfill before creating
+
+The scoring tier's corollary has a failure mode it never priced in: a player faster than
+everyone else combined. Once they have played every young field, every remaining candidate
+scores below `ln 2`, so each request creates — and the new tournament is solo until somebody
+else happens along inside its 48h grace window. In September 2026 a returning player opened
+**31 solo tournaments in a row** that way while 62 played-but-thin pessimistic-claim fields
+(one to five human finishers each) sat unreachable behind the decay and the 30-day window.
+
+So before creating, placement joins one of those. Three deliberate choices:
+
+- **A finisher, not a starter.** A human must have completed all four boards, which is what
+  a field needs before it can rate anyone. Joining a field somebody abandoned mid-way buys
+  nobody a comparison.
+- **Pessimistic claim rule only.** Optimistic-claim tournaments predate the claim fix and
+  claim for everyone regardless of preference (invariant 1); placement should never send a
+  player back into that gate.
+- **No reach limit.** The fields this rescues are exactly the ones the window and the decay
+  already dropped. Measured against a 30-day and 60-day reach on the real trace, unlimited
+  and 60 days tie (all pessimistic fields are younger than that today) and both beat 30.
+
+Replayed through `tools/calibrate_placement.mjs --sweep backfill` (558 real demands,
+2026-09-26):
+
+| | Backfill off | Backfill on |
+| --- | --- | --- |
+| Tournaments created | 196 | 164 |
+| Tournaments with one human | 51 | 7 |
+| Crossings with nobody to compare against | 9.1% | 1.3% |
+| Field at the average crossing | 3.85 | 4.15 |
+| Median first-to-last arrival | 40h | 161h |
+
+The last row is the price: the people you are compared against may have played the deal
+weeks ago. That is the right trade while the population is small and uneven, and the wrong
+one once daily traffic fills fresh tournaments by itself. **To switch back, set
+`PLACEMENT.BACKFILL` to `false`** — placement is then exactly tiers 1-3 and 5, and the
+simulator's `current` row follows the flag, so re-running `--sweep backfill` against a fresh
+trace shows both sides before and after.
 
 ### Grace ordering: rescue, then fill
 

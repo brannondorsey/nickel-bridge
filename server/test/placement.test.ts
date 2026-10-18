@@ -7,7 +7,8 @@ process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), 'bridge-placement-')), 'te
 
 // dynamic imports so DB_PATH is set before the db module initializes
 const { db } = await import('../src/db.js');
-const { PLACEMENT, chooseTournament, placeUser, tournamentScore } = await import('../src/tournaments.js');
+const { PLACEMENT, chooseBackfill, chooseTournament, placeUser, tournamentScore } = await import('../src/tournaments.js');
+type BackfillCandidate = import('../src/tournaments.js').BackfillCandidate;
 type PlacementCandidate = import('../src/tournaments.js').PlacementCandidate;
 
 // A stable "now" for injected clocks. Anchored to the real clock because the
@@ -300,7 +301,9 @@ describe('placeUser over the database', () => {
     const returner = addUser('returner');
     const tArchived = addTournament('ancient', NOW - days(31));
     for (const v of veterans) finishBoards(tArchived, v, 4); // huge field, out of window
-    const fresh = placeUser(returner, 'expert', { nowSec: NOW, rng: rng0 });
+    // The WINDOW is under test here, so the backfill tier — which has no
+    // window and would rightly take this field — is switched off.
+    const fresh = placeUser(returner, 'expert', { nowSec: NOW, rng: rng0, backfill: false });
     expect(fresh.tournament.id).not.toBe(tArchived);
     // ...but their own unfinished boards in an archived tournament still resume
     finishBoards(tArchived, returner, 2);
@@ -323,5 +326,103 @@ describe('placeUser over the database', () => {
     // grace cap reached, nobody has finished a board → score 0 → fresh one
     const overflow = placeUser(group[PLACEMENT.GRACE_CAP], 'expert', { nowSec: NOW, rng: rng0 });
     expect(overflow.tournament.id).not.toBe(first.tournament.id);
+  });
+});
+
+function backfillCand(opts: { finishers?: number; starters?: number; ageSec?: number }): BackfillCandidate {
+  const id = nextId++;
+  return {
+    id,
+    name: `T${id}`,
+    seed: 'seed',
+    created_at: NOW - (opts.ageSec ?? 0),
+    finishers: opts.finishers ?? 1,
+    starters: opts.starters ?? opts.finishers ?? 1,
+  } as BackfillCandidate;
+}
+
+describe('chooseBackfill', () => {
+  it('returns null with nothing to join, so placement creates', () => {
+    expect(chooseBackfill([])).toBeNull();
+    expect(chooseBackfill([backfillCand({ finishers: 0, starters: 2 })])).toBeNull();
+  });
+
+  it('rescues a field stuck at one human before deepening a fuller one', () => {
+    const full = backfillCand({ finishers: 4, ageSec: days(3) });
+    const alone = backfillCand({ finishers: 1, ageSec: days(40) });
+    expect(chooseBackfill([full, alone])).toBe(alone);
+  });
+
+  it('otherwise deepens the fullest field, freshest only breaking ties', () => {
+    const two = backfillCand({ finishers: 2, ageSec: days(1) });
+    const threeOld = backfillCand({ finishers: 3, ageSec: days(50) });
+    const threeNew = backfillCand({ finishers: 3, ageSec: days(20) });
+    expect(chooseBackfill([two, threeOld, threeNew])).toBe(threeNew);
+  });
+});
+
+describe('placeUser backfill tier', () => {
+  const rng0 = () => 0;
+  // Its own difficulty tier: earlier cases leave young, grace-eligible
+  // 'expert' and 'beginner' tournaments behind, and the grace tier would
+  // (correctly) take those before backfill is ever consulted.
+  const TIER = 'intermediate' as const;
+  // Every call below passes `backfill` explicitly rather than inheriting
+  // PLACEMENT.BACKFILL, so switching production back is a one-line change
+  // that leaves this suite green and still pinning what the tier does.
+  const addOld = (name: string) => {
+    const id = addTournament(name, NOW - days(60));
+    db.prepare(`UPDATE tournaments SET difficulty = ? WHERE id = ?`).run(TIER, id);
+    return id;
+  };
+  const cleanup = (ids: number[]) => {
+    for (const id of ids) {
+      db.prepare(`DELETE FROM boards WHERE tournament_id = ?`).run(id);
+      db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(id);
+    }
+  };
+
+  it('sends a player who has exhausted the young fields to an old one with a finisher', () => {
+    const [veteran, fast] = ['bf-veteran', 'bf-fast'].map(addUser);
+    // Two months old, one finisher: scores far below ln 2 and sits outside
+    // the backlog window, so the scoring tier can never reach it.
+    const old = addOld('bf-old');
+    finishBoards(old, veteran, 4);
+
+    const withBackfill = placeUser(fast, TIER, { nowSec: NOW, rng: rng0, backfill: true }).tournament.id;
+    const without = placeUser(addUser('bf-control'), TIER, { nowSec: NOW, rng: rng0, backfill: false }).tournament.id;
+    cleanup([old, without]);
+
+    expect(withBackfill).toBe(old);
+    expect(without).not.toBe(old);
+  });
+
+  it('never offers a pre-fix optimistic tournament, another tier, or a field nobody finished', () => {
+    const [veteran, partial, fast] = ['bf-v2', 'bf-partial', 'bf-fast2'].map(addUser);
+    const optimistic = addOld('bf-optimistic');
+    db.prepare(`UPDATE tournaments SET claim_rule = 'optimistic' WHERE id = ?`).run(optimistic);
+    finishBoards(optimistic, veteran, 4);
+    const otherTier = addTournament('bf-other-tier', NOW - days(60)); // stays 'expert'
+    finishBoards(otherTier, veteran, 4);
+    // Three done boards is not a finisher: the field cannot rate anyone yet.
+    const unfinished = addOld('bf-unfinished');
+    finishBoards(unfinished, partial, 3);
+
+    const placed = placeUser(fast, TIER, { nowSec: NOW, rng: rng0, backfill: true }).tournament.id;
+    cleanup([optimistic, otherTier, unfinished, placed]);
+
+    expect([optimistic, otherTier, unfinished]).not.toContain(placed);
+  });
+
+  it('never sends a player back into a tournament they already played', () => {
+    const [veteran, fast] = ['bf-v3', 'bf-fast3'].map(addUser);
+    const old = addOld('bf-played');
+    finishBoards(old, veteran, 4);
+    finishBoards(old, fast, 4);
+
+    const placed = placeUser(fast, TIER, { nowSec: NOW, rng: rng0, backfill: true }).tournament.id;
+    cleanup([old, placed]);
+
+    expect(placed).not.toBe(old);
   });
 });
