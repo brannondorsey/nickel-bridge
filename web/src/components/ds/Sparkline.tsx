@@ -8,16 +8,20 @@ export interface SparkPoint {
   value: number;
 }
 
-/** Plot geometry, in SVG user units. The plot scales UNIFORMLY to its
- *  container (style.css gives it `height: auto`), so these are a design width
- *  rather than pixels — 326 is the same figure DayGrid and StemChart are drawn
- *  against, and it is roughly the phone's own plot width, so on the design
- *  viewport one user unit is one pixel.
+/** Plot geometry, in SVG user units. The plot stretches to its container on x
+ *  alone (`preserveAspectRatio="none"`) at a fixed 86px height, so these are a
+ *  design width rather than pixels — 326 is the same figure DayGrid and
+ *  StemChart are drawn against, and roughly the phone's own plot width.
  *
- *  It used to stretch on x alone (`preserveAspectRatio="none"`), which is
- *  invisible at 326-in-330 and indefensible at 326-in-960: on a desktop the
- *  DayGrid's squares became 3:1 lozenges and StemChart's <text> labels were
- *  drawn stretched, since a non-uniform viewBox scales glyphs too. */
+ *  Stretching is what a time series wants at width: a wider panel spreads the
+ *  points out rather than making the chart taller. Uniform scaling was tried
+ *  and turned a 1440px profile's three sparklines into 163px-tall slabs (311px
+ *  at 2560), strokes and all. What a non-uniform viewBox gets wrong is the
+ *  MARKS, so none of them is left to it: every stroke is
+ *  `vector-effect: non-scaling-stroke` (style.css), and the dots are not
+ *  circles — a `<circle>` stretched 2× is an ellipse — but zero-length lines
+ *  with round caps, which a non-scaling stroke draws as a true circle of
+ *  exactly its stroke width at any scale. */
 const W = 326;
 const TOP = 14;
 const BASE = 76;
@@ -163,7 +167,7 @@ export function Sparkline({
           if (document.activeElement !== plotRef.current) setSelected(null);
         }}
       >
-        <svg width="100%" height="86" viewBox={`0 0 ${W} 86`} aria-hidden="true">
+        <svg width="100%" height="86" viewBox={`0 0 ${W} 86`} preserveAspectRatio="none" aria-hidden="true">
           <line x1="0" y1={TOP} x2={W} y2={TOP} stroke="var(--line)" strokeWidth="1" strokeDasharray="3 4" />
           {refValue !== undefined ? (
             <line className="sparkline-ref" x1="0" y1={y(refValue)} x2={W} y2={y(refValue)} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="5 4" />
@@ -174,10 +178,12 @@ export function Sparkline({
           {sel !== null ? (
             <>
               <line x1={x(sel)} y1={TOP - 6} x2={x(sel)} y2={BASE} stroke="var(--ink)" strokeWidth="1" strokeDasharray="2 3" />
-              <circle cx={x(sel)} cy={y(points[sel].value)} r="4.5" fill="var(--paper)" stroke="var(--ink)" strokeWidth="2" />
+              {/* a r=4.5 ring with a 2px stroke: 11px of ink, a 7px paper hole */}
+              <Dot cx={x(sel)} cy={y(points[sel].value)} d={11} color="var(--ink)" />
+              <Dot cx={x(sel)} cy={y(points[sel].value)} d={7} color="var(--paper)" />
             </>
           ) : null}
-          <circle cx={x(n - 1)} cy={y(points[n - 1].value)} r="3.5" fill="var(--ink)" />
+          <Dot cx={x(n - 1)} cy={y(points[n - 1].value)} d={7} color="var(--ink)" />
         </svg>
       </div>
       <div className="sparkline-captions">
@@ -193,4 +199,10 @@ export function Sparkline({
       ) : null}
     </div>
   );
+}
+
+/** A round dot `d` px across that stays round under the plot's x-only stretch
+ *  — see the geometry note at the top of this file. */
+function Dot({ cx, cy, d, color }: { cx: number; cy: number; d: number; color: string }) {
+  return <line x1={cx} y1={cy} x2={cx} y2={cy} stroke={color} strokeWidth={d} strokeLinecap="round" />;
 }

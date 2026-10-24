@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+
 export interface StemPoint {
   /** short axis tick, e.g. "−2" or "MADE" */
   tick: string;
@@ -60,33 +62,47 @@ export function StemChart({
 
   return (
     <div className="stemchart">
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-        <line x1="0" y1={BASELINE} x2={W} y2={BASELINE} stroke="var(--line)" strokeWidth="1" />
-        <line x1={xAvg} y1="8" x2={xAvg} y2={BASELINE} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="4 3" />
-        <text
-          x={avgOnRight ? xAvg - 5 : xAvg + 5}
-          y={AVG_LABEL_Y}
-          textAnchor={avgOnRight ? 'end' : 'start'}
-          className="stemchart-avg"
-        >
-          {avgLabel}
-        </text>
-        {points.map((p, i) => {
-          const barH = (p.pct / maxPct) * MAX_BAR;
-          const cx = x(i);
-          return (
-            <g key={i}>
-              <rect x={cx - BAR_W / 2} y={BASELINE - barH} width={BAR_W} height={barH} fill="var(--ink)" />
-              <text x={cx} y={BASELINE - barH - 7} className="stemchart-val">
-                {format(p.pct)}
-              </text>
-              <text x={cx} y={BASELINE + 15} className="stemchart-tick">
-                {p.tick}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      <div className="stemchart-plot">
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" y1={BASELINE} x2={W} y2={BASELINE} stroke="var(--line)" strokeWidth="1" />
+          <line x1={xAvg} y1="8" x2={xAvg} y2={BASELINE} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="4 3" />
+          {points.map((p, i) => {
+            const barH = (p.pct / maxPct) * MAX_BAR;
+            // a bar is a BAR_W-wide stroke rather than a rect, so the x-only
+            // stretch widens the gaps between bars and never the bars
+            return barH > 0 ? (
+              <line key={i} className="stemchart-bar" x1={x(i)} y1={BASELINE - barH} x2={x(i)} y2={BASELINE} stroke="var(--ink)" strokeWidth={BAR_W} />
+            ) : null;
+          })}
+        </svg>
+        {/* The labels are HTML laid over the plot rather than <text> inside it,
+            for DayStrip's reason: the plot stretches on x alone, and a glyph in
+            a non-uniformly scaled viewBox stretches with it. Each one is
+            positioned at its own fraction of the width and at its SVG baseline
+            in px — the height is fixed, so one user unit is one px on y. */}
+        <div className="stemchart-labels" aria-hidden="true">
+          <span
+            className={`stemchart-avg${avgOnRight ? ' end' : ''}`}
+            style={{ left: `${((avgOnRight ? xAvg - 5 : xAvg + 5) / W) * 100}%`, top: AVG_LABEL_Y }}
+          >
+            {avgLabel}
+          </span>
+          {points.map((p, i) => {
+            const barH = (p.pct / maxPct) * MAX_BAR;
+            const left = `${(x(i) / W) * 100}%`;
+            return (
+              <Fragment key={i}>
+                <span className="stemchart-val" style={{ left, top: BASELINE - barH - 7 }}>
+                  {format(p.pct)}
+                </span>
+                <span className="stemchart-tick" style={{ left, top: BASELINE + 15 }}>
+                  {p.tick}
+                </span>
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
       <div className="stemchart-captions">
         <span>{leftCaption}</span>
         <span>{rightCaption}</span>

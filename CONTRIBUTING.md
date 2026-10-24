@@ -1407,7 +1407,12 @@ hands, its two wrapped lines reserved up front (the dock rule again). Reduced mo
 trick-by-trick list instead, a legitimate reading rather than a fallback. Every moment shown
 is charged and keeps `StarGrade` (✗ at 0) — a costly-but-unfindable candidate never reaches
 either lens; the server drops it before the response leaves `computeCore`, so there is
-nothing here to excuse. Only THE PLAY skips `?par=1`. The demo
+nothing here to excuse. Only THE PLAY skips `?par=1`. Past 720 THE PLAY's replay dock is one row and
+pinned to the window's foot (`position: sticky`), and the cards size to the window's height —
+`(100vh - 680px) / 3.6`, floored at the phone's 82.5px and capped at 118px: the stack above the
+dock runs ~680px before a card is counted, so at every common laptop height the controls used
+to sit below the fold and stepping the play meant a scroll per card. Where the whole lens
+cannot fit (1280×720), the board scrolls under the dock rather than the cards shrinking further. The demo
 gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
 path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
 dissolved the tour's class-for-class `TourResult` copy).
@@ -2559,15 +2564,34 @@ everything above the waterline, so the desktop hero showed a river and no bridge
 genuinely seamless rather than nearly — the drawing's own edges each carry half of the same
 pier line, and the arch curve is at a springing point on both.
 
-**The three hand-rolled charts scale uniformly now.** `Sparkline`, `StemChart` and `DayGrid`
-were drawn against a 326-unit design width and stretched on x alone
-(`preserveAspectRatio="none"`), which is invisible at 326-in-330 and indefensible at
-326-in-960: the toll log's days became 3:1 lozenges and the stem chart's `<text>` labels were
-drawn stretched, since a non-uniform viewBox scales glyphs too. They now scale on both axes
-(`height: auto` in `style.css`), so a wider panel makes the whole drawing bigger.
+**The hand-rolled charts stretch on x and keep their height — and only the calendar scales.**
+`Sparkline`, `StemChart` and `DayGrid` are drawn against a 326-unit design width with
+`preserveAspectRatio="none"`, which is invisible at 326-in-330 and indefensible at 326-in-960
+for anything that is not a line: the toll log's days became 3:1 lozenges, the stem chart's
+`<text>` labels were drawn stretched, and every stroke thickened on its verticals. Scaling all
+three uniformly (`height: auto`) was the first fix and the wrong one for two of them: a 1440px
+profile drew its sparklines 163px tall and the stem chart's labels at 35px — 311px and 66px at
+2560. A wider panel should spread a time series or a histogram OUT, not make it taller. So:
 
-**`DayStrip` is the exception, and it is the exception because it carries TYPE.** Uniform
-scaling is right for a sparkline and wrong for an axis: the traffic feed's hours rule is
+- **Sparkline and StemChart keep a fixed height and stretch on x**, and none of their marks is
+  left to the stretch. Every stroke is `vector-effect: non-scaling-stroke`; Sparkline's dots are
+  zero-length lines with round caps (a stretched `<circle>` is an ellipse; a non-scaling round
+  cap is a true circle of its stroke width at any scale); StemChart's bars are `BAR_W`-wide
+  strokes rather than rects, so the stretch widens the gaps between bars and never the bars; and
+  its labels are HTML laid over the plot, DayStrip's move below, each pinned at its SVG baseline
+  by `--stem-lift`. At 390 the stretch is ~1.0, so the phone is unchanged: the profile is
+  2693px tall on both, with every panel at the same offset.
+- **DayGrid scales uniformly, and only past 720** (`.stats-page .daygrid-plot > svg`), because
+  its squares are the one shape here a stretch ruins and it carries no stroke or type for a
+  uniform scale to inflate; the panel caps it at 34rem. Below 720 it keeps the stretch, which on
+  a phone is within a few px of its design width.
+
+The uniform version also gave the three SVGs `display: block`, which removed each one's inline
+baseline gap and took ~36px off the PHONE profile — the kind of change the 390 column exists to
+catch. The inline gap is back.
+
+**`DayStrip` is where that pattern came from, because it carries TYPE.** Uniform scaling is
+wrong for an axis: the traffic feed's hours rule is
 `width: 100%` over a 324-unit viewBox, so a tablet's ~770px panel scaled every user unit 2.4×
 — including `<text>`, which put "12 AM / 6 AM / NOON / 6 PM" on screen at ~20px, twice the size
 of the clock times in the rows beneath it, and nothing inside a uniformly-scaled SVG can opt

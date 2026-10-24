@@ -481,7 +481,7 @@ describe('StemChart', () => {
         rightCaption="over contract"
       />,
     );
-    expect(container.querySelectorAll('rect')).toHaveLength(3);
+    expect(container.querySelectorAll('.stemchart-bar')).toHaveLength(3);
     expect(screen.getByText('MADE')).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
     expect(screen.getByText('Ø +0.2')).toBeInTheDocument();

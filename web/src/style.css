@@ -1377,18 +1377,17 @@ a.ds-btn-secondary:hover {
   /* the plot scrubs on horizontal drag, so keep vertical scrolling with the page */
   touch-action: pan-y;
 }
-/* The three hand-rolled charts are drawn against a 326-unit design width and
-   scale uniformly from it — `height: auto` is what makes the viewBox's own
-   aspect ratio decide the height, so a wider container makes the whole
-   drawing bigger instead of stretching it on x. See Sparkline's geometry note
-   for what the stretched version cost. `display: block` kills the inline
-   baseline gap the taller box would otherwise show under it. */
-.sparkline-plot > svg,
-.stemchart > svg,
-.daygrid-plot > svg {
-  display: block;
-  width: 100%;
-  height: auto;
+/* Sparkline and StemChart stretch on x alone at a fixed height (each sets
+   `preserveAspectRatio="none"`): a wider panel spreads a time series or a
+   histogram out rather than making it taller. Scaling them uniformly was tried
+   and drew a 1440px profile's sparklines 163px tall and StemChart's labels at
+   35px. What a non-uniform viewBox does get wrong is a stroke's width — a
+   2.5px line drawn 2x wider is 5px thick on its verticals and 2.5px on its
+   horizontals — so every stroke opts out of the scale. The marks that cannot
+   (dots, labels) are handled in the components themselves. */
+.sparkline-plot > svg *,
+.stemchart-plot > svg * {
+  vector-effect: non-scaling-stroke;
 }
 .sparkline-plot:focus-visible {
   outline: 2px solid var(--accent);
@@ -3528,6 +3527,10 @@ a.board-row:hover {
     max-width: 34rem;
     margin-inline: auto;
   }
+  /* square days at any width — see DayGrid.tsx */
+  .stats-page .daygrid-plot > svg {
+    height: auto;
+  }
 }
 
 
@@ -4006,27 +4009,40 @@ a.stat-tile:hover {
   color: var(--muted);
   margin-top: 2px;
 }
-.stemchart-val,
-.stemchart-tick {
-  text-anchor: middle;
+.stemchart-plot {
+  position: relative;
+}
+/* The labels sit over the plot in HTML (see StemChart.tsx), each pinned at its
+   SVG anchor: `left` is the x as a fraction of the width, `top` the text's
+   BASELINE in px. The transform turns that into the box's position — centred
+   on x like the old `text-anchor: middle`, and lifted by the font's ascent so
+   the baseline, not the top of the box, lands on `top`. */
+.stemchart-labels > span {
+  position: absolute;
+  line-height: 1;
+  white-space: nowrap;
+  font-family: var(--font-label);
+  transform: translate(-50%, var(--stem-lift));
+  --stem-lift: -0.9em;
 }
 .stemchart-val {
-  font-family: var(--font-label);
   font-weight: 800;
   font-size: 11px;
-  fill: var(--ink);
+  color: var(--ink);
 }
 .stemchart-tick {
-  font-family: var(--font-label);
   font-weight: 700;
   font-size: 9px;
-  fill: var(--muted);
+  color: var(--muted);
 }
-.stemchart-avg {
-  font-family: var(--font-label);
+.stemchart-labels > .stemchart-avg {
   font-weight: 700;
   font-size: 9.5px;
-  fill: var(--accent);
+  color: var(--accent);
+  transform: translate(0, var(--stem-lift));
+}
+.stemchart-labels > .stemchart-avg.end {
+  transform: translate(-100%, var(--stem-lift));
 }
 
 /* `order: 1`, paired with TRICKS TAKEN's and RIVALRIES' own — see the long
@@ -7728,6 +7744,54 @@ a.stat-tile:hover {
 }
 .replay-dock-rehearse {
   margin-top: 8px;
+}
+
+/* At width the dock is the replay's control band: one row instead of three,
+   pinned to the foot of the window like the bid dock. On a phone the dock is
+   reached by scrolling past your own hand, which is where a thumb is anyway;
+   on a laptop the stack above it (masthead, lens switch, the audit ribbon's
+   reserved caption, the PLAYED and W/E rails, two fans and the table) runs
+   ~680px before a single card is counted, so the controls fell below the fold
+   at every common laptop height and stepping through the play meant scrolling
+   for each card. Sticky makes reaching them structural rather than a matter of
+   the cards happening to be small enough.
+
+   The cards then size to the window's height, not only its width: the stack
+   is ~3.6 card heights plus that chrome, so (100vh - 680px) / 3.6 is the card
+   that fits the whole lens on screen. It is floored at the phone's own 82.5px
+   — on a window too short to fit, the board scrolls under the pinned dock
+   rather than shrinking past what the lens had before tablets existed — and
+   capped at the ladder's 118px. */
+@media (min-width: 720px) {
+  :root:has(.analyze-page .replay-dock) {
+    --card-h-cap: min(118px, max(82.5px, calc((100vh - 680px) / 3.6)));
+  }
+  .replay-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    /* the dock's height is fractional (font metrics), and a sticky box snaps
+       its paint to whole pixels — measured, that left a 1px row of the hand
+       showing under it at the window's foot. A shadow in its own fill closes
+       the seam whichever way the snap goes. */
+    box-shadow: 0 2px 0 var(--panel);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .replay-pips {
+    flex-basis: 100%;
+    margin-bottom: 2px;
+  }
+  .replay-dock-moment,
+  .replay-dock-rehearse {
+    margin-top: 0;
+  }
+  .replay-dock-row .ds-btn {
+    flex: 0 1 auto;
+    width: auto;
+  }
 }
 
 /* the engine's card, marked in a suit-line rail — the fan uses the live
