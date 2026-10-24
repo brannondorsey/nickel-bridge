@@ -272,6 +272,27 @@ export default function Compare() {
       <ScreenHeader title="Compare" onBack={() => navigate(-1)} />
       {who}
 
+      {/* THE TWO PAGES. Below 1024 both wrappers are `display: contents`, so
+          they generate no box and every panel lays out as the sibling it used
+          to be — the phone's DOM order and its rendering are untouched. Past
+          1024 they become a spread: the headline this screen reaches on the
+          left page, the long ledger behind it on the right.
+
+          Wrappers rather than per-panel `grid-column` rules, the profile
+          spread's own fix (see .stats-col in Player.tsx): grid's sparse
+          auto-placement never moves its cursor backwards, so pinning the
+          commentary to column two while the panels between them auto-placed
+          in column one put a hole of dead paper beside every panel — a
+          checkerboard rather than two columns.
+
+          The split is at the IN DETAIL cut, and that is the whole reason it
+          can be contiguous: the screen's reading order is already headline
+          then ledger (see the doc comment at the top of this file), so one
+          cut through the middle of it yields two pages whose DOM order is the
+          phone's, unchanged. Any other grouping — the commentary on one page,
+          the beams on the other — would interleave, and a wrapper cannot. */}
+      <div className="cmp-col cmp-col-headline">
+
       {view.headToHead ? (
         <div className="cmp-slip">
           <div className="label-caps cmp-slip-eyebrow">HEAD TO HEAD</div>
@@ -397,12 +418,23 @@ export default function Compare() {
         </div>
       </div>
 
+      </div>
+
+      <div className="cmp-col cmp-col-detail">
+
       {/* A panel with nothing drawn is omitted entirely rather than rendered as
           a heading over a set-aside note. On a thin pair that was two headed
           boxes saying only "too few between you", which the verdict above has
           already counted in one line — a reader gains nothing from being told
           the same thing twice more, in bigger type. The names of the set-aside
-          rows only appear where the panel has something to compare them to. */}
+          rows only appear where the panel has something to compare them to.
+
+          At width the cut also heads this page, which is why neither page
+          carries a head of its own — it already names what the page holds.
+          Note it is not guaranteed to: this test is exactly the state where
+          there is no cut either, so a pair whose every sub-bucket row is set
+          aside opens the right page on FOR CONTEXT's own panel heading
+          instead. That reads fine, since a panel states what it holds. */}
       {detailPanels.length > 0 ? (
         <div className="cmp-cut">
           <span>{DETAIL_HEADING}</span>
@@ -451,6 +483,8 @@ export default function Compare() {
           figures on a different night, and the gate is the size of that wobble. */}
       <div className="cmp-colophon">
         <GlossaryProse text="A gate is one standard error wide. Loosely: if the two of you played the same stretch again, that is about how much these figures would wander on their own, with nobody playing any better. A margin inside it is weather, not skill." />
+      </div>
+
       </div>
 
       <div className="cmp-footer">
