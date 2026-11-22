@@ -2824,11 +2824,19 @@ a.board-row:hover {
   .home > * {
     grid-column: 2;
   }
-  .home > .appheader,
+  .home > .appheader {
+    grid-column: 1 / -1;
+  }
+  /* The greeting spans the CONTENT columns, not the spacers: spanning 1 / -1
+     put "Good afternoon" at the paper's edge while the ticket and the ledger
+     under it start a spacer's width in (136px at 1440 on a new account), so
+     the screen's first line read as belonging to no column at all. 2 / -2
+     lines it up with the block it heads, and keeps the rating tile — which
+     centres itself — centred on the same axis as everything under it. */
   .home > .home-greeting,
   .home > .home-rating,
   .home > .notice-error {
-    grid-column: 1 / -1;
+    grid-column: 2 / -2;
   }
   .home > .home-tolls {
     grid-column: 3;
@@ -2998,13 +3006,53 @@ a.board-row:hover {
   .rankings > .appheader,
   .rankings > .rank-head,
   .rankings > .rank-provisional-note,
-  .rankings > .rank-move-row,
   .rankings > .notice-error,
   .rankings > .empty-note {
     grid-column: 1 / -1;
   }
+  /* The movement lever sets the period of the LADDER's arrows, so it sits on
+     the ladder's column, right-aligned over the arrows it governs. Spanning
+     the page put it at the far right edge over the house table, which has no
+     arrows at all. The ladder and its footnote are pinned to the same column
+     explicitly: left to auto-placement after a one-column lever, the ladder
+     would take the free cell beside it. */
+  .rankings > .rank-move-row,
+  .rankings > .rank-panel,
+  .rankings > .rank-foot {
+    grid-column: 1;
+  }
   .rankings > .rank-house {
     grid-column: 2;
+  }
+}
+/* Past 1400 both lists stop growing and flanking 1fr columns take the rest
+   (Home's move, so the masthead still spans the paper). A ladder row is a
+   rank, a name, a rating and an arrow: at 3fr of a 1920px page the name and
+   its rating were ~950px apart, which is a row the eye has to search along
+   rather than read. */
+@media (min-width: 1400px) {
+  .rankings {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 42rem) minmax(0, 30rem) minmax(0, 1fr);
+  }
+  /* restated rather than left to `> *`: the 1024 block pins these three at
+     two classes, which outranks a one-class catch-all */
+  .rankings > *,
+  .rankings > .rank-move-row,
+  .rankings > .rank-panel,
+  .rankings > .rank-foot {
+    grid-column: 2;
+  }
+  .rankings > .appheader {
+    grid-column: 1 / -1;
+  }
+  .rankings > .rank-head,
+  .rankings > .rank-provisional-note,
+  .rankings > .notice-error,
+  .rankings > .empty-note {
+    grid-column: 2 / -2;
+  }
+  .rankings > .rank-house {
+    grid-column: 3;
   }
 }
 .rank-head {
@@ -4840,6 +4888,33 @@ a.stat-tile:hover {
     justify-self: center;
   }
 }
+/* Past 1400 the two ledgers stop growing and flanking 1fr columns take the
+   rest (Home's move, so the masthead still spans the paper). A board's row
+   is a number, a contract and two figures: at 3fr of a 1920px page that put
+   "3NT by W +2" ~800px from the score it earned, the stranded-figures reading
+   Home's ledger cap exists to avoid. 40rem + 28rem keeps the 3:2 split and
+   adds to 68rem — the width a board's own result (.result) caps at — so a
+   crossing and the boards inside it read as the same document. */
+@media (min-width: 1400px) {
+  .tourney-page {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 40rem) minmax(0, 28rem) minmax(0, 1fr);
+  }
+  .tourney-page > * {
+    grid-column: 2;
+  }
+  .tourney-page > .screenheader {
+    grid-column: 1 / -1;
+  }
+  .tourney-page > .tourney-result-hero,
+  .tourney-page > .tourney-actions,
+  .tourney-page > .notice-error {
+    grid-column: 2 / -2;
+  }
+  .tourney-page > .tourney-field,
+  .tourney-page > .tourney-field-hint {
+    grid-column: 3;
+  }
+}
 .tourney-sheet {
   padding: 14px 16px 0;
   display: flex;
@@ -5362,11 +5437,11 @@ a.stat-tile:hover {
        meter. 4.46 is 6.4 × 46/66, i.e. the table's cap expressed in card
        HEIGHTS, which is the unit this token is in.
 
-       Height is still the other scarce axis on a landscape screen: this phase
-       stacks the table, your fan and its labels — about 2.6 card heights plus
-       ~130px of chrome — so 20vh keeps that inside a 700px-tall window, and
-       the 150px ceiling stops the cards outgrowing the table on a tall one. */
-    --card-h-cap: min(150px, 20vh, calc((var(--board-avail) - 8rem) / 4.46));
+       Height is still the other scarce axis on a landscape screen. The real
+       height term — the stack's own budget — is in the --play-stack-room
+       block below, which overrides this cap; this declaration only states the
+       width half of it, for reading in one place with --board-main. */
+    --card-h-cap: min(150px, calc((var(--board-avail) - 8rem) / 4.46));
     /* The width of the play composition itself: the table at its cap plus the
        dummy rail beside it. This is what the main column is, and it is derived
        from the card token rather than measured from the DOM — see the grid. */
@@ -5417,17 +5492,28 @@ a.stat-tile:hover {
    table's own air costs 1px of page per px (--trick-air, up to the 150px
    the flat version wanted), and only what is left over goes to the cards at
    3.6px of page per px. Both terms are zero-growth at 902px and below, so
-   every window that had no room to give renders exactly as it did before
-   this block existed — including 1280×720 and 1366×768, where the board
-   already overflowed. 20vh stays in the min() as the short-window guard it
-   always was; it is never the binding term once the affine one is. */
+   every window that had no room to give keeps the cards it had.
+
+   THE SHORT-WINDOW TERM IS THE SAME BUDGET READ THE OTHER WAY. It used to be
+   a flat 20vh, which is the E/W-dummy stack's arithmetic (2.6 card heights)
+   and not the tighter N/S one this block sizes for — so on every board your
+   side declared, the column overran a short window by its own 3.6 cards:
+   880px of page at 1280×720 and 902px at 1366×768, i.e. your own hand, its
+   seat line and the turn hint below the fold on the two commonest laptop
+   screens, and a scroll between dummy and hand for every card. Even
+   1440×900 overran by 2px, enough for a classic scrollbar to appear. The
+   column measures 3.6 card heights + 362px at the base air (that is the 902
+   above, at 150), so (100vh - 370px) / 3.6 is the card that fits it with an
+   8px cushion. It only binds where the window is shorter than ~910px — the
+   affine term takes over above that — and like the rest of this block it is
+   one budget for both layouts, so dummy appearing never resizes your hand. */
 @media (min-width: 1024px) {
   :root:has(.board-page:not(.analyze-page) .trick) {
     --play-stack-room: max(0px, calc(100vh - 920px));
     --trick-air: min(150px, calc(110px + var(--play-stack-room)));
     --card-h-cap: min(
       190px,
-      20vh,
+      calc((100vh - 370px) / 3.6),
       calc(150px + max(0px, var(--play-stack-room) - 40px) / 3.6),
       calc((var(--board-avail) - 8rem) / 4.46)
     );
@@ -6241,6 +6327,16 @@ a.stat-tile:hover {
   .gloss-letterhead {
     break-after: avoid;
   }
+  /* The A–Z scrubber is a thumb strip on a phone, where 8px letters 2px off
+     the list are fine because a finger drags down the whole strip. At width
+     it is clicked one letter at a time with a pointer, and the third column's
+     theme tags ran to within a few px of it, so the index read as part of the
+     last column. Room between them, and letters a cursor can actually hit. */
+  .gloss-main {
+    gap: var(--space-5);
+  }
+  /* (the letters' own size is overridden beside their base rule further down
+     — it is declared after this block, so a rule here would lose the tie) */
 }
 @media (min-width: 1400px) {
   .gloss-list {
@@ -6326,6 +6422,12 @@ a.stat-tile:hover {
 .gloss-scrub-letter:disabled {
   color: var(--line-dashed);
   cursor: default;
+}
+@media (min-width: 1024px) {
+  .gloss-scrub-letter {
+    font-size: 10.5px;
+    line-height: 1.6;
+  }
 }
 .gloss-notice {
   font-style: italic;
@@ -6724,6 +6826,18 @@ a.stat-tile:hover {
   margin-top: 4px;
   font-size: 11px;
 }
+/* A phone held sideways (390px tall, but 844 wide, so it also takes the
+   tablet wordmark) has less height than the hero's content, the cue and the
+   river scene together, and the cue is absolutely positioned — so it printed
+   over the pitch, and the pitch's last line over the bridge's deck. Reserving
+   the cue's own height in the hero's bottom padding lets the hero grow past
+   the window instead; the bridge simply lands one scroll down. Height-gated,
+   so every portrait screen keeps the hero it had. */
+@media (max-height: 560px) {
+  .landing .splash {
+    padding-bottom: calc(var(--splash-scene-h) + 72px);
+  }
+}
 
 /* Each panel is a page of the pamphlet, and the rule between two of them is a
    fold — so it needs air on BOTH sides. The bottom padding is what was missing:
@@ -7074,17 +7188,32 @@ a.stat-tile:hover {
 /* Past 1400 the columns stop growing and the GUTTERS grow instead. A beam
    row is not more readable at 900px than at 560: the bar is a margin against
    a gate, and past a point the extra width is spent on the distance between
-   a figure and the label naming it. NOTE: the profile spread (`.stats-page`)
-   dropped its own copy of this rule — measured at 1440 it produced ~144px of
-   dead margin against Rankings/Traffic/this-page-below-1400's ~40-54px
-   `--page-pad` gutter, which is the "page never caps its own width" law (see
-   "the responsive ladder") catching up with a page-level freeze. This block
-   is unchanged for now — it wasn't in scope for that fix — but the same
-   argument applies here and this is probably next. */
+   a figure and the label naming it.
+
+   The gutters are flanking 1fr COLUMNS, not a centred page — Home's own move
+   ("Home at width"). This used to be `justify-content: center` on two 36rem
+   tracks, which centred the MASTHEAD with them: at 1920 the header's rule
+   ran 384..1536 while every other screen's runs edge to edge, so stepping
+   from a profile into Compare moved the masthead ~340px in — the "page caps
+   its own width" bug the ladder exists to stop, in its quietest form. Now the
+   header spans the paper, and the players, the two pages, the thin state and
+   the closing button all sit on the spread's own axis. */
 @media (min-width: 1400px) {
   .cmp-page {
-    grid-template-columns: repeat(2, minmax(0, 36rem));
-    justify-content: center;
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 36rem)) minmax(0, 1fr);
+  }
+  .cmp-page > .cmp-who,
+  .cmp-page > .loading,
+  .cmp-page > .notice-error,
+  .cmp-page > .cmp-thin,
+  .cmp-page > .cmp-footer {
+    grid-column: 2 / -2;
+  }
+  .cmp-page > .cmp-col-headline {
+    grid-column: 2;
+  }
+  .cmp-page > .cmp-col-detail {
+    grid-column: 3;
   }
 }
 
@@ -7791,6 +7920,20 @@ a.stat-tile:hover {
   .replay-dock-row .ds-btn {
     flex: 0 1 auto;
     width: auto;
+  }
+  /* West and East are seats AT the table, so their rails stay beside it.
+     Left to the page they ran to its edges, and the table under them is
+     capped at 6.4 card widths (the 720 block's .trick rule), so at 1440 the
+     two hands sat ~500px either side of a 368px board — the "three unrelated
+     screens" reading the play screen's own centred block exists to avoid.
+     Capping the row at the table plus a suit line's worth either side keeps
+     each hand flanking the board above it, and still leaves each half wide
+     enough for a full 13-card hand on one line. */
+  .analyze-rails {
+    width: 100%;
+    max-width: calc(var(--card-w) * 6.4 + 12rem);
+    margin-inline: auto;
+    box-sizing: border-box;
   }
 }
 

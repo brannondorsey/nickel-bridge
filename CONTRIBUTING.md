@@ -1412,7 +1412,10 @@ pinned to the window's foot (`position: sticky`), and the cards size to the wind
 `(100vh - 680px) / 3.6`, floored at the phone's 82.5px and capped at 118px: the stack above the
 dock runs ~680px before a card is counted, so at every common laptop height the controls used
 to sit below the fold and stepping the play meant a scroll per card. Where the whole lens
-cannot fit (1280×720), the board scrolls under the dock rather than the cards shrinking further. The demo
+cannot fit (1280×720), the board scrolls under the dock rather than the cards shrinking further.
+The WEST/EAST rails are capped at the table's width plus 12rem and centred there, so the two
+hands flank the board they sit at — left to the page, they ran to its edges, ~500px either side
+of a 368px table at 1440. The demo
 gallery's `analyze-play` exhibit (`scenarios.ts`, `results` category) is the click-test
 path; `Result` in Board.tsx is exported with an `actions` slot (which is also what
 dissolved the tour's class-for-class `TourResult` copy).
@@ -2368,8 +2371,20 @@ walked sideways; the Glossary flows into two or three print columns
 (`columns`, not a grid — the letters are wildly uneven, and a grid row as tall as its tallest
 letter leaves holes a flowing column doesn't); a crossing is its scoresheet beside its field;
 Rankings keeps the ladder as one list (splitting a ranking across columns is a puzzle, not a
-layout) and gives the width to the house table. Each lives in an `at width` block beside its
-own screen's CSS.
+layout) and gives the width to the house table, with the MOVEMENT lever on the ladder's own
+column since it sets the period of the ladder's arrows. Each lives in an `at width` block
+beside its own screen's CSS.
+
+**Past 1400, a ledger stops growing and flanking `1fr` columns take the rest** — Home, Rankings,
+the crossing and Compare all use the same move, so the masthead still spans the paper while the
+rows stay readable. Two details make it work. Whatever HEADS the block (Home's greeting,
+Rankings' title, the crossing's postmark hero, Compare's players) spans `2 / -2`, the content
+columns, not `1 / -1`: spanning the spacers put Home's "Good afternoon" at the paper's edge 136px
+left of the ticket under it. And a 1024 rule that pins a child at two classes outranks the 1400
+block's `> *` catch-all, so the 1400 block restates those children explicitly — left to the
+catch-all, Rankings' ladder would have dropped into the left spacer. The crossing's pair adds
+to 68rem, the width a board's own result caps at, so a crossing and its boards read as one
+document.
 
 **Compare is a two-page spread like the profile, and the wrappers are the whole lesson.** Its
 desktop shape shipped once as beam panels in a `3fr` column with the head-to-head slip, the
@@ -2395,10 +2410,12 @@ cut, and that page opens on FOR CONTEXT's own panel heading instead. **And the c
 the old rule's were 3fr/2fr: both pages are mostly beam rows once the split is the reading
 order rather than beams-vs-commentary, and a bar's width is its own scale, so there is no case
 for starving one page to feed the other. Past 1400 they stop growing at 36rem each and the
-gutters take the rest — a beam row is not more readable at 900px than at 560. The profile
-spread used to do the same and no longer does (see above); the argument is the same for both,
-and the counter-argument — that this caps the page rather than the element — applies here too,
-so expect this block to go the same way. The masthead spans the top of both pages and the closing
+gutters take the rest — a beam row is not more readable at 900px than at 560. Those gutters are
+flanking `1fr` COLUMNS (Home's move), not a centred page: the first version centred the two
+tracks with `justify-content`, which dragged the masthead in with them, so at 1920 Compare's
+header rule ran 384..1536 while every other screen's runs edge to edge. The header now spans the
+paper like everywhere else; the players, both pages and the closing CTA sit on the spread's
+axis. The masthead spans the top of both pages and the closing
 CTA the foot. That CTA's `--action-w` cap and the ineligible state's reading-measure cap are
 both at **720**, not with the spread at 1024: neither needs a second column to exist, and a
 button or a paragraph reaches its limit as soon as the column is wider than one. Putting them
@@ -2498,8 +2515,9 @@ formula measures `--fan-space`, which is the viewport on the phone (identical to
 `min(100vw, 430px)` at every phone width) and the board's main column at desktop — measuring
 the viewport there would size cards from space the fan does not have and overflow the column.
 `--card-h-cap` goes 82.5px on the phone to `min(118px, 12vh)` past 720, then past 1024 to
-`min(190px, 20vh, 150px + max(0, --play-stack-room - 40px) / 3.6, (--board-avail - 8rem) /
-4.46)` on the PLAY screen (the last term is the table's — see the board section above) and `min(150px, 26vh)` on the BIDDING screen, which
+`min(190px, (100vh - 370px) / 3.6, 150px + max(0, --play-stack-room - 40px) / 3.6,
+(--board-avail - 8rem) / 4.46)` on the PLAY screen (the last term is the table's — see the board
+section above; the second is the stack's own height budget — see the next-but-one section) and `min(150px, 26vh)` on the BIDDING screen, which
 stacks exactly one hand and can afford the looser `vh` term; below 900px tall at any width
 from 720 the bidding cap drops to `min(110px, 13vh)` and the dock's plates tighten (44 → 40px),
 so a short landscape screen keeps the auction in view as well as the hand.
@@ -2537,9 +2555,15 @@ line, hint and gutters, which at the 150px card ceiling and the base 110px of ai
 902px — plus an 18px cushion for chrome that can vary by a line. The room is spent
 cheapest-first, which is also intent-first: the table's own air costs 1px of page per px, and
 only the remainder goes to the cards at 3.6px of page per px. Both terms are zero-growth at
-902px and below, so every window that had no room to give — 1280×720 and 1366×768, where the
-board already overflowed, and 1440–1600×900, where it fits by 2px — renders exactly as it did
-before. It is ONE budget rather than one per layout even though the E/W-dummy board stacks only
+902px and below. **Below that the same budget is read the other way, and that half matters
+more:** the short-window guard used to be a flat `20vh`, which is the E/W stack's arithmetic,
+not the N/S one's — so on every board your side declared, 1280×720 measured an 880px page and
+1366×768 a 902px one, i.e. your own hand, its seat line and the turn hint below the fold on the
+two commonest laptop screens and a scroll between dummy and hand for every card (1440×900
+overran by 2px, enough for a classic scrollbar). The column is `3.6 × card + 362px` at the base
+air, so `(100vh - 370px) / 3.6` is the card that fits it with an 8px cushion: 97px at 1280×720,
+111px at 1366×768, 147px at 1440×900, and never binding past ~910px of window, where the
+affine term takes over. It is ONE budget rather than one per layout even though the E/W-dummy board stacks only
 2.6 card heights and could afford ~100px more at 900: dummy is not tabled until the opening
 lead, so the stack a board is in changes mid-play, and a budget tracking it would resize the
 player's own hand the moment dummy appeared.
