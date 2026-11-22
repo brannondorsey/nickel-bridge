@@ -2447,6 +2447,17 @@ dock with it), and **the dock's tinted band still runs edge to edge** — a 34re
 surface fill floating mid-page is a ribbon, a band across the foot of the screen is a bidding
 box; the plates inside it keep `.bidbox-wrap`'s own 32rem cap and do not move.
 
+**The block is not only a desktop layout: every LANDSCAPE screen from 720 gets it too.** The six
+board rules that make it (the rail, the card budget, the play grid, the two table heights and the
+dummy rail's padding) are written `@media (min-width: 1024px), (min-width: 720px) and
+(orientation: landscape)`. Below 1024 the tray otherwise stacks above the table, and a stacked
+board needs ~860px of height whatever the window — measured on a board your side declares, your
+hand sat 144px below the fold at 1023×768, 345px at an 800×600 window (StatCounter's third most
+common desktop screen) and 376px on a 960×540 Android tablet held sideways, where the whole first
+screen was the finished auction. With the rail they fit, or come within a few dozen pixels. Portrait
+tablets keep the stacked board: they have the height, and a 272px rail would cost a portrait
+table more width than it can spare.
+
 One structural note: `PlayPhase` renders its parts as a flat list of siblings, so the rail is a
 real element (`.board-rail`, `display: contents` on the phone — it generates no box, so every
 phone measurement is unchanged) rather than three grid-placement rules, which is what the first
@@ -2520,7 +2531,12 @@ the viewport there would size cards from space the fan does not have and overflo
 section above; the second is the stack's own height budget — see the next-but-one section) and `min(150px, 26vh)` on the BIDDING screen, which
 stacks exactly one hand and can afford the looser `vh` term; below 900px tall at any width
 from 720 the bidding cap drops to `min(110px, 13vh)` and the dock's plates tighten (44 → 40px),
-so a short landscape screen keeps the auction in view as well as the hand.
+so a short landscape screen keeps the auction in view as well as the hand. Below 600px tall,
+at any width, the dock tightens again (plates 34px, every row trimmed) so the BID button stays on
+screen down to ~430px of window — an 800×600 window, a tablet or phone on its side, an iPhone SE
+with Safari's toolbars showing — and below 500px the play table drops its 230px floor to its own
+formula (`1.6 × card + 110px`): its contents need ~97px of that air, so the floor, never the air,
+is what a short screen can give back.
 
 **On the bidding screen your hand and its HCP never scroll away, at any size — and that is
 structural, not tuned.** `.bid-scroll` (the region between the masthead and the dock) is
@@ -3091,7 +3107,11 @@ Four details are load-bearing:
   than on them, which is exactly what shipped in the first draft. Relatedly, the width and
   height are spelled out in CSS rather than left to opposing offsets: a `<canvas>` is a
   REPLACED element, so `inset: -16px` with `width: auto` sits at its intrinsic 300×150 and
-  silently paints almost nothing.
+  silently paints almost nothing. The overhang has one cost outside the board: on a phone the
+  hand fan is the viewport's full width, so its canvas hung 16px past the right edge and the
+  page could be panned sideways whenever the foil was on. `.board-page` is `overflow-x: clip`
+  for that — `clip`, not `hidden`, so it trims the paint without becoming a scroll container
+  and Analyze's sticky replay dock keeps the viewport it sticks to.
 - **Tilt is the enhancement, not the feature.** Device orientation moves the grain's angle
   and phase — with curvature gone every card shares one normal, so tilting cannot light one
   card more than its neighbour and brightness is the wrong thing to hand a sensor. The

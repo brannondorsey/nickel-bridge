@@ -2232,7 +2232,7 @@ a.ds-btn-secondary:hover {
   /* grows with the card token so the bigger trick slots keep their air
      (two 0.8-card slots + labels + meter); identical to 230px at the old
      66px card */
-  height: max(230px, calc(var(--card-h) * 1.6 + 110px));
+  height: max(var(--trick-floor, 230px), calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
 }
 /* The auction rail beside this table is deliberately left content-sized —
    a short auction can leave it much shorter than the table + hand fan
@@ -2246,9 +2246,9 @@ a.ds-btn-secondary:hover {
    own value rather than losing the declaration altogether. Analyze reuses
    .trick for its own two-lens layout and is excluded — this is the
    ordinary play screen's table only. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   .board-page:not(.analyze-page) .trick {
-    height: max(230px, calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
+    height: max(var(--trick-floor, 230px), calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
   }
 }
 /* "Trick clearing: tap" (settings gate) is holding a completed trick on the
@@ -2551,7 +2551,7 @@ a.ds-btn-secondary:hover {
      height .trick normally uses, so a long suit never gets clipped and a
      short one never leaves the box looking squashed */
   height: auto;
-  min-height: max(230px, calc(var(--card-h) * 1.6 + 110px));
+  min-height: max(var(--trick-floor, 230px), calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
 }
 /* The E/W-dummy sibling of the air bump above .trick's own base rule, same
    reasoning: filling the vertical room a short auction leaves free.
@@ -2564,10 +2564,10 @@ a.ds-btn-secondary:hover {
    beside it. Proved by injecting a 900px child at 1512×900: the box stopped
    growing. This table's height is content-driven under its min-height, so
    it has to win here whatever the ordinary table's rule says. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   .board-page:not(.analyze-page) .play-row .trick {
     height: auto;
-    min-height: max(230px, calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
+    min-height: max(var(--trick-floor, 230px), calc(var(--card-h) * 1.6 + var(--trick-air, 110px)));
   }
 }
 .dummy-rail {
@@ -2599,7 +2599,7 @@ a.ds-btn-secondary:hover {
    also what tucks the auction tray in — any surplus in the main column
    becomes centring slack, and the tray ends up that much further from the
    table than the gutter it is supposed to sit at. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   .dummy-rail {
     padding: 12px 16px;
   }
@@ -5119,6 +5119,14 @@ a.stat-tile:hover {
   flex-direction: column;
   flex: 1;
   padding-bottom: 16px;
+  /* Foil trumps paints a canvas --foil-bleed past every card container so the
+     plate reaches the foot of a trick card taller than its row; on a phone the
+     hand fan IS the viewport's width, so that bleed hung 16px off the right
+     edge and the whole board could be panned sideways with the foil on. `clip`
+     rather than `hidden`: it trims the paint without making this a scroll
+     container, so nothing sticky inside it (Analyze's replay dock) loses the
+     viewport it sticks to. */
+  overflow-x: clip;
 }
 .board-head {
   display: flex;
@@ -5411,7 +5419,7 @@ a.stat-tile:hover {
  * The BIDDING screen deliberately does not get this treatment — see its own
  * block below. It has no table and no dummy, so a rail beside it would be a
  * rail beside nothing. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   /* The rail takes a SHARE of the page rather than a fixed slab. At 1024 a flat
      20rem is a fifth of the window, and every pixel of it is a pixel the cards
      don't get; the tray reads perfectly well a little narrower. The clamp's
@@ -5507,7 +5515,7 @@ a.stat-tile:hover {
    8px cushion. It only binds where the window is shorter than ~910px — the
    affine term takes over above that — and like the rest of this block it is
    one budget for both layouts, so dummy appearing never resizes your hand. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   :root:has(.board-page:not(.analyze-page) .trick) {
     --play-stack-room: max(0px, calc(100vh - 920px));
     --trick-air: min(150px, calc(110px + var(--play-stack-room)));
@@ -5546,7 +5554,7 @@ a.stat-tile:hover {
  * Where :has() is unsupported the whole treatment drops and the board stays
  * the single centred column the 720 block builds — narrower than it needs to
  * be, but not broken. */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 720px) and (orientation: landscape) {
   /* THE MASTHEAD STAYS AT THE TOP. This grid used to be .board-page itself,
      with `align-content: center` — which centres every row it owns, and one of
      those rows is the board's own header. On a tall window that floated the
@@ -5618,6 +5626,25 @@ a.stat-tile:hover {
     min-width: 0;
     width: auto;
     max-width: calc(var(--card-w) * 6.4);
+  }
+}
+/* The table on a SHORT screen (a phone or a 7in tablet on its side, an
+   800x600 window). Below ~500px of window no card size fits the board —
+   dummy, the table and your hand are three card heights before any chrome —
+   so the cards are already at their 56px floor, and the table's 230px floor
+   is 30px of air on top of the ~200px its contents measure (two seat labels,
+   two 0.8-card slots and the trick meter: 1.6 card heights + ~97px, which is
+   what the 110px of --trick-air is sized for — so the AIR stays; at 70px a
+   held trick's top card sat on the score and the bottom one under the meter
+   bar). Dropping the floor to the formula and trimming the gap under the
+   masthead buys back ~45px. Only the ordinary play screen; Analyze sets its
+   own table, and every screen taller than 500px is untouched. */
+@media (max-height: 500px) {
+  :root:has(.board-page:not(.analyze-page) .trick) {
+    --trick-floor: 0px;
+  }
+  .board-page:not(.analyze-page) > .play-phase {
+    margin-top: var(--space-2);
   }
 }
 
@@ -5700,6 +5727,8 @@ a.stat-tile:hover {
   }
   .bidding-dock .bidbox-fold {
     padding: 4px 0 2px;
+    /* a full-width toggle still wants the 24px minimum target height */
+    min-height: 24px;
   }
   .bidding-dock .confirm-row {
     margin-top: 6px;
@@ -5719,6 +5748,44 @@ a.stat-tile:hover {
   }
   .bidding-dock .seat-line {
     padding-top: 4px;
+  }
+}
+/* VERY short screens, at any width: a phone held sideways, a 7in tablet in
+ * landscape, an 800x600 desktop window, an iPhone SE with Safari's toolbars
+ * showing (375x548). Under ~600px of window the dock above is still ~300px of
+ * plates, which leaves the hand its min-height and pushes BID below the fold —
+ * reachable by scrolling the dock, but a primary action a player has to go
+ * looking for. 34px plates (still well past the 24px minimum target) and
+ * tighter rows bring the whole dock to ~250px, which puts the confirm button
+ * on screen down to ~430px of window, and on an iPhone SE gives the auction
+ * back a row it otherwise loses entirely. Below that the dock scrolls as
+ * before; .bid-scroll still guarantees the hand. Sits after the 720/900 block
+ * so it wins on source order where both apply. */
+@media (max-height: 600px) {
+  .bidding-dock .bidbox-wrap {
+    padding: 4px 12px 6px;
+  }
+  .bidding-dock .bidbox .grid {
+    gap: 4px;
+  }
+  .bidding-dock .bidbox .grid + .grid,
+  .bidding-dock .bidbox .callrow {
+    margin-top: 4px;
+    gap: 4px;
+  }
+  .bidding-dock .bidbox button.bid {
+    min-height: 34px;
+  }
+  .bidding-dock .bidbox-fold {
+    padding: 3px 0 1px;
+    min-height: 24px;
+  }
+  .bidding-dock .confirm-row {
+    margin-top: 5px;
+  }
+  .bidding-dock .confirm-row .ds-btn {
+    padding-top: 7px;
+    padding-bottom: 7px;
   }
 }
 /* The dock's band runs to the WINDOW's edges, not the page's. .board-page takes
@@ -6831,9 +6898,12 @@ a.stat-tile:hover {
    river scene together, and the cue is absolutely positioned — so it printed
    over the pitch, and the pitch's last line over the bridge's deck. Reserving
    the cue's own height in the hero's bottom padding lets the hero grow past
-   the window instead; the bridge simply lands one scroll down. Height-gated,
-   so every portrait screen keeps the hero it had. */
-@media (max-height: 560px) {
+   the window instead; the bridge simply lands one scroll down. Short desktop
+   windows hit the same thing at a taller height, because past 720 the
+   wordmark and the gate grow (measured overlapping at 1098x582 through
+   1280x616), hence the second, wider query. Height-gated either way, so every
+   portrait phone keeps the hero it had. */
+@media (max-height: 560px), (min-width: 720px) and (max-height: 700px) {
   .landing .splash {
     padding-bottom: calc(var(--splash-scene-h) + 72px);
   }
