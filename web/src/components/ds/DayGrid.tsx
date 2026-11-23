@@ -15,6 +15,12 @@ export const DAYGRID_WEEKS = 18;
 const MS_PER_DAY = 86_400_000;
 const CELL_GAP = 3; // svg user units
 const DESIGN_W = 326; // matches Sparkline's W, same visual rhythm on the page
+/* The svg stretches to its container (`preserveAspectRatio="none"`), which on a
+ * phone is within a few px of DESIGN_W. Past 720 style.css gives it
+ * `height: auto`, which makes the box take the viewBox's own aspect ratio, so
+ * the calendar grows uniformly and its days stay square rather than becoming
+ * oblong; the panel caps it at 34rem. Unlike Sparkline and StemChart there is
+ * no stroke or type in here for that to inflate. */
 
 function utcMidnight(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));

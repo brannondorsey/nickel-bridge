@@ -427,3 +427,36 @@ test('a visitor with no account can read the pitch and walk the practice deal', 
   await expect(page.getByText('Everyone plays the same deals.')).toBeVisible();
   await expect(page.locator('.bidbox')).toHaveCount(0);
 });
+
+/**
+ * Your hand and its HCP are never hidden behind the bid dock, at any size.
+ * That shipped broken once on landscape tablets, and then a fix tuned to a
+ * one-row auction broke again on a foldable at 810x686 — so this walks the
+ * real bidding screen, meaning panel open (the tallest feedback), through a
+ * spread of phones, tablets both ways round, short laptops and a desktop, and
+ * asserts the seat line sits wholly inside the visible region above the dock.
+ * See `.bid-scroll` in style.css for why it holds without any measuring.
+ */
+test('the hand and its HCP stay above the bid dock at every viewport', async ({ page }) => {
+  await signInAndOnboard(page, `Dock ${Date.now()}`);
+  await page.click('.home-cta');
+  await expect(page.locator('.bidbox button.bid:enabled').first()).toBeVisible({ timeout: 30_000 });
+  await page.locator('.bidbox button.bid:enabled').nth(3).click();
+  await expect(page.locator('.meaning-panel .mtitle')).toBeVisible();
+
+  const viewports: Array<[number, number]> = [
+    [360, 640], [390, 844], [740, 360], [844, 390], [810, 686], [768, 1024],
+    [1024, 768], [1180, 820], [1280, 720], [1366, 1024], [1440, 900], [1920, 1080],
+  ];
+  for (const [width, height] of viewports) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(150);
+    const m = await page.evaluate(() => {
+      const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+      return { seat: box('.seat-line'), fan: box('.board-fan'), scroll: box('.bid-scroll'), dock: box('.bid-dock') };
+    });
+    const at = `${width}x${height}`;
+    expect(m.seat.bottom, `seat line clears the dock at ${at}`).toBeLessThanOrEqual(m.dock.top + 0.5);
+    expect(m.fan.top, `hand is not scrolled off the top at ${at}`).toBeGreaterThanOrEqual(m.scroll.top - 0.5);
+  }
+});

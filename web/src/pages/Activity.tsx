@@ -94,12 +94,18 @@ export default function Activity() {
               Be the first — the gate is open.
             </div>
           ) : (
-            days.map((day) => {
+            /* THE WEEK. One flat wrapper so the seven days have something to be
+               laid out BY: on a phone and a tablet it is an ordinary block and
+               they stack exactly as they always did, and past 1024 it becomes a
+               horizontal scroller with one day per column (see "Traffic at
+               width" in style.css). */
+            <div className="traffic-week">
+            {days.map((day) => {
               const label = dayLabel(day.dateKey, now);
               // The now rule belongs to today and nowhere else.
               const isToday = label === 'Today';
               return (
-                <div key={day.dateKey}>
+                <div key={day.dateKey} className="traffic-day">
                   <div className="traffic-dayhead">
                     <h3>{label}</h3>
                     <span>{dayDate(day.dateKey)}</span>
@@ -124,7 +130,8 @@ export default function Activity() {
                   )}
                 </div>
               );
-            })
+            })}
+            </div>
           )}
 
           <div className="traffic-foot">
