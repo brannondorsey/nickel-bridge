@@ -502,3 +502,22 @@ as a sharpened hypothesis, not a closed case.
 | `--apply` refuses to write | The zone holds a Cache or Configuration Rule without the `[nickel-bridge]` prefix. It names it. Move it into this script or out of these two phases; do not hand-merge |
 | A page 404s on its assets after a deploy | A missed purge. `--purge --force` recovers it; then work out why the before/after origin comparison saw no change. If only *some* PoPs are affected, suspect that the purge is sampling the edge again rather than the origin |
 | A page's assets return 200 but as `text/html` | Same thing seen from the other end — that is the SPA fallback answering for a file the build deleted. The page is stale, not the asset |
+| `--audit` says a host is cert-expiring but `fly certs show` lists a fresh cert | Fly lists the replaced cert until it expires. `--audit` reads the newest per key type; if it still alarms, the renewal genuinely failed for one key type |
+| A host answers `525` and has no cert | Its app has no machine. Expected for demo while `deploy-demo` is off (`paused` in `SITES`, so `--audit` skips it) |
+
+## Re-enabling the demo app
+
+`deploy-demo` is switched off and demo is `paused` in `SITES`; the app shell, hostname and edge
+rules were kept, but its Fly cert lapsed on 2026-10-27, so the host serves `525` until a new one
+issues. In one PR, flip the leading `false` on `deploy-demo`'s `if:` in `ci.yml` and delete
+`paused: true` from demo's `SITES` row (`server/test/cloudflare-audit.test.ts` fails if only one
+moves). After the first deploy on `main`:
+
+```bash
+fly certs check demo-bridge.brannon.online --app nickel-bridge-demo   # refresh + re-validate
+fly certs show  demo-bridge.brannon.online --app nickel-bridge-demo   # want http-01 and an issued cert
+node scripts/cloudflare.mjs --audit --host=demo-bridge.brannon.online
+```
+
+If no cert issues, re-run `fly certs setup` and publish the `_fly-ownership` TXT it prints, as
+when the host was first fronted. Then the sweep above.

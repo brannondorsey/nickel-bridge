@@ -127,10 +127,20 @@ const API = 'https://api.cloudflare.com/client/v4';
  * why that is done with a Configuration Rule instead of the zone setting. `brannon.online`
  * carries ten other proxied hostnames belonging to unrelated projects, and nothing this
  * script does may reach them.
+ *
+ * `paused: true` marks a host whose app is deliberately switched off, which is the demo's state
+ * while ci.yml's `deploy-demo` sits behind its `false &&` gate: no machine, so the edge answers
+ * 525, and with nothing serving it the Fly cert lapses and cannot renew. `--audit` skips a
+ * paused host unless it is named with `--host=`, since auditing an app you switched off reports
+ * the switch-off, every week, and a check that is always red stops being read — the cert and
+ * proxy failures of the host that IS live then go unnoticed in the noise. Everything else still
+ * covers it: its rules stay in the plan, so `--check` holds them and `--apply` does not delete
+ * them, and re-enabling never has to rebuild the edge. The flag has to agree with that gate,
+ * and `server/test/cloudflare-audit.test.ts` fails if only one of the two is flipped.
  */
-const SITES = [
+export const SITES = [
   { host: 'bridge.brannon.online', app: 'nickel-bridge' },
-  { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo' },
+  { host: 'demo-bridge.brannon.online', app: 'nickel-bridge-demo', paused: true },
 ];
 const HOSTS = SITES.map((s) => s.host);
 
@@ -866,14 +876,39 @@ async function audit() {
     failed = true;
   };
 
+  const named = process.argv.some((a) => a.startsWith('--host='));
   for (const site of SITES.filter((s) => selectedHosts().includes(s.host))) {
     console.log(`\n── ${site.host} (${site.app}) ──`);
+    if (site.paused && !named) {
+      console.log(`· paused (its deploy job is switched off) — skipped; --host=${site.host} audits it anyway`);
+      continue;
+    }
     const siteFailed = await auditSite(site, fail);
     failed = failed || siteFailed;
   }
 
   if (failed) process.exitCode = 1;
   else console.log('\n✓ edge healthy.');
+}
+
+/**
+ * Days until the certificate Fly is SERVING expires, or null if it holds none.
+ *
+ * Fly keeps listing the certificate a renewal replaced until that one expires, so `issued` holds
+ * both: production read [Feb 10, Feb 10, Dec 12, Dec 12] the week after it renewed. The soonest
+ * entry is therefore the retired copy, and reading it reported a cert that had renewed as one
+ * that had not — 26 days left and falling a week a time, past the 21-day alarm two weeks on.
+ * So take the NEWEST per key type, then the soonest of those: an RSA renewal that succeeded
+ * must not hide an ECDSA one that did not.
+ */
+export function certDaysLeft(nodes, now = Date.now()) {
+  const newest = new Map();
+  for (const { type, expiresAt } of nodes) {
+    const t = new Date(expiresAt).getTime();
+    if (!(newest.get(type) >= t)) newest.set(type, t);
+  }
+  if (!newest.size) return null;
+  return Math.floor((Math.min(...newest.values()) - now) / 86_400_000);
 }
 
 /** Probe one host's edge, then read its certificate in light of whether it is proxied. */
@@ -926,7 +961,7 @@ async function auditSite(site, fail) {
   const q = `query($a:String!,$h:String!){app(name:$a){certificate(hostname:$h){
     isConfigured source clientStatus validationErrors{message}
     isAcmeAlpnConfigured isAcmeHttpConfigured isAcmeDnsConfigured
-    issued{nodes{expiresAt}}}}}`;
+    issued{nodes{expiresAt type}}}}}`;
   const res = await fetch('https://api.fly.io/graphql', {
     method: 'POST',
     headers: { Authorization: `Bearer ${flyToken}`, 'Content-Type': 'application/json' },
@@ -944,8 +979,7 @@ async function auditSite(site, fail) {
     cert.isAcmeHttpConfigured && 'http-01',
     cert.isAcmeDnsConfigured && 'dns-01',
   ].filter(Boolean);
-  const soonest = (cert.issued?.nodes ?? []).map((n) => new Date(n.expiresAt)).sort((a, b) => a - b)[0];
-  const days = soonest ? Math.floor((soonest - Date.now()) / 86_400_000) : null;
+  const days = certDaysLeft(cert.issued?.nodes ?? []);
   console.log(
     `· cert: ${days} days left, source=${cert.source}, status=${cert.clientStatus}, validation=[${methods.join(',') || 'none'}]`,
   );

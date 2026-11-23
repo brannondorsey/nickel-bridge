@@ -134,7 +134,10 @@ jobs:
   # back on a one-line change rather than a redeploy runbook. The app SHELL (hostname, TLS
   # cert, Cloudflare edge config) is left alone while disabled — only its machine and volume
   # are torn down — specifically so re-enabling never has to repeat the one-time cert/DNS
-  # setup in README.md "Deployment".
+  # setup in README.md "Deployment". Two caveats, both in CONTRIBUTING.md: flip demo's
+  # `paused: true` in scripts/cloudflare.mjs's SITES in the same change (a test fails if this
+  # flag and that one disagree), and the cert lapsed while paused, so after the first deploy run
+  # `fly certs check demo-bridge.brannon.online --app nickel-bridge-demo`.
   deploy-demo:
     needs: [test, e2e, docker]
     if: false && github.ref == 'refs/heads/main' && github.event_name == 'push'
