@@ -16,6 +16,9 @@ name: Edge upkeep
 #   - The record gets un-proxied (grey cloud) and everything quietly reaches Fly again.
 #     Symptom: no cf-cache-status header at all.
 #
+# A host marked `paused` in scripts/cloudflare.mjs's SITES (the demo app, while ci.yml's
+# deploy-demo is switched off) is not audited: it has no machine, so it would fail every week.
+#
 # Weekly is the right cadence: the cert failure mode has ~60 days of warning and drift has no
 # deadline, so this only needs to beat those, not catch things quickly.
 

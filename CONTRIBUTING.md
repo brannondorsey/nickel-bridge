@@ -337,11 +337,18 @@ re-enable): it sees no real users day to day, so its whole cost is idle Fly mach
 — measured at ~$1.50-2/mo via `node scripts/fly-uptime.mjs nickel-bridge-demo --recent`, which
 is real but small money for something that mostly proves its own uptime. Disabling it stopped
 short of deleting the Fly app: only its machine and 1GB volume were torn down (`flyctl machine
-destroy` / `flyctl volumes destroy`), leaving the app shell, hostname, TLS cert and Cloudflare
-edge config (see "The edge" below) untouched, so re-enabling is exactly the one-line flag flip
-— the job's own "Ensure demo app + volume exist" step already recreates the volume and machine
-from scratch on the next push to main, since it was self-provisioning/idempotent before this
-flag existed. Separately,
+destroy` / `flyctl volumes destroy`), leaving the app shell, hostname and Cloudflare edge
+config (see "The edge" below) untouched. Re-enabling is that flag plus demo's `paused: true` in
+`scripts/cloudflare.mjs`'s `SITES` (which keeps the weekly `--audit` off a host with nothing
+behind it; `server/test/cloudflare-audit.test.ts` fails if only one of the two moves) — the job's
+own "Ensure demo app + volume exist" step already recreates the volume and machine from scratch
+on the next push to main, since it was self-provisioning/idempotent before this flag existed. One
+thing did NOT survive the pause: with no machine the host answers 525, and its Fly cert lapsed
+(expired 2026-10-27; Fly reports `DNS records do not match the expected values`). So after that
+first deploy, run `fly certs check demo-bridge.brannon.online --app nickel-bridge-demo` — and if
+it stays unissued, `fly certs setup` and re-publish the `_fly-ownership` TXT it prints — then
+confirm `node scripts/cloudflare.mjs --audit --host=demo-bridge.brannon.online` is green.
+Separately,
 `.github/workflows/claude-pr-review.yml` runs Claude (via `anthropics/claude-code-action`) on
 every newly opened PR and posts a non-blocking review comment — authenticated via the
 `CLAUDE_CODE_OAUTH_TOKEN` repo secret (a `claude setup-token` OAuth token billed against a
@@ -1239,7 +1246,14 @@ rules are derived from the repo checkout rather than from what the origin serves
 them after a failed deploy would point the edge at routes that deploy never shipped.
 `.github/workflows/edge-upkeep.yml` runs `--check` (drift), `--audit` (cert + cache health,
 per host) and a full `--purge --force` weekly — all three fold into the job's pass/fail, since a
-repair pass that silently stopped running is the same as not having one. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
+repair pass that silently stopped running is the same as not having one. Two `--audit` rules exist
+because their absence turned that job red for weeks without a real fault behind it. **A host
+marked `paused` in `SITES` is skipped** unless named with `--host=` — demo, while `deploy-demo` is
+off, failed every run from 2026-10-19 on, and a check that is always red hides the host that is
+live; its rules stay in the plan, so `--check` and `--apply` still hold them. **Cert expiry is the
+newest certificate per key type**, never the soonest one listed: Fly keeps listing a replaced cert
+until it expires, so the soonest entry is the retired copy, and production read as "19 days and
+has not renewed" a week and a half after it had. [docs/edge-runbook.md](docs/edge-runbook.md) is the operator's companion:
 how to verify a fronted host end to end, and how to measure whether the fronting actually
 bought machine time. Everything no-ops without `CLOUDFLARE_API_TOKEN`, so none of it activates
 until that secret exists.
